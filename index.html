@@ -418,9 +418,16 @@ input,select,textarea{outline:none}
         <template v-for="g in wiz.selectedGames" :key="g.type">
           <div class="card" style="padding:14px;margin-bottom:10px;border-color:rgba(212,175,55,.3)">
             <!-- Header row -->
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
               <div style="font-size:15px;font-weight:800">{{GAME_DEFS[g.type].icon}} {{GAME_DEFS[g.type].name}}</div>
               <button @click="toggleWizGame(g.type)" style="background:transparent;border:none;color:rgba(240,237,224,.4);font-size:20px;cursor:pointer;padding:0;font-family:inherit;line-height:1">✕</button>
+            </div>
+            <!-- Description -->
+            <div class="muted" style="font-size:10px;line-height:1.4;margin-bottom:10px;padding:6px 8px;background:rgba(255,255,255,.03);border-radius:7px">{{GAME_DEFS[g.type].desc}}</div>
+            <!-- Net/Gross + Handicap % — for non-bonus games -->
+            <div v-if="g.type!=='snake'&&g.type!=='dots'&&g.type!=='bbb'&&g.type!=='junk'" style="display:flex;gap:8px;margin-bottom:10px">
+              <div style="flex:1"><div style="font-size:10px;opacity:.5;margin-bottom:4px">Scoring</div><div style="display:flex;gap:3px"><button @click="g.config.netGross='net'" style="flex:1;padding:6px;border-radius:7px;border:1px solid;cursor:pointer;font-family:inherit;font-size:11px;font-weight:700" :style="g.config.netGross!=='gross'?{background:'rgba(212,175,55,.15)',borderColor:'rgba(212,175,55,.5)',color:'#d4af37'}:{background:'rgba(255,255,255,.04)',borderColor:'rgba(255,255,255,.1)',color:'rgba(240,237,224,.4)'}">Net</button><button @click="g.config.netGross='gross'" style="flex:1;padding:6px;border-radius:7px;border:1px solid;cursor:pointer;font-family:inherit;font-size:11px;font-weight:700" :style="g.config.netGross==='gross'?{background:'rgba(212,175,55,.15)',borderColor:'rgba(212,175,55,.5)',color:'#d4af37'}:{background:'rgba(255,255,255,.04)',borderColor:'rgba(255,255,255,.1)',color:'rgba(240,237,224,.4)'}">Gross</button></div></div>
+              <div><div style="font-size:10px;opacity:.5;margin-bottom:4px">HCP %</div><input v-model.number="g.config.hcpPercent" type="number" min="0" max="100" class="inp" style="width:54px;font-size:13px;text-align:center;padding:6px 4px" placeholder="100"></div>
             </div>
 
             <!-- NASSAU -->
@@ -1606,16 +1613,12 @@ input,select,textarea{outline:none}
               <span class="muted" style="font-size:9px">USGA: {{GAME_DEFS[gameConfigType]?.hcpNote||'100% recommended'}}</span>
             </div>
 
-            <!-- Round selector for config -->
-            <div style="margin-bottom:12px">
+            <!-- Round selector — only show for tournaments with multiple rounds -->
+            <div v-if="T.rounds&&T.rounds.length>1" style="margin-bottom:12px">
               <label class="lbl">Apply to Round</label>
               <select v-model="gamesRoundId" class="inp" style="font-size:14px">
                 <option v-for="r in T.rounds" :key="r.id" :value="r.id">R{{r.id}}: {{r.course}}</option>
               </select>
-            </div>
-            <!-- Quick-add course if needed -->
-            <div style="display:flex;gap:7px;margin-bottom:12px">
-              <button @click="gameConfigType=null;view='courses';addingCourse=true" class="btn btn-ghost btn-sm" style="font-size:11px;flex:1">+ Add Course Manually</button>
             </div>
 
             <!-- Nassau config -->
@@ -3302,7 +3305,7 @@ input,select,textarea{outline:none}
 const{createApp,ref,computed,reactive,watch,onMounted}=Vue;
 
 // ── STATIC DATA ──
-const GW_VERSION='GolfWizard.2026.0324.0200';
+const GW_VERSION='GolfWizard.2026.0324.0400';
 const TODAY=new Date().toISOString().split('T')[0];
 const COURSES={
   'Bandon Trails':{
@@ -3405,77 +3408,18 @@ const WOLF_HOLE_MODES=[{k:'normal',l:'🤝 Partner'},{k:'lone',l:'🐺 Lone'},{k
   ];
   const WOLF_MULTIPLIER_OPTS=[{v:1,l:'1× (same as team)'},{v:2,l:'2× (double)'},{v:3,l:'3× (triple)'}];
 
-  const GAME_LIBRARY_DATA=[
-    {icon:'💰',name:'Nassau',color:'rgba(212,175,55,.15)',border:'rgba(212,175,55,.3)',
-     summary:'Three bets in one: Front 9, Back 9, and 18-hole Overall. The most popular format for money golf.',
-     rules:[
-       'Each bet (Front/Back/Overall) is a separate match-play contest.',
-       'Lower net score wins each hole. Most holes won on each 9 wins that bet.',
-       'Press: when a team falls 2+ holes behind, they start a new bet for the remaining holes.',
-       'Auto-press triggers at the set hole deficit — typically 2 down.',
-       'Typical stakes: $10 Front / $10 Back / $20 Overall. Presses add to that.'
-     ]},
-    {icon:'⚔️',name:'Match Play',color:'rgba(96,165,250,.1)',border:'rgba(96,165,250,.3)',
-     summary:'Hole-by-hole battle. Win the hole, earn a point. Most holes won wins the match.',
-     rules:[
-       'Lower net score wins the hole. Tie = halved (no points).',
-       'Track as holes up/down: "2 Up" means leading by 2 holes.',
-       'Match ends early if one side cannot mathematically catch up (e.g. 3&2 = won with 3 up, 2 to play).',
-       'Works 1v1 or 2v2 (best ball: lowest net on each side counts).',
-       'Flat dollar amount bet — winner collects at the end.'
-     ]},
-    {icon:'🎰',name:'Vegas',color:'rgba(212,175,55,.15)',border:'rgba(212,175,55,.3)',
-     summary:'Teams combine scores into a 2-digit number. The difference in numbers = points × $.',
-     rules:[
-       'Team of 2: sort scores low-to-high, combine as 2-digit number (e.g. 4+5 = 45).',
-       'Flip rule: if your low score is 7 or higher, it goes to the back (e.g. 7+4 = 47, not 74).',
-       'Lower number wins. Difference × $ per point = hole payout.',
-       'Monte Carlo: use each team\'s best ball score instead of combining.',
-       'Daytona (Flip the Bird): use worst ball instead of best. Flip rule still applies.',
-       'Newtown (Rock Ridge CC): sort all 4 scores — middle two partner vs outer two.'
-     ]},
-    {icon:'🔨',name:'Hammer',color:'rgba(249,115,22,.1)',border:'rgba(249,115,22,.3)',
-     summary:'Any player can call Hammer at any time, doubling the hole stake. Opponent accepts or concedes.',
-     rules:[
-       'Each hole starts at the base bet (e.g. $5).',
-       'Any player calls Hammer → the bet doubles. Opponent must accept or concede.',
-       'Right to hammer passes: the team that was just hammered can hammer back.',
-       'No player can hammer twice in a row.',
-       'Tied holes carry over — the multiplier rolls to the next hole.',
-       'Team mode: Side A hammers Side B as a whole. Individual mode: any player hammers any opponent.'
-     ]},
-    {icon:'🐺',name:'Wolf',color:'rgba(96,165,250,.1)',border:'rgba(96,165,250,.3)',
-     summary:'Rotating leader picks a partner after each tee shot — or goes it alone for double points.',
-     rules:[
-       'Tee order is fixed at the start. The Wolf rotates each hole.',
-       'After each player tees off, the Wolf can claim that player as a partner — or pass.',
-       'Lone Wolf: Wolf declares before seeing any tee shots. Points doubled if they win.',
-       'Blind Wolf: Wolf declares before the hole begins. Points doubled regardless of result.',
-       'Pig: Wolf picks a partner, then can steal them back. Pig must beat both opponents solo.',
-       'Points per hole × $ per point. Lone/Blind Wolf wins or loses at the configured multiplier.'
-     ]},
-    {icon:'🐍',name:'Snake',color:'rgba(248,113,113,.1)',border:'rgba(248,113,113,.3)',
-     summary:'3-putt = you get the snake. Pass it on with the next 3-putt. Holder at 18 pays everyone.',
-     rules:[
-       'Whenever a player 3-putts, they pick up the snake.',
-       'The snake passes on the next 3-putt by anyone.',
-       'If you already hold the snake and 3-putt, the snake count goes up — it does not transfer.',
-       'GolfWizard tracks the count: payout = $ per snake × total snakes this round.',
-       'Holder at hole 18 owes every other player ($ per snake × number of snakes).',
-       'Example: $5 wager, 3 snakes total → holder owes $15 to each other player.'
-     ]},
-    {icon:'✨',name:'Dots / Trash',color:'rgba(74,222,128,.1)',border:'rgba(74,222,128,.3)',
-     summary:'Earn dots for birdies, eagles, and special shots. Settle per dot at the end.',
-     rules:[
-       'Birdie = 1 dot (auto-detected from scores).',
-       'Eagle = 3 dots (auto-detected).',
-       'Greenie: closest to pin on a par 3 AND making par or better.',
-       'Sandie: up-and-down from a bunker for par or better.',
-       'Chip-in: holing any shot from off the green.',
-       'Polly: hitting the flagstick from off the green.',
-       'Settle per dot: each player pays the dot leader for the difference × $ per dot.'
-     ]}
-  ]
+  // Generate library data from GAME_DEFS — keeps them in sync
+  const GAME_LIBRARY_DATA=Object.keys(GAME_DEFS).filter(function(k){return GAME_DEFS[k].role==='main'||GAME_DEFS[k].role==='bonus';}).map(function(k){
+    var g=GAME_DEFS[k];
+    var colors={main:{color:'rgba(212,175,55,.08)',border:'rgba(212,175,55,.25)'},bonus:{color:'rgba(96,165,250,.08)',border:'rgba(96,165,250,.25)'}};
+    var c=colors[g.role]||colors.main;
+    // Split rules string into array, or use wagering + hcpNote as fallback rules
+    var rulesArr=[];
+    if(g.rules){rulesArr=g.rules.split('. ').filter(function(s){return s.trim().length>0;}).map(function(s){return s.replace(/\.$/,'')+'.';});}
+    if(g.wagering)rulesArr.push('Wagering: '+g.wagering);
+    if(g.hcpNote)rulesArr.push('Handicap: '+g.hcpNote);
+    return{icon:g.icon,name:g.name,color:c.color,border:c.border,summary:g.desc.split('.').slice(0,2).join('.')+'.', rules:rulesArr};
+  });
 
   const GAME_DEFS={
   // ── MAIN GAMES ──
@@ -7420,16 +7364,20 @@ setup(){
     // Auto-inherit team assignments if players already have teams
     var t1=wiz.players.filter(function(p){return p.team===1;}).map(function(p){return p.id;});
     var t2=wiz.players.filter(function(p){return p.team===2;}).map(function(p){return p.id;});
-    var cfg={ppt:5,team1:t1.length?t1.slice():pids.slice(0,2),team2:t2.length?t2.slice():pids.slice(2,4),players:pids.slice(),sideMatches:false,matches:[]};
+    var cfg={ppt:5,team1:t1.length?t1.slice():pids.slice(0,2),team2:t2.length?t2.slice():pids.slice(2,4),players:pids.slice(),sideMatches:false,matches:[],netGross:'net',hcpPercent:100,subMatches:[]};
     if(type==='nassau'){cfg.front=10;cfg.back=10;cfg.overall=20;cfg.pressAt=2;}
-    if(type==='skins'){cfg.carryover=true;cfg.skinsMode='individual';}
-    if(type==='wolf'){cfg.wolfTeeOrder=pids.slice();cfg.wolfLoneMultiplier=2;cfg.holes={};}
+    if(type==='match'){cfg.ppt=20;}
+    if(type==='skins'){cfg.ppt=5;cfg.carryover=true;cfg.skinsMode='individual';}
+    if(type==='wolf'){cfg.ppt=1;cfg.wolfTeeOrder=pids.slice();cfg.wolfLoneMultiplier=1;cfg.holes={};}
+    if(type==='vegas'){cfg.ppt=1;}
     if(type==='dots'){cfg.dotsPpt=1;}
-    if(type==='fiveThreeOne'){cfg.blitz=true;cfg.players=pids.slice(0,3);}
+    if(type==='fiveThreeOne'){cfg.ppt=1;cfg.blitz=true;cfg.players=pids.slice(0,3);}
     if(type==='snake'){cfg.holders={};}
-    if(type==='hammer'){cfg.hammerMode='team';cfg.holes={};}
-    if(type==='stableford'){cfg.variant='standard';}
+    if(type==='hammer'){cfg.ppt=5;cfg.hammerMode='team';cfg.holes={};}
+    if(type==='stableford'){cfg.ppt=1;cfg.variant='standard';}
     if(type==='teamday'){cfg.bestNets=2;cfg.bestGross=1;}
+    if(type==='hilow'){cfg.ppt=1;}
+    if(type==='sixes'){cfg.ppt=5;}
     wiz.selectedGames.push({type:type,config:cfg});
   }
 
@@ -8822,6 +8770,13 @@ setup(){
     }catch(e){}
     // Load GPS cache
     try{var gc2=localStorage.getItem('gw_gps_cache');if(gc2){var cached=JSON.parse(gc2);Object.assign(golfCourseCache.value,cached);}}catch(e){}
+    // Purge orphan course favorites (player IDs accidentally saved as course names)
+    var validCourseNames=new Set(Object.keys(COURSES));
+    var cleanedCF=courseFavorites.value.filter(function(name){return validCourseNames.has(name);});
+    if(cleanedCF.length!==courseFavorites.value.length){
+      courseFavorites.value=cleanedCF;
+      try{localStorage.setItem('golf_favorites',JSON.stringify(cleanedCF));}catch(e){}
+    }
     // Ensure Bandon Boys '26 is seeded as an upcoming tournament
     seedBandonIfNeeded();
   });
