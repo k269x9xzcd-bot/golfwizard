@@ -176,7 +176,7 @@ input,select,textarea{outline:none}
   <button onclick="location.reload()" style="background:rgba(212,175,55,.2);border:1px solid rgba(212,175,55,.4);color:#d4af37;padding:12px 24px;border-radius:12px;font-size:15px;font-family:-apple-system,sans-serif;cursor:pointer">Try Again</button>
 </div>
 
-<div id="build-tag" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:99998;font-size:28px;color:#d4af37;font-family:monospace;font-weight:900">v0300</div>
+<div id="build-tag" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:99998;font-size:28px;color:#d4af37;font-family:monospace;font-weight:900">v0300-test1</div>
 
 <div id="app">
 
@@ -1094,7 +1094,7 @@ input,select,textarea{outline:none}
     </div>
 
     <!-- ══ SCORING ══ -->
-    <div v-if="view==='scoring'" style="padding:0;background:#071507;min-height:100%">
+    <div v-if="false&&view==='scoring'" style="padding:0;background:#071507;min-height:100%">
 
       <!-- No active round prompt -->
       <div v-if="!T.rounds||!T.rounds.length" style="padding:40px 20px;text-align:center">
@@ -1602,7 +1602,7 @@ input,select,textarea{outline:none}
     </div>
 
     <!-- ══ GAMES ══ -->
-    <div v-if="view==='games'" style="padding:14px;background:#071507;min-height:100%">
+    <div v-if="false&&view==='games'" style="padding:14px;background:#071507;min-height:100%">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <div style="font-size:20px;font-weight:800">🎲 Games</div>
         <button v-if="activeRound" @click="showSettlement=true;settlementRid=activeRound?.id" class="btn btn-gold btn-sm" style="font-size:11px">💰 Settle Up</button>
@@ -2130,7 +2130,7 @@ input,select,textarea{outline:none}
 
 
     <!-- ══ HISTORY ══ -->
-    <div v-if="view==='history'" style="padding:14px;background:#071507;min-height:100%">
+    <div v-if="false&&view==='history'" style="padding:14px;background:#071507;min-height:100%">
       <div style="font-size:22px;font-weight:800;margin-bottom:16px">📊 History</div>
 
       <!-- Season money ledger — always prominent -->
@@ -2289,7 +2289,7 @@ input,select,textarea{outline:none}
     </div>
 
     <!-- ══ ROUNDS (tournament schedule) ══ -->
-    <div v-if="view==='rounds'" style="padding:14px;background:#071507;min-height:100%">
+    <div v-if="false&&view==='rounds'" style="padding:14px;background:#071507;min-height:100%">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
         <div style="font-size:20px;font-weight:800">Rounds</div>
         <button @click="startWizard()" class="btn btn-gold btn-sm">+ New</button>
@@ -2379,7 +2379,7 @@ input,select,textarea{outline:none}
     </div>
 
     <!-- ══ PLAYERS ══ -->
-    <div v-if="view==='players'" style="padding:14px;background:#071507;min-height:100%">
+    <div v-if="false&&view==='players'" style="padding:14px;background:#071507;min-height:100%">
       <div style="font-size:20px;font-weight:800;margin-bottom:16px">👥 Players</div>
 
       <!-- Add player -->
@@ -2452,7 +2452,7 @@ input,select,textarea{outline:none}
     </div>
 
     <!-- ══ COURSES ══ -->
-    <div v-if="view==='courses'" style="padding:14px;background:#071507;min-height:100%">
+    <div v-if="false&&view==='courses'" style="padding:14px;background:#071507;min-height:100%">
       <div style="font-size:20px;font-weight:800;margin-bottom:4px">⛳ Courses</div>
       <div class="muted" style="font-size:12px;margin-bottom:16px">Tap ★ to favorite · Tap to view details</div>
 
@@ -2705,7 +2705,7 @@ input,select,textarea{outline:none}
 
   
 <!-- FINISH ROUND MODAL -->
-<div v-if="showFinishRoundModal" style="position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:900;display:flex;align-items:flex-end;justify-content:center">
+<div v-if="false&&showFinishRoundModal" style="position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:900;display:flex;align-items:flex-end;justify-content:center">
   <div style="background:#0d1f0d;border-radius:20px 20px 0 0;border:1px solid rgba(74,222,128,.3);width:100%;max-width:480px;padding:24px 20px 32px">
     <div style="text-align:center;margin-bottom:20px">
       <div style="font-size:36px;margin-bottom:8px">🏁</div>
@@ -2886,7 +2886,7 @@ input,select,textarea{outline:none}
 
 
   <!-- ══ SCORECARD SCAN MODAL ══ -->
-  <div v-if="showScanModal" style="position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:700;display:flex;flex-direction:column;justify-content:flex-end" @click.self="closeScanModal()">
+  <div v-if="false&&showScanModal" style="position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:700;display:flex;flex-direction:column;justify-content:flex-end" @click.self="closeScanModal()">
     <div style="background:#0d1f0d;border-radius:20px 20px 0 0;border:1px solid rgba(212,175,55,.3);max-height:92vh;overflow-y:auto">
 
       <!-- Header -->
@@ -3043,7 +3043,7 @@ input,select,textarea{outline:none}
 
 
   <!-- ══ FULL SCORECARD MODAL ══ -->
-  <div v-if="showFullScorecard&&fullScorecardKey" style="position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:800;display:flex;flex-direction:column" @click.self="showFullScorecard=false">
+  <div v-if="false&&showFullScorecard" style="position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:800;display:flex;flex-direction:column" @click.self="showFullScorecard=false">
     <div style="background:#0d1f0d;display:flex;flex-direction:column;max-height:100dvh;overflow:hidden">
 
       <!-- Header: sticky -->
@@ -3175,7 +3175,7 @@ input,select,textarea{outline:none}
 
 
   <!-- ══ CLEAR ALL CONFIRMATION MODAL ══ -->
-  <div v-if="showClearConfirm" style="position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px">
+  <div v-if="false&&showClearConfirm" style="position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px">
     <div style="background:#1a0505;border:1px solid rgba(239,68,68,.4);border-radius:20px;padding:24px;max-width:340px;width:100%">
       <div style="font-size:36px;text-align:center;margin-bottom:12px">⚠️</div>
       <div style="font-size:18px;font-weight:800;color:#f87171;text-align:center;margin-bottom:8px">Clear All Data?</div>
@@ -3200,7 +3200,7 @@ input,select,textarea{outline:none}
   </div>
 
   <!-- ══ SETTLEMENT MODAL ══ -->
-  <div v-if="showSettlement" style="position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:600;display:flex;flex-direction:column;justify-content:flex-end" @click.self="showSettlement=false">
+  <div v-if="false&&showSettlement" style="position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:600;display:flex;flex-direction:column;justify-content:flex-end" @click.self="showSettlement=false">
     <div style="background:#0d1f0d;border-radius:20px 20px 0 0;border:1px solid rgba(212,175,55,.3);max-height:88vh;overflow-y:auto">
       <div style="padding:18px 18px 0;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:#0d1f0d;z-index:1;border-bottom:1px solid rgba(255,255,255,.07);padding-bottom:14px">
         <div style="font-size:18px;font-weight:800">💰 Settlement</div>
