@@ -7,7 +7,7 @@ export default defineConfig({
   // Set base to repo name for GitHub Pages — update if your repo is named differently
   // e.g. if hosted at jtspieler.github.io/GolfWizard set base: '/GolfWizard/'
   // For a custom domain (golfwizard.app) set base: '/'
-  base: '/GolfWizard/',
+  base: '/golfwizard/',
   build: {
     outDir: 'dist',
     sourcemap: false,
