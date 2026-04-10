@@ -68,8 +68,11 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function signInWithEmail(email) {
-    // Build redirect URL that works on both GitHub Pages (/golfwizard/) and localhost
-    const redirectTo = window.location.origin + window.location.pathname.replace(/\/$/, '')
+    // Always redirect to the production GitHub Pages URL after sign-in
+    const isProd = window.location.hostname !== 'localhost'
+    const redirectTo = isProd
+      ? 'https://k269x9xzcd-bot.github.io/golfwizard/'
+      : 'http://localhost:5173/'
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: redirectTo },
