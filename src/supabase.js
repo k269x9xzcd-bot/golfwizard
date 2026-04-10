@@ -7,12 +7,30 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: true,
+    detectSessionInUrl: false, // We handle this manually below (hash router conflict)
   },
   realtime: {
     params: { eventsPerSecond: 10 },
   },
 })
+
+// Manually handle magic link / OAuth tokens in the URL.
+// Supabase puts tokens in the URL hash: #access_token=...&refresh_token=...
+// Vue Router also uses the hash, so we extract tokens before the router sees the URL.
+;(async () => {
+  const hash = window.location.hash
+  if (hash && hash.includes('access_token=')) {
+    // Parse the fragment as query params
+    const params = new URLSearchParams(hash.replace(/^#\/?/, ''))
+    const accessToken = params.get('access_token')
+    const refreshToken = params.get('refresh_token')
+    if (accessToken && refreshToken) {
+      await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+      // Clean up the URL so the router doesn't get confused
+      window.history.replaceState(null, '', window.location.pathname + '#/')
+    }
+  }
+})()
 
 /**
  * Generate a 6-char room code via Supabase function
