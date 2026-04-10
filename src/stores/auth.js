@@ -12,9 +12,16 @@ export const useAuthStore = defineStore('auth', () => {
   // Initialize — called once on app start
   async function init() {
     loading.value = true
-    const { data: { session } } = await supabase.auth.getSession()
-    user.value = session?.user ?? null
-    if (user.value) await fetchProfile()
+    try {
+      // Add a 5s timeout so a Supabase hiccup never hangs the splash screen
+      const sessionPromise = supabase.auth.getSession()
+      const timeout = new Promise(resolve => setTimeout(() => resolve({ data: { session: null } }), 5000))
+      const { data: { session } } = await Promise.race([sessionPromise, timeout])
+      user.value = session?.user ?? null
+      if (user.value) await fetchProfile()
+    } catch (e) {
+      console.warn('Auth init error:', e)
+    }
 
     // Listen for auth state changes
     supabase.auth.onAuthStateChange(async (_event, session) => {
