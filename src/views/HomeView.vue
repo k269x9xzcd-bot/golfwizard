@@ -3,7 +3,7 @@
     <header class="view-header">
       <div class="header-logo">⛳ GolfWizard</div>
       <div class="header-actions">
-        <button v-if="authStore.isGuest" class="btn-ghost btn-sm" @click="showAuth = true">
+        <button v-if="!authStore.isAuthenticated" class="btn-signin" @click="showAuth = true">
           Sign In
         </button>
         <RouterLink v-else to="/settings" class="avatar-btn">

@@ -853,6 +853,21 @@ body {
   gap: var(--gw-space-2);
 }
 
+.btn-signin {
+  padding: 8px 16px;
+  background: var(--gw-green-500);
+  color: white;
+  border: none;
+  border-radius: var(--gw-radius-full);
+  font-family: var(--gw-font-body);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .15s;
+}
+.btn-signin:active { background: var(--gw-green-600); }
+
 .avatar-btn {
   width: 36px;
   height: 36px;
