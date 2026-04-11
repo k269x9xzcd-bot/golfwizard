@@ -67,21 +67,20 @@
               v-model="otp"
               type="text"
               class="auth-input auth-input--otp"
-              placeholder="000000"
+              placeholder="Enter code"
               inputmode="numeric"
               autocomplete="one-time-code"
-              maxlength="6"
-              minlength="6"
+              maxlength="8"
               id="auth-otp"
               name="otp"
-              pattern="[0-9]{6}"
+              pattern="[0-9]{4,8}"
               required
               ref="otpInput"
             />
             <button
               type="submit"
               class="btn-magic"
-              :disabled="verifying || otp.length < 6"
+              :disabled="verifying || otp.length < 4"
             >
               <span v-if="verifying" class="btn-spinner">⟳</span>
               <span v-else>✓</span>
@@ -144,7 +143,7 @@ async function sendOtp() {
 }
 
 async function verifyOtp() {
-  if (otp.value.length < 6) return
+  if (otp.value.length < 4) return
   verifying.value = true
   error.value = ''
   try {
