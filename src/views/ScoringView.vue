@@ -1,5 +1,5 @@
 <template>
-  <div class="view scoring-view">
+  <div class="view scoring-view" :class="{ 'landscape-mode': isLandscape }">
     <!-- Empty State -->
     <div v-if="!roundsStore.activeRound" class="empty-state">
       <div class="empty-icon">🏌️</div>
@@ -10,145 +10,204 @@
 
     <!-- Active Round -->
     <div v-else class="round-container">
-      <!-- Header -->
-      <header class="scoring-header">
-        <div class="header-left">
-          <h1 class="course-name">{{ roundsStore.activeRound.course_name }}</h1>
-          <div class="header-meta">
-            <span class="date">{{ formatDate(roundsStore.activeRound.date) }}</span>
-            <span class="holes-mode">{{ holesLabel }}</span>
-            <span v-if="roundsStore.activeRound.room_code" class="room-code-badge">
-              🔗 {{ roundsStore.activeRound.room_code }}
-            </span>
+      <!-- Portrait Layout -->
+      <template v-if="!isLandscape">
+        <!-- Header -->
+        <header class="scoring-header">
+          <div class="header-left">
+            <h1 class="course-name">{{ roundsStore.activeRound.course_name }}</h1>
+            <div class="header-meta">
+              <span class="date">{{ formatDate(roundsStore.activeRound.date) }}</span>
+              <span class="tee">{{ roundsStore.activeRound.tee }}</span>
+              <span class="holes-label">{{ holesLabel }}</span>
+              <span v-if="roundsStore.activeRound.room_code" class="room-code-badge">
+                🔗 {{ roundsStore.activeRound.room_code }}
+              </span>
+            </div>
+          </div>
+          <button class="btn-icon share-btn" title="Share">
+            <span>📤</span>
+          </button>
+        </header>
+
+        <!-- Games Chips Strip -->
+        <div v-if="roundsStore.activeGames.length > 0" class="games-strip">
+          <div class="games-scroll">
+            <button
+              v-for="game in roundsStore.activeGames"
+              :key="game.id"
+              class="game-chip"
+              :class="gameChipClass(game)"
+              @click="selectedGame = game"
+            >
+              <span class="game-icon">{{ gameIcon(game.type) }}</span>
+              <span class="game-name">{{ gameLabel(game.type) }}</span>
+              <span class="game-status">{{ gameStatusEmoji(game) }}</span>
+            </button>
           </div>
         </div>
-        <button class="btn-icon share-btn" title="Share">
-          <span>📤</span>
-        </button>
-      </header>
 
-      <!-- Games Chips Strip -->
-      <div v-if="roundsStore.activeGames.length > 0" class="games-strip">
-        <div class="games-scroll">
-          <button
-            v-for="game in roundsStore.activeGames"
-            :key="game.id"
-            class="game-chip"
-            :class="`game-${gameStatusClass(game)}`"
-            @click="selectedGame = game"
-          >
-            <span class="game-icon">{{ gameIcon(game) }}</span>
-            <span class="game-name">{{ game.type }}</span>
-            <span class="game-balance">{{ gameBalance(game) }}</span>
+        <!-- Hole Navigator -->
+        <div class="hole-navigator">
+          <button class="nav-btn nav-prev" @click="previousHole" :disabled="currentHoleIdx <= 0">
+            <span>‹</span>
+          </button>
+          <div class="nav-display">
+            <span class="nav-label">Hole</span>
+            <span class="nav-number">{{ currentHole }}</span>
+            <span class="nav-of">of {{ maxHole }}</span>
+          </div>
+          <button class="nav-btn nav-next" @click="nextHole" :disabled="currentHoleIdx >= maxHoleIdx">
+            <span>›</span>
           </button>
         </div>
-      </div>
 
-      <!-- Scorecard Grid -->
-      <div class="scorecard-wrapper">
-        <table class="scorecard">
-          <thead>
-            <tr>
-              <th class="col-hole">Hole</th>
-              <th v-for="member in roundsStore.activeMembers" :key="member.id" class="col-player">
-                {{ member.short_name || member.guest_name || 'P' }}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <!-- Par Row -->
-            <tr class="row-par">
-              <td class="col-hole">Par</td>
-              <td
-                v-for="member in roundsStore.activeMembers"
-                :key="`par-${member.id}`"
-                class="col-player"
-              >
-                {{ parForHole(1) }}
-              </td>
-            </tr>
+        <!-- Current Hole Card -->
+        <div class="hole-card">
+          <div class="hole-header">
+            <div class="hole-title">
+              <span class="hole-number">Hole {{ currentHole }}</span>
+              <span class="hole-par">Par {{ parForHole(currentHole) }}</span>
+            </div>
+            <div class="hole-meta">
+              <span class="hole-si">SI {{ siForHole(currentHole) }}</span>
+              <span class="hole-yards" v-if="yardsForHole(currentHole)">{{ yardsForHole(currentHole) }}y</span>
+            </div>
+          </div>
 
-            <!-- SI Row -->
-            <tr class="row-si">
-              <td class="col-hole">SI</td>
-              <td
-                v-for="member in roundsStore.activeMembers"
-                :key="`si-${member.id}`"
-                class="col-player"
-              >
-                {{ siForHole(1) }}
-              </td>
-            </tr>
-
-            <!-- Hole Rows -->
-            <tr
-              v-for="(hole, idx) in visibleHoles"
-              :key="hole"
-              class="row-hole"
-              :class="{ 'row-alt': idx % 2 === 1 }"
+          <!-- Player Scores -->
+          <div class="hole-players">
+            <div
+              v-for="member in roundsStore.activeMembers"
+              :key="member.id"
+              class="player-row"
+              @click="openScoreEntry(member, currentHole)"
             >
-              <td class="col-hole">{{ hole }}</td>
-              <td
-                v-for="member in roundsStore.activeMembers"
-                :key="`${hole}-${member.id}`"
-                class="col-player col-score"
-                @click="openScoreEntry(member, hole)"
-              >
-                <span
-                  v-if="getScore(member.id, hole) !== null"
-                  class="score-cell"
-                  :class="scoreClass(getScore(member.id, hole), parForHole(hole))"
-                >
-                  {{ getScore(member.id, hole) }}
-                </span>
-                <span v-else class="score-cell score-empty">—</span>
-              </td>
-            </tr>
+              <div class="player-info">
+                <div class="player-name">{{ member.short_name || member.guest_name }}</div>
+                <div class="player-hcp-indicator">
+                  <span v-for="s in strokesOnHole(memberHandicap(member), siForHole(currentHole))" :key="s" class="stroke-dot">•</span>
+                </div>
+              </div>
+              <div class="score-display">
+                <div class="gross-score" :class="scoreClass(getScore(member.id, currentHole), parForHole(currentHole))">
+                  {{ getScore(member.id, currentHole) || '—' }}
+                </div>
+                <div v-if="getScore(member.id, currentHole)" class="net-score">
+                  {{ netScore(getScore(member.id, currentHole), memberHandicap(member), siForHole(currentHole)) }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
-            <!-- OUT (Front 9) -->
-            <tr class="row-total">
-              <td class="col-hole">OUT</td>
-              <td
-                v-for="member in roundsStore.activeMembers"
-                :key="`out-${member.id}`"
-                class="col-player col-total"
-              >
-                {{ grossTotal(member.id, 1, 9) }}
-              </td>
-            </tr>
+        <!-- View Scorecard Button -->
+        <button class="btn-view-scorecard" @click="showScorecardModal = true">
+          📋 View Full Scorecard
+        </button>
+      </template>
 
-            <!-- IN (Back 9) -->
-            <tr class="row-total">
-              <td class="col-hole">IN</td>
-              <td
-                v-for="member in roundsStore.activeMembers"
-                :key="`in-${member.id}`"
-                class="col-player col-total"
-              >
-                {{ grossTotal(member.id, 10, 18) }}
-              </td>
-            </tr>
+      <!-- Landscape Layout -->
+      <template v-else>
+        <div class="landscape-header">
+          <h1>{{ roundsStore.activeRound.course_name }}</h1>
+          <span class="landscape-meta">{{ formatDate(roundsStore.activeRound.date) }} • {{ roundsStore.activeRound.tee }}</span>
+        </div>
 
-            <!-- TOTAL -->
-            <tr class="row-grand-total">
-              <td class="col-hole">TOT</td>
-              <td
-                v-for="member in roundsStore.activeMembers"
-                :key="`tot-${member.id}`"
-                class="col-player col-total"
-              >
-                {{ grossTotal(member.id, 1, 18) }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+        <!-- Landscape Scorecard Table -->
+        <div class="scorecard-wrapper">
+          <table class="scorecard-landscape">
+            <thead>
+              <tr>
+                <th class="col-hole">Hole</th>
+                <th v-for="member in roundsStore.activeMembers" :key="member.id" class="col-player">
+                  {{ member.short_name || member.guest_name }}
+                </th>
+                <th class="col-hole">OUT</th>
+                <th v-for="member in roundsStore.activeMembers" :key="`out-${member.id}`" class="col-player">
+                  {{ (memberGrossTotal(member.id, 1, 9) !== '—') ? memberGrossTotal(member.id, 1, 9) : '—' }}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Holes 1-9 -->
+              <tr v-for="hole in [1, 2, 3, 4, 5, 6, 7, 8, 9]" :key="`hole-${hole}`" class="row-hole">
+                <td class="col-hole">{{ hole }}</td>
+                <td v-for="member in roundsStore.activeMembers" :key="`${hole}-${member.id}`" class="col-player col-score" @click="openScoreEntry(member, hole)">
+                  <span class="score-gross" :class="scoreClass(getScore(member.id, hole), parForHole(hole))">
+                    {{ getScore(member.id, hole) || '—' }}
+                  </span>
+                  <span v-if="getScore(member.id, hole)" class="score-net">
+                    {{ netScore(getScore(member.id, hole), memberHandicap(member), siForHole(hole)) }}
+                  </span>
+                </td>
+                <td class="col-hole">{{ parForHole(hole) }}</td>
+                <td v-for="member in roundsStore.activeMembers" :key="`par-${hole}-${member.id}`" class="col-player">
+                  {{ parForHole(hole) }}
+                </td>
+              </tr>
 
-      <!-- Score Entry Overlay -->
+              <!-- OUT row -->
+              <tr class="row-total">
+                <td class="col-hole">OUT</td>
+                <td v-for="member in roundsStore.activeMembers" :key="`out-${member.id}`" class="col-player col-total">
+                  {{ memberGrossTotal(member.id, 1, 9) }}
+                </td>
+                <td class="col-hole">{{ parTotal(1, 9) }}</td>
+                <td v-for="member in roundsStore.activeMembers" :key="`out-net-${member.id}`" class="col-player col-total">
+                  {{ memberNetTotal(member.id, 1, 9) }}
+                </td>
+              </tr>
+
+              <!-- Holes 10-18 -->
+              <tr v-for="hole in [10, 11, 12, 13, 14, 15, 16, 17, 18]" :key="`hole-${hole}`" class="row-hole">
+                <td class="col-hole">{{ hole }}</td>
+                <td v-for="member in roundsStore.activeMembers" :key="`${hole}-${member.id}`" class="col-player col-score" @click="openScoreEntry(member, hole)">
+                  <span class="score-gross" :class="scoreClass(getScore(member.id, hole), parForHole(hole))">
+                    {{ getScore(member.id, hole) || '—' }}
+                  </span>
+                  <span v-if="getScore(member.id, hole)" class="score-net">
+                    {{ netScore(getScore(member.id, hole), memberHandicap(member), siForHole(hole)) }}
+                  </span>
+                </td>
+                <td class="col-hole">{{ parForHole(hole) }}</td>
+                <td v-for="member in roundsStore.activeMembers" :key="`par-${hole}-${member.id}`" class="col-player">
+                  {{ parForHole(hole) }}
+                </td>
+              </tr>
+
+              <!-- IN row -->
+              <tr class="row-total">
+                <td class="col-hole">IN</td>
+                <td v-for="member in roundsStore.activeMembers" :key="`in-${member.id}`" class="col-player col-total">
+                  {{ memberGrossTotal(member.id, 10, 18) }}
+                </td>
+                <td class="col-hole">{{ parTotal(10, 18) }}</td>
+                <td v-for="member in roundsStore.activeMembers" :key="`in-net-${member.id}`" class="col-player col-total">
+                  {{ memberNetTotal(member.id, 10, 18) }}
+                </td>
+              </tr>
+
+              <!-- TOTAL row -->
+              <tr class="row-grand-total">
+                <td class="col-hole">TOTAL</td>
+                <td v-for="member in roundsStore.activeMembers" :key="`tot-${member.id}`" class="col-player col-total">
+                  {{ memberGrossTotal(member.id, 1, 18) }}
+                </td>
+                <td class="col-hole">{{ parTotal(1, 18) }}</td>
+                <td v-for="member in roundsStore.activeMembers" :key="`tot-net-${member.id}`" class="col-player col-total">
+                  {{ memberNetTotal(member.id, 1, 18) }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </template>
+
+      <!-- Score Entry Modal -->
       <Transition name="overlay">
         <div v-if="entryMode" class="score-entry-overlay" @click="closeScoreEntry">
           <div class="score-entry-modal" @click.stop>
-            <!-- Header -->
             <div class="entry-header">
               <div class="entry-title">
                 <span class="entry-hole">Hole {{ entryHole }}</span>
@@ -158,7 +217,6 @@
               <div class="entry-player">{{ entryMember.short_name || entryMember.guest_name }}</div>
             </div>
 
-            <!-- Score Display -->
             <div class="score-input-area">
               <button class="btn-adjust btn-minus" @click="decrementScore">−</button>
               <div class="score-display">
@@ -166,12 +224,57 @@
                   {{ entryScore }}
                 </div>
                 <div class="score-label">{{ scoreLabel(entryScore - parForHole(entryHole)) }}</div>
+                <div v-if="entryScore" class="net-display">
+                  Net: {{ netScore(entryScore, memberHandicap(entryMember), siForHole(entryHole)) }}
+                </div>
               </div>
               <button class="btn-adjust btn-plus" @click="incrementScore">+</button>
             </div>
 
-            <!-- Buttons -->
             <button class="btn-done" @click="saveScore">Done</button>
+          </div>
+        </div>
+      </Transition>
+
+      <!-- Full Scorecard Modal (Portrait) -->
+      <Transition name="overlay">
+        <div v-if="showScorecardModal && !isLandscape" class="score-entry-overlay" @click="showScorecardModal = false">
+          <div class="scorecard-modal" @click.stop>
+            <div class="modal-header">
+              <h2>Full Scorecard</h2>
+              <button class="btn-close" @click="showScorecardModal = false">✕</button>
+            </div>
+            <div class="modal-content">
+              <table class="scorecard-in-modal">
+                <thead>
+                  <tr>
+                    <th class="col-hole">Hole</th>
+                    <th v-for="member in roundsStore.activeMembers" :key="member.id" class="col-player">
+                      {{ member.short_name || member.guest_name }}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="hole in allVisibleHoles" :key="`hole-${hole}`" class="row-hole">
+                    <td class="col-hole">{{ hole }}</td>
+                    <td v-for="member in roundsStore.activeMembers" :key="`${hole}-${member.id}`" class="col-player col-score" @click="openScoreEntry(member, hole)">
+                      <span class="score-gross" :class="scoreClass(getScore(member.id, hole), parForHole(hole))">
+                        {{ getScore(member.id, hole) || '—' }}
+                      </span>
+                      <span v-if="getScore(member.id, hole)" class="score-net">
+                        {{ netScore(getScore(member.id, hole), memberHandicap(member), siForHole(hole)) }}
+                      </span>
+                    </td>
+                  </tr>
+                  <tr class="row-total">
+                    <td class="col-hole">TOTAL</td>
+                    <td v-for="member in roundsStore.activeMembers" :key="`tot-${member.id}`" class="col-player col-total">
+                      {{ memberGrossTotal(member.id, 1, 18) }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </Transition>
@@ -180,34 +283,52 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoundsStore } from '../stores/rounds'
 import { COURSES } from '../modules/courses'
+import { memberHandicap as _memberHandicap, strokesOnHole, holeSI, holePar, holeYards, netScore as calcNetScore } from '../modules/gameEngine'
 
 const roundsStore = useRoundsStore()
 
-// Score entry state
+// Screen orientation
+const isLandscape = ref(false)
+const currentHoleIdx = ref(0)
 const entryMode = ref(false)
 const entryMember = ref(null)
 const entryHole = ref(null)
 const entryScore = ref(null)
 const selectedGame = ref(null)
+const showScorecardModal = ref(false)
 
-// Computed: course data
+// Orientation detection
+function updateOrientation() {
+  isLandscape.value = window.matchMedia('(orientation: landscape)').matches
+}
+
+onMounted(() => {
+  updateOrientation()
+  window.addEventListener('orientationchange', updateOrientation)
+  window.addEventListener('resize', updateOrientation)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('orientationchange', updateOrientation)
+  window.removeEventListener('resize', updateOrientation)
+})
+
+// Course data
 const courseData = computed(() => {
   if (!roundsStore.activeRound) return null
   return COURSES[roundsStore.activeRound.course_name] || null
 })
 
-// Computed: holes label (18, front 9, back 9)
 const holesLabel = computed(() => {
   const mode = roundsStore.activeRound?.holes_mode || '18'
-  if (mode === 'front9') return '⛳ Front 9'
-  if (mode === 'back9') return '⛳ Back 9'
-  return '⛳ 18 Holes'
+  if (mode === 'front9') return 'Front 9'
+  if (mode === 'back9') return 'Back 9'
+  return '18 Holes'
 })
 
-// Computed: visible holes based on mode
 const visibleHoles = computed(() => {
   const mode = roundsStore.activeRound?.holes_mode || '18'
   if (mode === 'front9') return Array.from({ length: 9 }, (_, i) => i + 1)
@@ -215,44 +336,57 @@ const visibleHoles = computed(() => {
   return Array.from({ length: 18 }, (_, i) => i + 1)
 })
 
-// ── Score getters ───────────────────────────────────────
+const allVisibleHoles = computed(() => visibleHoles.value)
+
+const maxHole = computed(() => visibleHoles.value[visibleHoles.value.length - 1])
+const maxHoleIdx = computed(() => visibleHoles.value.length - 1)
+
+const currentHole = computed(() => visibleHoles.value[currentHoleIdx.value] ?? 1)
+
+// Hole navigation
+function previousHole() {
+  if (currentHoleIdx.value > 0) currentHoleIdx.value--
+}
+
+function nextHole() {
+  if (currentHoleIdx.value < maxHoleIdx.value) currentHoleIdx.value++
+}
+
+// Course helpers
 function parForHole(hole) {
-  const tee = roundsStore.activeRound?.tee
   const cd = courseData.value
-  if (!cd || !tee || !cd.teesData || !cd.teesData[tee]) {
-    return 4
-  }
-  const holeIdx = hole - 1
-  return cd.par?.[holeIdx] ?? 4
+  if (!cd || !cd.par) return 4
+  return cd.par[hole - 1] ?? 4
 }
 
 function siForHole(hole) {
-  const tee = roundsStore.activeRound?.tee
   const cd = courseData.value
-  if (!cd || !tee || !cd.teesData || !cd.teesData[tee]) {
-    return hole
-  }
-  const holeIdx = hole - 1
-  return cd.si?.[holeIdx] ?? hole
+  if (!cd || !cd.si) return hole
+  return cd.si[hole - 1] ?? hole
 }
 
+function yardsForHole(hole) {
+  const cd = courseData.value
+  const tee = roundsStore.activeRound?.tee
+  if (!cd || !tee || !cd.teesData || !cd.teesData[tee]) return null
+  return cd.teesData[tee].yardsByHole?.[hole - 1] ?? null
+}
+
+// Score getters
 function getScore(memberId, hole) {
   return roundsStore.activeScores[memberId]?.[hole] ?? null
 }
 
-function scoreVsPar(score, par) {
-  if (score === null) return null
-  return score - par
+function memberHandicapValue(member) {
+  return _memberHandicap(member, courseData.value, roundsStore.activeRound?.tee)
 }
 
-function scoreLabel(diff) {
-  if (diff === null || diff === undefined) return ''
-  if (diff <= -2) return 'Eagle'
-  if (diff === -1) return 'Birdie'
-  if (diff === 0) return 'Par'
-  if (diff === 1) return 'Bogey'
-  if (diff === 2) return 'Double'
-  return `+${diff}`
+// Alias used by template
+const memberHandicap = memberHandicapValue
+
+function netScore(gross, hcp, si) {
+  if (gross == null) return null
+  return gross - strokesOnHole(hcp, si)
 }
 
 function scoreClass(score, par) {
@@ -265,7 +399,17 @@ function scoreClass(score, par) {
   return 'score-double'
 }
 
-function grossTotal(memberId, startHole = 1, endHole = 18) {
+function scoreLabel(diff) {
+  if (diff === null || diff === undefined) return ''
+  if (diff <= -2) return 'Eagle'
+  if (diff === -1) return 'Birdie'
+  if (diff === 0) return 'Par'
+  if (diff === 1) return 'Bogey'
+  if (diff === 2) return 'Double'
+  return `+${diff}`
+}
+
+function memberGrossTotal(memberId, startHole = 1, endHole = 18) {
   let total = 0
   let count = 0
   for (let h = startHole; h <= endHole; h++) {
@@ -278,30 +422,62 @@ function grossTotal(memberId, startHole = 1, endHole = 18) {
   return count > 0 ? total : '—'
 }
 
-// ── Game helpers ───────────────────────────────────────
-function gameIcon(game) {
-  const type = game.type?.toLowerCase() || ''
-  if (type === 'nassau') return '💰'
-  if (type === 'match') return '⚔️'
-  if (type === 'vegas') return '🎰'
-  if (type === 'wolf') return '🐺'
-  if (type === 'skins') return '💎'
-  return '🎮'
+function memberNetTotal(memberId, startHole = 1, endHole = 18) {
+  let total = 0
+  let count = 0
+  const member = roundsStore.activeMembers.find(m => m.id === memberId)
+  if (!member) return '—'
+  const hcp = memberHandicapValue(member)
+  for (let h = startHole; h <= endHole; h++) {
+    const s = getScore(memberId, h)
+    if (s !== null) {
+      const si = siForHole(h)
+      const strokes = strokesOnHole(hcp, si)
+      total += s - strokes
+      count++
+    }
+  }
+  return count > 0 ? total : '—'
 }
 
-function gameBalance(game) {
-  // Placeholder: would calculate actual balance from game config
-  // For now, return neutral state
-  return '—'
+function parTotal(startHole = 1, endHole = 18) {
+  let total = 0
+  for (let h = startHole; h <= endHole; h++) {
+    total += parForHole(h)
+  }
+  return total
 }
 
-function gameStatusClass(game) {
-  // 'winning' | 'losing' | 'even'
-  // Placeholder: would determine from game state
-  return 'even'
+// Game helpers
+function gameIcon(type) {
+  const t = type?.toLowerCase() || ''
+  const icons = {
+    nassau: '💰', skins: '💎', match: '⚔️', matchplay: '⚔️',
+    bestball: '🤝', snake: '🐍', dots: '●', fidget: '🎲',
+    bbn: '🏌️', match1v1: '1v1',
+  }
+  return icons[t] || '🎮'
 }
 
-// ── Score entry modal ───────────────────────────────────
+function gameLabel(type) {
+  const t = type?.toLowerCase() || ''
+  const labels = {
+    nassau: 'Nassau', skins: 'Skins', match: 'Match', matchplay: 'Match Play',
+    bestball: 'Best Ball', snake: 'Snake', dots: 'Dots', fidget: 'Fidget',
+    bbn: 'BBN', match1v1: '1v1',
+  }
+  return labels[t] || type
+}
+
+function gameStatusEmoji(game) {
+  return '▶'
+}
+
+function gameChipClass(game) {
+  return 'game-chip-active'
+}
+
+// Score entry modal
 function openScoreEntry(member, hole) {
   entryMember.value = member
   entryHole.value = hole
@@ -340,14 +516,13 @@ async function saveScore() {
   }
 }
 
-// ── Utilities ───────────────────────────────────────────
+// Utilities
 function formatDate(dateStr) {
   if (!dateStr) return ''
-  const date = new Date(dateStr)
+  const date = new Date(dateStr + 'T12:00:00')
   return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
-    year: 'numeric',
   })
 }
 </script>
@@ -363,6 +538,10 @@ function formatDate(dateStr) {
   height: 100vh;
   background: var(--gw-neutral-50);
   overflow: hidden;
+}
+
+.scoring-view.landscape-mode {
+  flex-direction: row;
 }
 
 .round-container {
@@ -417,7 +596,6 @@ function formatDate(dateStr) {
   cursor: pointer;
   transition: background-color 0.2s ease;
   min-height: 44px;
-  min-width: 44px;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -430,17 +608,18 @@ function formatDate(dateStr) {
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   HEADER
+   PORTRAIT: HEADER
    ══════════════════════════════════════════════════════════════════ */
 
 .scoring-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding: 1.5rem 1rem;
+  padding: 1.5rem 1rem 1rem;
   background: white;
   border-bottom: 1px solid var(--gw-neutral-200);
-  box-shadow: var(--gw-shadow-card);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
 }
 
 .header-left {
@@ -453,15 +632,21 @@ function formatDate(dateStr) {
   font-weight: 700;
   color: var(--gw-neutral-900);
   margin: 0 0 0.5rem 0;
+  line-height: 1.2;
 }
 
 .header-meta {
   display: flex;
-  gap: 1rem;
+  gap: 0.75rem;
+  flex-wrap: wrap;
   align-items: center;
   font-family: var(--gw-font-body);
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   color: var(--gw-neutral-600);
+}
+
+.date, .tee, .holes-label {
+  padding: 0.25rem 0.5rem;
 }
 
 .room-code-badge {
@@ -477,7 +662,7 @@ function formatDate(dateStr) {
   padding: 0.5rem;
   background: transparent;
   border: none;
-  font-size: 1.25rem;
+  font-size: 1.5rem;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   min-height: 44px;
@@ -485,23 +670,28 @@ function formatDate(dateStr) {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
-.share-btn:hover {
-  opacity: 0.7;
+.btn-icon {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   GAMES STRIP
+   PORTRAIT: GAMES STRIP
    ══════════════════════════════════════════════════════════════════ */
 
 .games-strip {
-  padding: 1rem;
+  padding: 0.75rem 1rem;
   background: white;
   border-bottom: 1px solid var(--gw-neutral-100);
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
+  flex-shrink: 0;
 }
 
 .games-scroll {
@@ -530,21 +720,14 @@ function formatDate(dateStr) {
   white-space: nowrap;
 }
 
-.game-chip:hover {
+.game-chip:active {
   background: var(--gw-neutral-200);
 }
 
-.game-chip.game-winning {
+.game-chip-active {
   background: var(--gw-green-100);
   border-color: var(--gw-green-300);
   color: var(--gw-green-700);
-}
-
-.game-chip.game-losing {
-  background: var(--gw-bogey);
-  background-color: rgba(239, 68, 68, 0.1);
-  border-color: var(--gw-bogey);
-  color: var(--gw-bogey);
 }
 
 .game-icon {
@@ -555,12 +738,296 @@ function formatDate(dateStr) {
   font-weight: 600;
 }
 
-.game-balance {
-  opacity: 0.75;
+.game-status {
+  opacity: 0.7;
+  font-size: 0.75rem;
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   SCORECARD GRID
+   PORTRAIT: HOLE NAVIGATOR
+   ══════════════════════════════════════════════════════════════════ */
+
+.hole-navigator {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background: white;
+  border-bottom: 1px solid var(--gw-neutral-100);
+  gap: 1rem;
+  flex-shrink: 0;
+}
+
+.nav-btn {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: var(--gw-green-500);
+  color: white;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 50px;
+  min-width: 50px;
+  -webkit-tap-highlight-color: transparent;
+  font-weight: 300;
+}
+
+.nav-btn:active {
+  background: var(--gw-green-600);
+}
+
+.nav-btn:disabled {
+  background: var(--gw-neutral-300);
+  cursor: not-allowed;
+}
+
+.nav-display {
+  flex: 1;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.nav-label {
+  font-family: var(--gw-font-body);
+  font-size: 0.75rem;
+  color: var(--gw-neutral-500);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.nav-number {
+  font-family: var(--gw-font-display);
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--gw-neutral-900);
+  line-height: 1;
+}
+
+.nav-of {
+  font-family: var(--gw-font-body);
+  font-size: 0.75rem;
+  color: var(--gw-neutral-500);
+  margin-top: 0.25rem;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   PORTRAIT: HOLE CARD
+   ══════════════════════════════════════════════════════════════════ */
+
+.hole-card {
+  flex: 1;
+  background: white;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+.hole-header {
+  padding: 1rem;
+  background: var(--gw-neutral-50);
+  border-bottom: 1px solid var(--gw-neutral-200);
+  flex-shrink: 0;
+}
+
+.hole-title {
+  display: flex;
+  gap: 1rem;
+  align-items: baseline;
+  margin-bottom: 0.5rem;
+}
+
+.hole-number {
+  font-family: var(--gw-font-display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--gw-neutral-900);
+}
+
+.hole-par {
+  font-family: var(--gw-font-body);
+  font-size: 1rem;
+  color: var(--gw-neutral-600);
+  font-weight: 600;
+}
+
+.hole-meta {
+  display: flex;
+  gap: 1rem;
+  font-family: var(--gw-font-body);
+  font-size: 0.85rem;
+  color: var(--gw-neutral-600);
+}
+
+.hole-si, .hole-yards {
+  padding: 0.25rem 0.5rem;
+}
+
+.hole-players {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  gap: 0.75rem;
+}
+
+.player-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+  background: var(--gw-neutral-50);
+  border-radius: var(--gw-radius-lg);
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.2s ease;
+  min-height: 80px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.player-row:active {
+  background: var(--gw-neutral-100);
+  border-color: var(--gw-green-300);
+}
+
+.player-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.player-name {
+  font-family: var(--gw-font-body);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--gw-neutral-900);
+}
+
+.player-hcp-indicator {
+  display: flex;
+  gap: 0.25rem;
+  font-size: 0.6rem;
+  color: var(--gw-neutral-400);
+}
+
+.stroke-dot {
+  font-weight: bold;
+}
+
+.score-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 60px;
+}
+
+.gross-score {
+  font-family: var(--gw-font-mono);
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+  min-width: 60px;
+  text-align: center;
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+}
+
+.gross-score.score-empty {
+  color: var(--gw-neutral-400);
+  font-weight: 400;
+}
+
+.gross-score.score-par {
+  color: var(--gw-neutral-900);
+}
+
+.gross-score.score-birdie {
+  background: var(--gw-green-500);
+  color: white;
+}
+
+.gross-score.score-eagle {
+  background: var(--gw-eagle);
+  color: white;
+}
+
+.gross-score.score-bogey {
+  color: var(--gw-bogey);
+  font-weight: 700;
+}
+
+.gross-score.score-double {
+  color: var(--gw-double);
+  font-weight: 700;
+}
+
+.net-score {
+  font-family: var(--gw-font-body);
+  font-size: 0.75rem;
+  color: var(--gw-neutral-500);
+  font-weight: 500;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   PORTRAIT: VIEW SCORECARD BUTTON
+   ══════════════════════════════════════════════════════════════════ */
+
+.btn-view-scorecard {
+  padding: 1rem;
+  background: var(--gw-green-500);
+  color: white;
+  border: none;
+  border-radius: 0;
+  font-family: var(--gw-font-body);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 56px;
+  -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
+  margin-bottom: calc(var(--gw-nav-height) + env(safe-area-inset-bottom));
+}
+
+.btn-view-scorecard:active {
+  background: var(--gw-green-600);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   LANDSCAPE: HEADER
+   ══════════════════════════════════════════════════════════════════ */
+
+.landscape-header {
+  padding: 1rem;
+  background: white;
+  border-bottom: 1px solid var(--gw-neutral-200);
+  flex-shrink: 0;
+}
+
+.landscape-header h1 {
+  font-family: var(--gw-font-display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--gw-neutral-900);
+  margin: 0 0 0.5rem 0;
+}
+
+.landscape-meta {
+  font-family: var(--gw-font-body);
+  font-size: 0.875rem;
+  color: var(--gw-neutral-600);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   LANDSCAPE: SCORECARD TABLE
    ══════════════════════════════════════════════════════════════════ */
 
 .scorecard-wrapper {
@@ -570,21 +1037,21 @@ function formatDate(dateStr) {
   background: white;
 }
 
-.scorecard {
+.scorecard-landscape {
   border-collapse: collapse;
   width: 100%;
-  min-width: 100%;
   font-family: var(--gw-font-body);
+  font-size: 0.85rem;
 }
 
-.scorecard thead {
+.scorecard-landscape thead {
   position: sticky;
   top: 0;
   background: var(--gw-neutral-50);
   z-index: 10;
 }
 
-.scorecard th {
+.scorecard-landscape th {
   padding: 0.75rem 0.5rem;
   text-align: center;
   font-size: 0.75rem;
@@ -594,6 +1061,13 @@ function formatDate(dateStr) {
   white-space: nowrap;
 }
 
+.scorecard-landscape td {
+  padding: 0.75rem 0.5rem;
+  text-align: center;
+  border-bottom: 1px solid var(--gw-neutral-100);
+  font-size: 0.85rem;
+}
+
 .col-hole {
   min-width: 3rem;
   width: 3rem;
@@ -601,68 +1075,13 @@ function formatDate(dateStr) {
   left: 0;
   z-index: 5;
   background: var(--gw-neutral-50);
+  font-weight: 600;
+  color: var(--gw-neutral-700);
 }
 
 .col-player {
   min-width: 4rem;
   width: 4rem;
-}
-
-.scorecard td {
-  padding: 0.75rem 0.5rem;
-  text-align: center;
-  border-bottom: 1px solid var(--gw-neutral-100);
-  font-size: 0.875rem;
-}
-
-.col-hole {
-  font-weight: 600;
-  color: var(--gw-neutral-700);
-  background: white;
-}
-
-.row-alt .col-hole {
-  background: var(--gw-neutral-50);
-}
-
-.row-alt {
-  background: var(--gw-neutral-50);
-}
-
-.row-par .col-hole,
-.row-si .col-hole {
-  color: var(--gw-neutral-600);
-  font-weight: 500;
-}
-
-.row-par,
-.row-si {
-  background: var(--gw-neutral-100);
-}
-
-.row-par .col-player,
-.row-si .col-player {
-  color: var(--gw-neutral-600);
-  font-weight: 500;
-}
-
-.row-total,
-.row-grand-total {
-  background: var(--gw-neutral-100);
-  border-top: 2px solid var(--gw-neutral-300);
-  border-bottom: 2px solid var(--gw-neutral-300);
-}
-
-.row-total .col-hole,
-.row-grand-total .col-hole {
-  font-weight: 700;
-  color: var(--gw-neutral-900);
-}
-
-.row-total .col-player,
-.row-grand-total .col-player {
-  font-weight: 700;
-  color: var(--gw-neutral-900);
 }
 
 .col-score {
@@ -677,56 +1096,56 @@ function formatDate(dateStr) {
   background: var(--gw-neutral-200);
 }
 
-/* Score cell styling */
-.score-cell {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 2rem;
-  height: 2rem;
-  border-radius: 50%;
+.score-gross {
+  display: block;
   font-family: var(--gw-font-mono);
   font-weight: 600;
-  transition: all 0.2s ease;
 }
 
-.score-cell.score-empty {
-  color: var(--gw-neutral-400);
-  font-weight: 400;
+.score-gross.score-birdie {
+  color: var(--gw-green-500);
 }
 
-.score-cell.score-par {
-  color: var(--gw-neutral-900);
+.score-gross.score-eagle {
+  color: var(--gw-eagle);
 }
 
-.score-cell.score-birdie {
-  background: var(--gw-green-500);
-  color: white;
-}
-
-.score-cell.score-eagle {
-  background: var(--gw-eagle);
-  color: white;
-}
-
-.score-cell.score-bogey {
+.score-gross.score-bogey {
   color: var(--gw-bogey);
-  font-weight: 700;
 }
 
-.score-cell.score-double {
+.score-gross.score-double {
   color: var(--gw-double);
-  font-weight: 700;
+}
+
+.score-net {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--gw-neutral-500);
+  margin-top: 0.2rem;
 }
 
 .col-total {
+  background: var(--gw-neutral-100);
   font-weight: 700;
   color: var(--gw-neutral-900);
+}
+
+.row-total {
   background: var(--gw-neutral-100);
+  border-top: 2px solid var(--gw-neutral-300);
+  border-bottom: 1px solid var(--gw-neutral-300);
+}
+
+.row-grand-total {
+  background: var(--gw-neutral-100);
+  border-top: 2px solid var(--gw-neutral-300);
+  border-bottom: 2px solid var(--gw-neutral-300);
+  font-weight: 700;
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   SCORE ENTRY OVERLAY & MODAL
+   SCORE ENTRY MODAL & OVERLAY
    ══════════════════════════════════════════════════════════════════ */
 
 .score-entry-overlay {
@@ -748,7 +1167,7 @@ function formatDate(dateStr) {
   border-radius: var(--gw-radius-xl) var(--gw-radius-xl) 0 0;
   padding: 1.5rem 1rem;
   padding-bottom: calc(1rem + env(safe-area-inset-bottom));
-  box-shadow: var(--gw-shadow-lg);
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .entry-header {
@@ -772,8 +1191,7 @@ function formatDate(dateStr) {
   color: var(--gw-neutral-900);
 }
 
-.entry-par,
-.entry-si {
+.entry-par, .entry-si {
   opacity: 0.7;
 }
 
@@ -823,15 +1241,14 @@ function formatDate(dateStr) {
 
 .score-number {
   font-family: var(--gw-font-mono);
-  font-size: 7.5rem;
+  font-size: 5rem;
   font-weight: 700;
   line-height: 1;
-  min-height: 120px;
+  min-height: 100px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--gw-neutral-900);
-  animation: score-pop 0.4s ease;
 }
 
 .score-number.score-eagle {
@@ -840,10 +1257,6 @@ function formatDate(dateStr) {
 
 .score-number.score-birdie {
   color: var(--gw-green-500);
-}
-
-.score-number.score-par {
-  color: var(--gw-neutral-900);
 }
 
 .score-number.score-bogey {
@@ -862,19 +1275,11 @@ function formatDate(dateStr) {
   margin-top: 0.5rem;
 }
 
-@keyframes score-pop {
-  0% {
-    transform: scale(1);
-  }
-  40% {
-    transform: scale(1.15);
-  }
-  70% {
-    transform: scale(0.95);
-  }
-  100% {
-    transform: scale(1);
-  }
+.net-display {
+  font-family: var(--gw-font-body);
+  font-size: 0.875rem;
+  color: var(--gw-neutral-500);
+  margin-top: 0.5rem;
 }
 
 .btn-done {
@@ -893,12 +1298,95 @@ function formatDate(dateStr) {
   -webkit-tap-highlight-color: transparent;
 }
 
-.btn-done:hover {
+.btn-done:active {
   background: var(--gw-green-600);
 }
 
-.btn-done:active {
-  background: var(--gw-green-700);
+/* ══════════════════════════════════════════════════════════════════
+   SCORECARD MODAL
+   ══════════════════════════════════════════════════════════════════ */
+
+.scorecard-modal {
+  width: 100%;
+  max-width: 90vh;
+  max-height: 80vh;
+  background: white;
+  border-radius: var(--gw-radius-xl);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid var(--gw-neutral-200);
+  flex-shrink: 0;
+}
+
+.modal-header h2 {
+  font-family: var(--gw-font-display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--gw-neutral-900);
+  margin: 0;
+}
+
+.btn-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--gw-neutral-500);
+  padding: 0.5rem;
+  min-width: 44px;
+  min-height: 44px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.modal-content {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 1rem;
+}
+
+.scorecard-in-modal {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.85rem;
+}
+
+.scorecard-in-modal thead {
+  position: sticky;
+  top: 0;
+  background: var(--gw-neutral-50);
+}
+
+.scorecard-in-modal th {
+  padding: 0.75rem 0.5rem;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--gw-neutral-700);
+  border-bottom: 1px solid var(--gw-neutral-200);
+}
+
+.scorecard-in-modal td {
+  padding: 0.75rem 0.5rem;
+  text-align: center;
+  border-bottom: 1px solid var(--gw-neutral-100);
+}
+
+.scorecard-in-modal .col-score {
+  cursor: pointer;
+}
+
+.scorecard-in-modal .col-total {
+  background: var(--gw-neutral-100);
+  font-weight: 700;
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -914,7 +1402,8 @@ function formatDate(dateStr) {
   opacity: 0;
 }
 
-.overlay-enter-from .score-entry-modal {
+.overlay-enter-from .score-entry-modal,
+.overlay-enter-from .scorecard-modal {
   transform: translateY(100%);
 }
 
@@ -922,65 +1411,40 @@ function formatDate(dateStr) {
   opacity: 0;
 }
 
-.overlay-leave-to .score-entry-modal {
+.overlay-leave-to .score-entry-modal,
+.overlay-leave-to .scorecard-modal {
   transform: translateY(100%);
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   MOBILE & RESPONSIVE
+   RESPONSIVE & MOBILE
    ══════════════════════════════════════════════════════════════════ */
 
 @media (max-width: 768px) {
-  .scoring-header {
-    padding: 1rem 0.75rem;
-  }
-
   .course-name {
     font-size: 1.5rem;
   }
 
-  .header-meta {
-    gap: 0.75rem;
-    font-size: 0.75rem;
+  .hole-number {
+    font-size: 1.25rem;
   }
 
-  .scorecard th,
-  .scorecard td {
-    padding: 0.5rem 0.25rem;
-    font-size: 0.75rem;
-  }
-
-  .col-hole {
-    min-width: 2.5rem;
-    width: 2.5rem;
-  }
-
-  .col-player {
-    min-width: 3.5rem;
-    width: 3.5rem;
-  }
-
-  .score-cell {
-    min-width: 1.75rem;
-    height: 1.75rem;
-    font-size: 0.75rem;
+  .player-row {
+    padding: 0.75rem;
+    min-height: 70px;
   }
 
   .score-number {
-    font-size: 5rem;
+    font-size: 3.5rem;
     min-height: 80px;
   }
 
   .btn-adjust {
-    width: 56px;
-    height: 56px;
+    width: 60px;
+    height: 60px;
     font-size: 1.5rem;
-    min-height: 56px;
-    min-width: 56px;
-  }
-
-  .score-input-area {
-    gap: 1rem;
+    min-height: 60px;
+    min-width: 60px;
   }
 }
 
@@ -999,8 +1463,8 @@ function formatDate(dateStr) {
   }
 
   .score-number {
-    font-size: 4rem;
-    min-height: 80px;
+    font-size: 3rem;
+    min-height: 70px;
   }
 
   .btn-adjust {

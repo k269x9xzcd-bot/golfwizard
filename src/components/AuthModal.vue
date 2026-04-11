@@ -21,7 +21,7 @@
               type="email"
               class="auth-input"
               placeholder="you@example.com"
-              autocomplete="email"
+              autocomplete="off"
               autocapitalize="none"
               autocorrect="off"
               spellcheck="false"
@@ -67,21 +67,21 @@
               v-model="otp"
               type="text"
               class="auth-input auth-input--otp"
-              placeholder="00000000"
+              placeholder="000000"
               inputmode="numeric"
               autocomplete="one-time-code"
-              maxlength="8"
-              minlength="4"
+              maxlength="6"
+              minlength="6"
               id="auth-otp"
               name="otp"
-              pattern="[0-9]*"
+              pattern="[0-9]{6}"
               required
               ref="otpInput"
             />
             <button
               type="submit"
               class="btn-magic"
-              :disabled="verifying || otp.length < 4"
+              :disabled="verifying || otp.length < 6"
             >
               <span v-if="verifying" class="btn-spinner">⟳</span>
               <span v-else>✓</span>
@@ -144,7 +144,7 @@ async function sendOtp() {
 }
 
 async function verifyOtp() {
-  if (otp.value.length < 4) return
+  if (otp.value.length < 6) return
   verifying.value = true
   error.value = ''
   try {

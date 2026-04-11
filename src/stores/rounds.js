@@ -23,8 +23,43 @@ export const useRoundsStore = defineStore('rounds', () => {
   // ── Computed ────────────────────────────────────────────────
   const activeRoundId = computed(() => activeRound.value?.id)
 
+  // ── Helpers ─────────────────────────────────────────────────
+  function _isGuest() {
+    const auth = useAuthStore()
+    return !auth.isAuthenticated
+  }
+
+  function _guestKey(roundId) {
+    return `gw_guest_round_${roundId}`
+  }
+
+  function _persistGuest() {
+    if (!activeRound.value) return
+    const payload = {
+      round: activeRound.value,
+      members: activeMembers.value,
+      games: activeGames.value,
+      scores: activeScores.value,
+    }
+    localStorage.setItem(_guestKey(activeRound.value.id), JSON.stringify(payload))
+    // Also keep an index of all guest rounds
+    const index = JSON.parse(localStorage.getItem('gw_guest_rounds_index') || '[]')
+    if (!index.includes(activeRound.value.id)) {
+      index.unshift(activeRound.value.id)
+      localStorage.setItem('gw_guest_rounds_index', JSON.stringify(index.slice(0, 50)))
+    }
+  }
+
   // ── Fetch history ───────────────────────────────────────────
   async function fetchRounds() {
+    if (_isGuest()) {
+      const index = JSON.parse(localStorage.getItem('gw_guest_rounds_index') || '[]')
+      rounds.value = index.map(id => {
+        const raw = localStorage.getItem(_guestKey(id))
+        return raw ? JSON.parse(raw).round : null
+      }).filter(Boolean)
+      return
+    }
     loading.value = true
     const { data, error } = await supabase
       .from('rounds')
@@ -42,6 +77,56 @@ export const useRoundsStore = defineStore('rounds', () => {
   // ── Create a new round ──────────────────────────────────────
   async function createRound({ name, courseName, tee, date, holesMode, format, withRoomCode = false, players = [], games = [] }) {
     const auth = useAuthStore()
+
+    // ── GUEST PATH ──────────────────────────────────────────
+    if (!auth.isAuthenticated) {
+      const roundId = `guest_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+      const round = {
+        id: roundId,
+        name,
+        course_name: courseName,
+        tee,
+        date: date || new Date().toISOString().slice(0, 10),
+        holes_mode: holesMode || '18',
+        format: format || 'social',
+        room_code: null,
+        owner_id: null,
+        is_complete: false,
+        created_at: new Date().toISOString(),
+      }
+
+      const members = players.map((p, i) => ({
+        id: `gm_${i}_${Date.now()}`,
+        round_id: roundId,
+        profile_id: null,
+        guest_name: p.name,
+        short_name: p.shortName ?? p.name?.slice(0, 6),
+        ghin_index: p.ghinIndex ?? null,
+        round_hcp: p.roundHcp ?? null,
+        team: p.team ?? null,
+        group_index: p.groupIndex ?? 0,
+        role: i === 0 ? 'admin' : 'player',
+      }))
+
+      const gameConfigs = games.map((g, i) => ({
+        id: `gg_${i}_${Date.now()}`,
+        round_id: roundId,
+        type: g.type,
+        config: g.config,
+        sort_order: i,
+        created_by: null,
+      }))
+
+      activeRound.value = round
+      activeMembers.value = members
+      activeGames.value = gameConfigs
+      activeScores.value = {}
+
+      _persistGuest()
+      return round
+    }
+
+    // ── AUTHENTICATED PATH ──────────────────────────────────
     let roomCode = null
     if (withRoomCode) roomCode = await generateRoomCode()
 
@@ -98,6 +183,19 @@ export const useRoundsStore = defineStore('rounds', () => {
 
   // ── Load a round as "active" ────────────────────────────────
   async function loadRound(roundId) {
+    // ── GUEST PATH ──────────────────────────────────────────
+    if (_isGuest() || String(roundId).startsWith('guest_')) {
+      const raw = localStorage.getItem(_guestKey(roundId))
+      if (!raw) throw new Error(`Guest round ${roundId} not found`)
+      const payload = JSON.parse(raw)
+      activeRound.value = payload.round
+      activeMembers.value = payload.members ?? []
+      activeGames.value = payload.games ?? []
+      activeScores.value = payload.scores ?? {}
+      return payload.round
+    }
+
+    // ── AUTHENTICATED PATH ──────────────────────────────────
     const { data, error } = await supabase
       .from('rounds')
       .select(`*, round_members(*), game_configs(*), scores(*)`)
@@ -125,10 +223,17 @@ export const useRoundsStore = defineStore('rounds', () => {
   // ── Upsert a score ──────────────────────────────────────────
   async function setScore(memberId, hole, score) {
     const auth = useAuthStore()
-    // Optimistic update
+    // Optimistic update always
     if (!activeScores.value[memberId]) activeScores.value[memberId] = {}
     activeScores.value[memberId][hole] = score
 
+    // ── GUEST PATH ──────────────────────────────────────────
+    if (!auth.isAuthenticated || String(activeRound.value?.id ?? '').startsWith('guest_')) {
+      _persistGuest()
+      return
+    }
+
+    // ── AUTHENTICATED PATH ──────────────────────────────────
     const { error } = await supabase
       .from('scores')
       .upsert({
@@ -150,6 +255,16 @@ export const useRoundsStore = defineStore('rounds', () => {
   // ── Save game configs ───────────────────────────────────────
   async function saveGameConfig(game) {
     const auth = useAuthStore()
+
+    if (!auth.isAuthenticated || String(activeRound.value?.id ?? '').startsWith('guest_')) {
+      const newGame = { ...game, id: game.id || `gg_${Date.now()}`, round_id: activeRound.value?.id }
+      const idx = activeGames.value.findIndex(g => g.id === newGame.id)
+      if (idx >= 0) activeGames.value[idx] = newGame
+      else activeGames.value.push(newGame)
+      _persistGuest()
+      return newGame
+    }
+
     const { data, error } = await supabase
       .from('game_configs')
       .upsert({
@@ -167,6 +282,14 @@ export const useRoundsStore = defineStore('rounds', () => {
   }
 
   async function deleteGameConfig(gameId) {
+    const auth = useAuthStore()
+
+    if (!auth.isAuthenticated || String(activeRound.value?.id ?? '').startsWith('guest_')) {
+      activeGames.value = activeGames.value.filter(g => g.id !== gameId)
+      _persistGuest()
+      return
+    }
+
     const { error } = await supabase.from('game_configs').delete().eq('id', gameId)
     if (error) throw error
     activeGames.value = activeGames.value.filter(g => g.id !== gameId)
@@ -208,6 +331,9 @@ export const useRoundsStore = defineStore('rounds', () => {
 
   // ── Real-time subscriptions ─────────────────────────────────
   function subscribeToRound(roundId) {
+    // Skip subscriptions for guest rounds
+    if (String(roundId).startsWith('guest_')) return
+
     // Clean up previous subscriptions
     if (scoreSubscription) supabase.removeChannel(scoreSubscription)
     if (memberSubscription) supabase.removeChannel(memberSubscription)
@@ -254,6 +380,14 @@ export const useRoundsStore = defineStore('rounds', () => {
 
   // ── Complete / archive a round ──────────────────────────────
   async function completeRound(roundId) {
+    if (_isGuest() || String(roundId).startsWith('guest_')) {
+      if (activeRound.value?.id === roundId) {
+        activeRound.value.is_complete = true
+        _persistGuest()
+      }
+      return
+    }
+
     const { error } = await supabase
       .from('rounds')
       .update({ is_complete: true })

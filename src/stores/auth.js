@@ -54,10 +54,10 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function updateProfile(updates) {
     if (!user.value) return
+    // Use upsert so it creates the profile row if it doesn't exist yet
     const { data, error } = await supabase
       .from('profiles')
-      .update(updates)
-      .eq('id', user.value.id)
+      .upsert({ id: user.value.id, ...updates }, { onConflict: 'id' })
       .select()
       .single()
     if (error) throw error

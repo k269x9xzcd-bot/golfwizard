@@ -140,12 +140,31 @@
                   maxlength="80"
                   @keydown.enter="step1Next"
                 />
+                <!-- Auto-fetch from API button -->
+                <button
+                  v-if="newCourse.name.length >= 3"
+                  class="btn-fetch-api"
+                  :disabled="apiFetching"
+                  @click="fetchCourseFromApi"
+                >
+                  {{ apiFetching ? '⟳ Fetching…' : '🔄 Fetch tees from golf database' }}
+                </button>
+                <div v-if="apiFetchMsg" class="api-fetch-msg" :class="{ 'api-fetch-err': apiFetchErr }">{{ apiFetchMsg }}</div>
               </div>
 
               <!-- Tees -->
               <div class="field-group">
                 <label class="field-label">Tee Boxes</label>
-                <div class="tees-list">
+                <div v-if="apiFetching" class="api-loading-inline">
+                  <span class="api-loading-spinner">⟳</span> Fetching tee data…
+                </div>
+                <div v-else-if="newCourse.tees.length === 0 && !newCourse.name.trim()" class="tees-empty-hint">
+                  Enter a course name above — tees will load automatically from the golf database.
+                </div>
+                <div v-else-if="newCourse.tees.length === 0" class="tees-empty-hint">
+                  No tees loaded yet. Type the full course name or tap "Fetch tees" above.
+                </div>
+                <div v-else class="tees-list">
                   <div v-for="(tee, idx) in newCourse.tees" :key="idx" class="tee-row">
                     <div class="tee-color-swatch" :style="{ background: teeColor(tee.name) }" />
                     <input v-model="tee.name" class="tee-name-input" placeholder="Tee name" maxlength="20" />
@@ -157,7 +176,7 @@
                     <button class="tee-remove" @click="removeTee(idx)" :disabled="newCourse.tees.length <= 1" aria-label="Remove tee">✕</button>
                   </div>
                 </div>
-                <button class="add-tee-btn" @click="addTee" :disabled="newCourse.tees.length >= 6">
+                <button class="add-tee-btn" @click="addTee" :disabled="newCourse.tees.length >= 10">
                   + Add Tee Box
                 </button>
               </div>
@@ -347,7 +366,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useCoursesStore } from '../stores/courses'
 import { useRoute } from 'vue-router'
 
@@ -427,7 +446,7 @@ function teeSummary(course) {
 }
 
 function selectCourse(course) {
-  // noop for now — course detail view could be added later
+  openEditCourse(course)
 }
 
 // ── Tee color map ────────────────────────────────────────────
@@ -456,17 +475,16 @@ const step2Error = ref('')
 const selectedTeeIdx = ref(0)
 const apiLoading = ref(false)
 
-function freshCourse(numTees = 2) {
+function freshCourse(numTees = 0) {
   return {
     name: '',
-    tees: [
-      { name: 'Black', rating: null, slope: null },
-      { name: 'White', rating: null, slope: null },
-    ].slice(0, numTees),
+    tees: numTees > 0
+      ? Array.from({ length: numTees }, () => ({ name: '', rating: null, slope: null }))
+      : [],
     holes: Array.from({ length: 18 }, (_, i) => ({
       par: 4,
-      siByTee: Array(numTees).fill(null).map((_, ti) => i + 1),  // per-tee SI
-      yards: Array(numTees).fill(null),  // one per tee
+      siByTee: Array(numTees).fill(null).map(() => i + 1),
+      yards: Array(numTees).fill(null),
     })),
   }
 }
@@ -487,40 +505,46 @@ function openAddCourse() {
 // Track which course we're editing (null = new course)
 const editingCourse = ref(null)
 
-function openEditCourse(c) {
+async function openEditCourse(c) {
   editingCourse.value = c
-  // Build editable form from existing course data
-  const teesData = c.teesData || {}
-  const teeNames = Object.keys(teesData)
-  const tees = teeNames.length
-    ? teeNames.map(name => ({
-        name,
-        rating: teesData[name].rating ?? null,
-        slope: teesData[name].slope ?? null,
-      }))
-    : [{ name: 'White', rating: null, slope: null }]
-
-  const par = c.par || Array(18).fill(4)
-  // Support legacy single si[] or new siByTee per tee
-  const globalSi = c.si || Array.from({ length: 18 }, (_, i) => i + 1)
-
-  const holes = Array.from({ length: 18 }, (_, i) => ({
-    par: par[i] || 4,
-    // Each tee gets its own SI; use teesData[name].siByHole if available, else global si
-    siByTee: teeNames.map(name => teesData[name]?.siByHole?.[i] ?? globalSi[i] ?? (i + 1)),
-    yards: teeNames.map(name => (teesData[name]?.yardsByHole?.[i]) || null),
-  }))
-
-  newCourse.value = {
-    name: c.name,
-    tees,
-    holes,
-  }
+  // Show overlay immediately with loading state — API-first approach
+  newCourse.value = { name: c.name, tees: [], holes: [] }
   addStep.value = 1
   step1Error.value = ''
   step2Error.value = ''
+  apiFetchMsg.value = ''
+  apiFetchErr.value = false
   selectedTeeIdx.value = 0
   showAddOverlay.value = true
+
+  // Try API fetch first
+  console.log('[GW] openEditCourse: fetching API data for', c.name)
+  await fetchCourseFromApi()
+
+  // If API fetch didn't populate tees, fall back to existing course data
+  if (newCourse.value.tees.length === 0) {
+    console.log('[GW] API fetch returned no tees, falling back to existing data')
+    const teesData = c.teesData || {}
+    const teeNames = Object.keys(teesData)
+    const tees = teeNames.length
+      ? teeNames.map(name => ({
+          name,
+          rating: teesData[name].rating ?? null,
+          slope: teesData[name].slope ?? null,
+        }))
+      : [{ name: 'White', rating: null, slope: null }]
+
+    const par = c.par || Array(18).fill(4)
+    const globalSi = c.si || Array.from({ length: 18 }, (_, i) => i + 1)
+
+    const holes = Array.from({ length: 18 }, (_, i) => ({
+      par: par[i] || 4,
+      siByTee: teeNames.map(name => teesData[name]?.siByHole?.[i] ?? globalSi[i] ?? (i + 1)),
+      yards: teeNames.map(name => (teesData[name]?.yardsByHole?.[i]) || null),
+    }))
+
+    newCourse.value = { name: c.name, tees, holes }
+  }
 }
 
 function closeAddCourse() {
@@ -549,15 +573,106 @@ function removeTee(idx) {
   }
 }
 
+// ── Fetch course data from API ─────────────────────────────────
+const apiFetching = ref(false)
+const apiFetchMsg = ref('')
+const apiFetchErr = ref(false)
+
+// Auto-fetch when user types a course name in Add mode (debounced)
+let nameSearchTimer = null
+watch(() => newCourse.value.name, (name) => {
+  clearTimeout(nameSearchTimer)
+  if (!showAddOverlay.value || editingCourse.value) return  // only for "Add" mode
+  const trimmed = (name || '').trim()
+  if (trimmed.length < 5) return  // wait for a meaningful name
+  nameSearchTimer = setTimeout(() => {
+    fetchCourseFromApi()
+  }, 800)
+})
+
+async function fetchCourseFromApi() {
+  const name = newCourse.value.name.trim()
+  if (!name || name.length < 3) return
+  apiFetching.value = true
+  apiFetchMsg.value = 'Searching golf database…'
+  apiFetchErr.value = false
+
+  try {
+    // Step 1: Search for the course
+    console.log('[GW] API search for:', name)
+    const results = await coursesStore.searchCoursesApi(name)
+    console.log('[GW] API search results:', results.length, results.map(r => r.name))
+    if (!results.length) {
+      apiFetchMsg.value = 'No matches found in the golf database.'
+      apiFetchErr.value = true
+      apiFetching.value = false
+      return
+    }
+
+    // Find best match
+    const match = results.find(r =>
+      r.name.toLowerCase() === name.toLowerCase()
+    ) || results.find(r =>
+      r.name.toLowerCase().includes(name.toLowerCase().split(' ')[0])
+    ) || results[0]
+
+    console.log('[GW] Best match:', match?.name, 'apiId:', match?.apiId)
+
+    if (!match?.apiId) {
+      apiFetchMsg.value = 'Could not find detailed data for this course.'
+      apiFetchErr.value = true
+      apiFetching.value = false
+      return
+    }
+
+    // Step 2: Fetch full detail
+    apiFetchMsg.value = `Found "${match.name}" — loading tee data…`
+    console.log('[GW] Fetching detail for apiId:', match.apiId)
+    const detail = await coursesStore.fetchCourseDetail(match.apiId)
+    console.log('[GW] Detail result:', detail ? Object.keys(detail.teesData || {}) : 'null')
+    if (!detail || !Object.keys(detail.teesData || {}).length) {
+      apiFetchMsg.value = 'Course found but no tee data available.'
+      apiFetchErr.value = true
+      apiFetching.value = false
+      return
+    }
+
+    // Step 3: Populate the form with API data
+    const teeNames = Object.keys(detail.teesData)
+    newCourse.value.name = match.name  // Use the official API name
+    newCourse.value.tees = teeNames.map(tn => ({
+      name: tn,
+      rating: detail.teesData[tn].rating ?? null,
+      slope: detail.teesData[tn].slope ?? null,
+    }))
+    newCourse.value.holes = Array.from({ length: 18 }, (_, i) => ({
+      par: detail.par?.[i] ?? 4,
+      siByTee: teeNames.map(tn =>
+        detail.teesData[tn].siByHole?.[i] ?? detail.si?.[i] ?? (i + 1)
+      ),
+      yards: teeNames.map(tn => detail.teesData[tn].yardsByHole?.[i] ?? null),
+    }))
+    selectedTeeIdx.value = 0
+    apiFetchMsg.value = `Loaded ${teeNames.length} tees from ${match.name}`
+    apiFetchErr.value = false
+  } catch (e) {
+    apiFetchMsg.value = 'Failed to fetch: ' + (e.message || 'Unknown error')
+    apiFetchErr.value = true
+  }
+  apiFetching.value = false
+}
+
 function step1Next() {
   step1Error.value = ''
   const name = newCourse.value.name.trim()
   if (!name) { step1Error.value = 'Please enter a course name.'; return }
-  // Check for duplicate only when adding new
+  // Check for duplicate only when adding new — allow overriding built-in courses
   if (!editingCourse.value) {
     const exists = coursesStore.allCourses.find(c => c.name.toLowerCase() === name.toLowerCase())
-    if (exists) { step1Error.value = `"${name}" already exists in your course list.`; return }
+    if (exists && exists.isCustom) { step1Error.value = `"${name}" already exists as a custom course. Edit it instead.`; return }
+    // Built-in course with same name is OK — we'll save as a custom override
   }
+  if (newCourse.value.tees.length === 0) { step1Error.value = 'No tees loaded. Wait for API fetch or add tees manually.'; return }
   const badTee = newCourse.value.tees.find(t => !t.name.trim())
   if (badTee) { step1Error.value = 'All tee boxes need a name.'; return }
   addStep.value = 2
@@ -565,8 +680,14 @@ function step1Next() {
 
 function step2Next() {
   step2Error.value = ''
-  // Validate SI for the currently selected tee
-  const sis = newCourse.value.holes.map(h => h.siByTee[selectedTeeIdx.value]).filter(s => s >= 1 && s <= 18)
+  // Validate SI for at least the first tee (or selected tee)
+  // API data usually has valid SIs; be lenient to allow saving
+  const sis = newCourse.value.holes.map(h => h.siByTee[selectedTeeIdx.value]).filter(s => s != null && s >= 1 && s <= 18)
+  if (sis.length < 18) {
+    const teeName = newCourse.value.tees[selectedTeeIdx.value]?.name || `Tee ${selectedTeeIdx.value + 1}`
+    step2Error.value = `Some stroke indexes are missing for "${teeName}". Fill in all 18 holes.`
+    return
+  }
   const uniqueSis = new Set(sis)
   if (uniqueSis.size !== 18) {
     const teeName = newCourse.value.tees[selectedTeeIdx.value]?.name || `Tee ${selectedTeeIdx.value + 1}`
@@ -1025,6 +1146,60 @@ async function doDelete() {
 }
 .add-tee-btn:hover, .add-tee-btn:active { border-color: var(--gw-green-400); color: var(--gw-green-500); }
 .add-tee-btn:disabled { opacity: .4; cursor: default; }
+
+/* ── Fetch from API button ───────────────────────────────── */
+.btn-fetch-api {
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px 14px;
+  background: var(--gw-green-50);
+  border: 1.5px solid var(--gw-green-300);
+  border-radius: var(--gw-radius-md);
+  font-family: var(--gw-font-body);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--gw-green-700);
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-fetch-api:active:not(:disabled) {
+  background: var(--gw-green-100);
+}
+.btn-fetch-api:disabled {
+  opacity: .6;
+  cursor: default;
+}
+.api-fetch-msg {
+  font-size: 13px;
+  color: var(--gw-green-600);
+  margin-top: 6px;
+  padding: 4px 0;
+}
+.api-fetch-msg.api-fetch-err {
+  color: #dc2626;
+}
+.tees-empty-hint {
+  font-size: 14px;
+  color: var(--gw-gray-500, #6b7280);
+  padding: 16px 0;
+  text-align: center;
+  line-height: 1.4;
+}
+.api-loading-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--gw-green-600);
+  padding: 16px 0;
+  justify-content: center;
+}
+.api-loading-spinner {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* ── Tee selector (step 2) ───────────────────────────────── */
 .tee-selector {

@@ -725,6 +725,87 @@ body {
   color: var(--gw-neutral-700);
 }
 
+/* Tee selector buttons in wizard */
+.tee-section {
+  margin-top: 12px;
+}
+.tee-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+.tee-option-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--gw-neutral-50);
+  border: 1.5px solid var(--gw-neutral-200);
+  border-radius: var(--gw-radius-md);
+  cursor: pointer;
+  font-family: var(--gw-font-body);
+  font-size: 15px;
+  color: var(--gw-neutral-700);
+  transition: border-color .15s, background .15s;
+  -webkit-tap-highlight-color: transparent;
+  text-align: left;
+}
+.tee-option-btn:active { background: var(--gw-neutral-100); }
+.tee-option-btn.tee-selected {
+  border-color: var(--gw-green-400);
+  background: var(--gw-green-50);
+  color: var(--gw-neutral-900);
+}
+.tee-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--tee-dot, #16a34a);
+  flex-shrink: 0;
+  border: 1px solid rgba(0,0,0,.15);
+}
+.tee-option-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tee-option-name {
+  font-weight: 600;
+  font-size: 15px;
+}
+.tee-option-detail {
+  font-size: 12px;
+  color: var(--gw-neutral-500);
+}
+
+/* Course section labels in wizard */
+.course-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--gw-neutral-400);
+  padding: 8px 4px 4px;
+}
+.course-option--fav {
+  border-left: 3px solid var(--gw-green-400);
+}
+
+/* API loading indicator in wizard */
+.api-loading-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+  color: var(--gw-neutral-500);
+  font-size: 14px;
+}
+.api-loading-spinner {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+}
+
 /* Roster options */
 .roster-list {
   display: flex;

@@ -10,17 +10,28 @@ export const useCoursesStore = defineStore('courses', () => {
   const loading = ref(false)
 
   // All courses: built-in + custom
+  // Supabase stores tee data in `tees` jsonb column (same shape as teesData)
+  // and hole data in `holes` jsonb column. localStorage stores teesData/par/si separately.
   const allCourses = computed(() => {
-    const custom = customCourses.value.map(c => ({
-      name: c.name,
-      tees: c.tees,
-      teesData: c.teesData ?? c.tees ?? null,
-      isCustom: true,
-      id: c.id,
-    }))
+    const custom = customCourses.value.map(c => {
+      // Supabase shape: c.tees = {Blue: {rating, slope, yards, ...}}, c.holes = [{par, ...}]
+      // localStorage shape: c.teesData = {...}, c.par = [...], c.si = [...]
+      const teesData = c.teesData ?? (typeof c.tees === 'object' && c.tees !== null && !Array.isArray(c.tees) ? c.tees : null)
+      const par = c.par ?? (Array.isArray(c.holes) ? c.holes.map(h => h.par ?? 4) : null)
+      const si = c.si ?? (Array.isArray(c.holes) ? c.holes.map(h => h.si ?? h.strokeIndex ?? null) : null)
+      return {
+        name: c.name,
+        tees: c.tees,
+        teesData,
+        par,
+        si,
+        isCustom: true,
+        id: c.id,
+      }
+    })
     const builtin = Object.entries(BUILTIN_COURSES).map(([name, data]) => ({
       name,
-      tees: data.tees,       // default tee name (string)
+      tees: data.tees,
       teesData: data.teesData,
       par: data.par,
       si: data.si,
@@ -28,6 +39,14 @@ export const useCoursesStore = defineStore('courses', () => {
     }))
     return [...custom, ...builtin]
   })
+
+  // Default favorites — set on first load when user hasn't favorited anything yet
+  const DEFAULT_FAVORITES = [
+    'Bonnie Briar Country Club',
+    'Manhattan Woods Golf Club',
+    'Kiawah Island Club',
+    'Bulls Bay Golf Club',
+  ]
 
   const favoriteNames = computed(() => new Set(favorites.value))
 
@@ -38,10 +57,17 @@ export const useCoursesStore = defineStore('courses', () => {
       customCourses.value = Object.entries(local).map(([name, data]) => ({
         id: `local_${name}`,
         name,
-        tees: data.tees ?? data,
+        tees: data.defaultTee ?? data.tees ?? data,
+        teesData: data.teesData ?? null,
+        par: data.par ?? null,
+        si: data.si ?? null,
         is_public: false,
       }))
-      favorites.value = JSON.parse(localStorage.getItem('golf_favorites') || '[]')
+      favorites.value = JSON.parse(localStorage.getItem('golf_favorites') || 'null')
+      if (!favorites.value) {
+        favorites.value = [...DEFAULT_FAVORITES]
+        localStorage.setItem('golf_favorites', JSON.stringify(favorites.value))
+      }
       return
     }
     loading.value = true
@@ -50,7 +76,11 @@ export const useCoursesStore = defineStore('courses', () => {
       .select('*')
       .eq('owner_id', auth.user.id)
     if (!error) customCourses.value = data ?? []
-    favorites.value = JSON.parse(localStorage.getItem('golf_favorites') || '[]')
+    favorites.value = JSON.parse(localStorage.getItem('golf_favorites') || 'null')
+    if (!favorites.value) {
+      favorites.value = [...DEFAULT_FAVORITES]
+      localStorage.setItem('golf_favorites', JSON.stringify(favorites.value))
+    }
     loading.value = false
   }
 
@@ -58,15 +88,37 @@ export const useCoursesStore = defineStore('courses', () => {
     const auth = useAuthStore()
     if (!auth.isAuthenticated) {
       const local = JSON.parse(localStorage.getItem('golf_custom_courses') || '{}')
-      local[course.name] = { tees: course.tees }
+      local[course.name] = {
+        teesData: course.teesData ?? null,
+        par: course.par ?? null,
+        si: course.si ?? null,
+        defaultTee: course.defaultTee ?? null,
+        tees: course.tees,
+      }
       localStorage.setItem('golf_custom_courses', JSON.stringify(local))
       customCourses.value.push({ id: `local_${course.name}`, ...course, is_public: false })
       return
     }
+    // Map to Supabase schema: tees (jsonb), holes (jsonb)
+    const teesData = course.teesData ?? course.tees ?? {}
+    const par = course.par ?? Array(18).fill(4)
+    const si = course.si ?? Array.from({ length: 18 }, (_, i) => i + 1)
+    const holes = par.map((p, i) => ({ par: p, si: si[i] ?? (i + 1) }))
+    const row = { name: course.name, tees: teesData, holes, is_public: false, owner_id: auth.user.id }
+
+    // Upsert: if a course with this name already exists for this user, update it
+    const existing = customCourses.value.find(c => c.name === course.name)
+    if (existing) {
+      const { data, error } = await supabase
+        .from('courses').update({ tees: teesData, holes }).eq('id', existing.id).select().single()
+      if (error) throw error
+      const idx = customCourses.value.findIndex(c => c.id === existing.id)
+      if (idx >= 0) customCourses.value[idx] = data
+      return data
+    }
+
     const { data, error } = await supabase
-      .from('courses')
-      .insert({ ...course, owner_id: auth.user.id })
-      .select().single()
+      .from('courses').insert(row).select().single()
     if (error) throw error
     customCourses.value.push(data)
     return data
@@ -85,8 +137,16 @@ export const useCoursesStore = defineStore('courses', () => {
       }
       return
     }
+    // Map to Supabase schema
+    const teesData = updates.teesData ?? updates.tees ?? null
+    const par = updates.par ?? null
+    const si = updates.si ?? null
+    const supaUpdates = {}
+    if (teesData) supaUpdates.tees = teesData
+    if (par || si) supaUpdates.holes = (par ?? Array(18).fill(4)).map((p, i) => ({ par: p, si: (si ?? [])[i] ?? (i + 1) }))
+    if (updates.name) supaUpdates.name = updates.name
     const { data, error } = await supabase
-      .from('courses').update(updates).eq('id', id).select().single()
+      .from('courses').update(supaUpdates).eq('id', id).select().single()
     if (error) throw error
     const idx = customCourses.value.findIndex(c => c.id === id)
     if (idx >= 0) customCourses.value[idx] = data
@@ -126,12 +186,14 @@ export const useCoursesStore = defineStore('courses', () => {
 
   async function searchCoursesApi(query) {
     if (!query || query.length < 3) return []
-    if (apiSearchCache.value[query]) return apiSearchCache.value[query]
+    if (apiSearchCache.value[query]) { console.log('[GW-store] searchCoursesApi cache hit for', query); return apiSearchCache.value[query] }
     try {
+      console.log('[GW-store] searchCoursesApi fetching:', query)
       const resp = await fetch(
         `https://api.golfcourseapi.com/v1/search?search_query=${encodeURIComponent(query)}`,
         { headers: { 'Authorization': `Key ${GOLF_API_KEY}` } }
       )
+      console.log('[GW-store] searchCoursesApi response status:', resp.status)
       if (!resp.ok) return []
       const json = await resp.json()
       const results = (json.courses || []).map(c => ({
@@ -144,7 +206,8 @@ export const useCoursesStore = defineStore('courses', () => {
       }))
       apiSearchCache.value[query] = results
       return results
-    } catch {
+    } catch (e) {
+      console.error('[GW-store] searchCoursesApi error:', e)
       return []
     }
   }

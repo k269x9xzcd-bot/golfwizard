@@ -89,7 +89,7 @@
               <div class="standings-divider" />
 
               <!-- Nassau -->
-              <template v-if="game.type === 'nassau'">
+              <template v-if="isGameType(game, 'nassau')">
                 <div class="nassau-grid">
                   <div class="nassau-header">Segment</div>
                   <div class="nassau-header">Status</div>
@@ -119,10 +119,20 @@
                     {{ nassauSegStatus(game, 'overall').leader }}
                   </div>
                 </div>
+                <div class="game-settlement">
+                  <div v-if="nassauSettlement(game)" class="settlement-detail">
+                    <div class="settlement-line">
+                      <span>{{ nassauSettlement(game).t1Name }}</span>
+                      <span :class="balanceClass(nassauSettlement(game).total)">
+                        {{ formatBalance(nassauSettlement(game).total) }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </template>
 
               <!-- Skins -->
-              <template v-else-if="game.type === 'skins'">
+              <template v-else-if="isGameType(game, 'skins')">
                 <div class="skins-grid">
                   <div
                     v-for="hole in 18"
@@ -144,7 +154,111 @@
                 </div>
               </template>
 
-              <!-- Generic standings -->
+              <!-- Match Play -->
+              <template v-else-if="isGameType(game, 'match')">
+                <div v-if="matchPlayResult(game)" class="match-standings">
+                  <div class="match-player">
+                    <span class="match-name">{{ matchPlayResult(game).p1.name }}</span>
+                    <span class="match-status" :class="matchStatusClass(matchPlayResult(game).finalUp)">
+                      {{ matchPlayResult(game).result }}
+                    </span>
+                  </div>
+                  <div class="match-vs">VS</div>
+                  <div class="match-player">
+                    <span class="match-name">{{ matchPlayResult(game).p2.name }}</span>
+                    <span class="match-status" :class="matchStatusClass(-matchPlayResult(game).finalUp)">
+                      —
+                    </span>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Best Ball -->
+              <template v-else-if="isGameType(game, 'bestball')">
+                <div v-if="bestBallResult(game)" class="bestball-standings">
+                  <div class="team-row">
+                    <span>{{ bestBallResult(game).t1Name }}</span>
+                    <span :class="balanceClass(bestBallResult(game).finalUp)">
+                      {{ formatBalance(bestBallResult(game).finalUp) }}
+                    </span>
+                  </div>
+                  <div class="team-row">
+                    <span>{{ bestBallResult(game).t2Name }}</span>
+                    <span :class="balanceClass(-bestBallResult(game).finalUp)">
+                      {{ formatBalance(-bestBallResult(game).finalUp) }}
+                    </span>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Snake -->
+              <template v-else-if="isGameType(game, 'snake')">
+                <div v-if="snakeResult(game)" class="snake-standings">
+                  <div v-for="(player, id) in snakeResult(game).owes" :key="id" class="snake-player">
+                    <span class="snake-name">{{ player.name }}</span>
+                    <div class="snake-info">
+                      <span class="snake-holes">{{ player.holes }} holes</span>
+                      <span class="snake-amount" :class="{ 'owes-amount': player.amount > 0 }">
+                        ${{ player.amount }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Dots -->
+              <template v-else-if="isGameType(game, 'dots')">
+                <div v-if="dotsResult(game)" class="dots-standings">
+                  <div v-for="(player, id) in dotsResult(game).dots" :key="id" class="dots-player">
+                    <span class="dots-name">{{ player.name }}</span>
+                    <div class="dots-info">
+                      <span class="dots-count">{{ player.dots }} dots</span>
+                      <span class="dots-amount" :class="balanceClass(player.amount)">
+                        {{ formatBalance(player.amount) }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Fidget -->
+              <template v-else-if="isGameType(game, 'fidget')">
+                <div v-if="fidgetResult(game)" class="fidget-standings">
+                  <div class="fidget-group">
+                    <div class="fidget-label">Fidgeters (no wins)</div>
+                    <div v-for="player in fidgetResult(game).fidgeters" :key="player.id" class="fidget-player">
+                      <span class="fidget-name">{{ player.short_name || player.guest_name }}</span>
+                      <span class="fidget-owes">Owes {{ (roundsStore.activeMembers.length - 1) * (game.config?.ppp || 10) }}</span>
+                    </div>
+                  </div>
+                  <div class="fidget-group">
+                    <div class="fidget-label">Winners</div>
+                    <div v-for="player in fidgetResult(game).winners" :key="player.id" class="fidget-player winning">
+                      <span class="fidget-name">{{ player.short_name || player.guest_name }}</span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+
+              <!-- BBN (Best Ball Net) -->
+              <template v-else-if="isGameType(game, 'bbn')">
+                <div v-if="bbnResult(game)" class="bbn-standings">
+                  <div class="bbn-summary">
+                    <div class="bbn-stat">
+                      <span class="bbn-label">Total Net</span>
+                      <span class="bbn-value">{{ bbnResult(game).totalNet }}</span>
+                    </div>
+                    <div class="bbn-stat">
+                      <span class="bbn-label">To Par</span>
+                      <span class="bbn-value" :class="balanceClass(bbnResult(game).overallToPar)">
+                        {{ formatBalance(bbnResult(game).overallToPar) }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Generic standings (fallback) -->
               <template v-else>
                 <div class="generic-standings">
                   <div
@@ -163,7 +277,6 @@
                   </div>
                 </div>
               </template>
-
             </div>
           </transition>
         </div>
@@ -186,10 +299,16 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRoundsStore } from '../stores/rounds'
+import { COURSES } from '../modules/courses'
+import {
+  computeNassau, computeSkins, computeMatch, computeSnake, computeDots, computeFidget,
+  computeBestBall, computeBestBallNet, memberHandicap, memberNetOnHole,
+  holePar, holeSI, strokesOnHole, holeRange
+} from '../modules/gameEngine'
 
 const roundsStore = useRoundsStore()
 
-// ── Expanded state ───────────────────────────────────────────
+// Expanded state
 const expandedIds = ref(new Set())
 function toggleExpanded(id) {
   if (expandedIds.value.has(id)) expandedIds.value.delete(id)
@@ -197,14 +316,29 @@ function toggleExpanded(id) {
   expandedIds.value = new Set(expandedIds.value)
 }
 
-// ── Date formatting ──────────────────────────────────────────
+// Course data
+const courseData = computed(() => {
+  if (!roundsStore.activeRound) return null
+  return COURSES[roundsStore.activeRound.course_name] || null
+})
+
+// Game context for engine functions
+const gameCtx = computed(() => ({
+  scores: roundsStore.activeScores,
+  members: roundsStore.activeMembers,
+  course: courseData.value,
+  tee: roundsStore.activeRound?.tee,
+  holesMode: roundsStore.activeRound?.holes_mode || '18',
+}))
+
+// Date formatting
 function formatDate(d) {
   if (!d) return ''
   const dt = new Date(d + 'T12:00:00')
   return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-// ── Scores helpers ───────────────────────────────────────────
+// Score helpers
 function getMemberScores(member) {
   return roundsStore.activeScores[member.id] || {}
 }
@@ -223,13 +357,11 @@ function memberGrossTotal(member) {
 }
 
 function memberNetVsPar(member) {
-  // Quick relative-to-par: would need course par data, return gross for now
-  // We'll show E, +1, -2 style from gross vs expected par
   const gross = memberGrossTotal(member)
   if (!gross) return null
   const holesIn = memberHolesPlayed(member)
   if (!holesIn) return null
-  const expectedPar = holesIn * 4  // rough estimate; ideally from course data
+  const expectedPar = holesIn * 4
   return gross - expectedPar
 }
 
@@ -259,36 +391,44 @@ const sortedMembers = computed(() => {
     if (!bPlayed) return -1
     return memberGrossTotal(a) - memberGrossTotal(b)
   })
-  // Mark leader
   if (members.length > 0 && memberGrossTotal(members[0]) > 0) {
     members[0].isLeading = true
   }
   return members
 })
 
-// ── Game helpers ─────────────────────────────────────────────
+// Game type checking
+function isGameType(game, type) {
+  return game.type?.toLowerCase() === type.toLowerCase()
+}
+
+// Game helpers
 const GAME_ICONS = {
-  nassau: '🏆', skins: '💰', wolf: '🐺', vegas: '🎲', matchPlay: '⚔️',
-  bestBall: '🤝', stableford: '📊', sixes: '🎯', snake: '🐍', dots: '●',
-  junk: '✨', fidget: '🎲', hiLow: '📈', hammer: '🔨', teamDay: '👥', fiveThreeOne: '5',
+  nassau: '💰', skins: '💎', wolf: '🐺', vegas: '🎲', match: '⚔️', matchplay: '⚔️',
+  bestball: '🤝', stableford: '📊', sixes: '🎯', snake: '🐍', dots: '●',
+  junk: '✨', fidget: '🎲', hilow: '📈', hammer: '🔨', teamday: '👥', fivethreeone: '5',
+  bbn: '🏌️', match1v1: '1v1',
 }
 const GAME_LABELS = {
-  nassau: 'Nassau', skins: 'Skins', wolf: 'Wolf', vegas: 'Vegas', matchPlay: 'Match Play',
-  bestBall: 'Best Ball', stableford: 'Stableford', sixes: 'Sixes', snake: 'Snake', dots: 'Dots',
-  junk: 'Junk', fidget: 'Fidget', hiLow: 'Hi-Low', hammer: 'Hammer', teamDay: 'Team Day', fiveThreeOne: '5-3-1',
+  nassau: 'Nassau', skins: 'Skins', wolf: 'Wolf', vegas: 'Vegas', match: 'Match Play', matchplay: 'Match Play',
+  bestball: 'Best Ball', stableford: 'Stableford', sixes: 'Sixes', snake: 'Snake', dots: 'Dots',
+  junk: 'Junk', fidget: 'Fidget', hilow: 'Hi-Low', hammer: 'Hammer', teamday: 'Team Day', fivethreeone: '5-3-1',
+  bbn: 'BBN', match1v1: '1v1',
 }
 const GAME_STYLE = {
-  nassau: 'gold', skins: 'green', wolf: 'purple', vegas: 'blue', matchPlay: 'red',
-  bestBall: 'teal', stableford: 'green', sixes: 'orange',
+  nassau: 'gold', skins: 'green', wolf: 'purple', vegas: 'blue', match: 'red', matchplay: 'red',
+  bestball: 'teal', stableford: 'green', sixes: 'orange', snake: 'purple', dots: 'orange',
+  fidget: 'blue', bbn: 'teal', match1v1: 'red',
 }
-function gameIcon(type) { return GAME_ICONS[type] || '🏌️' }
-function gameLabel(type) { return GAME_LABELS[type] || type }
-function gameStyle(type) { return GAME_STYLE[type] || 'default' }
+
+function gameIcon(type) { return GAME_ICONS[type?.toLowerCase()] || '🏌️' }
+function gameLabel(type) { return GAME_LABELS[type?.toLowerCase()] || type }
+function gameStyle(type) { return GAME_STYLE[type?.toLowerCase()] || 'default' }
 
 function configSummary(game) {
   const c = game.config || {}
   const parts = []
-  if (c.front != null && c.back != null) parts.push(`$${c.front}/$${c.back}/${c.overall || c.front + c.back}`)
+  if (c.front != null && c.back != null) parts.push(`$${c.front}/$${c.back}`)
   if (c.ppt != null) parts.push(`$${c.ppt}/skin`)
   if (c.ppp != null) parts.push(`$${c.ppp}/pt`)
   if (c.unit != null) parts.push(`$${c.unit}/unit`)
@@ -297,57 +437,39 @@ function configSummary(game) {
   return parts.join(' · ')
 }
 
-// ── Nassau calculations ──────────────────────────────────────
+// Nassau
 function nassauSegStatus(game, segment) {
-  const config = game.config || {}
-  const t1 = config.team1 || []
-  const t2 = config.team2 || []
-  const t1Names = t1.map(id => memberName(id)).join(' & ')
-  const t2Names = t2.map(id => memberName(id)).join(' & ')
+  if (!gameCtx.value || !gameCtx.value.course) return { status: '—', balance: 0, leader: '—' }
+  const result = computeNassau(gameCtx.value, game.config)
+  if (!result) return { status: '—', balance: 0, leader: '—' }
 
-  const range = segment === 'front' ? [1, 9] : segment === 'back' ? [10, 18] : [1, 18]
-  let score = 0
-  let holesInSeg = 0
+  let seg = null
+  if (segment === 'front') seg = result.frontSeg
+  else if (segment === 'back') seg = result.backSeg
+  else seg = { t1Up: result.overallUp, t1Wins: result.overallT1Wins }
 
-  for (let h = range[0]; h <= range[1]; h++) {
-    const t1Scores = t1.map(id => memberScoreForHole(id, h)).filter(s => s != null)
-    const t2Scores = t2.map(id => memberScoreForHole(id, h)).filter(s => s != null)
-    if (!t1Scores.length || !t2Scores.length) continue
-    holesInSeg++
-    const t1Best = Math.min(...t1Scores)
-    const t2Best = Math.min(...t2Scores)
-    if (t1Best < t2Best) score++
-    else if (t2Best < t1Best) score--
-  }
-
-  const segTotal = range[1] - range[0] + 1
-  const remaining = segTotal - holesInSeg
-
+  const t1Names = result.t1Name
+  const t2Names = result.t2Name
+  const up = seg.t1Up ?? 0
   let status = 'AS'
-  if (score > 0) status = `${t1Names || 'T1'} ${score} UP`
-  else if (score < 0) status = `${t2Names || 'T2'} ${Math.abs(score)} UP`
+  if (up > 0) status = `${t1Names} +${up}`
+  else if (up < 0) status = `${t2Names} +${Math.abs(up)}`
 
   return {
     status,
-    balance: score,
-    leader: score > 0 ? t1Names || 'Team 1' : score < 0 ? t2Names || 'Team 2' : 'All Square',
+    balance: up,
+    leader: up > 0 ? t1Names : up < 0 ? t2Names : 'All Square',
   }
 }
 
-function memberName(id) {
-  const m = roundsStore.activeMembers.find(m => m.id === id || m.profile_id === id)
-  return m ? (m.short_name || m.guest_name || '?') : '?'
+function nassauSettlement(game) {
+  if (!gameCtx.value || !gameCtx.value.course) return null
+  const result = computeNassau(gameCtx.value, game.config)
+  return result?.settlement ?? null
 }
 
-function memberScoreForHole(id, hole) {
-  const m = roundsStore.activeMembers.find(m => m.id === id || m.profile_id === id)
-  if (!m) return null
-  return (roundsStore.activeScores[m.id] || {})[hole] || null
-}
-
-// ── Skins calculations ───────────────────────────────────────
+// Skins
 function skinWinner(game, hole) {
-  const ppp = game.config?.ppt || 5
   const members = roundsStore.activeMembers
   const scores = members.map(m => ({ m, s: (roundsStore.activeScores[m.id] || {})[hole] }))
     .filter(x => x.s != null)
@@ -355,7 +477,7 @@ function skinWinner(game, hole) {
   const minScore = Math.min(...scores.map(x => x.s))
   const winners = scores.filter(x => x.s === minScore)
   if (winners.length === 1) return winners[0].m.short_name || winners[0].m.guest_name
-  return null // carry
+  return null
 }
 
 function skinClass(game, hole) {
@@ -382,9 +504,50 @@ function skinsWonCount(game) {
   return count
 }
 
-// ── Generic per-player standings ─────────────────────────────
+// Match Play
+function matchPlayResult(game) {
+  if (!gameCtx.value || !gameCtx.value.course) return null
+  return computeMatch(gameCtx.value, game.config) ?? null
+}
+
+function matchStatusClass(diff) {
+  if (diff > 0) return 'bal-winning'
+  if (diff < 0) return 'bal-losing'
+  return 'bal-even'
+}
+
+// Best Ball
+function bestBallResult(game) {
+  if (!gameCtx.value || !gameCtx.value.course) return null
+  return computeBestBall(gameCtx.value, game.config) ?? null
+}
+
+// Snake
+function snakeResult(game) {
+  if (!gameCtx.value || !gameCtx.value.course) return null
+  return computeSnake(gameCtx.value, game.config) ?? null
+}
+
+// Dots
+function dotsResult(game) {
+  if (!gameCtx.value || !gameCtx.value.course) return null
+  return computeDots(gameCtx.value, game.config) ?? null
+}
+
+// Fidget
+function fidgetResult(game) {
+  if (!gameCtx.value || !gameCtx.value.course) return null
+  return computeFidget(gameCtx.value, game.config) ?? null
+}
+
+// BBN
+function bbnResult(game) {
+  if (!gameCtx.value || !gameCtx.value.course) return null
+  return computeBestBallNet(gameCtx.value, game.config) ?? null
+}
+
+// Generic per-player standings
 function sortedMembersForGame(game) {
-  // Generic: sort by gross total for now
   return roundsStore.activeMembers
     .map((m, i) => ({
       ...m,
@@ -397,7 +560,9 @@ function sortedMembersForGame(game) {
 
 function formatBalance(val) {
   if (!val && val !== 0) return '—'
-  return String(val)
+  if (val > 0) return `+$${val}`
+  if (val < 0) return `-$${Math.abs(val)}`
+  return '$0'
 }
 
 function balanceClass(val) {
@@ -547,7 +712,7 @@ function balanceClass(val) {
 .ps-thru-empty { opacity: .4; }
 
 .score-under   { color: var(--gw-eagle); }
-.score-one-under { color: var(--gw-birdie); }
+.score-one-under { color: var(--gw-green-500); }
 .score-even    { color: var(--gw-neutral-900); }
 .score-over    { color: var(--gw-bogey); }
 .score-double-over { color: var(--gw-double); }
@@ -567,7 +732,7 @@ function balanceClass(val) {
   animation: card-in 250ms ease-out both;
 }
 .game-card--gold  { border-left-color: var(--gw-eagle); }
-.game-card--green { border-left-color: var(--gw-birdie); }
+.game-card--green { border-left-color: var(--gw-green-500); }
 .game-card--purple { border-left-color: #8b5cf6; }
 .game-card--blue  { border-left-color: #3b82f6; }
 .game-card--red   { border-left-color: var(--gw-bogey); }
@@ -630,6 +795,7 @@ function balanceClass(val) {
   display: grid;
   grid-template-columns: 70px 1fr 1fr;
   gap: 6px;
+  margin-bottom: 12px;
 }
 .nassau-header {
   font-size: 10px;
@@ -646,6 +812,21 @@ function balanceClass(val) {
   color: var(--gw-neutral-700);
   padding: 6px 0;
   border-bottom: 1px solid var(--gw-neutral-100);
+}
+
+.game-settlement {
+  padding: 12px 0 0;
+  border-top: 1px solid var(--gw-neutral-100);
+}
+.settlement-detail {
+  padding: 8px 0;
+}
+.settlement-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 /* Skins grid */
@@ -702,6 +883,179 @@ function balanceClass(val) {
 }
 .skins-count { font-size: 12px; color: var(--gw-neutral-400); }
 
+/* Match Play */
+.match-standings {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 0;
+}
+.match-player {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+}
+.match-name {
+  font-weight: 600;
+  color: var(--gw-neutral-800);
+}
+.match-vs {
+  text-align: center;
+  color: var(--gw-neutral-400);
+  font-weight: 600;
+  font-size: 12px;
+}
+.match-status {
+  font-family: var(--gw-font-mono);
+  font-weight: 700;
+}
+
+/* Best Ball */
+.bestball-standings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+}
+.team-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--gw-neutral-100);
+}
+
+/* Snake */
+.snake-standings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.snake-player {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--gw-neutral-100);
+}
+.snake-name {
+  font-weight: 600;
+  color: var(--gw-neutral-800);
+}
+.snake-info {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+}
+.snake-holes {
+  color: var(--gw-neutral-500);
+}
+.snake-amount {
+  font-family: var(--gw-font-mono);
+  font-weight: 600;
+  color: var(--gw-bogey);
+}
+.snake-amount.owes-amount {
+  color: var(--gw-double);
+}
+
+/* Dots */
+.dots-standings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dots-player {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--gw-neutral-100);
+}
+.dots-name {
+  font-weight: 600;
+  color: var(--gw-neutral-800);
+}
+.dots-info {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+}
+.dots-count {
+  color: var(--gw-neutral-500);
+}
+.dots-amount {
+  font-family: var(--gw-font-mono);
+  font-weight: 600;
+}
+
+/* Fidget */
+.fidget-standings {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.fidget-group {
+  padding: 8px 0;
+}
+.fidget-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--gw-neutral-400);
+  margin-bottom: 6px;
+}
+.fidget-player {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--gw-neutral-100);
+}
+.fidget-player.winning {
+  color: var(--gw-green-600);
+}
+.fidget-name {
+  font-weight: 500;
+  color: var(--gw-neutral-800);
+}
+.fidget-owes {
+  font-size: 12px;
+  color: var(--gw-neutral-500);
+}
+
+/* BBN */
+.bbn-standings {
+  padding: 12px 0;
+}
+.bbn-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.bbn-stat {
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  background: var(--gw-neutral-50);
+  border-radius: 6px;
+}
+.bbn-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gw-neutral-500);
+  text-transform: uppercase;
+}
+.bbn-value {
+  font-family: var(--gw-font-mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--gw-neutral-900);
+  margin-top: 4px;
+}
+
 /* Generic standings */
 .generic-standings { display: flex; flex-direction: column; gap: 8px; }
 .standing-row {
@@ -753,6 +1107,7 @@ function balanceClass(val) {
   text-align: center;
   color: white;
   animation: card-in 250ms ease-out both;
+  margin-bottom: 16px;
 }
 .settlement-icon { font-size: 32px; margin-bottom: 8px; }
 .settlement-title {
