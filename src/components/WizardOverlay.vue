@@ -630,7 +630,21 @@ const canFinish = computed(() => form.value.players.length >= 1)
 
 function nextStep() {
   if (step.value === 1 && canNext.value) step.value++
-  else if (step.value === 2 && canNext.value) step.value++
+  else if (step.value === 2 && canNext.value) {
+    // Auto-split players into teams when entering the games step
+    autoSplitTeams()
+    step.value++
+  }
+}
+
+function autoSplitTeams() {
+  // Only auto-split if teams are empty (haven't been manually set)
+  if (mainGame.value.config.team1.length || mainGame.value.config.team2.length) return
+  const players = form.value.players
+  if (players.length < 2) return
+  const half = Math.ceil(players.length / 2)
+  mainGame.value.config.team1 = players.slice(0, half).map(p => p.id)
+  mainGame.value.config.team2 = players.slice(half).map(p => p.id)
 }
 
 // ── Course selection ─────────────────────────────────────────────
