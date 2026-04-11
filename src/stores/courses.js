@@ -226,16 +226,26 @@ export const useCoursesStore = defineStore('courses', () => {
       if (!resp.ok) return null
       const json = await resp.json()
       const course = json.course || json
-      // Parse tees — API returns tees[] array with name, rating, slope, yardage
-      const teesRaw = course.tees || []
+      // Parse tees — API may return tees as object {"Blue": {...}} or array
+      const teesRawInput = course.tees || {}
+      let teesRaw = []
+      if (Array.isArray(teesRawInput)) {
+        teesRaw = teesRawInput
+      } else if (typeof teesRawInput === 'object' && teesRawInput !== null) {
+        // Object keyed by tee name, e.g. {"Blue": {courseRating, slopeRating, holes: [...]}}
+        teesRaw = Object.entries(teesRawInput).map(([name, data]) => ({
+          ...data, _keyName: name,
+        }))
+      }
+      console.log('[GW-store] teesRaw normalized:', teesRaw.length, 'tees')
       const teesData = {}
       for (const tee of teesRaw) {
-        const teeName = tee.tee_name || tee.name || 'Unknown'
+        const teeName = tee._keyName || tee.tee_name || tee.teeName || tee.name || 'Unknown'
         const holes = tee.holes || []
         teesData[teeName] = {
-          rating: tee.course_rating ?? tee.rating ?? null,
-          slope: tee.slope_rating ?? tee.slope ?? null,
-          yards: tee.total_yards ?? (holes.reduce((s, h) => s + (h.yards || h.yardage || 0), 0) || null),
+          rating: tee.courseRating ?? tee.course_rating ?? tee.rating ?? null,
+          slope: tee.slopeRating ?? tee.slope_rating ?? tee.slope ?? null,
+          yards: tee.totalYards ?? tee.total_yards ?? (holes.reduce((s, h) => s + (h.yards || h.yardage || 0), 0) || null),
           yardsByHole: holes.map(h => h.yards || h.yardage || null),
           siByHole: holes.map(h => h.handicap || h.stroke_index || null),
         }
