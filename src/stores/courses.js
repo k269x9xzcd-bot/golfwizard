@@ -237,10 +237,12 @@ export const useCoursesStore = defineStore('courses', () => {
           ...data, _keyName: name,
         }))
       }
-      console.log('[GW-store] teesRaw normalized:', teesRaw.length, 'tees')
+      console.log('[GW-store] teesRaw normalized:', teesRaw.length, 'tees', JSON.stringify(teesRaw.map(t => ({ key: t._keyName, teeName: t.teeName, tee_name: t.tee_name, name: t.name }))))
       const teesData = {}
       for (const tee of teesRaw) {
-        const teeName = tee._keyName || tee.tee_name || tee.teeName || tee.name || 'Unknown'
+        // Prefer inner tee name fields over the outer object key (_keyName)
+        // API often uses "Male"/"Female" as outer keys with the real name inside
+        const teeName = tee.tee_name || tee.teeName || tee.name || tee._keyName || 'Unknown'
         const holes = tee.holes || []
         teesData[teeName] = {
           rating: tee.courseRating ?? tee.course_rating ?? tee.rating ?? null,
