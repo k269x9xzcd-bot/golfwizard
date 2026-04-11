@@ -19,20 +19,22 @@ export const useAuthStore = defineStore('auth', () => {
       const { data: { session } } = await Promise.race([sessionPromise, timeout])
       user.value = session?.user ?? null
       if (user.value) await fetchProfile()
+
+      // Listen for auth state changes
+      supabase.auth.onAuthStateChange(async (_event, session) => {
+        user.value = session?.user ?? null
+        if (user.value) {
+          await fetchProfile()
+        } else {
+          profile.value = null
+        }
+      })
     } catch (e) {
       console.warn('Auth init error:', e)
+    } finally {
+      // Always clear loading — no matter what — so the app never stays blank
+      loading.value = false
     }
-
-    // Listen for auth state changes
-    supabase.auth.onAuthStateChange(async (_event, session) => {
-      user.value = session?.user ?? null
-      if (user.value) {
-        await fetchProfile()
-      } else {
-        profile.value = null
-      }
-    })
-    loading.value = false
   }
 
   async function fetchProfile() {
@@ -80,28 +82,26 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function signInWithEmail(email) {
-    // Always redirect to the production GitHub Pages URL after sign-in
-    const isProd = window.location.hostname !== 'localhost'
-    const redirectTo = isProd
-      ? 'https://k269x9xzcd-bot.github.io/golfwizard/'
-      : 'http://localhost:5173/'
+    // No emailRedirectTo — this forces Supabase to send a 6-digit OTP code
+    // instead of a magic link. The code is verified in-app via verifyOtp().
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: redirectTo },
+      options: { shouldCreateUser: true },
     })
     if (error) throw error
   }
 
   async function verifyOtp(email, token) {
-    const { data, error } = await supabase.auth.verifyOtp({
-      email,
-      token,
-      type: 'email',
-    })
-    if (error) throw error
-    user.value = data.session?.user ?? null
+    // Try 'email' type first (OTP codes sent without emailRedirectTo)
+    let result = await supabase.auth.verifyOtp({ email, token, type: 'email' })
+    // Fallback to 'magiclink' type if email fails
+    if (result.error) {
+      result = await supabase.auth.verifyOtp({ email, token, type: 'magiclink' })
+    }
+    if (result.error) throw result.error
+    user.value = result.data.session?.user ?? null
     if (user.value) await fetchProfile()
-    return data
+    return result.data
   }
 
   async function signOut() {

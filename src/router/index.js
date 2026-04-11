@@ -1,7 +1,10 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
+import HomeView from '../views/HomeView.vue'
 
+// HomeView is imported statically so it's always in the main bundle —
+// never a stale lazy-loaded chunk that breaks after a redeploy.
 const routes = [
-  { path: '/',         name: 'home',     component: () => import('../views/HomeView.vue') },
+  { path: '/',         name: 'home',     component: HomeView },
   { path: '/scoring',  name: 'scoring',  component: () => import('../views/ScoringView.vue') },
   { path: '/games',    name: 'games',    component: () => import('../views/GamesView.vue') },
   { path: '/history',  name: 'history',  component: () => import('../views/HistoryView.vue') },
@@ -15,4 +18,13 @@ export const router = createRouter({
   history: createWebHashHistory(),
   routes,
   scrollBehavior: () => ({ top: 0 }),
+})
+
+// If a lazy-loaded chunk fails (stale cache after redeploy), navigate home.
+// HomeView is statically bundled so it always works even with stale cache.
+router.onError((err) => {
+  if (err?.message?.includes('Failed to fetch dynamically imported module') ||
+      err?.message?.includes('Importing a module script failed')) {
+    router.push('/')
+  }
 })

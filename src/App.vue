@@ -1,5 +1,6 @@
 <template>
   <div id="golfwizard-app" :class="{ 'guest-mode': authStore.isGuest }">
+
     <!-- Loading splash -->
     <div v-if="authStore.loading" class="splash">
       <div class="splash-logo">⛳ GolfWizard</div>
@@ -64,40 +65,27 @@ const showWizard = ref(false)
 const showJoin = ref(false)
 
 onMounted(async () => {
-  try {
-    await authStore.init()
-  } catch (e) {
-    console.warn('Auth init failed:', e)
-  }
+  try { await authStore.init() } catch (e) { console.warn('Auth init failed:', e) }
 
-  // Run one-time migrations after auth
   if (authStore.isAuthenticated) {
     try {
       await Promise.all([
         rosterStore.migrateFromLocalStorage(),
         coursesStore.migrateFromLocalStorage(),
       ])
-    } catch (e) {
-      console.warn('Migration error:', e)
-    }
+    } catch (e) { console.warn('Migration error:', e) }
   }
 
-  // Load data — failures here should never crash the app
   try {
     await Promise.all([
       rosterStore.fetchPlayers(),
       coursesStore.fetchCustomCourses(),
     ])
-  } catch (e) {
-    console.warn('Data load error:', e)
-  }
+  } catch (e) { console.warn('Data load error:', e) }
 
-  // Handle deep-link room code join (e.g. golfwizard.app/#/join/ABC123)
   const hash = window.location.hash
   const joinMatch = hash.match(/\/join\/([A-Z0-9]{6})/i)
-  if (joinMatch) {
-    showJoin.value = true
-  }
+  if (joinMatch) showJoin.value = true
 })
 
 function onRoundCreated(round) {

@@ -21,11 +21,10 @@
               type="email"
               class="auth-input"
               placeholder="you@example.com"
-              autocomplete="username email"
+              autocomplete="email"
               autocapitalize="none"
               autocorrect="off"
               spellcheck="false"
-              inputmode="email"
               name="email"
               id="auth-email"
               required
@@ -37,7 +36,7 @@
             >
               <span v-if="sending" class="btn-spinner">⟳</span>
               <span v-else>✉️</span>
-              {{ sending ? 'Sending code…' : 'Send 6-digit code' }}
+              {{ sending ? 'Sending code…' : 'Send sign-in code' }}
             </button>
           </form>
 
@@ -53,12 +52,12 @@
           </button>
         </div>
 
-        <!-- Step 2: Enter 6-digit OTP code -->
+        <!-- Step 2: Enter sign-in code -->
         <div v-else-if="step === 'otp'" class="auth-body">
           <div class="otp-icon">📬</div>
           <h2 class="auth-title">Check your email</h2>
           <p class="auth-sub">
-            We sent a 6-digit code to<br>
+            We sent a sign-in code to<br>
             <strong class="auth-email-highlight">{{ email }}</strong>
           </p>
 
@@ -68,10 +67,11 @@
               v-model="otp"
               type="text"
               class="auth-input auth-input--otp"
-              placeholder="000000"
+              placeholder="00000000"
               inputmode="numeric"
               autocomplete="one-time-code"
-              maxlength="6"
+              maxlength="8"
+              minlength="4"
               id="auth-otp"
               name="otp"
               pattern="[0-9]*"
@@ -81,7 +81,7 @@
             <button
               type="submit"
               class="btn-magic"
-              :disabled="verifying || otp.length !== 6"
+              :disabled="verifying || otp.length < 4"
             >
               <span v-if="verifying" class="btn-spinner">⟳</span>
               <span v-else>✓</span>
@@ -144,7 +144,7 @@ async function sendOtp() {
 }
 
 async function verifyOtp() {
-  if (otp.value.length !== 6) return
+  if (otp.value.length < 4) return
   verifying.value = true
   error.value = ''
   try {
