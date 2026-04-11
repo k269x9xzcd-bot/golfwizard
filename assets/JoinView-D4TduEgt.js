@@ -1,0 +1,1 @@
+import{A as e,C as t,T as n}from"./vendor-DkyRcxIf.js";import{t as r}from"./JoinOverlay-B93kiU6R.js";var i={class:`view join-view`},a={__name:`JoinView`,setup(a){return(a,o)=>(e(),t(`div`,i,[n(r,{onClose:o[0]||=e=>a.$router.push(`/`)})]))}};export{a as default};
