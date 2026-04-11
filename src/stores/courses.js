@@ -37,7 +37,10 @@ export const useCoursesStore = defineStore('courses', () => {
       si: data.si,
       isCustom: false,
     }))
-    return [...custom, ...builtin]
+    // Custom courses override builtins with the same name
+    const customNames = new Set(custom.map(c => c.name))
+    const dedupedBuiltins = builtin.filter(b => !customNames.has(b.name))
+    return [...custom, ...dedupedBuiltins]
   })
 
   // Default favorites — set on first load when user hasn't favorited anything yet
@@ -226,38 +229,64 @@ export const useCoursesStore = defineStore('courses', () => {
       if (!resp.ok) return null
       const json = await resp.json()
       const course = json.course || json
-      // Parse tees — API may return tees as object {"Blue": {...}} or array
+      // ── Normalize tees ───────────────────────────────────────
+      // API returns: { "male": [ {tee_name, course_rating, slope_rating, holes:[...]}, ... ],
+      //               "female": [ ... ] }
+      // We flatten all gender groups into one tee list.
+      // If a tee name appears in both male & female we suffix with (M)/(F).
       const teesRawInput = course.tees || {}
-      let teesRaw = []
+      let teesFlat = []  // [{tee_name, course_rating, slope_rating, holes, _gender}, ...]
+
       if (Array.isArray(teesRawInput)) {
-        teesRaw = teesRawInput
+        // Already a flat array of tee objects
+        teesFlat = teesRawInput
       } else if (typeof teesRawInput === 'object' && teesRawInput !== null) {
-        // Object keyed by tee name, e.g. {"Blue": {courseRating, slopeRating, holes: [...]}}
-        teesRaw = Object.entries(teesRawInput).map(([name, data]) => ({
-          ...data, _keyName: name,
-        }))
+        // Object keyed by gender or tee name
+        for (const [groupKey, groupVal] of Object.entries(teesRawInput)) {
+          if (Array.isArray(groupVal)) {
+            // gender group: "male" → [{tee_name: "Blue", ...}, ...]
+            for (const tee of groupVal) {
+              teesFlat.push({ ...tee, _gender: groupKey })
+            }
+          } else if (typeof groupVal === 'object' && groupVal !== null) {
+            // single tee object keyed by name: "Blue" → {courseRating, ...}
+            teesFlat.push({ ...groupVal, _keyName: groupKey })
+          }
+        }
       }
-      console.log('[GW-store] teesRaw normalized:', teesRaw.length, 'tees', JSON.stringify(teesRaw.map(t => ({ key: t._keyName, teeName: t.teeName, tee_name: t.tee_name, name: t.name }))))
+
+      // Deduplicate names: if same tee_name appears in male & female, suffix with (M)/(F)
+      const nameCount = {}
+      for (const tee of teesFlat) {
+        const base = tee.tee_name || tee.teeName || tee.name || tee._keyName || 'Unknown'
+        nameCount[base] = (nameCount[base] || 0) + 1
+      }
+
+      console.log('[GW-store] teesFlat:', teesFlat.length, 'tees, names:', teesFlat.map(t => t.tee_name || t._keyName))
+
       const teesData = {}
-      for (const tee of teesRaw) {
-        // Prefer inner tee name fields over the outer object key (_keyName)
-        // API often uses "Male"/"Female" as outer keys with the real name inside
-        const teeName = tee.tee_name || tee.teeName || tee.name || tee._keyName || 'Unknown'
+      for (const tee of teesFlat) {
+        let teeName = tee.tee_name || tee.teeName || tee.name || tee._keyName || 'Unknown'
+        // Suffix with gender if name collision
+        if (nameCount[teeName] > 1 && tee._gender) {
+          const g = tee._gender.charAt(0).toUpperCase()  // M or F
+          teeName = `${teeName} (${g})`
+        }
         const holes = tee.holes || []
         teesData[teeName] = {
-          rating: tee.courseRating ?? tee.course_rating ?? tee.rating ?? null,
-          slope: tee.slopeRating ?? tee.slope_rating ?? tee.slope ?? null,
-          yards: tee.totalYards ?? tee.total_yards ?? (holes.reduce((s, h) => s + (h.yards || h.yardage || 0), 0) || null),
-          yardsByHole: holes.map(h => h.yards || h.yardage || null),
+          rating: tee.course_rating ?? tee.courseRating ?? tee.rating ?? null,
+          slope: tee.slope_rating ?? tee.slopeRating ?? tee.slope ?? null,
+          yards: tee.total_yards ?? tee.totalYards ?? (holes.reduce((s, h) => s + (h.yardage || h.yards || 0), 0) || null),
+          yardsByHole: holes.map(h => h.yardage || h.yards || null),
           siByHole: holes.map(h => h.handicap || h.stroke_index || null),
         }
       }
       // Global par/si from first tee or holes on course object
-      const firstTeeHoles = teesRaw[0]?.holes || course.holes || []
+      const firstTeeHoles = teesFlat[0]?.holes || course.holes || []
       const par = firstTeeHoles.map(h => h.par || 4)
       // si: use first tee that has handicap data
       let si = null
-      for (const tee of teesRaw) {
+      for (const tee of teesFlat) {
         const sis = (tee.holes || []).map(h => h.handicap || h.stroke_index || null)
         if (sis.some(s => s !== null)) { si = sis; break }
       }
