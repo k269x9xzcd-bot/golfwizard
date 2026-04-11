@@ -64,21 +64,33 @@ const showWizard = ref(false)
 const showJoin = ref(false)
 
 onMounted(async () => {
-  await authStore.init()
+  try {
+    await authStore.init()
+  } catch (e) {
+    console.warn('Auth init failed:', e)
+  }
 
   // Run one-time migrations after auth
   if (authStore.isAuthenticated) {
-    await Promise.all([
-      rosterStore.migrateFromLocalStorage(),
-      coursesStore.migrateFromLocalStorage(),
-    ])
+    try {
+      await Promise.all([
+        rosterStore.migrateFromLocalStorage(),
+        coursesStore.migrateFromLocalStorage(),
+      ])
+    } catch (e) {
+      console.warn('Migration error:', e)
+    }
   }
 
-  // Load data
-  await Promise.all([
-    rosterStore.fetchPlayers(),
-    coursesStore.fetchCustomCourses(),
-  ])
+  // Load data — failures here should never crash the app
+  try {
+    await Promise.all([
+      rosterStore.fetchPlayers(),
+      coursesStore.fetchCustomCourses(),
+    ])
+  } catch (e) {
+    console.warn('Data load error:', e)
+  }
 
   // Handle deep-link room code join (e.g. golfwizard.app/#/join/ABC123)
   const hash = window.location.hash

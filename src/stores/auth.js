@@ -37,12 +37,17 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function fetchProfile() {
     if (!user.value) return
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.value.id)
-      .single()
-    profile.value = data
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.value.id)
+        .maybeSingle()  // returns null instead of throwing if no row found
+      profile.value = data
+    } catch (e) {
+      console.warn('fetchProfile error:', e)
+      profile.value = null
+    }
   }
 
   async function updateProfile(updates) {
