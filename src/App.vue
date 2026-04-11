@@ -10,7 +10,7 @@
     <!-- Main app -->
     <template v-else>
       <!-- Wizard overlay for creating a new round -->
-      <WizardOverlay v-if="showWizard" @close="showWizard = false" @created="onRoundCreated" />
+      <WizardOverlay v-if="showWizard" @close="showWizard = false" @created="onRoundCreated" @setup-course="onSetupCourse" />
 
       <!-- Join by room code overlay -->
       <JoinOverlay v-if="showJoin" @close="showJoin = false" />
@@ -91,5 +91,13 @@ onMounted(async () => {
 function onRoundCreated(round) {
   showWizard.value = false
   router.push('/scoring')
+}
+
+function onSetupCourse(courseName, apiId) {
+  showWizard.value = false
+  // Navigate to courses view with pre-fill query param
+  const query = { add: courseName }
+  if (apiId) query.apiId = apiId
+  router.push({ path: '/courses', query })
 }
 </script>

@@ -14,12 +14,16 @@ export const useCoursesStore = defineStore('courses', () => {
     const custom = customCourses.value.map(c => ({
       name: c.name,
       tees: c.tees,
+      teesData: c.teesData ?? c.tees ?? null,
       isCustom: true,
       id: c.id,
     }))
     const builtin = Object.entries(BUILTIN_COURSES).map(([name, data]) => ({
       name,
-      tees: data,
+      tees: data.tees,       // default tee name (string)
+      teesData: data.teesData,
+      par: data.par,
+      si: data.si,
       isCustom: false,
     }))
     return [...custom, ...builtin]
@@ -68,6 +72,26 @@ export const useCoursesStore = defineStore('courses', () => {
     return data
   }
 
+  async function updateCourse(id, updates) {
+    const auth = useAuthStore()
+    if (!auth.isAuthenticated) {
+      const idx = customCourses.value.findIndex(c => c.id === id)
+      if (idx >= 0) {
+        customCourses.value[idx] = { ...customCourses.value[idx], ...updates }
+        const local = JSON.parse(localStorage.getItem('golf_custom_courses') || '{}')
+        const name = customCourses.value[idx].name
+        local[name] = { tees: updates.teesData, par: updates.par, si: updates.si, defaultTee: updates.defaultTee }
+        localStorage.setItem('golf_custom_courses', JSON.stringify(local))
+      }
+      return
+    }
+    const { data, error } = await supabase
+      .from('courses').update(updates).eq('id', id).select().single()
+    if (error) throw error
+    const idx = customCourses.value.findIndex(c => c.id === id)
+    if (idx >= 0) customCourses.value[idx] = data
+  }
+
   async function deleteCourse(id) {
     const auth = useAuthStore()
     if (!auth.isAuthenticated) {
@@ -96,6 +120,83 @@ export const useCoursesStore = defineStore('courses', () => {
     return allCourses.value.find(c => c.name === name)
   }
 
+  // ── Live course search via golfcourseapi.com ────────────────
+  const GOLF_API_KEY = 'YCTLHK65F52NIXNBEE5CIJ6WNE'
+  const apiSearchCache = ref({})
+
+  async function searchCoursesApi(query) {
+    if (!query || query.length < 3) return []
+    if (apiSearchCache.value[query]) return apiSearchCache.value[query]
+    try {
+      const resp = await fetch(
+        `https://api.golfcourseapi.com/v1/search?search_query=${encodeURIComponent(query)}`,
+        { headers: { 'Authorization': `Key ${GOLF_API_KEY}` } }
+      )
+      if (!resp.ok) return []
+      const json = await resp.json()
+      const results = (json.courses || []).map(c => ({
+        name: c.club_name || c.course_name || c.name,
+        location: [c.city, c.state].filter(Boolean).join(', '),
+        isApiResult: true,
+        apiId: c.id,
+        tees: null,
+        teesData: null,
+      }))
+      apiSearchCache.value[query] = results
+      return results
+    } catch {
+      return []
+    }
+  }
+
+  // ── Fetch full course detail from golfcourseapi.com ────────
+  const apiDetailCache = ref({})
+
+  async function fetchCourseDetail(apiId) {
+    if (!apiId) return null
+    if (apiDetailCache.value[apiId]) return apiDetailCache.value[apiId]
+    try {
+      const resp = await fetch(
+        `https://api.golfcourseapi.com/v1/courses/${apiId}`,
+        { headers: { 'Authorization': `Key ${GOLF_API_KEY}` } }
+      )
+      if (!resp.ok) return null
+      const json = await resp.json()
+      const course = json.course || json
+      // Parse tees — API returns tees[] array with name, rating, slope, yardage
+      const teesRaw = course.tees || []
+      const teesData = {}
+      for (const tee of teesRaw) {
+        const teeName = tee.tee_name || tee.name || 'Unknown'
+        const holes = tee.holes || []
+        teesData[teeName] = {
+          rating: tee.course_rating ?? tee.rating ?? null,
+          slope: tee.slope_rating ?? tee.slope ?? null,
+          yards: tee.total_yards ?? (holes.reduce((s, h) => s + (h.yards || h.yardage || 0), 0) || null),
+          yardsByHole: holes.map(h => h.yards || h.yardage || null),
+          siByHole: holes.map(h => h.handicap || h.stroke_index || null),
+        }
+      }
+      // Global par/si from first tee or holes on course object
+      const firstTeeHoles = teesRaw[0]?.holes || course.holes || []
+      const par = firstTeeHoles.map(h => h.par || 4)
+      // si: use first tee that has handicap data
+      let si = null
+      for (const tee of teesRaw) {
+        const sis = (tee.holes || []).map(h => h.handicap || h.stroke_index || null)
+        if (sis.some(s => s !== null)) { si = sis; break }
+      }
+      if (!si) si = firstTeeHoles.map((_, i) => i + 1)
+
+      const detail = { teesData, par, si }
+      apiDetailCache.value[apiId] = detail
+      return detail
+    } catch (e) {
+      console.warn('fetchCourseDetail error:', e)
+      return null
+    }
+  }
+
   // ── Migration: localStorage custom courses → Supabase ──────
   async function migrateFromLocalStorage() {
     const auth = useAuthStore()
@@ -121,7 +222,9 @@ export const useCoursesStore = defineStore('courses', () => {
 
   return {
     customCourses, favorites, allCourses, favoriteNames, loading,
-    fetchCustomCourses, addCourse, deleteCourse,
+    fetchCustomCourses, addCourse, updateCourse, deleteCourse,
     toggleFavorite, getCourse, migrateFromLocalStorage,
+    searchCoursesApi, apiSearchCache,
+    fetchCourseDetail, apiDetailCache,
   }
 })

@@ -7,11 +7,27 @@ export const useRosterStore = defineStore('roster', () => {
   const players = ref([])
   const loading = ref(false)
 
+  const DEFAULT_PLAYERS = [
+    { id: 'default_1', name: 'Jason Spieler',   short_name: 'Spieler', ghin_index: 9.1,  is_favorite: true },
+    { id: 'default_2', name: 'Alex Dubin',       short_name: 'Dubin',   ghin_index: 6.6,  is_favorite: true },
+    { id: 'default_3', name: 'Craig Sedaka',     short_name: 'Sedaka',  ghin_index: 9.8,  is_favorite: true },
+    { id: 'default_4', name: 'Stephen Berkley',  short_name: 'Berkley', ghin_index: 15.8, is_favorite: true },
+    { id: 'default_5', name: 'Alex Pugatch',     short_name: 'Pugatch', ghin_index: 7.5,  is_favorite: true },
+    { id: 'default_6', name: 'Scott Millman',    short_name: 'Millman', ghin_index: 8.5,  is_favorite: true },
+    { id: 'default_7', name: 'Jeremy Collet',    short_name: 'Collet',  ghin_index: 10.3, is_favorite: true },
+    { id: 'default_8', name: 'Benny Salerno',    short_name: 'Salerno', ghin_index: 14.6, is_favorite: true },
+  ]
+
   async function fetchPlayers() {
     const auth = useAuthStore()
     if (!auth.isAuthenticated) {
-      // Load from localStorage for guests
-      players.value = JSON.parse(localStorage.getItem('gw_roster') || '[]')
+      // Load from localStorage for guests; seed defaults if empty
+      const saved = JSON.parse(localStorage.getItem('gw_roster') || '[]')
+      if (saved.length === 0) {
+        players.value = DEFAULT_PLAYERS
+      } else {
+        players.value = saved
+      }
       return
     }
     loading.value = true

@@ -49,6 +49,11 @@
               aria-label="Remove from favorites"
             >★</button>
             <button
+              class="edit-btn"
+              @click.stop="openEditCourse(c)"
+              aria-label="Edit course"
+            >✏️</button>
+            <button
               v-if="c.isCustom"
               class="delete-btn"
               @click.stop="confirmDelete(c)"
@@ -89,6 +94,11 @@
             :aria-label="coursesStore.favoriteNames.has(c.name) ? 'Remove from favorites' : 'Add to favorites'"
           >{{ coursesStore.favoriteNames.has(c.name) ? '★' : '☆' }}</button>
           <button
+            class="edit-btn"
+            @click.stop="openEditCourse(c)"
+            aria-label="Edit course"
+          >✏️</button>
+          <button
             v-if="c.isCustom"
             class="delete-btn"
             @click.stop="confirmDelete(c)"
@@ -109,10 +119,16 @@
               <span v-for="s in 3" :key="s" class="step-dot" :class="{ active: addStep === s, done: addStep > s }" />
             </div>
 
+            <!-- API loading state -->
+            <div v-if="apiLoading" class="overlay-content overlay-loading">
+              <div class="api-load-spinner">⟳</div>
+              <div class="api-load-text">Fetching course data…</div>
+            </div>
+
             <!-- ── Step 1: Course name & tee setup ── -->
-            <div v-if="addStep === 1" class="overlay-content">
+            <div v-if="!apiLoading && addStep === 1" class="overlay-content">
               <button class="close-btn" @click="closeAddCourse">✕</button>
-              <h2 class="overlay-title">Add a Course</h2>
+              <h2 class="overlay-title">{{ editingCourse ? 'Edit Course' : 'Add a Course' }}</h2>
               <p class="overlay-sub">Name your course and set up the tee boxes</p>
 
               <div class="field-group">
@@ -155,14 +171,14 @@
             </div>
 
             <!-- ── Step 2: Hole-by-hole data ── -->
-            <div v-if="addStep === 2" class="overlay-content">
+            <div v-if="!apiLoading && addStep === 2" class="overlay-content">
               <button class="close-btn" @click="closeAddCourse">✕</button>
               <h2 class="overlay-title">Hole Details</h2>
               <p class="overlay-sub">Enter par, stroke index, and yardage for each hole</p>
 
-              <!-- Tee selector for yardage -->
+              <!-- Tee selector for yardage & SI -->
               <div class="tee-selector">
-                <span class="tee-label">Yardage for:</span>
+                <span class="tee-label">Editing tee:</span>
                 <div class="tee-tabs">
                   <button
                     v-for="(tee, idx) in newCourse.tees"
@@ -206,10 +222,10 @@
                       </div>
                     </div>
 
-                    <!-- SI -->
+                    <!-- SI (per selected tee) -->
                     <div class="hole-cell">
                       <input
-                        v-model.number="newCourse.holes[hole-1].si"
+                        v-model.number="newCourse.holes[hole-1].siByTee[selectedTeeIdx]"
                         class="hole-input"
                         type="number"
                         min="1"
@@ -258,9 +274,9 @@
             </div>
 
             <!-- ── Step 3: Review & save ── -->
-            <div v-if="addStep === 3" class="overlay-content">
+            <div v-if="!apiLoading && addStep === 3" class="overlay-content">
               <button class="close-btn" @click="closeAddCourse">✕</button>
-              <h2 class="overlay-title">Review & Save</h2>
+              <h2 class="overlay-title">{{ editingCourse ? 'Review Changes' : 'Review & Save' }}</h2>
               <p class="overlay-sub">Make sure everything looks right</p>
 
               <!-- Summary card -->
@@ -284,7 +300,7 @@
                 <div class="preview-header">Par</div>
                 <div v-for="h in 9" :key="'p'+h" class="preview-cell">{{ newCourse.holes[h-1].par }}</div>
                 <div class="preview-header">SI</div>
-                <div v-for="h in 9" :key="'s'+h" class="preview-cell">{{ newCourse.holes[h-1].si }}</div>
+                <div v-for="h in 9" :key="'s'+h" class="preview-cell">{{ newCourse.holes[h-1].siByTee[0] }}</div>
               </div>
 
               <div class="preview-label">Back 9</div>
@@ -294,7 +310,7 @@
                 <div class="preview-header">Par</div>
                 <div v-for="h in 9" :key="'p'+h" class="preview-cell">{{ newCourse.holes[h+8].par }}</div>
                 <div class="preview-header">SI</div>
-                <div v-for="h in 9" :key="'s'+h" class="preview-cell">{{ newCourse.holes[h+8].si }}</div>
+                <div v-for="h in 9" :key="'s'+h" class="preview-cell">{{ newCourse.holes[h+8].siByTee[0] }}</div>
               </div>
 
               <div class="overlay-footer">
@@ -333,9 +349,54 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useCoursesStore } from '../stores/courses'
+import { useRoute } from 'vue-router'
 
 const coursesStore = useCoursesStore()
-onMounted(() => coursesStore.fetchCustomCourses())
+const route = useRoute()
+
+onMounted(async () => {
+  await coursesStore.fetchCustomCourses()
+  // Auto-open add overlay if ?add=CourseName query param present
+  if (route.query.add) {
+    const courseName = String(route.query.add)
+    const apiId = route.query.apiId ? String(route.query.apiId) : null
+    let course = freshCourse()
+    course.name = courseName
+
+    if (apiId) {
+      // Fetch full course detail from API to pre-populate the editor
+      apiLoading.value = true
+      showAddOverlay.value = true  // show overlay with loading state
+      const detail = await coursesStore.fetchCourseDetail(apiId)
+      apiLoading.value = false
+      if (detail) {
+        const teeNames = Object.keys(detail.teesData || {})
+        if (teeNames.length) {
+          course.tees = teeNames.map(name => ({
+            name,
+            rating: detail.teesData[name].rating ?? null,
+            slope: detail.teesData[name].slope ?? null,
+          }))
+          course.holes = Array.from({ length: 18 }, (_, i) => ({
+            par: detail.par?.[i] ?? 4,
+            siByTee: teeNames.map(name =>
+              detail.teesData[name].siByHole?.[i] ?? detail.si?.[i] ?? (i + 1)
+            ),
+            yards: teeNames.map(name => detail.teesData[name].yardsByHole?.[i] ?? null),
+          }))
+        }
+      }
+    }
+
+    newCourse.value = course
+    editingCourse.value = null
+    addStep.value = 1
+    step1Error.value = ''
+    step2Error.value = ''
+    selectedTeeIdx.value = 0
+    showAddOverlay.value = true
+  }
+})
 
 // ── Search ──────────────────────────────────────────────────
 const search = ref('')
@@ -393,18 +454,19 @@ const saving = ref(false)
 const step1Error = ref('')
 const step2Error = ref('')
 const selectedTeeIdx = ref(0)
+const apiLoading = ref(false)
 
-function freshCourse() {
+function freshCourse(numTees = 2) {
   return {
     name: '',
     tees: [
       { name: 'Black', rating: null, slope: null },
       { name: 'White', rating: null, slope: null },
-    ],
+    ].slice(0, numTees),
     holes: Array.from({ length: 18 }, (_, i) => ({
       par: 4,
-      si: i + 1,
-      yards: [null, null],  // one per tee
+      siByTee: Array(numTees).fill(null).map((_, ti) => i + 1),  // per-tee SI
+      yards: Array(numTees).fill(null),  // one per tee
     })),
   }
 }
@@ -412,9 +474,48 @@ function freshCourse() {
 const newCourse = ref(freshCourse())
 
 function openAddCourse() {
+  editingCourse.value = null
   newCourse.value = freshCourse()
-  // Pre-fill name from search if present
   if (search.value) newCourse.value.name = search.value
+  addStep.value = 1
+  step1Error.value = ''
+  step2Error.value = ''
+  selectedTeeIdx.value = 0
+  showAddOverlay.value = true
+}
+
+// Track which course we're editing (null = new course)
+const editingCourse = ref(null)
+
+function openEditCourse(c) {
+  editingCourse.value = c
+  // Build editable form from existing course data
+  const teesData = c.teesData || {}
+  const teeNames = Object.keys(teesData)
+  const tees = teeNames.length
+    ? teeNames.map(name => ({
+        name,
+        rating: teesData[name].rating ?? null,
+        slope: teesData[name].slope ?? null,
+      }))
+    : [{ name: 'White', rating: null, slope: null }]
+
+  const par = c.par || Array(18).fill(4)
+  // Support legacy single si[] or new siByTee per tee
+  const globalSi = c.si || Array.from({ length: 18 }, (_, i) => i + 1)
+
+  const holes = Array.from({ length: 18 }, (_, i) => ({
+    par: par[i] || 4,
+    // Each tee gets its own SI; use teesData[name].siByHole if available, else global si
+    siByTee: teeNames.map(name => teesData[name]?.siByHole?.[i] ?? globalSi[i] ?? (i + 1)),
+    yards: teeNames.map(name => (teesData[name]?.yardsByHole?.[i]) || null),
+  }))
+
+  newCourse.value = {
+    name: c.name,
+    tees,
+    holes,
+  }
   addStep.value = 1
   step1Error.value = ''
   step2Error.value = ''
@@ -429,14 +530,20 @@ function closeAddCourse() {
 function addTee() {
   if (newCourse.value.tees.length >= 6) return
   newCourse.value.tees.push({ name: '', rating: null, slope: null })
-  // Extend yards arrays
-  newCourse.value.holes.forEach(h => h.yards.push(null))
+  // Extend yards and siByTee arrays
+  newCourse.value.holes.forEach((h, i) => {
+    h.yards.push(null)
+    h.siByTee.push(i + 1)
+  })
 }
 
 function removeTee(idx) {
   if (newCourse.value.tees.length <= 1) return
   newCourse.value.tees.splice(idx, 1)
-  newCourse.value.holes.forEach(h => h.yards.splice(idx, 1))
+  newCourse.value.holes.forEach(h => {
+    h.yards.splice(idx, 1)
+    h.siByTee.splice(idx, 1)
+  })
   if (selectedTeeIdx.value >= newCourse.value.tees.length) {
     selectedTeeIdx.value = newCourse.value.tees.length - 1
   }
@@ -446,9 +553,11 @@ function step1Next() {
   step1Error.value = ''
   const name = newCourse.value.name.trim()
   if (!name) { step1Error.value = 'Please enter a course name.'; return }
-  // Check for duplicate
-  const exists = coursesStore.allCourses.find(c => c.name.toLowerCase() === name.toLowerCase())
-  if (exists) { step1Error.value = `"${name}" already exists in your course list.`; return }
+  // Check for duplicate only when adding new
+  if (!editingCourse.value) {
+    const exists = coursesStore.allCourses.find(c => c.name.toLowerCase() === name.toLowerCase())
+    if (exists) { step1Error.value = `"${name}" already exists in your course list.`; return }
+  }
   const badTee = newCourse.value.tees.find(t => !t.name.trim())
   if (badTee) { step1Error.value = 'All tee boxes need a name.'; return }
   addStep.value = 2
@@ -456,11 +565,12 @@ function step1Next() {
 
 function step2Next() {
   step2Error.value = ''
-  // Validate SI: each hole 1-18 should be unique
-  const sis = newCourse.value.holes.map(h => h.si).filter(s => s >= 1 && s <= 18)
+  // Validate SI for the currently selected tee
+  const sis = newCourse.value.holes.map(h => h.siByTee[selectedTeeIdx.value]).filter(s => s >= 1 && s <= 18)
   const uniqueSis = new Set(sis)
   if (uniqueSis.size !== 18) {
-    step2Error.value = 'Stroke indexes must be unique values 1-18 for each hole.'
+    const teeName = newCourse.value.tees[selectedTeeIdx.value]?.name || `Tee ${selectedTeeIdx.value + 1}`
+    step2Error.value = `Stroke indexes for "${teeName}" must be unique values 1–18.`
     return
   }
   addStep.value = 3
@@ -478,7 +588,6 @@ function totalYards(teeIdx) {
 async function saveCourse() {
   saving.value = true
   try {
-    // Build the tees structure matching existing course format
     const teesData = {}
     newCourse.value.tees.forEach((tee, ti) => {
       teesData[tee.name] = {
@@ -486,20 +595,32 @@ async function saveCourse() {
         slope: tee.slope,
         yards: newCourse.value.holes.reduce((sum, h) => sum + (h.yards[ti] || 0), 0),
         yardsByHole: newCourse.value.holes.map(h => h.yards[ti] || 0),
+        siByHole: newCourse.value.holes.map(h => h.siByTee[ti] || null),
       }
     })
 
     const coursePayload = {
       name: newCourse.value.name.trim(),
       tees: teesData,
+      teesData,
       par: newCourse.value.holes.map(h => h.par),
-      si: newCourse.value.holes.map(h => h.si),
+      // Global SI = first tee's SI for backward compat
+      si: newCourse.value.holes.map(h => h.siByTee[0] || null),
       defaultTee: newCourse.value.tees[0].name,
     }
 
-    await coursesStore.addCourse(coursePayload)
+    if (editingCourse.value?.isCustom) {
+      // Update existing custom course
+      await coursesStore.updateCourse(editingCourse.value.id, coursePayload)
+    } else if (editingCourse.value && !editingCourse.value.isCustom) {
+      // Built-in course: save as custom copy (with " (Custom)" suffix optional)
+      await coursesStore.addCourse(coursePayload)
+    } else {
+      await coursesStore.addCourse(coursePayload)
+    }
+
     showAddOverlay.value = false
-    // scroll to top to see the new course
+    editingCourse.value = null
     search.value = newCourse.value.name
     setTimeout(() => { search.value = '' }, 2000)
   } catch (err) {
@@ -1188,6 +1309,23 @@ async function doDelete() {
 .saving-spinner {
   display: inline-block;
   animation: spin 1s linear infinite;
+}
+
+.overlay-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  gap: 16px;
+}
+.api-load-spinner {
+  font-size: 36px;
+  animation: spin 1s linear infinite;
+}
+.api-load-text {
+  font-size: 15px;
+  color: #666;
 }
 
 .step-error {

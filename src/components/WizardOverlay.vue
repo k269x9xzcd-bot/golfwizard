@@ -15,23 +15,37 @@
           class="wiz-input"
           placeholder="Search courses…"
           @input="filterCourses"
+          @focus="scrollInputIntoView"
         />
         <div class="course-list">
+          <div v-if="apiSearching" class="course-searching">Searching…</div>
           <div
-            v-for="c in filteredCourses.slice(0, 8)"
+            v-for="c in filteredCourses.slice(0, 10)"
             :key="c.name"
             class="course-option"
-            :class="{ selected: form.courseName === c.name }"
+            :class="{ selected: form.courseName === c.name, 'course-option--api': c.isApiResult }"
             @click="selectCourse(c)"
           >
-            {{ c.name }}
+            <span class="course-option-name">{{ c.name }}</span>
+            <span v-if="c.location" class="course-option-loc">{{ c.location }}</span>
           </div>
         </div>
-        <div v-if="form.courseName" class="tee-row">
+        <!-- Tee selector — only shown when course has tee data -->
+        <div v-if="form.courseName && teesForCourse.length" class="tee-row">
           <label>Tee:</label>
           <select v-model="form.tee" class="wiz-select">
-            <option v-for="t in teesForCourse" :key="t" :value="t">{{ t }}</option>
+            <option v-for="t in teesForCourse" :key="t.name" :value="t.name">
+              {{ t.name }}{{ t.yards ? ' — ' + t.yards.toLocaleString() + ' yds' : '' }}{{ t.rating ? ' (' + t.rating + '/' + t.slope + ')' : '' }}
+            </option>
           </select>
+        </div>
+
+        <!-- API course with no tee data: prompt to set up -->
+        <div v-if="form.courseName && !teesForCourse.length" class="api-course-notice">
+          <div class="api-notice-text">
+            📋 <strong>{{ form.courseName }}</strong> found — add tee/SI data to use it.
+          </div>
+          <button class="btn-primary btn-sm" @click="openCourseSetup">Set up course →</button>
         </div>
         <input v-model="form.date" type="date" class="wiz-input" />
         <div class="holes-row">
@@ -53,6 +67,7 @@
           class="wiz-input"
           placeholder="Search roster…"
           @input="filterPlayers"
+          @focus="scrollInputIntoView"
         />
         <div class="roster-list">
           <div
@@ -120,13 +135,13 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useCoursesStore } from '../stores/courses'
 import { useRosterStore } from '../stores/roster'
 import { useRoundsStore } from '../stores/rounds'
 import { GAME_DEFS } from '../modules/courses'
 
-const emit = defineEmits(['close', 'created'])
+const emit = defineEmits(['close', 'created', 'setup-course'])
 const coursesStore = useCoursesStore()
 const rosterStore = useRosterStore()
 const roundsStore = useRoundsStore()
@@ -149,15 +164,46 @@ const courseSearch = ref('')
 const playerSearch = ref('')
 const newName = ref('')
 const newHcp = ref('')
+const apiResults = ref([])
+const apiSearching = ref(false)
 
 const filteredCourses = computed(() => {
   const q = courseSearch.value.toLowerCase()
-  return coursesStore.allCourses.filter(c => c.name.toLowerCase().includes(q))
+  const local = coursesStore.allCourses.filter(c => c.name.toLowerCase().includes(q))
+  if (!q) return local
+  // Merge in API results that aren't already in local list
+  const localNames = new Set(local.map(c => c.name.toLowerCase()))
+  const extras = apiResults.value.filter(c => !localNames.has(c.name.toLowerCase()))
+  return [...local, ...extras]
+})
+
+let searchTimer = null
+watch(courseSearch, async (q) => {
+  apiResults.value = []
+  clearTimeout(searchTimer)
+  if (q.length < 3) return
+  searchTimer = setTimeout(async () => {
+    apiSearching.value = true
+    apiResults.value = await coursesStore.searchCoursesApi(q)
+    apiSearching.value = false
+  }, 400)
 })
 
 const teesForCourse = computed(() => {
   const c = coursesStore.getCourse(form.value.courseName)
-  return c ? Object.keys(c.tees) : []
+  if (!c) return []
+  // Use teesData if available (has yardage), fallback to tees string
+  if (c.teesData) {
+    return Object.entries(c.teesData).map(([name, data]) => ({
+      name,
+      yards: data.yards,
+      rating: data.rating,
+      slope: data.slope,
+    }))
+  }
+  // Fallback: tees is a string (default tee name) or object
+  if (typeof c.tees === 'string') return [{ name: c.tees, yards: null, rating: null, slope: null }]
+  return Object.keys(c.tees).map(name => ({ name, yards: null, rating: null, slope: null }))
 })
 
 const filteredRoster = computed(() => {
@@ -166,20 +212,40 @@ const filteredRoster = computed(() => {
 })
 
 const canNext = computed(() => {
-  if (step.value === 1) return !!form.value.courseName
+  if (step.value === 1) return !!form.value.courseName && teesForCourse.value.length > 0
   if (step.value === 2) return form.value.players.length >= 1
   return true
 })
+
+function openCourseSetup() {
+  // Find the apiId if this came from an API search result
+  const apiResult = apiResults.value.find(c => c.name === form.value.courseName)
+  emit('setup-course', form.value.courseName, apiResult?.apiId ?? null)
+}
 
 const canFinish = computed(() => form.value.players.length >= 1)
 
 function selectCourse(c) {
   form.value.courseName = c.name
-  const tees = Object.keys(c.tees)
-  form.value.tee = tees[0] ?? ''
+  // Use the course's default tee if set, otherwise first tee from teesData
+  if (c.teesData) {
+    const defaultTee = c.tees && typeof c.tees === 'string' ? c.tees : Object.keys(c.teesData)[0]
+    form.value.tee = defaultTee ?? ''
+  } else if (typeof c.tees === 'string') {
+    form.value.tee = c.tees
+  } else {
+    form.value.tee = Object.keys(c.tees ?? {})[0] ?? ''
+  }
 }
 
 function filterCourses() {} // computed handles it
+
+function scrollInputIntoView(e) {
+  // iOS: scroll the focused input into view after keyboard opens
+  setTimeout(() => {
+    e.target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, 350)
+}
 
 function isPlayerAdded(p) {
   return form.value.players.some(fp => fp.id === p.id)

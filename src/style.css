@@ -600,6 +600,8 @@ body {
 .wizard-modal {
   border-radius: var(--gw-radius-xl) var(--gw-radius-xl) 0 0;
   max-height: 92dvh;
+  /* svh = small viewport height (excludes keyboard on iOS Safari) */
+  max-height: 92svh;
   display: flex;
   flex-direction: column;
   padding: 0;
@@ -681,6 +683,12 @@ body {
   color: var(--gw-green-700);
   font-weight: 500;
 }
+
+/* course API styles */
+.course-option-name { flex: 1; }
+.course-option-loc { font-size: 12px; color: #888; white-space: nowrap; }
+.course-option--api { border-style: dashed; }
+.course-searching { font-size: 13px; color: #888; padding: 6px 12px; font-style: italic; }
 
 /* Holes buttons */
 .holes-row {
@@ -1143,3 +1151,26 @@ body {
   outline: 2px solid var(--gw-green-400);
   outline-offset: 2px;
 }
+
+/* API course notice in wizard */
+.api-course-notice {
+  background: #fff8e7;
+  border: 1.5px solid #f0c040;
+  border-radius: var(--gw-radius-md);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.api-notice-text { font-size: 14px; color: #6b5200; }
+
+/* Edit button on course cards */
+.edit-btn {
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px;
+  opacity: 0.6;
+}
+.edit-btn:hover { opacity: 1; }
