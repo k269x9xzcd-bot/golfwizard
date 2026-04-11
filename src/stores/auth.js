@@ -87,6 +87,18 @@ export const useAuthStore = defineStore('auth', () => {
     if (error) throw error
   }
 
+  async function verifyOtp(email, token) {
+    const { data, error } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: 'email',
+    })
+    if (error) throw error
+    user.value = data.session?.user ?? null
+    if (user.value) await fetchProfile()
+    return data
+  }
+
   async function signOut() {
     await supabase.auth.signOut()
     user.value = null
@@ -96,6 +108,6 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     user, profile, loading, isGuest, isAuthenticated,
     init, fetchProfile, updateProfile,
-    signInWithGoogle, signInWithApple, signInWithEmail, signOut,
+    signInWithGoogle, signInWithApple, signInWithEmail, verifyOtp, signOut,
   }
 })

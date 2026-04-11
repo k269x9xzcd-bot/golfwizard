@@ -9,13 +9,13 @@
           <span class="auth-logo-text">GolfWizard</span>
         </div>
 
-        <!-- Sign-in form -->
-        <div v-if="!emailSent" class="auth-body">
+        <!-- Step 1: Enter email -->
+        <div v-if="step === 'email'" class="auth-body">
           <h2 class="auth-title">Sign in to sync your rounds</h2>
           <p class="auth-sub">Your rounds, roster, and history — on every device.</p>
 
-          <form @submit.prevent="signInEmail" class="auth-form">
-            <label class="auth-label">Email address</label>
+          <form @submit.prevent="sendOtp" class="auth-form">
+            <label class="auth-label" for="auth-email">Email address</label>
             <input
               v-model="email"
               type="email"
@@ -37,7 +37,7 @@
             >
               <span v-if="sending" class="btn-spinner">⟳</span>
               <span v-else>✉️</span>
-              {{ sending ? 'Sending link…' : 'Send magic link' }}
+              {{ sending ? 'Sending code…' : 'Send 6-digit code' }}
             </button>
           </form>
 
@@ -45,9 +45,7 @@
             <span class="error-icon">⚠️</span> {{ error }}
           </div>
 
-          <div class="auth-divider">
-            <span>or</span>
-          </div>
+          <div class="auth-divider"><span>or</span></div>
 
           <button class="btn-guest" @click="$emit('close')">
             Continue as guest
@@ -55,22 +53,57 @@
           </button>
         </div>
 
-        <!-- Email sent confirmation -->
-        <div v-else class="email-sent-body">
-          <div class="sent-icon">📬</div>
-          <h3 class="sent-title">Check your inbox</h3>
-          <p class="sent-sub">
-            We sent a sign-in link to<br>
-            <strong class="sent-email">{{ email }}</strong>
+        <!-- Step 2: Enter 6-digit OTP code -->
+        <div v-else-if="step === 'otp'" class="auth-body">
+          <div class="otp-icon">📬</div>
+          <h2 class="auth-title">Check your email</h2>
+          <p class="auth-sub">
+            We sent a 6-digit code to<br>
+            <strong class="auth-email-highlight">{{ email }}</strong>
           </p>
-          <p class="sent-hint">Tap the link in the email to sign in. You can close this.</p>
+
+          <form @submit.prevent="verifyOtp" class="auth-form">
+            <label class="auth-label" for="auth-otp">Enter code</label>
+            <input
+              v-model="otp"
+              type="text"
+              class="auth-input auth-input--otp"
+              placeholder="000000"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              maxlength="6"
+              id="auth-otp"
+              name="otp"
+              pattern="[0-9]*"
+              required
+              ref="otpInput"
+            />
+            <button
+              type="submit"
+              class="btn-magic"
+              :disabled="verifying || otp.length !== 6"
+            >
+              <span v-if="verifying" class="btn-spinner">⟳</span>
+              <span v-else>✓</span>
+              {{ verifying ? 'Verifying…' : 'Sign in' }}
+            </button>
+          </form>
+
+          <div v-if="error" class="auth-error">
+            <span class="error-icon">⚠️</span> {{ error }}
+          </div>
 
           <button class="btn-retry" @click="resetForm">
-            Try a different email
+            ← Try a different email
           </button>
-          <button class="btn-guest" @click="$emit('close')">
-            Continue as guest for now
-          </button>
+        </div>
+
+        <!-- Step 3: Success -->
+        <div v-else-if="step === 'success'" class="auth-body auth-body--success">
+          <div class="success-icon">🎉</div>
+          <h2 class="auth-title">You're signed in!</h2>
+          <p class="auth-sub">Welcome to GolfWizard. Your rounds are now syncing to the cloud.</p>
+          <button class="btn-magic" @click="$emit('close')">Let's play →</button>
         </div>
 
       </div>
@@ -79,34 +112,57 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, nextTick } from 'vue'
 import { useAuthStore } from '../stores/auth'
 
 const emit = defineEmits(['close'])
 const authStore = useAuthStore()
 
+const step = ref('email')
 const email = ref('')
+const otp = ref('')
 const sending = ref(false)
-const emailSent = ref(false)
+const verifying = ref(false)
 const error = ref('')
+const otpInput = ref(null)
 
-async function signInEmail() {
+async function sendOtp() {
   if (!email.value.trim()) return
   sending.value = true
   error.value = ''
   try {
     await authStore.signInWithEmail(email.value.trim())
-    emailSent.value = true
+    step.value = 'otp'
+    // Focus OTP input after transition
+    await nextTick()
+    setTimeout(() => otpInput.value?.focus(), 100)
   } catch (e) {
-    error.value = e.message || 'Could not send link. Please try again.'
+    error.value = e.message || 'Could not send code. Please try again.'
   } finally {
     sending.value = false
   }
 }
 
+async function verifyOtp() {
+  if (otp.value.length !== 6) return
+  verifying.value = true
+  error.value = ''
+  try {
+    await authStore.verifyOtp(email.value.trim(), otp.value.trim())
+    step.value = 'success'
+    // Auto-close after 2 seconds
+    setTimeout(() => emit('close'), 2000)
+  } catch (e) {
+    error.value = e.message || 'Invalid code. Please check and try again.'
+    otp.value = ''
+  } finally {
+    verifying.value = false
+  }
+}
+
 function resetForm() {
-  emailSent.value = false
-  email.value = ''
+  step.value = 'email'
+  otp.value = ''
   error.value = ''
 }
 </script>
@@ -154,6 +210,9 @@ function resetForm() {
 .auth-body {
   padding: 20px 24px 28px;
 }
+.auth-body--success {
+  text-align: center;
+}
 
 .auth-title {
   font-family: var(--gw-font-display);
@@ -167,7 +226,22 @@ function resetForm() {
   color: var(--gw-neutral-500);
   text-align: center;
   margin: 0 0 24px;
-  line-height: 1.5;
+  line-height: 1.6;
+}
+.auth-email-highlight {
+  color: var(--gw-neutral-900);
+}
+
+/* ── OTP icon ────────────────────────────────────────────── */
+.otp-icon {
+  font-size: 48px;
+  text-align: center;
+  margin-bottom: 8px;
+}
+.success-icon {
+  font-size: 52px;
+  text-align: center;
+  margin-bottom: 12px;
 }
 
 /* ── Form ────────────────────────────────────────────────── */
@@ -202,8 +276,16 @@ function resetForm() {
   border-color: var(--gw-green-400);
   background: white;
 }
+.auth-input--otp {
+  font-family: var(--gw-font-mono);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-align: center;
+  padding: 16px;
+}
 
-/* ── Magic link button ───────────────────────────────────── */
+/* ── Button ──────────────────────────────────────────────── */
 .btn-magic {
   width: 100%;
   padding: 16px;
@@ -248,7 +330,6 @@ function resetForm() {
   color: #991b1b;
   margin-top: 8px;
 }
-.error-icon { flex-shrink: 0; }
 
 /* ── Divider ─────────────────────────────────────────────── */
 .auth-divider {
@@ -283,12 +364,10 @@ function resetForm() {
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  transition: border-color .15s, background .15s;
   -webkit-tap-highlight-color: transparent;
 }
 .btn-guest:active {
   background: var(--gw-neutral-50);
-  border-color: var(--gw-neutral-300);
 }
 .guest-note {
   font-size: 11px;
@@ -296,37 +375,11 @@ function resetForm() {
   font-weight: 400;
 }
 
-/* ── Email sent ──────────────────────────────────────────── */
-.email-sent-body {
-  padding: 24px 24px 28px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 12px;
-}
-.sent-icon { font-size: 52px; line-height: 1; }
-.sent-title {
-  font-family: var(--gw-font-display);
-  font-size: 22px;
-  color: var(--gw-neutral-900);
-  margin: 0;
-}
-.sent-sub {
-  font-size: 15px;
-  color: var(--gw-neutral-600);
-  margin: 0;
-  line-height: 1.6;
-}
-.sent-email {
-  color: var(--gw-neutral-900);
-}
-.sent-hint {
-  font-size: 13px;
-  color: var(--gw-neutral-400);
-  margin: 0;
-}
+/* ── Retry ───────────────────────────────────────────────── */
 .btn-retry {
+  display: block;
+  width: 100%;
+  text-align: center;
   background: none;
   border: none;
   color: var(--gw-green-600);
@@ -334,7 +387,7 @@ function resetForm() {
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  padding: 8px;
+  padding: 12px 8px 0;
   -webkit-tap-highlight-color: transparent;
 }
 

@@ -20,11 +20,6 @@
       <div class="card-cta">Continue →</div>
     </div>
 
-    <!-- Guest sign-in nudge -->
-    <div v-if="authStore.isGuest" class="nudge-card">
-      <div class="nudge-text">☁️ Sign in to save your rounds to the cloud and play with friends</div>
-      <button class="btn-primary btn-sm" @click="showAuth = true">Sign In</button>
-    </div>
 
     <!-- Recent rounds -->
     <section v-if="roundsStore.rounds.length" class="section">
