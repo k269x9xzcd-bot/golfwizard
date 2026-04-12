@@ -264,6 +264,99 @@
           <TeamPicker :players="form.players" v-model:team1="mainGame.config.team1" v-model:team2="mainGame.config.team2" />
         </div>
 
+        <!-- Vegas config -->
+        <div v-if="mainGame.type === 'vegas'" class="game-config-card">
+          <div class="config-row">
+            <div class="config-field">
+              <label>$ per point</label>
+              <input v-model.number="mainGame.config.ppt" type="number" min="1" class="config-input" placeholder="1" />
+            </div>
+            <div class="config-field">
+              <label>Flip on birdie?</label>
+              <select v-model="mainGame.config.birdieFlip" class="config-select">
+                <option :value="true">Yes</option>
+                <option :value="false">No</option>
+              </select>
+            </div>
+          </div>
+          <TeamPicker :players="form.players" v-model:team1="mainGame.config.team1" v-model:team2="mainGame.config.team2" />
+        </div>
+
+        <!-- Hi-Low config -->
+        <div v-if="mainGame.type === 'hilow'" class="game-config-card">
+          <div class="config-row">
+            <div class="config-field">
+              <label>$ per hole</label>
+              <input v-model.number="mainGame.config.ppt" type="number" min="1" class="config-input" placeholder="5" />
+            </div>
+          </div>
+          <TeamPicker :players="form.players" v-model:team1="mainGame.config.team1" v-model:team2="mainGame.config.team2" />
+        </div>
+
+        <!-- Stableford config -->
+        <div v-if="mainGame.type === 'stableford'" class="game-config-card">
+          <div class="config-row">
+            <div class="config-field">
+              <label>$ per point</label>
+              <input v-model.number="mainGame.config.ppt" type="number" min="1" class="config-input" placeholder="1" />
+            </div>
+          </div>
+          <div class="config-note">Eagle +3, Birdie +2, Par +1, Bogey 0, Double −1. All {{ form.players.length }} players compete.</div>
+        </div>
+
+        <!-- Wolf config -->
+        <div v-if="mainGame.type === 'wolf'" class="game-config-card">
+          <div class="config-row">
+            <div class="config-field">
+              <label>$ per point</label>
+              <input v-model.number="mainGame.config.ppt" type="number" min="1" class="config-input" placeholder="5" />
+            </div>
+            <div class="config-field">
+              <label>Lone Wolf multiplier</label>
+              <select v-model.number="mainGame.config.wolfLoneMultiplier" class="config-select">
+                <option :value="1">1×</option>
+                <option :value="2">2×</option>
+                <option :value="3">3×</option>
+              </select>
+            </div>
+          </div>
+          <div class="config-note">Wolf picks a partner each hole (or goes lone). Tee order rotates automatically.</div>
+        </div>
+
+        <!-- Hammer config -->
+        <div v-if="mainGame.type === 'hammer'" class="game-config-card">
+          <div class="config-row">
+            <div class="config-field">
+              <label>Starting $ per hole</label>
+              <input v-model.number="mainGame.config.ppt" type="number" min="1" class="config-input" placeholder="1" />
+            </div>
+          </div>
+          <TeamPicker :players="form.players" v-model:team1="mainGame.config.team1" v-model:team2="mainGame.config.team2" />
+          <div class="config-note">Throw the hammer to double the bet. Opponent must accept or concede.</div>
+        </div>
+
+        <!-- Sixes config -->
+        <div v-if="mainGame.type === 'sixes'" class="game-config-card">
+          <div class="config-row">
+            <div class="config-field">
+              <label>$ per point</label>
+              <input v-model.number="mainGame.config.ppt" type="number" min="1" class="config-input" placeholder="1" />
+            </div>
+          </div>
+          <div class="config-note">Teams rotate every 6 holes. 6 pts per hole split among winners.</div>
+        </div>
+
+        <!-- 5-3-1 config -->
+        <div v-if="mainGame.type === 'fiveThreeOne'" class="game-config-card">
+          <div class="config-row">
+            <div class="config-field">
+              <label>$ per point</label>
+              <input v-model.number="mainGame.config.ppt" type="number" min="1" class="config-input" placeholder="1" />
+            </div>
+          </div>
+          <div class="config-note">Best net gets 5, second gets 3, third gets 1, worst gets 0. All {{ form.players.length }} players compete.</div>
+        </div>
+
         <!-- No main game -->
         <div v-if="mainGame.type === 'none'" class="config-note">Select a main game or just track scores.</div>
 
@@ -519,21 +612,39 @@ const creating = ref(false)
 
 // ── Main game ────────────────────────────────────────────────────
 const MAIN_GAMES = [
-  { key: 'nassau',  icon: '💰', label: 'Nassau' },
-  { key: 'match',   icon: '⚔️', label: 'Match Play' },
-  { key: 'skins',   icon: '🏆', label: 'Skins' },
-  { key: 'bestball',icon: '🏅', label: 'Best Ball' },
-  { key: 'none',    icon: '📊', label: 'Scores Only' },
+  { key: 'nassau',      icon: '💰', label: 'Nassau' },
+  { key: 'vegas',       icon: '🎰', label: 'Vegas' },
+  { key: 'match',       icon: '⚔️', label: 'Match Play' },
+  { key: 'skins',       icon: '🏆', label: 'Skins' },
+  { key: 'hilow',       icon: '📊', label: 'Hi-Low' },
+  { key: 'stableford',  icon: '⭐', label: 'Stableford' },
+  { key: 'wolf',        icon: '🐺', label: 'Wolf' },
+  { key: 'hammer',      icon: '🔨', label: 'Hammer' },
+  { key: 'sixes',       icon: '🎲', label: 'Sixes' },
+  { key: 'fiveThreeOne',icon: '5️⃣', label: '5-3-1' },
+  { key: 'bestball',    icon: '🏅', label: 'Best Ball' },
+  { key: 'none',        icon: '📋', label: 'Scores Only' },
 ]
+
+// Default configs per game type
+const GAME_DEFAULTS = {
+  nassau:      { front: 10, back: 10, overall: 20, pressAt: 2, team1: [], team2: [] },
+  vegas:       { ppt: 1, birdieFlip: true, team1: [], team2: [] },
+  match:       { ppt: 20, format: '2v2', player1: '', player2: '', team1: [], team2: [] },
+  skins:       { ppt: 5, carry: true },
+  hilow:       { ppt: 5, team1: [], team2: [] },
+  stableford:  { ppt: 1 },
+  wolf:        { ppt: 5, wolfLoneMultiplier: 2 },
+  hammer:      { ppt: 1, team1: [], team2: [] },
+  sixes:       { ppt: 1 },
+  fiveThreeOne:{ ppt: 1 },
+  bestball:    { ppt: 5, ballsPerTeam: 1, team1: [], team2: [] },
+  none:        {},
+}
 
 const mainGame = ref({
   type: 'nassau',
-  config: {
-    front: 10, back: 10, overall: 20, pressAt: 2,
-    team1: [], team2: [],
-    format: '2v2', ppt: 20,
-    ballsPerTeam: 1,
-  },
+  config: { ...GAME_DEFAULTS.nassau },
 })
 
 const sideGames = ref({
@@ -547,7 +658,16 @@ const sideGames = ref({
 })
 
 function setMainGame(key) {
+  // Preserve team assignments if switching between team games
+  const oldTeam1 = mainGame.value.config.team1 || []
+  const oldTeam2 = mainGame.value.config.team2 || []
   mainGame.value.type = key
+  mainGame.value.config = { ...GAME_DEFAULTS[key] || {} }
+  // Restore teams if the new game supports them
+  if (mainGame.value.config.team1 !== undefined) {
+    mainGame.value.config.team1 = oldTeam1
+    mainGame.value.config.team2 = oldTeam2
+  }
 }
 
 function toggleSideGame(key) {
