@@ -95,6 +95,16 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Disable double-tap-to-zoom on all interactive elements (iOS Safari) */
+html {
+  touch-action: manipulation;
+}
+button, a, select, input, label, [role="button"], .pill, .tee-option-btn,
+.course-option, .roster-option, .game-type-btn, .side-game-header,
+.holes-btn, .nav-item, .round-card, .tab-btn {
+  touch-action: manipulation;
+}
+
 html, body {
   margin: 0;
   padding: 0;

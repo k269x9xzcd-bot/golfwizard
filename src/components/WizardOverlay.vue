@@ -677,6 +677,7 @@ const TeamPicker = {
         padding: '8px 12px', marginBottom: '5px', borderRadius: '9px',
         fontSize: '13px', fontWeight: isOn ? '700' : '500', cursor: 'pointer',
         border: 'none', fontFamily: 'inherit',
+        touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent',
         background: isOn
           ? (team === 1 ? 'rgba(96,165,250,.25)' : 'rgba(248,113,113,.25)')
           : 'rgba(255,255,255,.04)',
