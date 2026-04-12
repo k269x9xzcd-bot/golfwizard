@@ -338,7 +338,8 @@ function parForHole(hole) {
 }
 
 function siForHole(hole) {
-  return courseData.value?.si?.[hole - 1] ?? hole
+  // Use per-tee SI if available (custom courses store SI per tee box)
+  return holeSI(courseData.value, hole, roundsStore.activeRound?.tee)
 }
 
 function yardsForHole(hole) {
