@@ -536,7 +536,7 @@ function formatDate(dateStr) {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: var(--gw-neutral-50);
+  background: var(--gw-neutral-950);
   overflow: hidden;
 }
 
@@ -573,14 +573,14 @@ function formatDate(dateStr) {
 .empty-title {
   font-family: var(--gw-font-display);
   font-size: 1.75rem;
-  color: var(--gw-neutral-900);
+  color: var(--gw-text);
   margin: 0 0 0.5rem 0;
 }
 
 .empty-message {
   font-family: var(--gw-font-body);
   font-size: 1rem;
-  color: var(--gw-neutral-600);
+  color: var(--gw-text-muted);
   margin: 0 0 2rem 0;
 }
 
@@ -616,9 +616,9 @@ function formatDate(dateStr) {
   justify-content: space-between;
   align-items: flex-start;
   padding: 1.5rem 1rem 1rem;
-  background: white;
-  border-bottom: 1px solid var(--gw-neutral-200);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  background: var(--gw-neutral-900);
+  border-bottom: 1px solid var(--gw-card-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
   flex-shrink: 0;
 }
 
@@ -630,7 +630,7 @@ function formatDate(dateStr) {
   font-family: var(--gw-font-display);
   font-size: 1.75rem;
   font-weight: 700;
-  color: var(--gw-neutral-900);
+  color: var(--gw-gold);
   margin: 0 0 0.5rem 0;
   line-height: 1.2;
 }
@@ -642,7 +642,7 @@ function formatDate(dateStr) {
   align-items: center;
   font-family: var(--gw-font-body);
   font-size: 0.8rem;
-  color: var(--gw-neutral-600);
+  color: var(--gw-text-muted);
 }
 
 .date, .tee, .holes-label {
@@ -651,8 +651,8 @@ function formatDate(dateStr) {
 
 .room-code-badge {
   padding: 0.375rem 0.75rem;
-  background: var(--gw-green-100);
-  color: var(--gw-green-700);
+  background: rgba(212, 175, 55, 0.15);
+  color: var(--gw-gold);
   border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 600;
@@ -686,8 +686,8 @@ function formatDate(dateStr) {
 
 .games-strip {
   padding: 0.75rem 1rem;
-  background: white;
-  border-bottom: 1px solid var(--gw-neutral-100);
+  background: var(--gw-neutral-900);
+  border-bottom: 1px solid var(--gw-card-border);
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
@@ -706,13 +706,13 @@ function formatDate(dateStr) {
   align-items: center;
   gap: 0.5rem;
   padding: 0.625rem 1rem;
-  background: var(--gw-neutral-100);
-  border: 1px solid var(--gw-neutral-200);
+  background: var(--gw-neutral-800);
+  border: 1px solid var(--gw-card-border);
   border-radius: 999px;
   font-family: var(--gw-font-body);
   font-size: 0.875rem;
   font-weight: 500;
-  color: var(--gw-neutral-700);
+  color: var(--gw-text-muted);
   cursor: pointer;
   transition: all 0.2s ease;
   min-height: 44px;
@@ -721,13 +721,13 @@ function formatDate(dateStr) {
 }
 
 .game-chip:active {
-  background: var(--gw-neutral-200);
+  background: var(--gw-neutral-700);
 }
 
 .game-chip-active {
-  background: var(--gw-green-100);
-  border-color: var(--gw-green-300);
-  color: var(--gw-green-700);
+  background: rgba(212, 175, 55, 0.15);
+  border-color: var(--gw-gold);
+  color: var(--gw-gold);
 }
 
 .game-icon {
@@ -752,8 +752,8 @@ function formatDate(dateStr) {
   justify-content: space-between;
   align-items: center;
   padding: 1rem;
-  background: white;
-  border-bottom: 1px solid var(--gw-neutral-100);
+  background: var(--gw-neutral-900);
+  border-bottom: 1px solid var(--gw-card-border);
   gap: 1rem;
   flex-shrink: 0;
 }
@@ -762,8 +762,8 @@ function formatDate(dateStr) {
   width: 50px;
   height: 50px;
   border-radius: 50%;
-  background: var(--gw-green-500);
-  color: white;
+  background: var(--gw-gold);
+  color: var(--gw-neutral-950);
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
@@ -777,11 +777,11 @@ function formatDate(dateStr) {
 }
 
 .nav-btn:active {
-  background: var(--gw-green-600);
+  background: #e5c158;
 }
 
 .nav-btn:disabled {
-  background: var(--gw-neutral-300);
+  background: var(--gw-neutral-700);
   cursor: not-allowed;
 }
 
@@ -796,7 +796,7 @@ function formatDate(dateStr) {
 .nav-label {
   font-family: var(--gw-font-body);
   font-size: 0.75rem;
-  color: var(--gw-neutral-500);
+  color: var(--gw-text-muted);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -806,14 +806,14 @@ function formatDate(dateStr) {
   font-family: var(--gw-font-display);
   font-size: 2rem;
   font-weight: 700;
-  color: var(--gw-neutral-900);
+  color: var(--gw-text);
   line-height: 1;
 }
 
 .nav-of {
   font-family: var(--gw-font-body);
   font-size: 0.75rem;
-  color: var(--gw-neutral-500);
+  color: var(--gw-text-muted);
   margin-top: 0.25rem;
 }
 
@@ -823,7 +823,7 @@ function formatDate(dateStr) {
 
 .hole-card {
   flex: 1;
-  background: white;
+  background: var(--gw-neutral-950);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   display: flex;
@@ -833,8 +833,8 @@ function formatDate(dateStr) {
 
 .hole-header {
   padding: 1rem;
-  background: var(--gw-neutral-50);
-  border-bottom: 1px solid var(--gw-neutral-200);
+  background: var(--gw-neutral-900);
+  border-bottom: 1px solid var(--gw-card-border);
   flex-shrink: 0;
 }
 
@@ -849,13 +849,13 @@ function formatDate(dateStr) {
   font-family: var(--gw-font-display);
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--gw-neutral-900);
+  color: var(--gw-text);
 }
 
 .hole-par {
   font-family: var(--gw-font-body);
   font-size: 1rem;
-  color: var(--gw-neutral-600);
+  color: var(--gw-text-muted);
   font-weight: 600;
 }
 
@@ -864,7 +864,7 @@ function formatDate(dateStr) {
   gap: 1rem;
   font-family: var(--gw-font-body);
   font-size: 0.85rem;
-  color: var(--gw-neutral-600);
+  color: var(--gw-text-muted);
 }
 
 .hole-si, .hole-yards {
@@ -884,18 +884,18 @@ function formatDate(dateStr) {
   align-items: center;
   justify-content: space-between;
   padding: 1rem;
-  background: var(--gw-neutral-50);
+  background: var(--gw-card-bg);
   border-radius: var(--gw-radius-lg);
   cursor: pointer;
-  border: 2px solid transparent;
+  border: 2px solid var(--gw-card-border);
   transition: all 0.2s ease;
   min-height: 80px;
   -webkit-tap-highlight-color: transparent;
 }
 
 .player-row:active {
-  background: var(--gw-neutral-100);
-  border-color: var(--gw-green-300);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--gw-gold);
 }
 
 .player-info {
@@ -908,14 +908,14 @@ function formatDate(dateStr) {
   font-family: var(--gw-font-body);
   font-size: 1rem;
   font-weight: 600;
-  color: var(--gw-neutral-900);
+  color: var(--gw-text);
 }
 
 .player-hcp-indicator {
   display: flex;
   gap: 0.25rem;
   font-size: 0.6rem;
-  color: var(--gw-neutral-400);
+  color: var(--gw-text-muted);
 }
 
 .stroke-dot {
@@ -942,12 +942,12 @@ function formatDate(dateStr) {
 }
 
 .gross-score.score-empty {
-  color: var(--gw-neutral-400);
+  color: var(--gw-text-muted);
   font-weight: 400;
 }
 
 .gross-score.score-par {
-  color: var(--gw-neutral-900);
+  color: var(--gw-text);
 }
 
 .gross-score.score-birdie {
@@ -973,7 +973,7 @@ function formatDate(dateStr) {
 .net-score {
   font-family: var(--gw-font-body);
   font-size: 0.75rem;
-  color: var(--gw-neutral-500);
+  color: var(--gw-text-muted);
   font-weight: 500;
 }
 
@@ -983,8 +983,8 @@ function formatDate(dateStr) {
 
 .btn-view-scorecard {
   padding: 1rem;
-  background: var(--gw-green-500);
-  color: white;
+  background: var(--gw-gold);
+  color: var(--gw-neutral-950);
   border: none;
   border-radius: 0;
   font-family: var(--gw-font-body);
@@ -998,7 +998,7 @@ function formatDate(dateStr) {
 }
 
 .btn-view-scorecard:active {
-  background: var(--gw-green-600);
+  background: #e5c158;
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -1007,8 +1007,8 @@ function formatDate(dateStr) {
 
 .landscape-header {
   padding: 1rem;
-  background: white;
-  border-bottom: 1px solid var(--gw-neutral-200);
+  background: var(--gw-neutral-900);
+  border-bottom: 1px solid var(--gw-card-border);
   flex-shrink: 0;
 }
 
@@ -1016,14 +1016,14 @@ function formatDate(dateStr) {
   font-family: var(--gw-font-display);
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--gw-neutral-900);
+  color: var(--gw-gold);
   margin: 0 0 0.5rem 0;
 }
 
 .landscape-meta {
   font-family: var(--gw-font-body);
   font-size: 0.875rem;
-  color: var(--gw-neutral-600);
+  color: var(--gw-text-muted);
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -1034,7 +1034,7 @@ function formatDate(dateStr) {
   flex: 1;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
-  background: white;
+  background: var(--gw-neutral-950);
 }
 
 .scorecard-landscape {
@@ -1047,7 +1047,7 @@ function formatDate(dateStr) {
 .scorecard-landscape thead {
   position: sticky;
   top: 0;
-  background: var(--gw-neutral-50);
+  background: var(--gw-neutral-900);
   z-index: 10;
 }
 
@@ -1056,16 +1056,17 @@ function formatDate(dateStr) {
   text-align: center;
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--gw-neutral-700);
-  border-bottom: 2px solid var(--gw-neutral-200);
+  color: var(--gw-text-muted);
+  border-bottom: 2px solid var(--gw-card-border);
   white-space: nowrap;
 }
 
 .scorecard-landscape td {
   padding: 0.75rem 0.5rem;
   text-align: center;
-  border-bottom: 1px solid var(--gw-neutral-100);
+  border-bottom: 1px solid rgba(212, 175, 55, 0.08);
   font-size: 0.85rem;
+  color: var(--gw-text);
 }
 
 .col-hole {
@@ -1074,9 +1075,9 @@ function formatDate(dateStr) {
   position: sticky;
   left: 0;
   z-index: 5;
-  background: var(--gw-neutral-50);
+  background: var(--gw-neutral-900);
   font-weight: 600;
-  color: var(--gw-neutral-700);
+  color: var(--gw-text-muted);
 }
 
 .col-player {
@@ -1093,7 +1094,7 @@ function formatDate(dateStr) {
 }
 
 .col-score:active {
-  background: var(--gw-neutral-200);
+  background: rgba(212, 175, 55, 0.1);
 }
 
 .score-gross {
@@ -1121,26 +1122,26 @@ function formatDate(dateStr) {
 .score-net {
   display: block;
   font-size: 0.7rem;
-  color: var(--gw-neutral-500);
+  color: var(--gw-text-muted);
   margin-top: 0.2rem;
 }
 
 .col-total {
-  background: var(--gw-neutral-100);
+  background: var(--gw-neutral-800);
   font-weight: 700;
-  color: var(--gw-neutral-900);
+  color: var(--gw-text);
 }
 
 .row-total {
-  background: var(--gw-neutral-100);
-  border-top: 2px solid var(--gw-neutral-300);
-  border-bottom: 1px solid var(--gw-neutral-300);
+  background: var(--gw-neutral-800);
+  border-top: 2px solid var(--gw-card-border);
+  border-bottom: 1px solid var(--gw-card-border);
 }
 
 .row-grand-total {
-  background: var(--gw-neutral-100);
-  border-top: 2px solid var(--gw-neutral-300);
-  border-bottom: 2px solid var(--gw-neutral-300);
+  background: var(--gw-neutral-800);
+  border-top: 2px solid var(--gw-card-border);
+  border-bottom: 2px solid var(--gw-card-border);
   font-weight: 700;
 }
 
@@ -1163,11 +1164,11 @@ function formatDate(dateStr) {
 
 .score-entry-modal {
   width: 100%;
-  background: white;
+  background: var(--gw-neutral-900);
   border-radius: var(--gw-radius-xl) var(--gw-radius-xl) 0 0;
   padding: 1.5rem 1rem;
   padding-bottom: calc(1rem + env(safe-area-inset-bottom));
-  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.5);
 }
 
 .entry-header {
@@ -1182,13 +1183,13 @@ function formatDate(dateStr) {
   align-items: center;
   font-family: var(--gw-font-body);
   font-size: 0.875rem;
-  color: var(--gw-neutral-600);
+  color: var(--gw-text-muted);
   margin-bottom: 0.5rem;
 }
 
 .entry-hole {
   font-weight: 700;
-  color: var(--gw-neutral-900);
+  color: var(--gw-text);
 }
 
 .entry-par, .entry-si {
@@ -1198,7 +1199,7 @@ function formatDate(dateStr) {
 .entry-player {
   font-family: var(--gw-font-display);
   font-size: 1.5rem;
-  color: var(--gw-neutral-900);
+  color: var(--gw-gold);
   font-weight: 700;
 }
 
@@ -1214,11 +1215,11 @@ function formatDate(dateStr) {
   width: 72px;
   height: 72px;
   border-radius: 50%;
-  background: var(--gw-neutral-100);
-  border: 2px solid var(--gw-neutral-300);
+  background: var(--gw-neutral-800);
+  border: 2px solid var(--gw-card-border);
   font-size: 2rem;
   font-weight: 300;
-  color: var(--gw-neutral-700);
+  color: var(--gw-text);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1231,8 +1232,8 @@ function formatDate(dateStr) {
 }
 
 .btn-adjust:active {
-  background: var(--gw-neutral-200);
-  border-color: var(--gw-neutral-400);
+  background: var(--gw-neutral-700);
+  border-color: var(--gw-gold);
 }
 
 .score-display {
@@ -1248,7 +1249,7 @@ function formatDate(dateStr) {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--gw-neutral-900);
+  color: var(--gw-text);
 }
 
 .score-number.score-eagle {
@@ -1271,22 +1272,22 @@ function formatDate(dateStr) {
   font-family: var(--gw-font-body);
   font-size: 1rem;
   font-weight: 600;
-  color: var(--gw-neutral-600);
+  color: var(--gw-text-muted);
   margin-top: 0.5rem;
 }
 
 .net-display {
   font-family: var(--gw-font-body);
   font-size: 0.875rem;
-  color: var(--gw-neutral-500);
+  color: var(--gw-text-muted);
   margin-top: 0.5rem;
 }
 
 .btn-done {
   width: 100%;
   padding: 1rem;
-  background: var(--gw-green-500);
-  color: white;
+  background: var(--gw-gold);
+  color: var(--gw-neutral-950);
   border: none;
   border-radius: var(--gw-radius-lg);
   font-family: var(--gw-font-body);
@@ -1299,7 +1300,7 @@ function formatDate(dateStr) {
 }
 
 .btn-done:active {
-  background: var(--gw-green-600);
+  background: #e5c158;
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -1310,11 +1311,11 @@ function formatDate(dateStr) {
   width: 100%;
   max-width: 90vh;
   max-height: 80vh;
-  background: white;
+  background: var(--gw-neutral-900);
   border-radius: var(--gw-radius-xl);
   display: flex;
   flex-direction: column;
-  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.5);
 }
 
 .modal-header {
@@ -1322,7 +1323,7 @@ function formatDate(dateStr) {
   justify-content: space-between;
   align-items: center;
   padding: 1rem;
-  border-bottom: 1px solid var(--gw-neutral-200);
+  border-bottom: 1px solid var(--gw-card-border);
   flex-shrink: 0;
 }
 
@@ -1330,7 +1331,7 @@ function formatDate(dateStr) {
   font-family: var(--gw-font-display);
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--gw-neutral-900);
+  color: var(--gw-gold);
   margin: 0;
 }
 
@@ -1339,7 +1340,7 @@ function formatDate(dateStr) {
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
-  color: var(--gw-neutral-500);
+  color: var(--gw-text-muted);
   padding: 0.5rem;
   min-width: 44px;
   min-height: 44px;
@@ -1362,7 +1363,7 @@ function formatDate(dateStr) {
 .scorecard-in-modal thead {
   position: sticky;
   top: 0;
-  background: var(--gw-neutral-50);
+  background: var(--gw-neutral-900);
 }
 
 .scorecard-in-modal th {
@@ -1370,14 +1371,15 @@ function formatDate(dateStr) {
   text-align: center;
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--gw-neutral-700);
-  border-bottom: 1px solid var(--gw-neutral-200);
+  color: var(--gw-text-muted);
+  border-bottom: 1px solid var(--gw-card-border);
 }
 
 .scorecard-in-modal td {
   padding: 0.75rem 0.5rem;
   text-align: center;
-  border-bottom: 1px solid var(--gw-neutral-100);
+  border-bottom: 1px solid rgba(212, 175, 55, 0.08);
+  color: var(--gw-text);
 }
 
 .scorecard-in-modal .col-score {
@@ -1385,8 +1387,9 @@ function formatDate(dateStr) {
 }
 
 .scorecard-in-modal .col-total {
-  background: var(--gw-neutral-100);
+  background: var(--gw-neutral-800);
   font-weight: 700;
+  color: var(--gw-text);
 }
 
 /* ══════════════════════════════════════════════════════════════════
