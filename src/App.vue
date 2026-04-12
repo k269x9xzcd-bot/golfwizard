@@ -34,13 +34,13 @@
           <span class="nav-icon nav-plus">＋</span>
           <span class="nav-label">New Round</span>
         </button>
-        <RouterLink to="/games" class="nav-item" :class="{ active: $route.name === 'games' }">
-          <span class="nav-icon">🎮</span>
-          <span class="nav-label">Games</span>
-        </RouterLink>
         <RouterLink to="/history" class="nav-item" :class="{ active: $route.name === 'history' }">
-          <span class="nav-icon">📊</span>
+          <span class="nav-icon">🕐</span>
           <span class="nav-label">History</span>
+        </RouterLink>
+        <RouterLink to="/metrics" class="nav-item" :class="{ active: $route.name === 'metrics' }">
+          <span class="nav-icon">📊</span>
+          <span class="nav-label">Stats</span>
         </RouterLink>
       </nav>
     </template>

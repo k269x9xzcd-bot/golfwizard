@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { supabase, generateRoomCode } from '../supabase'
 import { useAuthStore } from './auth'
+import { computeAllSettlements } from '../modules/settlements'
+import { getCourse } from '../modules/courses'
 
 export const useRoundsStore = defineStore('rounds', () => {
   const authStore = useAuthStore()
@@ -386,25 +388,118 @@ export const useRoundsStore = defineStore('rounds', () => {
     memberSubscription = null
   }
 
+  // ── Compute settlements for a round ─────────────────────────
+  function _buildSettlementCtx() {
+    const round = activeRound.value
+    if (!round) return null
+    const course = getCourse(round.course_name)
+    if (!course) return null
+    return {
+      course,
+      tee: round.tee,
+      members: activeMembers.value,
+      scores: activeScores.value,
+      holesMode: round.holes_mode || '18',
+    }
+  }
+
   // ── Complete / archive a round ──────────────────────────────
   async function completeRound(roundId) {
+    // Compute settlements before marking complete
+    let settlementData = null
+    if (activeRound.value?.id === roundId && activeGames.value.length) {
+      const ctx = _buildSettlementCtx()
+      if (ctx) {
+        try {
+          settlementData = computeAllSettlements(ctx, activeGames.value)
+        } catch (e) {
+          console.warn('Settlement computation failed:', e)
+        }
+      }
+    }
+
+    // ── GUEST PATH ──────────────────────────────────────────
     if (_isGuest() || String(roundId).startsWith('guest_')) {
       if (activeRound.value?.id === roundId) {
         activeRound.value.is_complete = true
+        activeRound.value.settlements = settlementData
         _persistGuest()
       }
-      return
+      return settlementData
     }
 
+    // ── AUTHENTICATED PATH ──────────────────────────────────
+    // 1. Mark round complete
     const { error } = await supabase
       .from('rounds')
       .update({ is_complete: true })
       .eq('id', roundId)
     if (error) throw error
+
+    // 2. Save settlement JSON snapshot
+    if (settlementData) {
+      const { error: sErr } = await supabase
+        .from('round_settlements')
+        .upsert({
+          round_id: roundId,
+          settlement_json: settlementData,
+          computed_at: new Date().toISOString(),
+        }, { onConflict: 'round_id' })
+      if (sErr) console.warn('Failed to save settlement snapshot:', sErr)
+
+      // 3. Save individual ledger entries
+      if (settlementData.ledger?.length) {
+        const rows = settlementData.ledger.map(l => ({
+          round_id: roundId,
+          from_member_id: l.from_member_id,
+          to_member_id: l.to_member_id,
+          amount: l.amount,
+          note: l.note || 'Round settlement',
+        }))
+        const { error: lErr } = await supabase
+          .from('ledger_entries')
+          .insert(rows)
+        if (lErr) console.warn('Failed to save ledger entries:', lErr)
+      }
+    }
+
     if (activeRound.value?.id === roundId) {
       activeRound.value.is_complete = true
     }
     unsubscribe()
+    return settlementData
+  }
+
+  // ── Fetch settlements for a round ───────────────────────────
+  async function fetchSettlements(roundId) {
+    if (_isGuest() || String(roundId).startsWith('guest_')) {
+      const raw = localStorage.getItem(_guestKey(roundId))
+      if (!raw) return null
+      const payload = JSON.parse(raw)
+      return payload.round?.settlements || null
+    }
+
+    const { data, error } = await supabase
+      .from('round_settlements')
+      .select('settlement_json')
+      .eq('round_id', roundId)
+      .maybeSingle()
+    if (error || !data) return null
+    return data.settlement_json
+  }
+
+  // ── Fetch ledger entries for metrics ───────────────────────
+  async function fetchLedgerEntries(filters = {}) {
+    if (_isGuest()) return []
+
+    let q = supabase.from('ledger_entries').select('*')
+    if (filters.roundId) q = q.eq('round_id', filters.roundId)
+    if (filters.memberId) {
+      q = q.or(`from_member_id.eq.${filters.memberId},to_member_id.eq.${filters.memberId}`)
+    }
+    const { data, error } = await q.order('created_at', { ascending: false })
+    if (error) return []
+    return data ?? []
   }
 
   // ── Guest mode: save to localStorage ───────────────────────
@@ -426,6 +521,7 @@ export const useRoundsStore = defineStore('rounds', () => {
     fetchRounds, createRound, loadRound, setScore,
     saveGameConfig, updateGameConfig, deleteGameConfig,
     joinByRoomCode, completeRound,
+    fetchSettlements, fetchLedgerEntries,
     subscribeToRound, unsubscribe,
     saveGuestRound, loadGuestRounds,
   }

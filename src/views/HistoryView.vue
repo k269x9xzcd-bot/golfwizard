@@ -104,9 +104,44 @@
               <template v-if="round.game_configs?.length">
                 <div class="detail-section-label">Settlement</div>
                 <div class="settlement-block">
-                  <div class="settlement-placeholder">
+                  <!-- Loading settlements -->
+                  <div v-if="settlementLoading[round.id]" class="settlement-placeholder">
                     <div class="settlement-ph-icon">💰</div>
-                    <div class="settlement-ph-text">Settlement details available in the active round view.</div>
+                    <div class="settlement-ph-text">Loading settlements…</div>
+                  </div>
+                  <!-- Has settlement data -->
+                  <template v-else-if="settlementsCache[round.id]">
+                    <!-- Player totals -->
+                    <div v-if="settlementsCache[round.id].playerTotals" class="settlement-totals">
+                      <div
+                        v-for="(info, pid) in settlementsCache[round.id].playerTotals"
+                        :key="pid"
+                        class="settlement-player"
+                        :class="{ positive: info.total > 0, negative: info.total < 0 }"
+                      >
+                        <span class="settlement-name">{{ info.name }}</span>
+                        <span class="settlement-amount">{{ info.total > 0 ? '+' : '' }}{{ formatMoney(info.total) }}</span>
+                      </div>
+                    </div>
+                    <!-- Ledger (who pays whom) -->
+                    <div v-if="settlementsCache[round.id].ledger?.length" class="settlement-ledger">
+                      <div
+                        v-for="(entry, i) in settlementsCache[round.id].ledger"
+                        :key="i"
+                        class="ledger-entry"
+                      >
+                        <span class="ledger-from">{{ entry.from_name }}</span>
+                        <span class="ledger-arrow">→</span>
+                        <span class="ledger-to">{{ entry.to_name }}</span>
+                        <span class="ledger-amount">${{ entry.amount }}</span>
+                      </div>
+                    </div>
+                    <div v-else class="settlement-even">All square — no payments needed</div>
+                  </template>
+                  <!-- No settlement saved -->
+                  <div v-else class="settlement-placeholder">
+                    <div class="settlement-ph-icon">💰</div>
+                    <div class="settlement-ph-text">No settlement data saved for this round.</div>
                   </div>
                 </div>
               </template>
@@ -120,17 +155,36 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoundsStore } from '../stores/rounds'
 
 const roundsStore = useRoundsStore()
 onMounted(() => roundsStore.fetchRounds())
 
 const expandedIds = ref(new Set())
-function toggleRound(id) {
+const settlementsCache = reactive({})
+const settlementLoading = reactive({})
+
+async function toggleRound(id) {
   if (expandedIds.value.has(id)) expandedIds.value.delete(id)
-  else expandedIds.value.add(id)
+  else {
+    expandedIds.value.add(id)
+    // Fetch settlements if not cached
+    if (!settlementsCache[id] && !settlementLoading[id]) {
+      settlementLoading[id] = true
+      try {
+        const data = await roundsStore.fetchSettlements(id)
+        if (data) settlementsCache[id] = data
+      } catch (e) { /* silent */ }
+      settlementLoading[id] = false
+    }
+  }
   expandedIds.value = new Set(expandedIds.value)
+}
+
+function formatMoney(val) {
+  if (val == null || val === 0) return '$0'
+  return '$' + Math.abs(Math.round(val * 100) / 100)
 }
 
 // ── Date helpers ─────────────────────────────────────────────
@@ -178,7 +232,7 @@ function getMembersWithScores(round) {
   return members.map(m => {
     const memberScores = scores.filter(s => s.member_id === m.id)
     const byHole = {}
-    memberScores.forEach(s => { byHole[s.hole] = s.strokes })
+    memberScores.forEach(s => { byHole[s.hole] = s.score ?? s.strokes })
 
     const front9 = [1,2,3,4,5,6,7,8,9].reduce((sum, h) => sum + (byHole[h] || 0), 0)
     const back9  = [10,11,12,13,14,15,16,17,18].reduce((sum, h) => sum + (byHole[h] || 0), 0)
@@ -488,6 +542,79 @@ function gameStyle(type) { return GAME_STYLES[type] || 'default' }
 }
 .settlement-ph-icon { font-size: 20px; }
 .settlement-ph-text { font-size: 13px; color: var(--gw-text-muted); line-height: 1.4; }
+
+/* Settlement totals */
+.settlement-totals {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.settlement-player {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: var(--gw-radius-sm, 8px);
+}
+.settlement-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--gw-text);
+}
+.settlement-amount {
+  font-family: var(--gw-font-mono);
+  font-size: 15px;
+  font-weight: 700;
+}
+.settlement-player.positive .settlement-amount { color: #86efac; }
+.settlement-player.negative .settlement-amount { color: #fca5a5; }
+
+/* Ledger entries */
+.settlement-ledger {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ledger-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(212, 175, 55, 0.06);
+  border-radius: var(--gw-radius-sm, 8px);
+  border-left: 3px solid var(--gw-gold);
+}
+.ledger-from {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fca5a5;
+}
+.ledger-arrow {
+  font-size: 13px;
+  color: var(--gw-text-muted);
+}
+.ledger-to {
+  font-size: 13px;
+  font-weight: 600;
+  color: #86efac;
+  flex: 1;
+}
+.ledger-amount {
+  font-family: var(--gw-font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--gw-gold);
+}
+.settlement-even {
+  padding: 12px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--gw-text-muted);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: var(--gw-radius-sm, 8px);
+}
 
 /* ── Animations ──────────────────────────────────────────── */
 @keyframes card-in {
