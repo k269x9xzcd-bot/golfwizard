@@ -171,7 +171,7 @@ function resetForm() {
 .auth-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(10, 34, 24, 0.55);
+  background: rgba(0, 0, 0, 0.6);
   z-index: 300;
   display: flex;
   align-items: flex-end;
@@ -184,10 +184,11 @@ function resetForm() {
 .auth-sheet {
   width: 100%;
   max-width: 480px;
-  background: white;
+  background: var(--gw-card-bg);
   border-radius: 24px 24px 0 0;
   padding: 0 0 env(safe-area-inset-bottom);
   animation: slide-up .28s cubic-bezier(.32,1,.28,1);
+  border: 1px solid var(--gw-card-border);
 }
 
 /* ── Logo ────────────────────────────────────────────────── */
@@ -202,7 +203,7 @@ function resetForm() {
 .auth-logo-text {
   font-family: var(--gw-font-display);
   font-size: 26px;
-  color: var(--gw-green-700);
+  color: var(--gw-gold);
 }
 
 /* ── Body ────────────────────────────────────────────────── */
@@ -216,19 +217,19 @@ function resetForm() {
 .auth-title {
   font-family: var(--gw-font-display);
   font-size: 22px;
-  color: var(--gw-neutral-900);
+  color: var(--gw-text);
   margin: 0 0 6px;
   text-align: center;
 }
 .auth-sub {
   font-size: 14px;
-  color: var(--gw-neutral-500);
+  color: var(--gw-text-muted);
   text-align: center;
   margin: 0 0 24px;
   line-height: 1.6;
 }
 .auth-email-highlight {
-  color: var(--gw-neutral-900);
+  color: var(--gw-text);
 }
 
 /* ── OTP icon ────────────────────────────────────────────── */
@@ -254,7 +255,7 @@ function resetForm() {
   font-family: var(--gw-font-body);
   font-size: 13px;
   font-weight: 600;
-  color: var(--gw-neutral-600);
+  color: var(--gw-text-muted);
 }
 .auth-input {
   width: 100%;
@@ -262,9 +263,9 @@ function resetForm() {
   padding: 15px 16px;
   font-family: var(--gw-font-body);
   font-size: 16px;
-  color: var(--gw-neutral-900);
-  background: var(--gw-neutral-50);
-  border: 1.5px solid var(--gw-neutral-200);
+  color: var(--gw-text);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1.5px solid var(--gw-card-border);
   border-radius: var(--gw-radius-md);
   outline: none;
   transition: border-color .2s;
@@ -272,8 +273,8 @@ function resetForm() {
   appearance: none;
 }
 .auth-input:focus {
-  border-color: var(--gw-green-400);
-  background: white;
+  border-color: var(--gw-gold);
+  background: rgba(255, 255, 255, 0.08);
 }
 .auth-input--otp {
   font-family: var(--gw-font-mono);
@@ -288,8 +289,8 @@ function resetForm() {
 .btn-magic {
   width: 100%;
   padding: 16px;
-  background: var(--gw-green-500);
-  color: white;
+  background: var(--gw-gold);
+  color: #000;
   border: none;
   border-radius: var(--gw-radius-md);
   font-family: var(--gw-font-body);
@@ -304,7 +305,7 @@ function resetForm() {
   -webkit-tap-highlight-color: transparent;
 }
 .btn-magic:active:not(:disabled) {
-  background: var(--gw-green-600);
+  background: #e5c158;
   transform: scale(.98);
 }
 .btn-magic:disabled {
@@ -321,12 +322,12 @@ function resetForm() {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid rgba(255, 107, 107, 0.3);
   border-radius: var(--gw-radius-sm);
   padding: 10px 14px;
   font-size: 13px;
-  color: #991b1b;
+  color: #ff6b6b;
   margin-top: 8px;
 }
 
@@ -336,7 +337,7 @@ function resetForm() {
   align-items: center;
   gap: 12px;
   margin: 18px 0;
-  color: var(--gw-neutral-300);
+  color: var(--gw-text-muted);
   font-size: 13px;
 }
 .auth-divider::before,
@@ -344,7 +345,7 @@ function resetForm() {
   content: '';
   flex: 1;
   height: 1px;
-  background: var(--gw-neutral-200);
+  background: var(--gw-card-border);
 }
 
 /* ── Guest button ────────────────────────────────────────── */
@@ -352,12 +353,12 @@ function resetForm() {
   width: 100%;
   padding: 14px 16px;
   background: none;
-  border: 1.5px solid var(--gw-neutral-200);
+  border: 1.5px solid var(--gw-card-border);
   border-radius: var(--gw-radius-md);
   font-family: var(--gw-font-body);
   font-size: 15px;
   font-weight: 500;
-  color: var(--gw-neutral-700);
+  color: var(--gw-text);
   cursor: pointer;
   display: flex;
   flex-direction: column;
@@ -366,11 +367,11 @@ function resetForm() {
   -webkit-tap-highlight-color: transparent;
 }
 .btn-guest:active {
-  background: var(--gw-neutral-50);
+  background: rgba(255, 255, 255, 0.05);
 }
 .guest-note {
   font-size: 11px;
-  color: var(--gw-neutral-400);
+  color: var(--gw-text-muted);
   font-weight: 400;
 }
 
@@ -381,7 +382,7 @@ function resetForm() {
   text-align: center;
   background: none;
   border: none;
-  color: var(--gw-green-600);
+  color: var(--gw-gold);
   font-family: var(--gw-font-body);
   font-size: 14px;
   font-weight: 500;

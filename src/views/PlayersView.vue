@@ -130,16 +130,17 @@ async function saveEdit() {
 .add-form {
   display: flex; flex-direction: column; gap: 8px;
   margin-bottom: 16px; padding: 14px;
-  background: var(--surface, #fff);
+  background: var(--gw-card-bg);
   border-radius: 12px;
-  box-shadow: 0 1px 4px rgba(0,0,0,.08);
+  box-shadow: 0 1px 4px rgba(0,0,0,.2);
+  border: 1px solid var(--gw-card-border);
 }
 .name-row { display: flex; gap: 8px; }
 .name-row .wiz-input { flex: 1; }
 
 .section-label {
   font-size: 11px; font-weight: 600; letter-spacing: .06em;
-  text-transform: uppercase; color: #888;
+  text-transform: uppercase; color: var(--gw-text-muted);
   padding: 4px 4px 6px; margin-top: 8px;
 }
 
@@ -147,42 +148,44 @@ async function saveEdit() {
   display: flex; align-items: center; gap: 10px;
   padding: 12px 14px; margin-bottom: 8px;
   border-radius: 12px;
-  background: var(--surface, #fff);
-  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+  background: var(--gw-card-bg);
+  box-shadow: 0 1px 4px rgba(0,0,0,.2);
+  border: 1px solid var(--gw-card-border);
 }
 .player-card--dim { opacity: 0.75; }
 
 .fav-btn {
   font-size: 22px; background: none; border: none;
   cursor: pointer; padding: 0; line-height: 1;
-  color: #ccc;
+  color: rgba(240, 237, 224, 0.3);
 }
-.fav-btn--on { color: #e8a020; }
+.fav-btn--on { color: var(--gw-gold); }
 
 .player-info { flex: 1; cursor: pointer; }
-.player-name { font-weight: 600; font-size: 15px; }
-.player-ghin { font-size: 12px; color: #888; margin-top: 1px; }
+.player-name { font-weight: 600; font-size: 15px; color: var(--gw-text); }
+.player-ghin { font-size: 12px; color: var(--gw-text-muted); margin-top: 1px; }
 
 .delete-btn {
-  font-size: 13px; color: #bbb; background: none;
+  font-size: 13px; color: rgba(240, 237, 224, 0.3); background: none;
   border: none; cursor: pointer; padding: 4px;
 }
 
-.empty-state { text-align: center; padding: 40px 20px; color: #999; }
+.empty-state { text-align: center; padding: 40px 20px; color: var(--gw-text-muted); }
 .empty-icon { font-size: 40px; margin-bottom: 8px; }
 
 /* Edit overlay */
 .edit-backdrop {
-  position: fixed; inset: 0; background: rgba(0,0,0,.4);
+  position: fixed; inset: 0; background: rgba(0,0,0,.6);
   z-index: 200; display: flex; align-items: flex-end;
 }
 .edit-sheet {
-  width: 100%; background: #fff; border-radius: 20px 20px 0 0;
+  width: 100%; background: var(--gw-card-bg); border-radius: 20px 20px 0 0;
   padding: 20px 16px 36px; display: flex; flex-direction: column; gap: 12px;
+  border: 1px solid var(--gw-card-border);
 }
 .edit-header { display: flex; justify-content: space-between; align-items: center; }
-.edit-title { font-size: 17px; font-weight: 700; }
-.close-btn { background: none; border: none; font-size: 18px; cursor: pointer; color: #888; }
+.edit-title { font-size: 17px; font-weight: 700; color: var(--gw-text); }
+.close-btn { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--gw-text-muted); }
 .edit-footer { display: flex; gap: 10px; margin-top: 4px; }
 .edit-footer .btn-ghost, .edit-footer .btn-primary { flex: 1; }
 </style>

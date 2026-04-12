@@ -215,7 +215,7 @@ function gameStyle(type) { return GAME_STYLES[type] || 'default' }
 /* ── Layout ─────────────────────────────────────────────── */
 .history-view {
   min-height: 100%;
-  background: var(--gw-neutral-50);
+  background: var(--gw-neutral-950);
   padding-bottom: calc(var(--gw-nav-height) + env(safe-area-inset-bottom) + 16px);
 }
 
@@ -229,15 +229,15 @@ function gameStyle(type) { return GAME_STYLES[type] || 'default' }
 .history-title {
   font-family: var(--gw-font-display);
   font-size: 28px;
-  color: var(--gw-neutral-900);
+  color: var(--gw-text);
   margin: 0;
   flex: 1;
 }
 
 .round-count {
   font-size: 13px;
-  color: var(--gw-neutral-400);
-  background: var(--gw-neutral-100);
+  color: var(--gw-text-muted);
+  background: rgba(255, 255, 255, 0.08);
   border-radius: var(--gw-radius-full);
   padding: 4px 12px;
 }
@@ -253,12 +253,12 @@ function gameStyle(type) { return GAME_STYLES[type] || 'default' }
 .loading-spinner {
   width: 32px;
   height: 32px;
-  border: 3px solid var(--gw-neutral-200);
-  border-top-color: var(--gw-green-500);
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: var(--gw-gold);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
-.loading-text { font-size: 14px; color: var(--gw-neutral-400); }
+.loading-text { font-size: 14px; color: var(--gw-text-muted); }
 
 /* ── Empty state ─────────────────────────────────────────── */
 .empty-state {
@@ -272,19 +272,19 @@ function gameStyle(type) { return GAME_STYLES[type] || 'default' }
 .empty-title {
   font-family: var(--gw-font-display);
   font-size: 22px;
-  color: var(--gw-neutral-900);
+  color: var(--gw-text);
   margin-bottom: 8px;
 }
 .empty-sub {
   font-size: 14px;
-  color: var(--gw-neutral-500);
+  color: var(--gw-text-muted);
   margin-bottom: 24px;
   line-height: 1.5;
 }
 .btn-primary {
   padding: 14px 28px;
-  background: var(--gw-green-500);
-  color: white;
+  background: var(--gw-gold);
+  color: #000;
   border: none;
   border-radius: var(--gw-radius-md);
   font-family: var(--gw-font-body);
@@ -304,12 +304,12 @@ function gameStyle(type) { return GAME_STYLES[type] || 'default' }
   font-weight: 700;
   letter-spacing: .08em;
   text-transform: uppercase;
-  color: var(--gw-neutral-400);
+  color: var(--gw-text-muted);
   padding: 12px 4px 6px;
 }
 
 .round-card {
-  background: white;
+  background: var(--gw-card-bg);
   border-radius: var(--gw-radius-lg);
   margin-bottom: 10px;
   box-shadow: var(--gw-shadow-card);
@@ -317,7 +317,7 @@ function gameStyle(type) { return GAME_STYLES[type] || 'default' }
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   animation: card-in 250ms ease-out both;
-  border-left: 3px solid var(--gw-green-500);
+  border-left: 3px solid var(--gw-gold);
 }
 
 .round-card-header {
@@ -333,7 +333,7 @@ function gameStyle(type) { return GAME_STYLES[type] || 'default' }
   font-family: var(--gw-font-body);
   font-size: 16px;
   font-weight: 600;
-  color: var(--gw-neutral-900);
+  color: var(--gw-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -346,10 +346,10 @@ function gameStyle(type) { return GAME_STYLES[type] || 'default' }
   margin-top: 3px;
   flex-wrap: wrap;
 }
-.round-date { font-size: 12px; color: var(--gw-neutral-400); }
-.round-dot  { font-size: 12px; color: var(--gw-neutral-300); }
-.round-players { font-size: 12px; color: var(--gw-neutral-400); }
-.round-format  { font-size: 12px; color: var(--gw-green-600); font-weight: 500; }
+.round-date { font-size: 12px; color: var(--gw-text-muted); }
+.round-dot  { font-size: 12px; color: rgba(240, 237, 224, 0.2); }
+.round-players { font-size: 12px; color: var(--gw-text-muted); }
+.round-format  { font-size: 12px; color: var(--gw-gold); font-weight: 500; }
 
 .round-card-right {
   display: flex;
@@ -372,19 +372,19 @@ function gameStyle(type) { return GAME_STYLES[type] || 'default' }
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: .04em;
-  color: var(--gw-neutral-400);
+  color: var(--gw-text-muted);
 }
 .mini-total {
   font-family: var(--gw-font-mono);
   font-size: 16px;
   font-weight: 700;
-  color: var(--gw-neutral-800);
+  color: var(--gw-text);
   line-height: 1.2;
 }
 
 .expand-arrow {
   font-size: 22px;
-  color: var(--gw-neutral-300);
+  color: rgba(240, 237, 224, 0.3);
   transform: rotate(90deg);
   transition: transform .2s;
 }
@@ -393,7 +393,7 @@ function gameStyle(type) { return GAME_STYLES[type] || 'default' }
 /* ── Round detail ────────────────────────────────────────── */
 .detail-divider {
   height: 1px;
-  background: var(--gw-neutral-100);
+  background: var(--gw-card-border);
 }
 
 .round-detail { padding: 0 16px 16px; }
@@ -403,7 +403,7 @@ function gameStyle(type) { return GAME_STYLES[type] || 'default' }
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .08em;
-  color: var(--gw-neutral-400);
+  color: var(--gw-text-muted);
   padding: 12px 0 8px;
 }
 
@@ -414,10 +414,10 @@ function gameStyle(type) { return GAME_STYLES[type] || 'default' }
   align-items: center;
   gap: 4px;
   padding: 6px 0;
-  border-bottom: 1px solid var(--gw-neutral-100);
+  border-bottom: 1px solid var(--gw-card-border);
 }
 .scores-header {
-  border-bottom: 2px solid var(--gw-neutral-200);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
   padding-bottom: 4px;
   margin-bottom: 2px;
 }
@@ -427,7 +427,7 @@ function gameStyle(type) { return GAME_STYLES[type] || 'default' }
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .06em;
-  color: var(--gw-neutral-400);
+  color: var(--gw-text-muted);
 }
 
 .score-player-col {
@@ -435,22 +435,22 @@ function gameStyle(type) { return GAME_STYLES[type] || 'default' }
   font-family: var(--gw-font-body);
   font-size: 14px;
   font-weight: 500;
-  color: var(--gw-neutral-800);
+  color: var(--gw-text);
 }
 .score-num-col {
   width: 36px;
   text-align: center;
   font-family: var(--gw-font-mono);
   font-size: 14px;
-  color: var(--gw-neutral-600);
+  color: var(--gw-text-muted);
 }
-.score-nine { color: var(--gw-neutral-500); }
+.score-nine { color: var(--gw-text-muted); }
 .score-total-col { width: 44px; }
 .score-total {
   font-family: var(--gw-font-mono);
   font-size: 17px;
   font-weight: 700;
-  color: var(--gw-neutral-900);
+  color: var(--gw-text);
 }
 
 /* Game tags */
@@ -466,15 +466,15 @@ function gameStyle(type) { return GAME_STYLES[type] || 'default' }
   font-family: var(--gw-font-body);
   font-size: 12px;
   font-weight: 500;
-  background: var(--gw-neutral-100);
-  color: var(--gw-neutral-600);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--gw-text-muted);
 }
-.game-tag--gold   { background: #fef3c7; color: #92400e; }
-.game-tag--green  { background: var(--gw-green-50); color: var(--gw-green-700); }
-.game-tag--purple { background: #ede9fe; color: #5b21b6; }
-.game-tag--blue   { background: #dbeafe; color: #1e40af; }
-.game-tag--red    { background: #fee2e2; color: #991b1b; }
-.game-tag--teal   { background: #ccfbf1; color: #115e59; }
+.game-tag--gold   { background: rgba(212, 175, 55, 0.15); color: var(--gw-gold); }
+.game-tag--green  { background: rgba(34, 197, 94, 0.15); color: #86efac; }
+.game-tag--purple { background: rgba(168, 85, 247, 0.15); color: #d8b4fe; }
+.game-tag--blue   { background: rgba(59, 130, 246, 0.15); color: #93c5fd; }
+.game-tag--red    { background: rgba(239, 68, 68, 0.15); color: #fca5a5; }
+.game-tag--teal   { background: rgba(20, 184, 166, 0.15); color: #99f6e4; }
 
 /* Settlement block */
 .settlement-block { margin-bottom: 4px; }
@@ -483,11 +483,11 @@ function gameStyle(type) { return GAME_STYLES[type] || 'default' }
   align-items: center;
   gap: 10px;
   padding: 12px;
-  background: var(--gw-neutral-50);
+  background: rgba(255, 255, 255, 0.05);
   border-radius: var(--gw-radius-md);
 }
 .settlement-ph-icon { font-size: 20px; }
-.settlement-ph-text { font-size: 13px; color: var(--gw-neutral-500); line-height: 1.4; }
+.settlement-ph-text { font-size: 13px; color: var(--gw-text-muted); line-height: 1.4; }
 
 /* ── Animations ──────────────────────────────────────────── */
 @keyframes card-in {

@@ -768,7 +768,7 @@ async function doDelete() {
   display: flex;
   flex-direction: column;
   min-height: 100%;
-  background: var(--gw-neutral-50);
+  background: var(--gw-neutral-950);
   padding-bottom: calc(var(--gw-nav-height) + env(safe-area-inset-bottom) + 16px);
 }
 
@@ -782,7 +782,7 @@ async function doDelete() {
 .courses-title {
   font-family: var(--gw-font-display);
   font-size: 28px;
-  color: var(--gw-neutral-900);
+  color: var(--gw-text);
   margin: 0;
 }
 
@@ -790,8 +790,8 @@ async function doDelete() {
   width: 44px;
   height: 44px;
   border-radius: var(--gw-radius-full);
-  background: var(--gw-green-500);
-  color: white;
+  background: var(--gw-gold);
+  color: #000;
   border: none;
   cursor: pointer;
   display: flex;
@@ -801,7 +801,7 @@ async function doDelete() {
   transition: transform .15s, background .15s;
   -webkit-tap-highlight-color: transparent;
 }
-.add-course-btn:active { transform: scale(.92); background: var(--gw-green-600); }
+.add-course-btn:active { transform: scale(.92); background: #e5c158; }
 .add-icon { font-size: 22px; line-height: 1; }
 
 /* ── Search ─────────────────────────────────────────────── */
@@ -815,7 +815,7 @@ async function doDelete() {
   top: 50%;
   transform: translateY(-50%);
   font-size: 18px;
-  color: var(--gw-neutral-400);
+  color: var(--gw-text-muted);
   pointer-events: none;
 }
 .search-input {
@@ -824,9 +824,9 @@ async function doDelete() {
   padding: 12px 40px 12px 38px;
   font-family: var(--gw-font-body);
   font-size: 16px;
-  color: var(--gw-neutral-900);
-  background: white;
-  border: 1.5px solid var(--gw-neutral-200);
+  color: var(--gw-text);
+  background: var(--gw-card-bg);
+  border: 1.5px solid var(--gw-card-border);
   border-radius: var(--gw-radius-full);
   outline: none;
   box-shadow: var(--gw-shadow-sm);
@@ -834,7 +834,7 @@ async function doDelete() {
   -webkit-appearance: none;
   appearance: none;
 }
-.search-input:focus { border-color: var(--gw-green-400); }
+.search-input:focus { border-color: var(--gw-gold); }
 .search-clear {
   position: absolute;
   right: 12px;
@@ -842,7 +842,7 @@ async function doDelete() {
   transform: translateY(-50%);
   background: none;
   border: none;
-  color: var(--gw-neutral-400);
+  color: var(--gw-text-muted);
   font-size: 14px;
   cursor: pointer;
   padding: 4px;
@@ -858,33 +858,34 @@ async function doDelete() {
   font-weight: 600;
   letter-spacing: .08em;
   text-transform: uppercase;
-  color: var(--gw-neutral-400);
+  color: var(--gw-text-muted);
   padding: 12px 4px 6px;
 }
 
 .course-card {
   display: flex;
   align-items: center;
-  background: white;
+  background: var(--gw-card-bg);
   border-radius: var(--gw-radius-lg);
   padding: 14px 12px 14px 16px;
   margin-bottom: 8px;
   box-shadow: var(--gw-shadow-card);
   cursor: pointer;
   border-left: 3px solid transparent;
+  border: 1px solid var(--gw-card-border);
   transition: transform .12s, box-shadow .12s;
   -webkit-tap-highlight-color: transparent;
   animation: card-in 250ms ease-out both;
 }
 .course-card:active { transform: scale(.98); box-shadow: var(--gw-shadow-sm); }
-.course-card--custom { border-left-color: var(--gw-green-400); }
+.course-card--custom { border-left-color: var(--gw-gold); }
 
 .course-card-main { flex: 1; min-width: 0; }
 .course-name {
   font-family: var(--gw-font-body);
   font-size: 16px;
   font-weight: 500;
-  color: var(--gw-neutral-900);
+  color: var(--gw-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -899,16 +900,16 @@ async function doDelete() {
   font-size: 10px;
   font-weight: 600;
   letter-spacing: .05em;
-  color: var(--gw-green-500);
-  background: var(--gw-green-50);
+  color: var(--gw-gold);
+  background: rgba(212, 175, 55, 0.15);
   padding: 2px 6px;
   border-radius: var(--gw-radius-full);
-  border: 1px solid var(--gw-green-200);
+  border: 1px solid rgba(212, 175, 55, 0.3);
 }
 .tee-count {
   font-family: var(--gw-font-body);
   font-size: 13px;
-  color: var(--gw-neutral-400);
+  color: var(--gw-text-muted);
 }
 
 .course-actions {
@@ -923,7 +924,7 @@ async function doDelete() {
   border: none;
   background: none;
   font-size: 20px;
-  color: var(--gw-neutral-300);
+  color: rgba(240, 237, 224, 0.3);
   cursor: pointer;
   border-radius: var(--gw-radius-full);
   display: flex;
@@ -933,7 +934,7 @@ async function doDelete() {
   transition: color .15s, transform .15s;
 }
 .fav-btn:active { transform: scale(.85); }
-.fav-btn--active { color: #f59e0b; }
+.fav-btn--active { color: var(--gw-gold); }
 
 .delete-btn {
   width: 36px;
@@ -960,7 +961,7 @@ async function doDelete() {
 .empty-icon { font-size: 40px; margin-bottom: 12px; }
 .empty-text {
   font-family: var(--gw-font-body);
-  color: var(--gw-neutral-400);
+  color: var(--gw-text-muted);
   margin-bottom: 20px;
 }
 
@@ -968,7 +969,7 @@ async function doDelete() {
 .overlay-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(10,34,24,.5);
+  background: rgba(0,0,0,.6);
   z-index: 200;
   display: flex;
   align-items: flex-end;
@@ -978,13 +979,14 @@ async function doDelete() {
 .overlay-sheet {
   width: 100%;
   max-width: 600px;
-  background: white;
+  background: var(--gw-card-bg);
   border-radius: var(--gw-radius-xl) var(--gw-radius-xl) 0 0;
   max-height: 92vh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   padding-bottom: env(safe-area-inset-bottom);
+  border: 1px solid var(--gw-card-border);
 }
 .overlay-content {
   display: flex;
@@ -1004,7 +1006,7 @@ async function doDelete() {
   border: none;
   background: none;
   font-size: 16px;
-  color: var(--gw-neutral-400);
+  color: var(--gw-text-muted);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
@@ -1019,25 +1021,25 @@ async function doDelete() {
   width: 8px;
   height: 8px;
   border-radius: var(--gw-radius-full);
-  background: var(--gw-neutral-200);
+  background: rgba(255, 255, 255, 0.15);
   transition: background .2s, transform .2s;
 }
 .step-dot.active {
-  background: var(--gw-green-500);
+  background: var(--gw-gold);
   transform: scale(1.25);
 }
-.step-dot.done { background: var(--gw-green-300); }
+.step-dot.done { background: #a89968; }
 
 .overlay-title {
   font-family: var(--gw-font-display);
   font-size: 24px;
-  color: var(--gw-neutral-900);
+  color: var(--gw-text);
   margin: 0 0 4px;
   padding-right: 40px;
 }
 .overlay-sub {
   font-size: 14px;
-  color: var(--gw-neutral-500);
+  color: var(--gw-text-muted);
   margin: 0 0 24px;
 }
 
@@ -1048,7 +1050,7 @@ async function doDelete() {
   font-family: var(--gw-font-body);
   font-size: 13px;
   font-weight: 600;
-  color: var(--gw-neutral-600);
+  color: var(--gw-text-muted);
   margin-bottom: 8px;
 }
 .field-input {
@@ -1057,15 +1059,15 @@ async function doDelete() {
   padding: 14px 16px;
   font-family: var(--gw-font-body);
   font-size: 16px;
-  color: var(--gw-neutral-900);
-  background: var(--gw-neutral-50);
-  border: 1.5px solid var(--gw-neutral-200);
+  color: var(--gw-text);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1.5px solid var(--gw-card-border);
   border-radius: var(--gw-radius-md);
   outline: none;
   transition: border-color .2s;
   -webkit-appearance: none;
 }
-.field-input:focus { border-color: var(--gw-green-400); }
+.field-input:focus { border-color: var(--gw-gold); }
 
 /* ── Tees ────────────────────────────────────────────────── */
 .tees-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
@@ -1073,7 +1075,7 @@ async function doDelete() {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--gw-neutral-50);
+  background: rgba(255, 255, 255, 0.05);
   border-radius: var(--gw-radius-md);
   padding: 10px 12px;
 }
@@ -1090,7 +1092,7 @@ async function doDelete() {
   font-family: var(--gw-font-body);
   font-size: 15px;
   font-weight: 500;
-  color: var(--gw-neutral-900);
+  color: var(--gw-text);
   border: none;
   background: transparent;
   outline: none;
@@ -1106,23 +1108,23 @@ async function doDelete() {
   font-family: var(--gw-font-mono);
   font-size: 14px;
   text-align: center;
-  color: var(--gw-neutral-700);
-  background: white;
-  border: 1.5px solid var(--gw-neutral-200);
+  color: var(--gw-text);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1.5px solid var(--gw-card-border);
   border-radius: var(--gw-radius-sm);
   padding: 6px 4px;
   outline: none;
   -webkit-appearance: none;
   appearance: none;
 }
-.tee-num-input:focus { border-color: var(--gw-green-400); }
-.tee-sep { font-size: 14px; color: var(--gw-neutral-400); }
+.tee-num-input:focus { border-color: var(--gw-gold); }
+.tee-sep { font-size: 14px; color: var(--gw-text-muted); }
 .tee-remove {
   width: 28px;
   height: 28px;
   border: none;
   background: none;
-  color: var(--gw-neutral-400);
+  color: var(--gw-text-muted);
   font-size: 13px;
   cursor: pointer;
   padding: 0;
@@ -1135,16 +1137,16 @@ async function doDelete() {
   width: 100%;
   padding: 12px;
   background: none;
-  border: 1.5px dashed var(--gw-neutral-300);
+  border: 1.5px dashed rgba(240, 237, 224, 0.2);
   border-radius: var(--gw-radius-md);
   font-family: var(--gw-font-body);
   font-size: 14px;
-  color: var(--gw-neutral-500);
+  color: var(--gw-text-muted);
   cursor: pointer;
   transition: border-color .2s, color .2s;
   -webkit-tap-highlight-color: transparent;
 }
-.add-tee-btn:hover, .add-tee-btn:active { border-color: var(--gw-green-400); color: var(--gw-green-500); }
+.add-tee-btn:hover, .add-tee-btn:active { border-color: var(--gw-gold); color: var(--gw-gold); }
 .add-tee-btn:disabled { opacity: .4; cursor: default; }
 
 /* ── Fetch from API button ───────────────────────────────── */
@@ -1152,19 +1154,19 @@ async function doDelete() {
   width: 100%;
   margin-top: 8px;
   padding: 10px 14px;
-  background: var(--gw-green-50);
-  border: 1.5px solid var(--gw-green-300);
+  background: rgba(212, 175, 55, 0.15);
+  border: 1.5px solid rgba(212, 175, 55, 0.3);
   border-radius: var(--gw-radius-md);
   font-family: var(--gw-font-body);
   font-size: 14px;
   font-weight: 500;
-  color: var(--gw-green-700);
+  color: var(--gw-gold);
   cursor: pointer;
   transition: background .15s, border-color .15s;
   -webkit-tap-highlight-color: transparent;
 }
 .btn-fetch-api:active:not(:disabled) {
-  background: var(--gw-green-100);
+  background: rgba(212, 175, 55, 0.25);
 }
 .btn-fetch-api:disabled {
   opacity: .6;
@@ -1172,16 +1174,16 @@ async function doDelete() {
 }
 .api-fetch-msg {
   font-size: 13px;
-  color: var(--gw-green-600);
+  color: var(--gw-gold);
   margin-top: 6px;
   padding: 4px 0;
 }
 .api-fetch-msg.api-fetch-err {
-  color: #dc2626;
+  color: #ff6b6b;
 }
 .tees-empty-hint {
   font-size: 14px;
-  color: var(--gw-gray-500, #6b7280);
+  color: var(--gw-text-muted);
   padding: 16px 0;
   text-align: center;
   line-height: 1.4;
@@ -1191,7 +1193,7 @@ async function doDelete() {
   align-items: center;
   gap: 8px;
   font-size: 14px;
-  color: var(--gw-green-600);
+  color: var(--gw-gold);
   padding: 16px 0;
   justify-content: center;
 }
@@ -1212,7 +1214,7 @@ async function doDelete() {
 .tee-label {
   font-size: 12px;
   font-weight: 600;
-  color: var(--gw-neutral-400);
+  color: var(--gw-text-muted);
   text-transform: uppercase;
   letter-spacing: .05em;
   white-space: nowrap;
@@ -1221,20 +1223,20 @@ async function doDelete() {
 .tee-tab {
   padding: 6px 12px;
   border-radius: var(--gw-radius-full);
-  border: 1.5px solid var(--gw-neutral-200);
-  background: white;
+  border: 1.5px solid var(--gw-card-border);
+  background: rgba(255, 255, 255, 0.08);
   font-family: var(--gw-font-body);
   font-size: 13px;
   font-weight: 500;
-  color: var(--gw-neutral-600);
+  color: var(--gw-text-muted);
   cursor: pointer;
   transition: all .15s;
   -webkit-tap-highlight-color: transparent;
 }
 .tee-tab.active {
-  background: var(--tee-color, var(--gw-green-500));
+  background: var(--tee-color, var(--gw-gold));
   border-color: transparent;
-  color: white;
+  color: #000;
 }
 
 /* ── Holes grid ──────────────────────────────────────────── */
@@ -1260,34 +1262,34 @@ async function doDelete() {
   font-weight: 700;
   letter-spacing: .07em;
   text-transform: uppercase;
-  color: var(--gw-neutral-400);
-  background: var(--gw-neutral-50);
+  color: var(--gw-text-muted);
+  background: rgba(255, 255, 255, 0.08);
   padding: 8px 4px;
   text-align: center;
   border-radius: 4px 4px 0 0;
 }
-.col-active { background: var(--gw-green-50) !important; }
+.col-active { background: rgba(212, 175, 55, 0.15) !important; }
 
 .hole-num {
   font-family: var(--gw-font-mono);
   font-size: 13px;
   font-weight: 600;
-  color: var(--gw-neutral-700);
+  color: var(--gw-text-muted);
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--gw-neutral-100);
+  background: rgba(255, 255, 255, 0.08);
   border-radius: 4px;
   height: 44px;
 }
-.hole-num.hole-back { background: var(--gw-neutral-200); }
+.hole-num.hole-back { background: rgba(255, 255, 255, 0.12); }
 
 .hole-cell {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: white;
-  border: 1px solid var(--gw-neutral-100);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   height: 44px;
   border-radius: 4px;
 }
@@ -1299,19 +1301,19 @@ async function doDelete() {
   width: 24px;
   height: 32px;
   border: none;
-  background: var(--gw-neutral-100);
+  background: rgba(255, 255, 255, 0.08);
   border-radius: 4px;
   font-family: var(--gw-font-mono);
   font-size: 13px;
   font-weight: 600;
-  color: var(--gw-neutral-600);
+  color: var(--gw-text-muted);
   cursor: pointer;
   transition: all .12s;
   -webkit-tap-highlight-color: transparent;
 }
 .par-btn.active {
-  background: var(--gw-green-500);
-  color: white;
+  background: var(--gw-gold);
+  color: #000;
 }
 
 .hole-input {
@@ -1321,7 +1323,7 @@ async function doDelete() {
   font-family: var(--gw-font-mono);
   font-size: 14px;
   font-weight: 500;
-  color: var(--gw-neutral-800);
+  color: var(--gw-text);
   border: none;
   background: transparent;
   outline: none;
@@ -1340,8 +1342,8 @@ async function doDelete() {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .05em;
-  color: var(--gw-neutral-500);
-  background: var(--gw-neutral-100);
+  color: var(--gw-text-muted);
+  background: rgba(255, 255, 255, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1352,8 +1354,8 @@ async function doDelete() {
   font-family: var(--gw-font-mono);
   font-size: 14px;
   font-weight: 700;
-  color: var(--gw-neutral-800);
-  background: var(--gw-neutral-100);
+  color: var(--gw-text);
+  background: rgba(255, 255, 255, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1363,15 +1365,16 @@ async function doDelete() {
 
 /* ── Review card ─────────────────────────────────────────── */
 .review-card {
-  background: var(--gw-green-900);
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.15) 0%, rgba(212, 175, 55, 0.08) 100%);
   border-radius: var(--gw-radius-lg);
   padding: 20px;
   margin-bottom: 20px;
+  border: 1px solid rgba(212, 175, 55, 0.2);
 }
 .review-course-name {
   font-family: var(--gw-font-display);
   font-size: 22px;
-  color: white;
+  color: var(--gw-text);
   margin-bottom: 12px;
 }
 .review-tees { display: flex; flex-direction: column; gap: 8px; }
@@ -1389,18 +1392,18 @@ async function doDelete() {
 .review-tee-name {
   font-family: var(--gw-font-body);
   font-size: 14px;
-  color: white;
+  color: var(--gw-text);
   flex: 1;
 }
 .review-tee-rating {
   font-family: var(--gw-font-mono);
   font-size: 12px;
-  color: var(--gw-neutral-300);
+  color: var(--gw-text-muted);
 }
 .review-tee-yds {
   font-family: var(--gw-font-mono);
   font-size: 12px;
-  color: var(--gw-green-300);
+  color: var(--gw-gold);
 }
 
 /* ── Scorecard preview ───────────────────────────────────── */
@@ -1409,7 +1412,7 @@ async function doDelete() {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .07em;
-  color: var(--gw-neutral-400);
+  color: var(--gw-text-muted);
   margin-bottom: 6px;
 }
 .preview-grid {
@@ -1423,8 +1426,8 @@ async function doDelete() {
   font-family: var(--gw-font-body);
   font-size: 10px;
   font-weight: 700;
-  color: var(--gw-neutral-500);
-  background: var(--gw-neutral-100);
+  color: var(--gw-text-muted);
+  background: rgba(255, 255, 255, 0.08);
   padding: 6px 2px;
   text-align: center;
   border-radius: 4px;
@@ -1433,16 +1436,16 @@ async function doDelete() {
   font-family: var(--gw-font-mono);
   font-size: 13px;
   font-weight: 600;
-  color: var(--gw-neutral-700);
-  background: white;
+  color: var(--gw-text);
+  background: rgba(255, 255, 255, 0.05);
   padding: 8px 4px;
   text-align: center;
-  border: 1px solid var(--gw-neutral-100);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 4px;
 }
 .preview-hole {
-  color: var(--gw-green-600);
-  background: var(--gw-green-50);
+  color: var(--gw-gold);
+  background: rgba(212, 175, 55, 0.15);
   font-weight: 700;
 }
 
@@ -1456,8 +1459,8 @@ async function doDelete() {
 .btn-primary {
   flex: 1;
   padding: 16px;
-  background: var(--gw-green-500);
-  color: white;
+  background: var(--gw-gold);
+  color: #000;
   border: none;
   border-radius: var(--gw-radius-md);
   font-family: var(--gw-font-body);
@@ -1467,13 +1470,13 @@ async function doDelete() {
   transition: background .15s, transform .12s;
   -webkit-tap-highlight-color: transparent;
 }
-.btn-primary:active { background: var(--gw-green-600); transform: scale(.97); }
+.btn-primary:active { background: #e5c158; transform: scale(.97); }
 .btn-primary:disabled { opacity: .6; cursor: default; }
 .btn-ghost {
   padding: 16px 20px;
   background: none;
-  color: var(--gw-neutral-500);
-  border: 1.5px solid var(--gw-neutral-200);
+  color: var(--gw-text-muted);
+  border: 1.5px solid var(--gw-card-border);
   border-radius: var(--gw-radius-md);
   font-family: var(--gw-font-body);
   font-size: 16px;
@@ -1500,14 +1503,14 @@ async function doDelete() {
 }
 .api-load-text {
   font-size: 15px;
-  color: #666;
+  color: var(--gw-text-muted);
 }
 
 .step-error {
   font-size: 13px;
-  color: var(--gw-bogey);
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid rgba(255, 107, 107, 0.3);
   border-radius: var(--gw-radius-sm);
   padding: 10px 12px;
   margin-top: 12px;
@@ -1515,25 +1518,26 @@ async function doDelete() {
 
 /* ── Confirm sheet ───────────────────────────────────────── */
 .confirm-sheet {
-  background: white;
+  background: var(--gw-card-bg);
   border-radius: var(--gw-radius-xl) var(--gw-radius-xl) 0 0;
   padding: 32px 24px;
   padding-bottom: calc(24px + env(safe-area-inset-bottom));
   width: 100%;
   max-width: 480px;
   text-align: center;
+  border: 1px solid var(--gw-card-border);
 }
 .confirm-icon { font-size: 36px; margin-bottom: 12px; }
 .confirm-title {
   font-family: var(--gw-font-body);
   font-size: 18px;
   font-weight: 600;
-  color: var(--gw-neutral-900);
+  color: var(--gw-text);
   margin-bottom: 8px;
 }
 .confirm-sub {
   font-size: 14px;
-  color: var(--gw-neutral-500);
+  color: var(--gw-text-muted);
   margin-bottom: 24px;
   line-height: 1.5;
 }
@@ -1544,8 +1548,8 @@ async function doDelete() {
 .btn-danger {
   flex: 1;
   padding: 16px;
-  background: #dc2626;
-  color: white;
+  background: #ff6b6b;
+  color: #fff;
   border: none;
   border-radius: var(--gw-radius-md);
   font-family: var(--gw-font-body);
