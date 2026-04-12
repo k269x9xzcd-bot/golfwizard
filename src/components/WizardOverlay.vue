@@ -438,40 +438,69 @@ import { useRosterStore } from '../stores/roster'
 import { useRoundsStore } from '../stores/rounds'
 
 // ── TeamPicker component (inline) ────────────────────────────────
+// Old-version style: two-column side-by-side, tap player to assign to that team
 const TeamPicker = {
   name: 'TeamPicker',
   props: { players: Array, team1: Array, team2: Array },
   emits: ['update:team1', 'update:team2'],
   setup(props, { emit }) {
-    function toggle(pid, teamNum) {
-      const current = teamNum === 1 ? props.team1 : props.team2
-      const otherArr = teamNum === 1 ? props.team2 : props.team1
-      const otherKey = teamNum === 1 ? 'update:team2' : 'update:team1'
-      if (current.includes(pid)) {
-        emit(`update:team${teamNum}`, current.filter(id => id !== pid))
-      } else {
-        emit(otherKey, otherArr.filter(id => id !== pid))
-        emit(`update:team${teamNum}`, [...current, pid])
+    function assign(pid, teamNum) {
+      // Remove from both teams first
+      const newT1 = (props.team1 || []).filter(id => id !== pid)
+      const newT2 = (props.team2 || []).filter(id => id !== pid)
+      // Add to the target team
+      if (teamNum === 1) newT1.push(pid)
+      else newT2.push(pid)
+      emit('update:team1', newT1)
+      emit('update:team2', newT2)
+    }
+    function getTeam(pid) {
+      if ((props.team1 || []).includes(pid)) return 1
+      if ((props.team2 || []).includes(pid)) return 2
+      return 0
+    }
+    const colStyle = (team) => ({
+      flex: '1', padding: '10px', borderRadius: '12px',
+      background: team === 1 ? 'rgba(96,165,250,.07)' : 'rgba(248,113,113,.07)',
+      border: `1px solid ${team === 1 ? 'rgba(96,165,250,.2)' : 'rgba(248,113,113,.2)'}`,
+    })
+    const labelStyle = (team) => ({
+      fontSize: '10px', fontWeight: '700', marginBottom: '8px', textTransform: 'uppercase',
+      color: team === 1 ? '#60a5fa' : '#f87171',
+    })
+    const btnStyle = (pid, team) => {
+      const isOn = getTeam(pid) === team
+      return {
+        display: 'block', width: '100%', textAlign: 'left',
+        padding: '8px 12px', marginBottom: '5px', borderRadius: '9px',
+        fontSize: '13px', fontWeight: isOn ? '700' : '500', cursor: 'pointer',
+        border: 'none', fontFamily: 'inherit',
+        background: isOn
+          ? (team === 1 ? 'rgba(96,165,250,.25)' : 'rgba(248,113,113,.25)')
+          : 'rgba(255,255,255,.04)',
+        color: isOn
+          ? (team === 1 ? '#60a5fa' : '#f87171')
+          : 'rgba(240,237,224,.5)',
       }
     }
-    return () => h('div', { class: 'team-picker' }, [
-      h('div', { class: 'team-col' }, [
-        h('div', { class: 'team-label team-label--1' }, 'Team 1'),
+    return () => h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '12px' } }, [
+      h('div', { style: colStyle(1) }, [
+        h('div', { style: labelStyle(1) }, 'TEAM 1'),
         ...(props.players || []).map(p =>
-          h('div', {
+          h('button', {
             key: 't1-' + p.id,
-            class: ['team-player', props.team1?.includes(p.id) ? 'active' : ''],
-            onClick: () => toggle(p.id, 1),
+            style: btnStyle(p.id, 1),
+            onClick: () => assign(p.id, 1),
           }, p.shortName || p.name)
         ),
       ]),
-      h('div', { class: 'team-col' }, [
-        h('div', { class: 'team-label team-label--2' }, 'Team 2'),
+      h('div', { style: colStyle(2) }, [
+        h('div', { style: labelStyle(2) }, 'TEAM 2'),
         ...(props.players || []).map(p =>
-          h('div', {
+          h('button', {
             key: 't2-' + p.id,
-            class: ['team-player', props.team2?.includes(p.id) ? 'active' : ''],
-            onClick: () => toggle(p.id, 2),
+            style: btnStyle(p.id, 2),
+            onClick: () => assign(p.id, 2),
           }, p.shortName || p.name)
         ),
       ]),
