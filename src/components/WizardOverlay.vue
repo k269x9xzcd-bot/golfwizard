@@ -147,7 +147,30 @@
 
         <!-- Main game selector -->
         <div class="game-section-label">Main Game</div>
-        <div class="game-type-grid">
+
+        <!-- Collapsed: show selected game chip + change button -->
+        <div v-if="!showMainGrid && mainGame.type !== 'none'" class="main-game-selected">
+          <div class="main-game-chip">
+            <span class="gtb-icon">{{ MAIN_GAMES.find(g => g.key === mainGame.type)?.icon }}</span>
+            <span class="gtb-label">{{ MAIN_GAMES.find(g => g.key === mainGame.type)?.label }}</span>
+            <button class="btn-game-info" @click.stop="toggleGameInfo(mainGame.type)" title="How to play">ℹ️</button>
+          </div>
+          <button class="btn-change-game" @click="showMainGrid = true">Change</button>
+        </div>
+
+        <!-- Game info popover (shown when ℹ️ tapped for main game chip) -->
+        <div v-if="gameInfoKey && !showMainGrid && getGameDef(gameInfoKey)" class="game-info-popover">
+          <div class="game-info-title">{{ getGameDef(gameInfoKey).name }}</div>
+          <p class="game-info-desc">{{ getGameDef(gameInfoKey).desc }}</p>
+          <div class="game-info-section"><strong>Rules:</strong> {{ getGameDef(gameInfoKey).rules }}</div>
+          <div class="game-info-section"><strong>Wagering:</strong> {{ getGameDef(gameInfoKey).wagering }}</div>
+          <div v-if="getGameDef(gameInfoKey).example" class="game-info-section"><strong>Example:</strong> {{ getGameDef(gameInfoKey).example }}</div>
+          <div class="game-info-section game-info-hcp"><strong>Handicap:</strong> {{ getGameDef(gameInfoKey).hcpNote }}</div>
+          <button class="btn-close-info" @click="gameInfoKey = null">Got it</button>
+        </div>
+
+        <!-- Expanded grid: pick a main game -->
+        <div v-if="showMainGrid" class="game-type-grid">
           <button
             v-for="g in MAIN_GAMES"
             :key="g.key"
@@ -157,7 +180,19 @@
           >
             <span class="gtb-icon">{{ g.icon }}</span>
             <span class="gtb-label">{{ g.label }}</span>
+            <button class="btn-game-info btn-game-info-grid" @click.stop="toggleGameInfo(g.key)" title="How to play" v-if="g.key !== 'none'">ℹ️</button>
           </button>
+        </div>
+
+        <!-- Game info popover (shown when ℹ️ tapped in grid) -->
+        <div v-if="gameInfoKey && showMainGrid && getGameDef(gameInfoKey)" class="game-info-popover">
+          <div class="game-info-title">{{ getGameDef(gameInfoKey).name }}</div>
+          <p class="game-info-desc">{{ getGameDef(gameInfoKey).desc }}</p>
+          <div class="game-info-section"><strong>Rules:</strong> {{ getGameDef(gameInfoKey).rules }}</div>
+          <div class="game-info-section"><strong>Wagering:</strong> {{ getGameDef(gameInfoKey).wagering }}</div>
+          <div v-if="getGameDef(gameInfoKey).example" class="game-info-section"><strong>Example:</strong> {{ getGameDef(gameInfoKey).example }}</div>
+          <div class="game-info-section game-info-hcp"><strong>Handicap:</strong> {{ getGameDef(gameInfoKey).hcpNote }}</div>
+          <button class="btn-close-info" @click="gameInfoKey = null">Got it</button>
         </div>
 
         <!-- Nassau config -->
@@ -272,7 +307,14 @@
               <input v-model.number="mainGame.config.ppt" type="number" min="1" class="config-input" placeholder="1" />
             </div>
             <div class="config-field">
-              <label>Flip on birdie?</label>
+              <label>Scoring</label>
+              <select v-model="mainGame.config.scoring" class="config-select">
+                <option value="net">Net (strokes)</option>
+                <option value="gross">Gross (no strokes)</option>
+              </select>
+            </div>
+            <div class="config-field">
+              <label>Birdie flip?</label>
               <select v-model="mainGame.config.birdieFlip" class="config-select">
                 <option :value="true">Yes</option>
                 <option :value="false">No</option>
@@ -368,7 +410,16 @@
           <div class="side-game-row" v-if="mainGame.type !== 'skins'">
             <div class="side-game-header" @click="toggleSideGame('skins')">
               <span>🏆 Skins</span>
-              <span class="side-toggle">{{ sideGames.skins.enabled ? '▲' : '▼' }}</span>
+              <span class="side-header-actions">
+                <button class="btn-game-info btn-game-info-sm" @click.stop="toggleGameInfo('skins')" title="How to play">ℹ️</button>
+                <span class="side-toggle">{{ sideGames.skins.enabled ? '▲' : '▼' }}</span>
+              </span>
+            </div>
+            <div v-if="gameInfoKey === 'skins'" class="game-info-popover game-info-inline">
+              <p class="game-info-desc">{{ getGameDef('skins')?.desc }}</p>
+              <div class="game-info-section"><strong>Rules:</strong> {{ getGameDef('skins')?.rules }}</div>
+              <div v-if="getGameDef('skins')?.example" class="game-info-section"><strong>Example:</strong> {{ getGameDef('skins')?.example }}</div>
+              <button class="btn-close-info" @click="gameInfoKey = null">Got it</button>
             </div>
             <div v-if="sideGames.skins.enabled" class="side-game-config">
               <input v-model.number="sideGames.skins.ppt" type="number" class="config-input" placeholder="$5/skin" />
@@ -379,7 +430,16 @@
           <div class="side-game-row">
             <div class="side-game-header" @click="toggleSideGame('dots')">
               <span>🎯 Dots (Birdies, Greenies, Sandies)</span>
-              <span class="side-toggle">{{ sideGames.dots.enabled ? '▲' : '▼' }}</span>
+              <span class="side-header-actions">
+                <button class="btn-game-info btn-game-info-sm" @click.stop="toggleGameInfo('dots')" title="How to play">ℹ️</button>
+                <span class="side-toggle">{{ sideGames.dots.enabled ? '▲' : '▼' }}</span>
+              </span>
+            </div>
+            <div v-if="gameInfoKey === 'dots'" class="game-info-popover game-info-inline">
+              <p class="game-info-desc">{{ getGameDef('dots')?.desc }}</p>
+              <div class="game-info-section"><strong>Rules:</strong> {{ getGameDef('dots')?.rules }}</div>
+              <div v-if="getGameDef('dots')?.example" class="game-info-section"><strong>Example:</strong> {{ getGameDef('dots')?.example }}</div>
+              <button class="btn-close-info" @click="gameInfoKey = null">Got it</button>
             </div>
             <div v-if="sideGames.dots.enabled" class="side-game-config">
               <div class="config-row">
@@ -400,8 +460,17 @@
           <!-- Snake -->
           <div class="side-game-row">
             <div class="side-game-header" @click="toggleSideGame('snake')">
-              <span>🐍 Snake (worst scorer carries it)</span>
-              <span class="side-toggle">{{ sideGames.snake.enabled ? '▲' : '▼' }}</span>
+              <span>🐍 Snake (3-putt tracker)</span>
+              <span class="side-header-actions">
+                <button class="btn-game-info btn-game-info-sm" @click.stop="toggleGameInfo('snake')" title="How to play">ℹ️</button>
+                <span class="side-toggle">{{ sideGames.snake.enabled ? '▲' : '▼' }}</span>
+              </span>
+            </div>
+            <div v-if="gameInfoKey === 'snake'" class="game-info-popover game-info-inline">
+              <p class="game-info-desc">{{ getGameDef('snake')?.desc }}</p>
+              <div class="game-info-section"><strong>Rules:</strong> {{ getGameDef('snake')?.rules }}</div>
+              <div v-if="getGameDef('snake')?.example" class="game-info-section"><strong>Example:</strong> {{ getGameDef('snake')?.example }}</div>
+              <button class="btn-close-info" @click="gameInfoKey = null">Got it</button>
             </div>
             <div v-if="sideGames.snake.enabled" class="side-game-config">
               <div class="config-field">
@@ -415,7 +484,16 @@
           <div class="side-game-row">
             <div class="side-game-header" @click="toggleSideGame('fidget')">
               <span>😬 Fidget (never win a hole = pay everyone)</span>
-              <span class="side-toggle">{{ sideGames.fidget.enabled ? '▲' : '▼' }}</span>
+              <span class="side-header-actions">
+                <button class="btn-game-info btn-game-info-sm" @click.stop="toggleGameInfo('fidget')" title="How to play">ℹ️</button>
+                <span class="side-toggle">{{ sideGames.fidget.enabled ? '▲' : '▼' }}</span>
+              </span>
+            </div>
+            <div v-if="gameInfoKey === 'fidget'" class="game-info-popover game-info-inline">
+              <p class="game-info-desc">{{ getGameDef('fidget')?.desc }}</p>
+              <div class="game-info-section"><strong>Rules:</strong> {{ getGameDef('fidget')?.rules }}</div>
+              <div v-if="getGameDef('fidget')?.example" class="game-info-section"><strong>Example:</strong> {{ getGameDef('fidget')?.example }}</div>
+              <button class="btn-close-info" @click="gameInfoKey = null">Got it</button>
             </div>
             <div v-if="sideGames.fidget.enabled" class="side-game-config">
               <div class="config-field">
@@ -448,7 +526,7 @@
                   </select>
                 </div>
                 <div class="config-field">
-                  <label>$ per hole</label>
+                  <label>$ closeout</label>
                   <input v-model.number="sideGames.match1.ppt" type="number" class="config-input" placeholder="10" />
                 </div>
               </div>
@@ -478,30 +556,41 @@
                   </select>
                 </div>
                 <div class="config-field">
-                  <label>$ per hole</label>
+                  <label>$ closeout</label>
                   <input v-model.number="sideGames.match2.ppt" type="number" class="config-input" placeholder="10" />
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- Best Ball net tracker -->
-          <div class="side-game-row">
-            <div class="side-game-header" @click="toggleSideGame('bbn')">
-              <span>🏅 Best Ball Net Total (group tracker)</span>
-              <span class="side-toggle">{{ sideGames.bbn.enabled ? '▲' : '▼' }}</span>
-            </div>
-            <div v-if="sideGames.bbn.enabled" class="side-game-config">
-              <div class="config-field">
-                <label>Balls to count per hole</label>
-                <select v-model.number="sideGames.bbn.ballsToCount" class="config-select">
-                  <option :value="1">1 (Best Ball)</option>
-                  <option :value="2">2 (Better Ball)</option>
-                  <option :value="3">3</option>
-                </select>
+          <!-- Best Ball trackers (foursome-wide) -->
+          <div class="game-section-label" style="margin-top:12px">Best Ball Trackers</div>
+          <div v-for="tracker in bbnTrackers" :key="tracker.id" class="side-game-row">
+            <div class="side-game-config" style="border-top:none">
+              <div class="config-row">
+                <div class="config-field">
+                  <label>Balls</label>
+                  <select v-model.number="tracker.ballsToCount" class="config-select">
+                    <option :value="1">1 Best</option>
+                    <option :value="2">2 Best</option>
+                    <option :value="3">3 Best</option>
+                    <option :value="4">All 4</option>
+                  </select>
+                </div>
+                <div class="config-field">
+                  <label>Scoring</label>
+                  <select v-model="tracker.scoring" class="config-select">
+                    <option value="net">Net</option>
+                    <option value="gross">Gross</option>
+                  </select>
+                </div>
+                <div class="config-field" style="flex:0;align-self:flex-end">
+                  <button class="remove-btn" @click="removeBbnTracker(tracker.id)" v-if="bbnTrackers.length > 1" title="Remove">✕</button>
+                </div>
               </div>
             </div>
           </div>
+          <button class="btn-ghost btn-sm" style="align-self:flex-start;margin-top:4px" @click="addBbnTracker">+ Add tracker</button>
         </div>
 
         <!-- Room code -->
@@ -529,6 +618,7 @@ import { ref, computed, watch, h } from 'vue'
 import { useCoursesStore } from '../stores/courses'
 import { useRosterStore } from '../stores/roster'
 import { useRoundsStore } from '../stores/rounds'
+import { GAME_DEFS } from '../modules/courses'
 
 // ── TeamPicker component (inline) ────────────────────────────────
 // Old-version style: two-column side-by-side, tap player to assign to that team
@@ -629,7 +719,7 @@ const MAIN_GAMES = [
 // Default configs per game type
 const GAME_DEFAULTS = {
   nassau:      { front: 10, back: 10, overall: 20, pressAt: 2, team1: [], team2: [] },
-  vegas:       { ppt: 1, birdieFlip: true, team1: [], team2: [] },
+  vegas:       { ppt: 1, birdieFlip: true, scoring: 'net', team1: [], team2: [] },
   match:       { ppt: 20, format: '2v2', player1: '', player2: '', team1: [], team2: [] },
   skins:       { ppt: 5, carry: true },
   hilow:       { ppt: 5, team1: [], team2: [] },
@@ -646,6 +736,17 @@ const mainGame = ref({
   type: 'nassau',
   config: { ...GAME_DEFAULTS.nassau },
 })
+const showMainGrid = ref(true)
+const gameInfoKey = ref(null) // which game's info popover is open
+
+function toggleGameInfo(key) {
+  gameInfoKey.value = gameInfoKey.value === key ? null : key
+}
+function getGameDef(key) {
+  // Map wizard keys to GAME_DEFS keys
+  const keyMap = { hilow: 'hilow', fiveThreeOne: 'fiveThreeOne', bestball: 'bestball', match1: 'match1v1', match2: 'match1v1' }
+  return GAME_DEFS[keyMap[key] || key] || null
+}
 
 const sideGames = ref({
   skins:  { enabled: false, ppt: 5, carry: true },
@@ -654,8 +755,22 @@ const sideGames = ref({
   fidget: { enabled: false, ppp: 10 },
   match1: { enabled: false, player1: '', player2: '', ppt: 10 },
   match2: { enabled: false, player1: '', player2: '', ppt: 10 },
-  bbn:    { enabled: true,  ballsToCount: 1 },
+  bbn:    { enabled: false },
 })
+
+// Best Ball trackers — multiple allowed (foursome-wide, not team-based)
+const bbnTrackers = ref([
+  { id: 1, ballsToCount: 1, scoring: 'net' },
+])
+let bbnNextId = 2
+
+function addBbnTracker() {
+  bbnTrackers.value.push({ id: bbnNextId++, ballsToCount: 1, scoring: 'net' })
+}
+
+function removeBbnTracker(id) {
+  bbnTrackers.value = bbnTrackers.value.filter(t => t.id !== id)
+}
 
 function setMainGame(key) {
   // Preserve team assignments if switching between team games
@@ -668,6 +783,9 @@ function setMainGame(key) {
     mainGame.value.config.team1 = oldTeam1
     mainGame.value.config.team2 = oldTeam2
   }
+  // Collapse grid once a real game is picked
+  if (key !== 'none') showMainGrid.value = false
+  gameInfoKey.value = null
 }
 
 function toggleSideGame(key) {
@@ -989,8 +1107,16 @@ function buildGameConfigs() {
   if (sg.match2.enabled && sg.match2.player1 && sg.match2.player2) {
     games.push({ type: 'match1v1', config: { player1: sg.match2.player1, player2: sg.match2.player2, ppt: sg.match2.ppt } })
   }
-  if (sg.bbn.enabled) {
-    games.push({ type: 'bbn', config: { ballsToCount: sg.bbn.ballsToCount } })
+  // Best Ball trackers (always included — foursome-wide)
+  for (const tracker of bbnTrackers.value) {
+    games.push({
+      type: 'bbn',
+      config: {
+        ballsToCount: tracker.ballsToCount,
+        scoring: tracker.scoring,
+        label: `${tracker.ballsToCount}BB ${tracker.scoring === 'gross' ? 'Gross' : 'Net'}`,
+      },
+    })
   }
 
   return games

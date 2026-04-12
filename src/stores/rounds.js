@@ -281,6 +281,14 @@ export const useRoundsStore = defineStore('rounds', () => {
     return data
   }
 
+  // Update just the config object of an existing game (e.g., snake events)
+  async function updateGameConfig(gameId, newConfig) {
+    const game = activeGames.value.find(g => g.id === gameId)
+    if (!game) return
+    game.config = { ...newConfig }
+    return saveGameConfig(game)
+  }
+
   async function deleteGameConfig(gameId) {
     const auth = useAuthStore()
 
@@ -416,7 +424,7 @@ export const useRoundsStore = defineStore('rounds', () => {
     activeRound, activeMembers, activeScores, activeGames,
     rounds, loading, activeRoundId,
     fetchRounds, createRound, loadRound, setScore,
-    saveGameConfig, deleteGameConfig,
+    saveGameConfig, updateGameConfig, deleteGameConfig,
     joinByRoomCode, completeRound,
     subscribeToRound, unsubscribe,
     saveGuestRound, loadGuestRounds,

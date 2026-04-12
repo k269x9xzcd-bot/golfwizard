@@ -367,6 +367,25 @@ body {
   width: 80px;
 }
 
+.wiz-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gw-text-muted);
+  margin-bottom: 4px;
+}
+
+.wiz-row {
+  display: flex;
+  gap: 12px;
+}
+
+.wiz-field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .wiz-select {
   padding: 10px 12px;
   font-family: var(--gw-font-body);
@@ -706,6 +725,10 @@ body {
 .course-searching { font-size: 13px; color: var(--gw-text-muted); padding: 6px 12px; font-style: italic; }
 
 /* Holes buttons */
+.holes-toggle {
+  display: flex;
+  gap: var(--gw-space-2);
+}
 .holes-row {
   display: flex;
   gap: var(--gw-space-2);
@@ -898,35 +921,351 @@ body {
   justify-content: center;
 }
 
-/* Games grid in wizard */
-.games-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--gw-space-2);
+/* ── Game type grid (Step 3 wizard) ──────────────────────────── */
+.game-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gw-gold);
+  padding: 2px 0 6px;
 }
 
-.game-chip {
+.game-type-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.game-type-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 12px 8px;
+  gap: 6px;
+  padding: 14px 6px 12px;
+  min-height: 78px;
   border-radius: var(--gw-radius-md);
-  background: var(--gw-neutral-700);
-  border: 1.5px solid transparent;
+  background: var(--gw-green-800);
+  border: 1.5px solid var(--gw-green-600);
   cursor: pointer;
-  transition: all 0.12s;
-  min-height: 72px;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+  -webkit-tap-highlight-color: transparent;
+  color: var(--gw-text);
+  font-family: var(--gw-font-body);
 }
 
-.game-chip.selected {
-  background: rgba(212, 175, 55, 0.15);
+.game-type-btn:active {
+  transform: scale(0.95);
+}
+
+.game-type-btn.selected {
+  background: linear-gradient(135deg, rgba(212,175,55,.18) 0%, rgba(26,122,85,.22) 100%);
+  border-color: var(--gw-gold);
+  box-shadow: 0 0 12px rgba(212,175,55,.20), inset 0 0 0 1px rgba(212,175,55,.10);
+}
+
+.gtb-icon {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.gtb-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  color: rgba(240,237,224,.8);
+}
+
+.game-type-btn.selected .gtb-label {
+  color: var(--gw-gold);
+}
+
+/* ── Game config cards ───────────────────────────────────────── */
+.game-config-card {
+  background: var(--gw-green-800);
+  border: 1px solid var(--gw-green-600);
+  border-radius: var(--gw-radius-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: card-in 0.2s ease-out;
+}
+
+.config-row {
+  display: flex;
+  gap: 12px;
+}
+
+.config-field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.config-field label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--gw-text-muted);
+}
+
+.config-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--gw-radius-sm);
+  border: 1.5px solid var(--gw-green-600);
+  background: rgba(22,96,68,.25);
+  color: var(--gw-gold-lt);
+  font-family: var(--gw-font-mono);
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: border-color .15s, background .15s;
+}
+
+.config-input:focus {
+  outline: none;
+  border-color: var(--gw-gold);
+  background: rgba(22,96,68,.35);
+  box-shadow: 0 0 8px rgba(212,175,55,.15);
+}
+
+.config-input::placeholder {
+  color: rgba(212,175,55,.35);
+  font-weight: 400;
+}
+
+.config-select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--gw-radius-sm);
+  border: 1.5px solid var(--gw-green-600);
+  background: var(--gw-green-800);
+  color: var(--gw-text);
+  font-family: var(--gw-font-body);
+  font-size: 14px;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  transition: border-color .15s;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23d4af37' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+.config-select:focus {
+  outline: none;
   border-color: var(--gw-gold);
 }
 
-.game-icon { font-size: 22px; line-height: 1; }
-.game-name { font-size: 11px; font-weight: 500; text-align: center; color: var(--gw-text); }
+.config-note {
+  font-size: 12px;
+  color: var(--gw-text-muted);
+  line-height: 1.4;
+  padding: 4px 0;
+}
+
+/* ── Side games ──────────────────────────────────────────────── */
+.side-games-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.side-game-row {
+  border-radius: var(--gw-radius-md);
+  border: 1px solid var(--gw-green-700);
+  background: var(--gw-neutral-800);
+  overflow: hidden;
+  transition: border-color .15s;
+}
+
+.side-game-row:has(.side-game-config) {
+  border-color: var(--gw-green-600);
+}
+
+.side-game-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--gw-text);
+  -webkit-tap-highlight-color: transparent;
+  transition: background .12s;
+}
+
+.side-game-header:active {
+  background: rgba(255,255,255,.04);
+}
+
+.side-toggle {
+  font-size: 10px;
+  color: var(--gw-text-muted);
+}
+
+.side-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Main game selected chip ─────────────────────────────── */
+.main-game-selected {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--gw-green-800);
+  border: 1.5px solid var(--gw-gold);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+}
+.main-game-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--gw-text-primary);
+  font-size: 15px;
+}
+.main-game-chip .gtb-icon { font-size: 20px; }
+.btn-change-game {
+  background: rgba(255,255,255,.08);
+  border: 1px solid var(--gw-green-600);
+  color: var(--gw-text-secondary);
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.btn-change-game:active {
+  background: rgba(255,255,255,.14);
+}
+
+/* ── Game info icons ─────────────────────────────────────── */
+.btn-game-info {
+  background: none;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px;
+  -webkit-tap-highlight-color: transparent;
+  opacity: 0.7;
+  transition: opacity 0.12s;
+}
+.btn-game-info:active { opacity: 1; }
+.btn-game-info-grid {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 11px;
+}
+.game-type-btn {
+  position: relative;
+}
+.btn-game-info-sm {
+  font-size: 13px;
+}
+
+/* ── Game info popover ───────────────────────────────────── */
+.game-info-popover {
+  background: var(--gw-green-900);
+  border: 1px solid var(--gw-green-600);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 8px 0 12px;
+  animation: card-in 0.18s ease-out;
+}
+.game-info-inline {
+  margin: 0 0 4px;
+  border-top: 1px solid var(--gw-green-700);
+  border-radius: 0 0 12px 12px;
+}
+.game-info-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--gw-gold);
+  margin-bottom: 8px;
+}
+.game-info-desc {
+  font-size: 13px;
+  color: var(--gw-text-primary);
+  line-height: 1.5;
+  margin: 0 0 10px;
+}
+.game-info-section {
+  font-size: 12px;
+  color: var(--gw-text-secondary);
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+.game-info-section strong {
+  color: var(--gw-text-primary);
+}
+.game-info-hcp {
+  background: rgba(212,175,55,.08);
+  padding: 8px 10px;
+  border-radius: 8px;
+  border-left: 3px solid var(--gw-gold);
+}
+.btn-close-info {
+  background: var(--gw-green-700);
+  border: none;
+  color: var(--gw-text-primary);
+  font-size: 12px;
+  padding: 6px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-top: 4px;
+}
+.btn-close-info:active {
+  background: var(--gw-green-600);
+}
+
+.side-game-config {
+  padding: 10px 14px 14px;
+  border-top: 1px solid var(--gw-green-700);
+  background: rgba(22,96,68,.08);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: card-in 0.15s ease-out;
+}
+
+/* Dots checkboxes */
+.dots-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding-top: 4px;
+}
+
+.dots-options label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--gw-text);
+  cursor: pointer;
+}
+
+.dots-options input[type="checkbox"] {
+  accent-color: var(--gw-gold);
+  width: 16px;
+  height: 16px;
+}
 
 .room-code-row {
   padding: var(--gw-space-3) 0;

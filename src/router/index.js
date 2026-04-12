@@ -11,6 +11,7 @@ const routes = [
   { path: '/players',  name: 'players',  component: () => import('../views/PlayersView.vue') },
   { path: '/courses',  name: 'courses',  component: () => import('../views/CoursesView.vue') },
   { path: '/settings', name: 'settings', component: () => import('../views/SettingsView.vue') },
+  { path: '/library',  name: 'library',  component: () => import('../views/GameLibraryView.vue') },
   { path: '/join/:code?', name: 'join',  component: () => import('../views/JoinView.vue') },
 ]
 

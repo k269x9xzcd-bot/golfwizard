@@ -41,9 +41,58 @@
               @click="selectedGame = game"
             >
               <span class="game-icon">{{ gameIcon(game.type) }}</span>
-              <span class="game-name">{{ gameLabel(game.type) }}</span>
+              <span class="game-name">{{ gameLabel(game.type, game.config) }}</span>
               <span class="game-status">{{ gameStatusEmoji(game) }}</span>
             </button>
+          </div>
+        </div>
+
+        <!-- In-round game config editor (tap a game chip) -->
+        <div v-if="selectedGame" class="game-edit-panel">
+          <div class="game-edit-header">
+            <span class="game-edit-title">{{ gameIcon(selectedGame.type) }} {{ gameLabel(selectedGame.type, selectedGame.config) }}</span>
+            <div class="game-edit-actions">
+              <router-link to="/library" class="btn-rules-link">📖 Rules</router-link>
+              <button class="btn-close-edit" @click="selectedGame = null">✕</button>
+            </div>
+          </div>
+          <div class="game-edit-fields">
+            <!-- $ per point/skin/hole (most games have ppt) -->
+            <div v-if="selectedGame.config.ppt !== undefined" class="edit-field">
+              <label>$ value</label>
+              <input
+                type="number"
+                :value="selectedGame.config.ppt"
+                @change="updateSelectedConfig('ppt', +$event.target.value)"
+                class="edit-input"
+                min="1"
+              />
+            </div>
+            <!-- Nassau front/back/overall -->
+            <template v-if="selectedGame.type === 'nassau'">
+              <div class="edit-field">
+                <label>Front $</label>
+                <input type="number" :value="selectedGame.config.front" @change="updateSelectedConfig('front', +$event.target.value)" class="edit-input" min="1" />
+              </div>
+              <div class="edit-field">
+                <label>Back $</label>
+                <input type="number" :value="selectedGame.config.back" @change="updateSelectedConfig('back', +$event.target.value)" class="edit-input" min="1" />
+              </div>
+              <div class="edit-field">
+                <label>Overall $</label>
+                <input type="number" :value="selectedGame.config.overall" @change="updateSelectedConfig('overall', +$event.target.value)" class="edit-input" min="1" />
+              </div>
+            </template>
+            <!-- Dots per point -->
+            <div v-if="selectedGame.type === 'dots' && selectedGame.config.ppt !== undefined" class="edit-field">
+              <label>$ per dot</label>
+              <input type="number" :value="selectedGame.config.ppt" @change="updateSelectedConfig('ppt', +$event.target.value)" class="edit-input" min="1" />
+            </div>
+            <!-- Fidget -->
+            <div v-if="selectedGame.config.ppp !== undefined" class="edit-field">
+              <label>$ per player</label>
+              <input type="number" :value="selectedGame.config.ppp" @change="updateSelectedConfig('ppp', +$event.target.value)" class="edit-input" min="1" />
+            </div>
           </div>
         </div>
 
@@ -63,7 +112,11 @@
         </div>
 
         <!-- Current Hole Card -->
-        <div class="hole-card">
+        <transition :name="slideDirection" mode="out-in">
+        <div class="hole-card" :key="currentHole"
+          @touchstart="onTouchStart"
+          @touchend="onTouchEnd"
+        >
           <div class="hole-header">
             <div class="hole-title">
               <span class="hole-number">Hole {{ currentHole }}</span>
@@ -98,6 +151,34 @@
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+        </transition>
+
+        <!-- Swipe hint -->
+        <div class="swipe-hint">swipe ← → to change holes</div>
+
+        <!-- Snake 3-putt panel -->
+        <div v-if="snakeGame" class="bonus-panel">
+          <div class="bonus-header">
+            <span>🐍 Snake</span>
+            <span v-if="snakeHolder" class="snake-current">{{ snakeHolderName }} holds</span>
+            <span v-else class="snake-current muted">No holder yet</span>
+          </div>
+          <div class="bonus-label">Tap who 3-putted:</div>
+          <div class="snake-buttons">
+            <button
+              v-for="member in roundsStore.activeMembers"
+              :key="'snake-' + member.id"
+              class="snake-tap-btn"
+              @click="addSnakeEvent(member.id)"
+            >
+              {{ member.short_name || member.guest_name }}
+            </button>
+          </div>
+          <div v-if="snakeEventsOnHole.length" class="snake-hole-events">
+            🐍 × {{ snakeEventsOnHole.length }} on this hole
+            <button class="btn-undo-snake" @click="undoLastSnake">Undo</button>
           </div>
         </div>
 
@@ -300,6 +381,38 @@ const entryScore = ref(null)
 const selectedGame = ref(null)
 const showScorecardModal = ref(false)
 
+// In-round game config editing
+async function updateSelectedConfig(field, value) {
+  if (!selectedGame.value) return
+  selectedGame.value.config[field] = value
+  await roundsStore.updateGameConfig(selectedGame.value.id, { ...selectedGame.value.config })
+}
+
+// Swipe navigation
+const swipeStartX = ref(0)
+const swipeStartY = ref(0)
+const slideDirection = ref('') // 'slide-left' or 'slide-right'
+
+function onTouchStart(e) {
+  swipeStartX.value = e.touches[0].clientX
+  swipeStartY.value = e.touches[0].clientY
+}
+
+function onTouchEnd(e) {
+  const dx = e.changedTouches[0].clientX - swipeStartX.value
+  const dy = e.changedTouches[0].clientY - swipeStartY.value
+  // Horizontal swipe: >60px and dominantly horizontal (1.5× ratio)
+  if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+    if (dx < 0 && currentHoleIdx.value < maxHoleIdx.value) {
+      slideDirection.value = 'slide-left'
+      currentHoleIdx.value++
+    } else if (dx > 0 && currentHoleIdx.value > 0) {
+      slideDirection.value = 'slide-right'
+      currentHoleIdx.value--
+    }
+  }
+}
+
 // Orientation detection
 function updateOrientation() {
   isLandscape.value = window.matchMedia('(orientation: landscape)').matches
@@ -345,11 +458,17 @@ const currentHole = computed(() => visibleHoles.value[currentHoleIdx.value] ?? 1
 
 // Hole navigation
 function previousHole() {
-  if (currentHoleIdx.value > 0) currentHoleIdx.value--
+  if (currentHoleIdx.value > 0) {
+    slideDirection.value = 'slide-right'
+    currentHoleIdx.value--
+  }
 }
 
 function nextHole() {
-  if (currentHoleIdx.value < maxHoleIdx.value) currentHoleIdx.value++
+  if (currentHoleIdx.value < maxHoleIdx.value) {
+    slideDirection.value = 'slide-left'
+    currentHoleIdx.value++
+  }
 }
 
 // Course helpers
@@ -455,16 +574,21 @@ function gameIcon(type) {
     nassau: '💰', skins: '💎', match: '⚔️', matchplay: '⚔️',
     bestball: '🤝', snake: '🐍', dots: '●', fidget: '🎲',
     bbn: '🏌️', match1v1: '1v1',
+    vegas: '🎰', hilow: '📊', stableford: '⭐', wolf: '🐺',
+    hammer: '🔨', sixes: '🎲', fivethreeone: '5️⃣',
   }
   return icons[t] || '🎮'
 }
 
-function gameLabel(type) {
+function gameLabel(type, config) {
+  if (type?.toLowerCase() === 'bbn' && config?.label) return config.label
   const t = type?.toLowerCase() || ''
   const labels = {
     nassau: 'Nassau', skins: 'Skins', match: 'Match', matchplay: 'Match Play',
     bestball: 'Best Ball', snake: 'Snake', dots: 'Dots', fidget: 'Fidget',
-    bbn: 'BBN', match1v1: '1v1',
+    bbn: 'Best Ball', match1v1: '1v1',
+    vegas: 'Vegas', hilow: 'Hi-Low', stableford: 'Stableford', wolf: 'Wolf',
+    hammer: 'Hammer', sixes: 'Sixes', fivethreeone: '5-3-1',
   }
   return labels[t] || type
 }
@@ -514,6 +638,45 @@ async function saveScore() {
   } catch (error) {
     console.error('Failed to save score:', error)
   }
+}
+
+// ── Snake 3-putt tracking ────────────────────────────────────────
+const snakeGame = computed(() => {
+  return roundsStore.activeGames.find(g => g.type?.toLowerCase() === 'snake') || null
+})
+
+const snakeHolder = computed(() => {
+  const events = snakeGame.value?.config?.events || []
+  return events.length ? events[events.length - 1].pid : null
+})
+
+const snakeHolderName = computed(() => {
+  if (!snakeHolder.value) return null
+  const m = roundsStore.activeMembers.find(m => m.id === snakeHolder.value)
+  return m?.short_name || m?.guest_name || '?'
+})
+
+const snakeEventsOnHole = computed(() => {
+  const events = snakeGame.value?.config?.events || []
+  return events.filter(e => e.hole === currentHole.value)
+})
+
+async function addSnakeEvent(pid) {
+  if (!snakeGame.value) return
+  const events = snakeGame.value.config.events || []
+  events.push({ hole: currentHole.value, pid, ts: Date.now() })
+  snakeGame.value.config.events = events
+  // Persist to store
+  await roundsStore.updateGameConfig(snakeGame.value.id, { ...snakeGame.value.config, events })
+}
+
+async function undoLastSnake() {
+  if (!snakeGame.value) return
+  const events = snakeGame.value.config.events || []
+  if (!events.length) return
+  events.pop()
+  snakeGame.value.config.events = events
+  await roundsStore.updateGameConfig(snakeGame.value.id, { ...snakeGame.value.config, events })
 }
 
 // Utilities
@@ -1476,5 +1639,192 @@ function formatDate(dateStr) {
     min-height: 52px;
     min-width: 52px;
   }
+}
+
+/* ── Swipe slide transitions ─────────────────────────────── */
+.slide-left-enter-active,
+.slide-left-leave-active,
+.slide-right-enter-active,
+.slide-right-leave-active {
+  transition: transform 0.22s ease-out, opacity 0.22s ease-out;
+}
+
+.slide-left-enter-from {
+  transform: translateX(40px);
+  opacity: 0;
+}
+.slide-left-leave-to {
+  transform: translateX(-40px);
+  opacity: 0;
+}
+
+.slide-right-enter-from {
+  transform: translateX(-40px);
+  opacity: 0;
+}
+.slide-right-leave-to {
+  transform: translateX(40px);
+  opacity: 0;
+}
+
+/* Swipe hint */
+.swipe-hint {
+  text-align: center;
+  font-size: 10px;
+  color: var(--gw-text-muted);
+  opacity: 0.4;
+  padding: 6px 0 0;
+  user-select: none;
+}
+
+/* ── In-round game config editor ───────────────────────────── */
+.game-edit-panel {
+  background: var(--gw-green-800, #0d3325);
+  border: 1px solid var(--gw-green-600, #166044);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 0 16px 8px;
+  animation: card-in 0.15s ease-out;
+}
+.game-edit-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.game-edit-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--gw-text-primary, #f0ede0);
+}
+.game-edit-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.btn-rules-link {
+  font-size: 11px;
+  color: var(--gw-gold, #d4af37);
+  text-decoration: none;
+  padding: 3px 8px;
+  border: 1px solid rgba(212,175,55,0.3);
+  border-radius: 6px;
+}
+.btn-close-edit {
+  background: none;
+  border: none;
+  color: var(--gw-text-muted, #7d9283);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+.game-edit-fields {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 70px;
+  flex: 1;
+}
+.edit-field label {
+  font-size: 10px;
+  color: var(--gw-text-secondary, #a3b8aa);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.edit-input {
+  background: var(--gw-green-900, #0a2218);
+  border: 1px solid var(--gw-green-600, #166044);
+  color: var(--gw-text-primary, #f0ede0);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 16px;
+  font-weight: 600;
+  width: 100%;
+  text-align: center;
+}
+.edit-input:focus {
+  outline: none;
+  border-color: var(--gw-gold, #d4af37);
+}
+
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Snake 3-putt bonus panel ──────────────────────────────── */
+.bonus-panel {
+  background: var(--gw-green-800, #0d3325);
+  border: 1px solid var(--gw-green-600, #166044);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin: 12px 0;
+}
+.bonus-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.bonus-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gw-gold, #d4af37);
+  letter-spacing: 0.3px;
+}
+.snake-current {
+  font-size: 12px;
+  color: var(--gw-text-secondary, #a3b8aa);
+  background: rgba(255,255,255,0.06);
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+.snake-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.snake-tap-btn {
+  flex: 1;
+  min-width: 70px;
+  padding: 10px 6px;
+  border: 1.5px solid var(--gw-green-600, #166044);
+  border-radius: 10px;
+  background: var(--gw-green-900, #0a2218);
+  color: var(--gw-text-primary, #f0ede0);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.snake-tap-btn:active {
+  background: var(--gw-green-600, #166044);
+  border-color: var(--gw-gold, #d4af37);
+}
+.snake-hole-events {
+  font-size: 11px;
+  color: var(--gw-text-muted, #7d9283);
+  padding-top: 4px;
+}
+.btn-undo-snake {
+  background: none;
+  border: 1px solid var(--gw-green-600, #166044);
+  color: var(--gw-text-secondary, #a3b8aa);
+  font-size: 11px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.btn-undo-snake:active {
+  background: rgba(255,255,255,0.06);
 }
 </style>

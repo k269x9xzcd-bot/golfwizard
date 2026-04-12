@@ -3,9 +3,12 @@
     <!-- Header -->
     <header class="games-header">
       <h1 class="games-title">Games</h1>
-      <div v-if="roundsStore.activeRound" class="round-badge">
-        <span class="round-badge-dot" />
-        Live
+      <div class="games-header-right">
+        <router-link to="/library" class="btn-library">📖 Rules</router-link>
+        <div v-if="roundsStore.activeRound" class="round-badge">
+          <span class="round-badge-dot" />
+          Live
+        </div>
       </div>
     </header>
 
@@ -15,6 +18,7 @@
       <div class="empty-title">No active round</div>
       <div class="empty-sub">Start a round from the home screen to configure and track games.</div>
       <router-link to="/" class="btn-primary">Go Home</router-link>
+      <router-link to="/library" class="btn-secondary" style="margin-top:8px">📖 Browse Game Rules</router-link>
     </div>
 
     <!-- Active round with games -->
@@ -75,7 +79,7 @@
           <div class="game-card-header">
             <div class="game-icon">{{ gameIcon(game.type) }}</div>
             <div class="game-info">
-              <div class="game-name">{{ gameLabel(game.type) }}</div>
+              <div class="game-name">{{ gameLabel(game.type, game.config) }}</div>
               <div class="game-config-summary">{{ configSummary(game) }}</div>
             </div>
             <div class="game-status">
@@ -154,8 +158,8 @@
                 </div>
               </template>
 
-              <!-- Match Play -->
-              <template v-else-if="isGameType(game, 'match')">
+              <!-- Match Play (includes 1v1 side matches) -->
+              <template v-else-if="isGameType(game, 'match') || isGameType(game, 'match1v1')">
                 <div v-if="matchPlayResult(game)" class="match-standings">
                   <div class="match-player">
                     <span class="match-name">{{ matchPlayResult(game).p1.name }}</span>
@@ -191,18 +195,25 @@
                 </div>
               </template>
 
-              <!-- Snake -->
+              <!-- Snake (3-putt based) -->
               <template v-else-if="isGameType(game, 'snake')">
                 <div v-if="snakeResult(game)" class="snake-standings">
-                  <div v-for="(player, id) in snakeResult(game).owes" :key="id" class="snake-player">
-                    <span class="snake-name">{{ player.name }}</span>
-                    <div class="snake-info">
-                      <span class="snake-holes">{{ player.holes }} holes</span>
-                      <span class="snake-amount" :class="{ 'owes-amount': player.amount > 0 }">
-                        ${{ player.amount }}
-                      </span>
-                    </div>
+                  <div class="snake-holder-row" v-if="snakeResult(game).holder">
+                    <span>🐍 Holder:</span>
+                    <span class="snake-holder-name">{{ snakeResult(game).holderName }}</span>
                   </div>
+                  <div class="snake-holder-row" v-else>
+                    <span class="snake-no-holder">🐍 No holder yet</span>
+                  </div>
+                  <div class="snake-count">{{ snakeResult(game).snakeCount }} total 3-putts</div>
+                  <div v-for="s in snakeResult(game).settlements" :key="s.id" class="standing-row">
+                    <span class="standing-name">{{ s.name }}</span>
+                    <span class="snake-count-badge">{{ s.snakes }}🐍</span>
+                    <span class="standing-value" :class="balanceClass(s.net)">
+                      {{ formatBalance(s.net) }}
+                    </span>
+                  </div>
+                  <div class="game-note">Tap "who 3-putted" in scoring view to record</div>
                 </div>
               </template>
 
@@ -245,8 +256,8 @@
                 <div v-if="bbnResult(game)" class="bbn-standings">
                   <div class="bbn-summary">
                     <div class="bbn-stat">
-                      <span class="bbn-label">Total Net</span>
-                      <span class="bbn-value">{{ bbnResult(game).totalNet }}</span>
+                      <span class="bbn-label">Total {{ bbnResult(game).scoring === 'gross' ? 'Gross' : 'Net' }}</span>
+                      <span class="bbn-value">{{ bbnResult(game).totalScore }}</span>
                     </div>
                     <div class="bbn-stat">
                       <span class="bbn-label">To Par</span>
@@ -254,6 +265,119 @@
                         {{ formatBalance(bbnResult(game).overallToPar) }}
                       </span>
                     </div>
+                    <div class="bbn-stat">
+                      <span class="bbn-label">Balls</span>
+                      <span class="bbn-value">{{ bbnResult(game).ballsToCount }}</span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Vegas -->
+              <template v-else-if="isGameType(game, 'vegas')">
+                <div v-if="vegasResult(game)" class="team-standings">
+                  <div class="team-row">
+                    <span>{{ vegasResult(game).t1Name }}</span>
+                    <span :class="balanceClass(vegasResult(game).t1Total)">
+                      {{ formatBalance(vegasResult(game).settlement.t1Net) }}
+                    </span>
+                  </div>
+                  <div class="team-row">
+                    <span>{{ vegasResult(game).t2Name }}</span>
+                    <span :class="balanceClass(-vegasResult(game).t1Total)">
+                      {{ formatBalance(-vegasResult(game).settlement.t1Net) }}
+                    </span>
+                  </div>
+                  <div class="game-note">Point diff: {{ vegasResult(game).t1Total }} × ${{ game.config?.ppt || 1 }}/pt</div>
+                </div>
+              </template>
+
+              <!-- Hi-Low -->
+              <template v-else-if="isGameType(game, 'hilow')">
+                <div v-if="hilowResult(game)" class="team-standings">
+                  <div class="team-row">
+                    <span>{{ hilowResult(game).t1Name }}</span>
+                    <span class="team-pts">{{ hilowResult(game).t1Pts }} pts</span>
+                    <span :class="balanceClass(hilowResult(game).settlement.t1Net)">
+                      {{ formatBalance(hilowResult(game).settlement.t1Net) }}
+                    </span>
+                  </div>
+                  <div class="team-row">
+                    <span>{{ hilowResult(game).t2Name }}</span>
+                    <span class="team-pts">{{ hilowResult(game).t2Pts }} pts</span>
+                    <span :class="balanceClass(-hilowResult(game).settlement.t1Net)">
+                      {{ formatBalance(-hilowResult(game).settlement.t1Net) }}
+                    </span>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Stableford -->
+              <template v-else-if="isGameType(game, 'stableford')">
+                <div v-if="stablefordResult(game)" class="individual-standings">
+                  <div v-for="p in stablefordResult(game).ranked" :key="p.id" class="standing-row">
+                    <span class="standing-name">{{ p.name }}</span>
+                    <span class="standing-pts">{{ p.pts }} pts</span>
+                    <span class="standing-value" :class="balanceClass(stablefordSettlement(game, p.id))">
+                      {{ formatBalance(stablefordSettlement(game, p.id)) }}
+                    </span>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Wolf -->
+              <template v-else-if="isGameType(game, 'wolf')">
+                <div v-if="wolfResult(game)" class="individual-standings">
+                  <div v-for="s in wolfResult(game).settlements" :key="s.id" class="standing-row">
+                    <span class="standing-name">{{ s.name }}</span>
+                    <span class="standing-value" :class="balanceClass(s.net)">
+                      {{ formatBalance(s.net) }}
+                    </span>
+                  </div>
+                  <div class="game-note">Wolf choices needed in scoring view</div>
+                </div>
+              </template>
+
+              <!-- Hammer -->
+              <template v-else-if="isGameType(game, 'hammer')">
+                <div v-if="hammerResult(game)" class="team-standings">
+                  <div class="team-row">
+                    <span>{{ hammerResult(game).t1Name }}</span>
+                    <span :class="balanceClass(hammerResult(game).t1Total)">
+                      {{ formatBalance(hammerResult(game).settlement.t1Net) }}
+                    </span>
+                  </div>
+                  <div class="team-row">
+                    <span>{{ hammerResult(game).t2Name }}</span>
+                    <span :class="balanceClass(-hammerResult(game).t1Total)">
+                      {{ formatBalance(-hammerResult(game).settlement.t1Net) }}
+                    </span>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Sixes -->
+              <template v-else-if="isGameType(game, 'sixes')">
+                <div v-if="sixesResult(game)" class="individual-standings">
+                  <div v-for="s in sixesResult(game).settlements" :key="s.id" class="standing-row">
+                    <span class="standing-name">{{ s.name }}</span>
+                    <span class="standing-pts">{{ s.pts }} pts</span>
+                    <span class="standing-value" :class="balanceClass(s.net)">
+                      {{ formatBalance(s.net) }}
+                    </span>
+                  </div>
+                </div>
+              </template>
+
+              <!-- 5-3-1 -->
+              <template v-else-if="isGameType(game, 'fivethreeone')">
+                <div v-if="fiveThreeOneResult(game)" class="individual-standings">
+                  <div v-for="s in fiveThreeOneResult(game).settlements" :key="s.id" class="standing-row">
+                    <span class="standing-name">{{ s.name }}</span>
+                    <span class="standing-pts">{{ s.pts }} pts</span>
+                    <span class="standing-value" :class="balanceClass(s.net)">
+                      {{ formatBalance(s.net) }}
+                    </span>
                   </div>
                 </div>
               </template>
@@ -302,7 +426,9 @@ import { useRoundsStore } from '../stores/rounds'
 import { COURSES } from '../modules/courses'
 import {
   computeNassau, computeSkins, computeMatch, computeSnake, computeDots, computeFidget,
-  computeBestBall, computeBestBallNet, memberHandicap, memberNetOnHole,
+  computeBestBall, computeBestBallNet, computeVegas, computeHiLow, computeStableford,
+  computeWolf, computeHammer, computeSixes, computeFiveThreeOne,
+  memberHandicap, memberNetOnHole,
   holePar, holeSI, strokesOnHole, holeRange
 } from '../modules/gameEngine'
 
@@ -413,28 +539,41 @@ const GAME_LABELS = {
   nassau: 'Nassau', skins: 'Skins', wolf: 'Wolf', vegas: 'Vegas', match: 'Match Play', matchplay: 'Match Play',
   bestball: 'Best Ball', stableford: 'Stableford', sixes: 'Sixes', snake: 'Snake', dots: 'Dots',
   junk: 'Junk', fidget: 'Fidget', hilow: 'Hi-Low', hammer: 'Hammer', teamday: 'Team Day', fivethreeone: '5-3-1',
-  bbn: 'BBN', match1v1: '1v1',
+  bbn: 'Best Ball', match1v1: '1v1',
 }
 const GAME_STYLE = {
   nassau: 'gold', skins: 'green', wolf: 'purple', vegas: 'blue', match: 'red', matchplay: 'red',
   bestball: 'teal', stableford: 'green', sixes: 'orange', snake: 'purple', dots: 'orange',
-  fidget: 'blue', bbn: 'teal', match1v1: 'red',
+  fidget: 'blue', bbn: 'teal', match1v1: 'red', hilow: 'teal', hammer: 'red', fivethreeone: 'orange',
 }
 
 function gameIcon(type) { return GAME_ICONS[type?.toLowerCase()] || '🏌️' }
-function gameLabel(type) { return GAME_LABELS[type?.toLowerCase()] || type }
+function gameLabel(type, config) {
+  if (type?.toLowerCase() === 'bbn' && config?.label) return config.label
+  if (type?.toLowerCase() === 'match1v1' && config?.player1 && config?.player2) {
+    // Find player short names
+    const p1 = roundsStore.activeMembers?.find(m => m.id === config.player1)
+    const p2 = roundsStore.activeMembers?.find(m => m.id === config.player2)
+    if (p1 && p2) return `${p1.short_name || p1.guest_name} v ${p2.short_name || p2.guest_name}`
+  }
+  return GAME_LABELS[type?.toLowerCase()] || type
+}
 function gameStyle(type) { return GAME_STYLE[type?.toLowerCase()] || 'default' }
 
 function configSummary(game) {
   const c = game.config || {}
+  const t = game.type?.toLowerCase() || ''
   const parts = []
   if (c.front != null && c.back != null) parts.push(`$${c.front}/$${c.back}`)
-  if (c.ppt != null) parts.push(`$${c.ppt}/skin`)
+  else if (t === 'match1v1' || t === 'match') parts.push(c.ppt ? `$${c.ppt} closeout` : '')
+  else if (c.ppt != null) parts.push(`$${c.ppt}/pt`)
   if (c.ppp != null) parts.push(`$${c.ppp}/pt`)
   if (c.unit != null) parts.push(`$${c.unit}/unit`)
-  const netGross = c.netGross === 'gross' ? 'Gross' : 'Net'
-  parts.push(netGross)
-  return parts.join(' · ')
+  if (c.ballsToCount) parts.push(`${c.ballsToCount} ball${c.ballsToCount > 1 ? 's' : ''}`)
+  const scoring = c.scoring || c.netGross
+  if (scoring === 'gross') parts.push('Gross')
+  else parts.push('Net')
+  return parts.filter(Boolean).join(' · ')
 }
 
 // Nassau
@@ -546,6 +685,55 @@ function bbnResult(game) {
   return computeBestBallNet(gameCtx.value, game.config) ?? null
 }
 
+// Vegas
+function vegasResult(game) {
+  if (!gameCtx.value || !gameCtx.value.course) return null
+  return computeVegas(gameCtx.value, game.config) ?? null
+}
+
+// Hi-Low
+function hilowResult(game) {
+  if (!gameCtx.value || !gameCtx.value.course) return null
+  return computeHiLow(gameCtx.value, game.config) ?? null
+}
+
+// Stableford
+function stablefordResult(game) {
+  if (!gameCtx.value || !gameCtx.value.course) return null
+  return computeStableford(gameCtx.value, game.config) ?? null
+}
+
+function stablefordSettlement(game, playerId) {
+  const result = stablefordResult(game)
+  if (!result) return 0
+  const s = result.settlements.find(s => s.id === playerId)
+  return s?.net ?? 0
+}
+
+// Wolf
+function wolfResult(game) {
+  if (!gameCtx.value || !gameCtx.value.course) return null
+  return computeWolf(gameCtx.value, game.config) ?? null
+}
+
+// Hammer
+function hammerResult(game) {
+  if (!gameCtx.value || !gameCtx.value.course) return null
+  return computeHammer(gameCtx.value, game.config) ?? null
+}
+
+// Sixes
+function sixesResult(game) {
+  if (!gameCtx.value || !gameCtx.value.course) return null
+  return computeSixes(gameCtx.value, game.config) ?? null
+}
+
+// 5-3-1
+function fiveThreeOneResult(game) {
+  if (!gameCtx.value || !gameCtx.value.course) return null
+  return computeFiveThreeOne(gameCtx.value, game.config) ?? null
+}
+
 // Generic per-player standings
 function sortedMembersForGame(game) {
   return roundsStore.activeMembers
@@ -594,6 +782,30 @@ function balanceClass(val) {
   color: var(--gw-text);
   margin: 0;
   flex: 1;
+}
+
+.games-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-library {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--gw-green-800, #0d3325);
+  border: 1px solid var(--gw-green-600, #166044);
+  color: var(--gw-text-secondary, #a3b8aa);
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.12s;
+}
+.btn-library:active {
+  background: var(--gw-green-700, #114a35);
 }
 
 .round-badge {
@@ -1190,6 +1402,29 @@ function balanceClass(val) {
   text-decoration: none;
   display: inline-block;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* ── New game standings ──────────────────────────────────── */
+.team-standings,
+.individual-standings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 4px;
+}
+
+.standing-pts,
+.team-pts {
+  font-size: 12px;
+  color: var(--gw-text-muted);
+  font-family: var(--gw-font-mono);
+}
+
+.game-note {
+  font-size: 11px;
+  color: var(--gw-text-muted);
+  padding-top: 6px;
+  font-style: italic;
 }
 
 /* ── Animations ──────────────────────────────────────────── */
