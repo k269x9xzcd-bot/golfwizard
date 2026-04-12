@@ -1170,14 +1170,17 @@ body {
 
 .side-game-row {
   border-radius: var(--gw-radius-md);
-  border: 1px solid var(--gw-green-700);
-  background: var(--gw-neutral-800);
+  border: 1px dashed rgba(255,255,255,.1);
+  background: transparent;
   overflow: hidden;
-  transition: border-color .15s;
+  transition: border-color .15s, background .15s, opacity .15s;
+  opacity: 0.55;
 }
 
-.side-game-row:has(.side-game-config) {
-  border-color: var(--gw-green-600);
+.side-game-row.side-game-on {
+  border: 1px solid var(--gw-green-600);
+  background: var(--gw-neutral-800);
+  opacity: 1;
 }
 
 .side-game-header {

@@ -421,7 +421,7 @@
 
         <div class="side-games-list">
           <!-- Skins as side game -->
-          <div class="side-game-row" v-if="mainGame.type !== 'skins'">
+          <div class="side-game-row" :class="{ 'side-game-on': sideGames.skins.enabled }" v-if="mainGame.type !== 'skins'">
             <div class="side-game-header" @click="toggleSideGame('skins')">
               <span>🏆 Skins</span>
               <span class="side-header-actions">
@@ -441,7 +441,7 @@
           </div>
 
           <!-- Dots/Junk -->
-          <div class="side-game-row">
+          <div class="side-game-row" :class="{ 'side-game-on': sideGames.dots.enabled }">
             <div class="side-game-header" @click="toggleSideGame('dots')">
               <span>🎯 Dots (Birdies, Greenies, Sandies)</span>
               <span class="side-header-actions">
@@ -472,7 +472,7 @@
           </div>
 
           <!-- Snake -->
-          <div class="side-game-row">
+          <div class="side-game-row" :class="{ 'side-game-on': sideGames.snake.enabled }">
             <div class="side-game-header" @click="toggleSideGame('snake')">
               <span>🐍 Snake (3-putt tracker)</span>
               <span class="side-header-actions">
@@ -495,7 +495,7 @@
           </div>
 
           <!-- Fidget -->
-          <div class="side-game-row">
+          <div class="side-game-row" :class="{ 'side-game-on': sideGames.fidget.enabled }">
             <div class="side-game-header" @click="toggleSideGame('fidget')">
               <span>😬 Fidget (never win a hole = pay everyone)</span>
               <span class="side-header-actions">
@@ -518,7 +518,7 @@
           </div>
 
           <!-- 1v1 Side Match -->
-          <div class="side-game-row">
+          <div class="side-game-row" :class="{ 'side-game-on': sideGames.match1.enabled }">
             <div class="side-game-header" @click="toggleSideGame('match1')">
               <span>⚔️ 1v1 Side Match</span>
               <span class="side-toggle">{{ sideGames.match1.enabled ? '▲' : '▼' }}</span>
@@ -548,7 +548,7 @@
           </div>
 
           <!-- 2nd 1v1 Side Match -->
-          <div v-if="sideGames.match1.enabled" class="side-game-row">
+          <div v-if="sideGames.match1.enabled" class="side-game-row" :class="{ 'side-game-on': sideGames.match2.enabled }">
             <div class="side-game-header" @click="toggleSideGame('match2')">
               <span>⚔️ 2nd Side Match</span>
               <span class="side-toggle">{{ sideGames.match2.enabled ? '▲' : '▼' }}</span>
@@ -578,7 +578,7 @@
           </div>
 
           <!-- Best Ball trackers -->
-          <div class="side-game-row">
+          <div class="side-game-row" :class="{ 'side-game-on': sideGames.bbn.enabled }">
             <div class="side-game-header" @click="toggleSideGame('bbn')">
               <span>🏅 Best Ball Tracker</span>
               <span class="side-toggle">{{ sideGames.bbn.enabled ? '▲' : '▼' }}</span>
