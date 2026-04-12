@@ -4,7 +4,7 @@
       <div class="wizard-header">
         <button class="modal-close" @click="$emit('close')">✕</button>
         <div class="wizard-title">New Round</div>
-        <div class="wizard-step-indicator">{{ step }}/{{ totalSteps }}</div>
+        <div class="wizard-step-indicator">Step {{ step }} of {{ totalSteps }}</div>
       </div>
 
       <!-- ── Step 1: Course & Date ───────────────────────────── -->

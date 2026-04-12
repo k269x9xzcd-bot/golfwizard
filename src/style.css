@@ -666,9 +666,11 @@ body {
 }
 
 .wizard-step-indicator {
-  font-size: 13px;
+  font-size: 11px;
   color: var(--gw-text-muted);
-  font-family: var(--gw-font-mono);
+  font-family: var(--gw-font-body);
+  font-weight: 500;
+  letter-spacing: 0.3px;
 }
 
 .wizard-step {
