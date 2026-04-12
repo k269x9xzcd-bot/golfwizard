@@ -882,6 +882,83 @@ body {
   align-items: center;
 }
 
+/* ── Player cards (wizard step 2) ─────────────────────── */
+.player-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.player-card {
+  background: var(--gw-green-800, #0d3325);
+  border: 1px solid var(--gw-green-700, #114a35);
+  border-radius: var(--gw-radius-md, 12px);
+  padding: 12px 14px;
+}
+.player-card-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.player-card-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--gw-text, #f0ede0);
+}
+.player-card-remove {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--gw-text-muted, #7d9283);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.player-card-meta {
+  display: flex;
+  gap: 8px;
+}
+.player-card-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.player-card-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--gw-text-muted, #7d9283);
+}
+.player-card-input {
+  width: 64px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--gw-green-700, #114a35);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--gw-gold, #d4af37);
+  font-family: var(--gw-font-mono, monospace);
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+  -webkit-appearance: none;
+}
+.player-card-input:focus {
+  outline: none;
+  border-color: var(--gw-gold, #d4af37);
+}
+.player-card-input::placeholder {
+  color: var(--gw-text-muted, #7d9283);
+  font-weight: 400;
+}
+
+/* Legacy (keep for compat) */
 .added-players {
   display: flex;
   flex-direction: column;

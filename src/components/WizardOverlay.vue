@@ -100,12 +100,26 @@
       <div v-if="step === 2" class="wizard-step">
         <h3>Who's playing?</h3>
 
-        <!-- Added players (chips at top) -->
-        <div v-if="form.players.length" class="added-chips">
-          <div v-for="(p, i) in form.players" :key="p.id" class="added-chip">
-            <span>{{ p.shortName || p.name }}</span>
-            <span class="chip-hcp">{{ p.ghinIndex ?? '—' }}</span>
-            <button @click="form.players.splice(i, 1)">×</button>
+        <!-- Added players -->
+        <div v-if="form.players.length" class="player-cards">
+          <div v-for="(p, i) in form.players" :key="p.id" class="player-card">
+            <div class="player-card-main">
+              <span class="player-card-name">{{ p.name }}</span>
+              <button class="player-card-remove" @click="form.players.splice(i, 1)" title="Remove">×</button>
+            </div>
+            <div class="player-card-meta">
+              <label class="player-card-field">
+                <span class="player-card-label">Index</span>
+                <input
+                  type="number"
+                  step="0.1"
+                  class="player-card-input"
+                  :value="p.ghinIndex"
+                  @input="p.ghinIndex = $event.target.value ? parseFloat($event.target.value) : null"
+                  placeholder="—"
+                />
+              </label>
+            </div>
           </div>
         </div>
 
@@ -563,34 +577,39 @@
             </div>
           </div>
 
-          <!-- Best Ball trackers (foursome-wide) -->
-          <div class="game-section-label" style="margin-top:12px">Best Ball Trackers</div>
-          <div v-for="tracker in bbnTrackers" :key="tracker.id" class="side-game-row">
-            <div class="side-game-config" style="border-top:none">
-              <div class="config-row">
-                <div class="config-field">
-                  <label>Balls</label>
-                  <select v-model.number="tracker.ballsToCount" class="config-select">
-                    <option :value="1">1 Best</option>
-                    <option :value="2">2 Best</option>
-                    <option :value="3">3 Best</option>
-                    <option :value="4">All 4</option>
-                  </select>
-                </div>
-                <div class="config-field">
-                  <label>Scoring</label>
-                  <select v-model="tracker.scoring" class="config-select">
-                    <option value="net">Net</option>
-                    <option value="gross">Gross</option>
-                  </select>
-                </div>
-                <div class="config-field" style="flex:0;align-self:flex-end">
-                  <button class="remove-btn" @click="removeBbnTracker(tracker.id)" v-if="bbnTrackers.length > 1" title="Remove">✕</button>
+          <!-- Best Ball trackers -->
+          <div class="side-game-row">
+            <div class="side-game-header" @click="toggleSideGame('bbn')">
+              <span>🏅 Best Ball Tracker</span>
+              <span class="side-toggle">{{ sideGames.bbn.enabled ? '▲' : '▼' }}</span>
+            </div>
+            <div v-if="sideGames.bbn.enabled" class="side-game-config">
+              <div v-for="tracker in bbnTrackers" :key="tracker.id" style="margin-bottom:8px">
+                <div class="config-row">
+                  <div class="config-field">
+                    <label>Balls</label>
+                    <select v-model.number="tracker.ballsToCount" class="config-select">
+                      <option :value="1">1 Best</option>
+                      <option :value="2">2 Best</option>
+                      <option :value="3">3 Best</option>
+                      <option :value="4">All 4</option>
+                    </select>
+                  </div>
+                  <div class="config-field">
+                    <label>Scoring</label>
+                    <select v-model="tracker.scoring" class="config-select">
+                      <option value="net">Net</option>
+                      <option value="gross">Gross</option>
+                    </select>
+                  </div>
+                  <div class="config-field" style="flex:0;align-self:flex-end">
+                    <button class="remove-btn" @click="removeBbnTracker(tracker.id)" v-if="bbnTrackers.length > 1" title="Remove">✕</button>
+                  </div>
                 </div>
               </div>
+              <button class="btn-ghost btn-sm" style="align-self:flex-start" @click="addBbnTracker">+ Add tracker</button>
             </div>
           </div>
-          <button class="btn-ghost btn-sm" style="align-self:flex-start;margin-top:4px" @click="addBbnTracker">+ Add tracker</button>
         </div>
 
         <!-- Room code -->
@@ -733,8 +752,8 @@ const GAME_DEFAULTS = {
 }
 
 const mainGame = ref({
-  type: 'nassau',
-  config: { ...GAME_DEFAULTS.nassau },
+  type: 'none',
+  config: { ...GAME_DEFAULTS.none },
 })
 const showMainGrid = ref(true)
 const gameInfoKey = ref(null) // which game's info popover is open
@@ -906,7 +925,8 @@ function nextStep() {
 
 function autoSplitTeams() {
   // Only auto-split if teams are empty (haven't been manually set)
-  if (mainGame.value.config.team1.length || mainGame.value.config.team2.length) return
+  if (!mainGame.value.config.team1 && !mainGame.value.config.team2) return
+  if (mainGame.value.config.team1?.length || mainGame.value.config.team2?.length) return
   const players = form.value.players
   if (players.length < 2) return
   const half = Math.ceil(players.length / 2)
@@ -1107,16 +1127,18 @@ function buildGameConfigs() {
   if (sg.match2.enabled && sg.match2.player1 && sg.match2.player2) {
     games.push({ type: 'match1v1', config: { player1: sg.match2.player1, player2: sg.match2.player2, ppt: sg.match2.ppt } })
   }
-  // Best Ball trackers (always included — foursome-wide)
-  for (const tracker of bbnTrackers.value) {
-    games.push({
-      type: 'bbn',
-      config: {
-        ballsToCount: tracker.ballsToCount,
-        scoring: tracker.scoring,
-        label: `${tracker.ballsToCount}BB ${tracker.scoring === 'gross' ? 'Gross' : 'Net'}`,
-      },
-    })
+  // Best Ball trackers (only if enabled)
+  if (sideGames.value.bbn.enabled) {
+    for (const tracker of bbnTrackers.value) {
+      games.push({
+        type: 'bbn',
+        config: {
+          ballsToCount: tracker.ballsToCount,
+          scoring: tracker.scoring,
+          label: `${tracker.ballsToCount}BB ${tracker.scoring === 'gross' ? 'Gross' : 'Net'}`,
+        },
+      })
+    }
   }
 
   return games
@@ -1124,20 +1146,31 @@ function buildGameConfigs() {
 
 // ── Create round ─────────────────────────────────────────────────
 async function create() {
+  if (creating.value) return
   creating.value = true
   try {
+    const games = buildGameConfigs()
     const round = await roundsStore.createRound({
       courseName: form.value.courseName,
       tee: form.value.tee,
       date: form.value.date,
       holesMode: form.value.holesMode,
       withRoomCode: form.value.withRoomCode,
-      players: form.value.players,
-      games: buildGameConfigs(),
+      players: form.value.players.map(p => ({
+        ...p,
+        roundHcp: p.ghinIndex != null ? Math.round(p.ghinIndex) : null,
+      })),
+      games,
     })
-    emit('created', round)
+    if (round) {
+      emit('created', round)
+    } else {
+      console.error('createRound returned null')
+      alert('Failed to create round. Please try again.')
+    }
   } catch (e) {
     console.error('Failed to create round:', e)
+    alert('Error creating round: ' + (e.message || 'Unknown error'))
   } finally {
     creating.value = false
   }
