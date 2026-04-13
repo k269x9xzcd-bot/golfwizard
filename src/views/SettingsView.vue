@@ -72,7 +72,7 @@
       </div>
     </template>
 
-    <div class="settings-version">GolfWizard v{{ appVersion }}</div>
+    <div class="settings-version">GolfWizard v{{ appVersion }} <span class="settings-build-stamp">build {{ buildStamp }}</span></div>
     <AuthModal v-if="showAuth" @close="showAuth = false" />
   </div>
 </template>
@@ -94,6 +94,7 @@ const saveError = ref('')
 const saveSuccess = ref(false)
 
 const appVersion = __APP_VERSION__
+const buildStamp = __BUILD_STAMP__
 
 const avatarInitials = computed(() => {
   const n = displayName.value.trim() || authStore.user?.email || '?'
@@ -270,5 +271,9 @@ async function save() {
 .settings-version {
   text-align: center; margin-top: 24px;
   font-size: 11px; color: rgba(240,237,224,.2); letter-spacing: .05em;
+}
+.settings-build-stamp {
+  display: block; font-size: 9px; color: rgba(240,237,224,.12);
+  letter-spacing: .03em; margin-top: 2px; font-family: monospace;
 }
 </style>

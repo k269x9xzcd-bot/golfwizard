@@ -4,8 +4,11 @@ import { readFileSync, writeFileSync } from 'fs'
 import { resolve } from 'path'
 
 const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'))
+const BUILD_TS = Date.now()
+const BUILD_STAMP = `${pkg.version}-${BUILD_TS}`
 
 // Plugin to stamp the build version into sw.js after build
+// Also writes a _version.json file to dist/ for post-deploy validation
 function stampServiceWorker() {
   return {
     name: 'stamp-sw',
@@ -13,13 +16,19 @@ function stampServiceWorker() {
       const swPath = resolve('./dist/sw.js')
       try {
         let sw = readFileSync(swPath, 'utf-8')
-        // Replace the placeholder with the actual version + timestamp for uniqueness
-        const stamp = `${pkg.version}-${Date.now()}`
-        sw = sw.replace('__BUILD_VERSION__', stamp)
+        sw = sw.replace('__BUILD_VERSION__', BUILD_STAMP)
         writeFileSync(swPath, sw)
       } catch (e) {
         console.warn('Could not stamp sw.js:', e.message)
       }
+      // Write a version manifest — used by deploy validation
+      const versionPath = resolve('./dist/_version.json')
+      writeFileSync(versionPath, JSON.stringify({
+        version: pkg.version,
+        stamp: BUILD_STAMP,
+        builtAt: new Date(BUILD_TS).toISOString(),
+      }, null, 2))
+      console.log(`\n✅ Build stamped: ${BUILD_STAMP}\n`)
     }
   }
 }
@@ -29,6 +38,7 @@ export default defineConfig({
   plugins: [vue(), stampServiceWorker()],
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
+    __BUILD_STAMP__: JSON.stringify(BUILD_STAMP),
   },
   // Set base to repo name for GitHub Pages — update if your repo is named differently
   // e.g. if hosted at jtspieler.github.io/GolfWizard set base: '/GolfWizard/'
