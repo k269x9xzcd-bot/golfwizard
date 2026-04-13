@@ -146,10 +146,32 @@
                 </div>
               </template>
 
+              <!-- Round actions -->
+              <div class="round-actions">
+                <button class="round-action-btn round-action-edit" @click.stop="reopenRound(round)">
+                  ✏️ Edit Scores
+                </button>
+                <button class="round-action-btn round-action-delete" @click.stop="confirmDelete(round)">
+                  🗑️ Delete Round
+                </button>
+              </div>
+
             </div>
           </transition>
         </div>
       </template>
+    </div>
+
+    <!-- Delete confirmation -->
+    <div v-if="deleteTarget" class="delete-overlay" @click="deleteTarget = null">
+      <div class="delete-dialog" @click.stop>
+        <div class="delete-title">Delete Round?</div>
+        <div class="delete-msg">This will permanently delete the round at <strong>{{ deleteTarget.course_name }}</strong> on {{ formatDate(deleteTarget.date) }} and all its scores/games.</div>
+        <div class="delete-actions">
+          <button class="btn-cancel" @click="deleteTarget = null">Cancel</button>
+          <button class="btn-delete-confirm" @click="doDelete">Delete</button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -157,8 +179,10 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoundsStore } from '../stores/rounds'
+import { useRouter } from 'vue-router'
 
 const roundsStore = useRoundsStore()
+const router = useRouter()
 onMounted(() => roundsStore.fetchRounds())
 
 const expandedIds = ref(new Set())
@@ -180,6 +204,28 @@ async function toggleRound(id) {
     }
   }
   expandedIds.value = new Set(expandedIds.value)
+}
+
+const deleteTarget = ref(null)
+
+function confirmDelete(round) {
+  deleteTarget.value = round
+}
+
+async function doDelete() {
+  if (!deleteTarget.value) return
+  try {
+    await roundsStore.deleteRound(deleteTarget.value.id)
+    deleteTarget.value = null
+  } catch (e) {
+    console.error('Delete failed:', e)
+  }
+}
+
+function reopenRound(round) {
+  // Set this round as active and navigate to scoring
+  roundsStore.setActiveRound(round)
+  router.push('/scoring')
 }
 
 function formatMoney(val) {
@@ -635,4 +681,54 @@ function gameStyle(type) { return GAME_STYLES[type] || 'default' }
   opacity: 0;
   max-height: 0;
 }
+
+/* Round actions */
+.round-actions {
+  display: flex; gap: 8px; padding-top: 12px; margin-top: 8px;
+  border-top: 1px solid rgba(255,255,255,.06);
+}
+.round-action-btn {
+  flex: 1; padding: 10px 12px; border-radius: 10px;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.04);
+  color: var(--gw-text, #f0ede0);
+  text-align: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.round-action-btn:active { background: rgba(255,255,255,.08); }
+.round-action-edit { border-color: rgba(96,165,250,.3); color: #60a5fa; }
+.round-action-delete { border-color: rgba(248,113,113,.3); color: #f87171; }
+
+/* Delete confirmation overlay */
+.delete-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,.6);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.delete-dialog {
+  background: var(--gw-green-800, #0d3325);
+  border: 1px solid rgba(248,113,113,.3);
+  border-radius: 16px;
+  padding: 24px; max-width: 340px; width: 100%;
+}
+.delete-title {
+  font-size: 18px; font-weight: 800; color: #f87171; margin-bottom: 10px;
+}
+.delete-msg {
+  font-size: 13px; color: rgba(240,237,224,.7); line-height: 1.5; margin-bottom: 18px;
+}
+.delete-actions { display: flex; gap: 10px; }
+.btn-cancel {
+  flex: 1; padding: 12px; border-radius: 10px;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
+  color: var(--gw-text, #f0ede0); font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.btn-delete-confirm {
+  flex: 1; padding: 12px; border-radius: 10px;
+  background: rgba(248,113,113,.2); border: 1px solid rgba(248,113,113,.4);
+  color: #f87171; font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.btn-delete-confirm:active { background: rgba(248,113,113,.35); }
 </style>

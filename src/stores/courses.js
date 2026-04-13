@@ -40,7 +40,13 @@ export const useCoursesStore = defineStore('courses', () => {
     // Custom courses override builtins with the same name
     const customNames = new Set(custom.map(c => c.name))
     const dedupedBuiltins = builtin.filter(b => !customNames.has(b.name))
-    return [...custom, ...dedupedBuiltins]
+    // Final dedup by name (keep first occurrence)
+    const seen = new Set()
+    return [...custom, ...dedupedBuiltins].filter(c => {
+      if (seen.has(c.name)) return false
+      seen.add(c.name)
+      return true
+    })
   })
 
   // Default favorites — set on first load when user hasn't favorited anything yet
@@ -52,6 +58,20 @@ export const useCoursesStore = defineStore('courses', () => {
   ]
 
   const favoriteNames = computed(() => new Set(favorites.value))
+
+  // Ensure favorites array has no duplicates (can accumulate from localStorage)
+  function _dedupFavorites() {
+    const seen = new Set()
+    const deduped = favorites.value.filter(name => {
+      if (seen.has(name)) return false
+      seen.add(name)
+      return true
+    })
+    if (deduped.length !== favorites.value.length) {
+      favorites.value = deduped
+      localStorage.setItem('golf_favorites', JSON.stringify(deduped))
+    }
+  }
 
   async function fetchCustomCourses() {
     const auth = useAuthStore()
@@ -71,6 +91,7 @@ export const useCoursesStore = defineStore('courses', () => {
         favorites.value = [...DEFAULT_FAVORITES]
         localStorage.setItem('golf_favorites', JSON.stringify(favorites.value))
       }
+      _dedupFavorites()
       return
     }
     loading.value = true
@@ -78,12 +99,20 @@ export const useCoursesStore = defineStore('courses', () => {
       .from('courses')
       .select('*')
       .eq('owner_id', auth.user.id)
-    if (!error) customCourses.value = data ?? []
+    if (!error) {
+      // Dedup by name (keep most recently updated)
+      const byName = {}
+      for (const c of (data ?? [])) {
+        if (!byName[c.name] || (c.updated_at > byName[c.name].updated_at)) byName[c.name] = c
+      }
+      customCourses.value = Object.values(byName)
+    }
     favorites.value = JSON.parse(localStorage.getItem('golf_favorites') || 'null')
     if (!favorites.value) {
       favorites.value = [...DEFAULT_FAVORITES]
       localStorage.setItem('golf_favorites', JSON.stringify(favorites.value))
     }
+    _dedupFavorites()
     loading.value = false
   }
 
@@ -116,7 +145,7 @@ export const useCoursesStore = defineStore('courses', () => {
         .from('courses').update({ tees: teesData, holes }).eq('id', existing.id).select().single()
       if (error) throw error
       const idx = customCourses.value.findIndex(c => c.id === existing.id)
-      if (idx >= 0) customCourses.value[idx] = data
+      if (idx >= 0) customCourses.value[idx] = { ...customCourses.value[idx], ...data }
       return data
     }
 
@@ -152,7 +181,7 @@ export const useCoursesStore = defineStore('courses', () => {
       .from('courses').update(supaUpdates).eq('id', id).select().single()
     if (error) throw error
     const idx = customCourses.value.findIndex(c => c.id === id)
-    if (idx >= 0) customCourses.value[idx] = data
+    if (idx >= 0) customCourses.value[idx] = { ...customCourses.value[idx], ...data }
   }
 
   async function deleteCourse(id) {

@@ -673,6 +673,26 @@ body {
   letter-spacing: 0.3px;
 }
 
+.wizard-close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(212, 175, 55, 0.1);
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gw-text-muted);
+  flex-shrink: 0;
+  margin-left: var(--gw-space-3);
+}
+.wizard-close-btn:hover {
+  background: rgba(212, 175, 55, 0.2);
+  color: var(--gw-text);
+}
+
 .wizard-step {
   flex: 1;
   overflow-y: auto;
@@ -1377,11 +1397,24 @@ body {
   background: var(--gw-neutral-950);
 }
 
+.header-logo-group {
+  display: flex;
+  flex-direction: column;
+}
+
 .header-logo {
   font-family: var(--gw-font-display);
   font-size: 22px;
   color: var(--gw-gold);
   letter-spacing: -0.3px;
+}
+
+.header-version {
+  font-family: var(--gw-font-body);
+  font-size: 10px;
+  color: var(--gw-text-muted);
+  letter-spacing: 0.5px;
+  margin-top: -2px;
 }
 
 .header-actions {

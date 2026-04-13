@@ -63,17 +63,20 @@ export const useRoundsStore = defineStore('rounds', () => {
       return
     }
     loading.value = true
-    const { data, error } = await supabase
-      .from('rounds')
-      .select(`
-        *,
-        round_members (*),
-        game_configs (*),
-        scores (*)
-      `)
-      .order('date', { ascending: false })
-    if (!error) rounds.value = data ?? []
-    loading.value = false
+    try {
+      const { data, error } = await supabase
+        .from('rounds')
+        .select(`
+          *,
+          round_members (*),
+          game_configs (*),
+          scores (*)
+        `)
+        .order('date', { ascending: false })
+      if (!error) rounds.value = data ?? []
+    } finally {
+      loading.value = false
+    }
   }
 
   // ── Create a new round ──────────────────────────────────────
@@ -149,7 +152,8 @@ export const useRoundsStore = defineStore('rounds', () => {
 
     if (error) throw error
 
-    // Add members
+    // Add members — use .select() to get back the new UUIDs
+    let insertedMembers = []
     if (players.length) {
       const memberRows = players.map((p, i) => ({
         round_id: round.id,
@@ -162,24 +166,61 @@ export const useRoundsStore = defineStore('rounds', () => {
         group_index: p.groupIndex ?? 0,
         role: i === 0 && auth.user?.id ? 'admin' : 'player',
       }))
-      const { error: mErr } = await supabase.from('round_members').insert(memberRows)
+      const { data: mData, error: mErr } = await supabase.from('round_members').insert(memberRows).select()
       if (mErr) throw mErr
+      insertedMembers = mData ?? []
     }
 
-    // Add games
+    // Build a mapping from wizard player IDs → new Supabase member IDs
+    // Match by short_name since that's unique within a round
+    const idMap = {}
+    for (const p of players) {
+      const shortName = p.shortName ?? p.name?.slice(0, 6)
+      const match = insertedMembers.find(m => m.short_name === shortName)
+      if (match && p.id) idMap[p.id] = match.id
+    }
+
+    // Add games — remap team1/team2/player IDs from wizard IDs to real member IDs
     if (games.length) {
-      const gameRows = games.map((g, i) => ({
-        round_id: round.id,
-        type: g.type,
-        config: g.config,
-        sort_order: i,
-        created_by: auth.user?.id ?? null,
-      }))
+      const gameRows = games.map((g, i) => {
+        const config = { ...g.config }
+        // Remap team arrays
+        if (Array.isArray(config.team1)) config.team1 = config.team1.map(id => idMap[id] || id)
+        if (Array.isArray(config.team2)) config.team2 = config.team2.map(id => idMap[id] || id)
+        // Remap individual player refs
+        if (config.player1) config.player1 = idMap[config.player1] || config.player1
+        if (config.player2) config.player2 = idMap[config.player2] || config.player2
+        // Remap players array (fidget, etc.)
+        if (Array.isArray(config.players)) config.players = config.players.map(id => idMap[id] || id)
+        return {
+          round_id: round.id,
+          type: g.type,
+          config,
+          sort_order: i,
+          created_by: auth.user?.id ?? null,
+        }
+      })
       const { error: gErr } = await supabase.from('game_configs').insert(gameRows)
       if (gErr) throw gErr
     }
 
-    await loadRound(round.id)
+    // Load the full round — if this fails, the round was still created in Supabase
+    try {
+      await loadRound(round.id)
+    } catch (e) {
+      console.warn('loadRound failed after creation, setting basic state:', e)
+      // Set basic active state so the user can still score
+      activeRound.value = round
+      activeMembers.value = insertedMembers
+      activeGames.value = games.map((g, i) => ({
+        id: `fallback_${i}`,
+        round_id: round.id,
+        type: g.type,
+        config: g.config,
+        sort_order: i,
+      }))
+      activeScores.value = {}
+    }
     return round
   }
 
@@ -345,40 +386,51 @@ export const useRoundsStore = defineStore('rounds', () => {
     if (String(roundId).startsWith('guest_')) return
 
     // Clean up previous subscriptions
-    if (scoreSubscription) supabase.removeChannel(scoreSubscription)
-    if (memberSubscription) supabase.removeChannel(memberSubscription)
+    try {
+      if (scoreSubscription) supabase.removeChannel(scoreSubscription)
+      if (memberSubscription) supabase.removeChannel(memberSubscription)
+    } catch (e) { console.warn('Failed to clean up subscriptions:', e) }
+    scoreSubscription = null
+    memberSubscription = null
 
-    // Subscribe to score changes
-    scoreSubscription = supabase
-      .channel(`scores:${roundId}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'scores',
-        filter: `round_id=eq.${roundId}`,
-      }, payload => {
-        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-          const s = payload.new
-          if (!activeScores.value[s.member_id]) activeScores.value[s.member_id] = {}
-          activeScores.value[s.member_id][s.hole] = s.score
-        }
-      })
-      .subscribe()
+    // Subscribe in a non-blocking way — don't let subscription failures block round creation
+    try {
+      scoreSubscription = supabase
+        .channel(`scores:${roundId}`)
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'scores',
+          filter: `round_id=eq.${roundId}`,
+        }, payload => {
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            const s = payload.new
+            if (!activeScores.value[s.member_id]) activeScores.value[s.member_id] = {}
+            activeScores.value[s.member_id][s.hole] = s.score
+          }
+        })
+        .subscribe((status, err) => {
+          if (err) console.warn('Score subscription error:', err)
+        })
 
-    // Subscribe to member changes (someone joins)
-    memberSubscription = supabase
-      .channel(`members:${roundId}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'round_members',
-        filter: `round_id=eq.${roundId}`,
-      }, payload => {
-        if (!activeMembers.value.find(m => m.id === payload.new.id)) {
-          activeMembers.value.push(payload.new)
-        }
-      })
-      .subscribe()
+      memberSubscription = supabase
+        .channel(`members:${roundId}`)
+        .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'round_members',
+          filter: `round_id=eq.${roundId}`,
+        }, payload => {
+          if (!activeMembers.value.find(m => m.id === payload.new.id)) {
+            activeMembers.value.push(payload.new)
+          }
+        })
+        .subscribe((status, err) => {
+          if (err) console.warn('Member subscription error:', err)
+        })
+    } catch (e) {
+      console.warn('Real-time subscription setup failed (non-critical):', e)
+    }
   }
 
   function unsubscribe() {
@@ -464,10 +516,70 @@ export const useRoundsStore = defineStore('rounds', () => {
     }
 
     if (activeRound.value?.id === roundId) {
-      activeRound.value.is_complete = true
+      // Reassign to trigger Vue reactivity
+      activeRound.value = { ...activeRound.value, is_complete: true }
     }
     unsubscribe()
     return settlementData
+  }
+
+  // ── Delete a round ──────────────────────────────────────
+  async function deleteRound(roundId) {
+    // ── GUEST PATH ──
+    if (_isGuest() || String(roundId).startsWith('guest_')) {
+      if (activeRound.value?.id === roundId) {
+        activeRound.value = null
+        activeMembers.value = []
+        activeScores.value = {}
+        activeGames.value = []
+      }
+      rounds.value = rounds.value.filter(r => r.id !== roundId)
+      _persistGuest()
+      return
+    }
+
+    // ── AUTHENTICATED PATH ──
+    // Delete scores, members, games, settlements, then round
+    await supabase.from('scores').delete().eq('round_id', roundId)
+    await supabase.from('round_games').delete().eq('round_id', roundId)
+    await supabase.from('round_settlements').delete().eq('round_id', roundId)
+    await supabase.from('round_members').delete().eq('round_id', roundId)
+    const { error } = await supabase.from('rounds').delete().eq('id', roundId)
+    if (error) throw error
+
+    // Clear active if this was the active round
+    if (activeRound.value?.id === roundId) {
+      activeRound.value = null
+      activeMembers.value = []
+      activeScores.value = {}
+      activeGames.value = []
+    }
+    rounds.value = rounds.value.filter(r => r.id !== roundId)
+  }
+
+  // ── Set a round as active and reload data ────────────────
+  async function setActiveRound(round) {
+    activeRound.value = round
+    // Re-fetch members, scores, games
+    if (_isGuest() || String(round.id).startsWith('guest_')) {
+      const gData = JSON.parse(localStorage.getItem('golf_active_round') || 'null')
+      if (gData) {
+        activeMembers.value = gData.members || []
+        activeScores.value = gData.scores || {}
+        activeGames.value = gData.games || []
+      }
+      return
+    }
+    const { data: members } = await supabase.from('round_members').select('*').eq('round_id', round.id)
+    activeMembers.value = members ?? []
+    const { data: scores } = await supabase.from('scores').select('*').eq('round_id', round.id)
+    activeScores.value = {}
+    for (const s of (scores ?? [])) {
+      const key = `${s.member_id}_${s.hole}`
+      activeScores.value[key] = s.strokes
+    }
+    const { data: games } = await supabase.from('round_games').select('*').eq('round_id', round.id)
+    activeGames.value = (games ?? []).map(g => ({ ...g, config: typeof g.config === 'string' ? JSON.parse(g.config) : g.config }))
   }
 
   // ── Fetch settlements for a round ───────────────────────────
@@ -520,7 +632,7 @@ export const useRoundsStore = defineStore('rounds', () => {
     rounds, loading, activeRoundId,
     fetchRounds, createRound, loadRound, setScore,
     saveGameConfig, updateGameConfig, deleteGameConfig,
-    joinByRoomCode, completeRound,
+    joinByRoomCode, completeRound, deleteRound, setActiveRound,
     fetchSettlements, fetchLedgerEntries,
     subscribeToRound, unsubscribe,
     saveGuestRound, loadGuestRounds,

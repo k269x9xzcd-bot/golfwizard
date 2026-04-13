@@ -4,10 +4,40 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/golfwizard/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="GolfWizard" />
+    <meta name="theme-color" content="#0a1208" />
+    <link rel="manifest" href="/golfwizard/manifest.json" />
     <title>⛳ GolfWizard</title>
   </head>
   <body>
     <div id="app"></div>
     <script type="module" src="/src/main.js"></script>
+    <script>
+      // Register service worker for PWA / home screen installs
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/golfwizard/sw.js')
+            .then(reg => {
+              // When a new SW is waiting, activate it immediately
+              reg.addEventListener('updatefound', () => {
+                const newWorker = reg.installing
+                newWorker?.addEventListener('statechange', () => {
+                  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    // New version available — reload to pick it up
+                    newWorker.postMessage('SKIP_WAITING')
+                    window.location.reload()
+                  }
+                })
+              })
+            })
+        })
+        // If SW controller changes (new SW took over), reload the page
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          window.location.reload()
+        })
+      }
+    </script>
   </body>
 </html>

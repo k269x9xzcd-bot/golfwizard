@@ -22,11 +22,24 @@ export const router = createRouter({
   scrollBehavior: () => ({ top: 0 }),
 })
 
-// If a lazy-loaded chunk fails (stale cache after redeploy), navigate home.
-// HomeView is statically bundled so it always works even with stale cache.
+// If a lazy-loaded chunk fails (stale cache after redeploy), force a hard reload.
+// This clears the cached old JS and picks up the latest build from the server.
+// We track whether we already tried reloading to avoid an infinite loop.
 router.onError((err) => {
-  if (err?.message?.includes('Failed to fetch dynamically imported module') ||
-      err?.message?.includes('Importing a module script failed')) {
-    router.push('/')
+  const isChunkError =
+    err?.message?.includes('Failed to fetch dynamically imported module') ||
+    err?.message?.includes('Importing a module script failed') ||
+    err?.message?.includes('Unable to preload CSS') ||
+    err?.code === 'MODULE_NOT_FOUND'
+  if (isChunkError) {
+    const alreadyReloaded = sessionStorage.getItem('gw_chunk_reload')
+    if (!alreadyReloaded) {
+      sessionStorage.setItem('gw_chunk_reload', '1')
+      window.location.reload()
+    } else {
+      // Already reloaded once — just go home to avoid loop
+      sessionStorage.removeItem('gw_chunk_reload')
+      router.push('/')
+    }
   }
 })

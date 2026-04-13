@@ -122,11 +122,22 @@ export function memberNetOnHoleLowMan(ctx, member, hole, allMembers) {
 // ── SKINS ────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────
 export function computeSkins(ctx, config) {
-  const { ppt = 5, players: pids } = config
+  const {
+    ppt = 5,
+    players: pids,
+    carry = true,              // carry pot on ties (true) or dead skins (false)
+    payoutModel = 'pool',      // 'pool' = pot-based, 'perPlayer' = each player pays ppt per skin won by others
+    lastHoleTie = 'carry',     // 'carry' = pot carries (dead), 'split' = tied players split pot on hole 18
+    hcpMode = 'lowman',        // 'lowman' = low-man adjusted, 'course' = full course HCP
+  } = config
   const members = pids
     ? ctx.members.filter(m => pids.includes(m.id))
     : ctx.members
   const { from, to } = holeRange(ctx.holesMode)
+
+  const netFn = hcpMode === 'course'
+    ? (m, h) => memberNetOnHole(ctx, m, h)
+    : (m, h) => memberNetOnHoleLowMan(ctx, m, h, members)
 
   const holeResults = []
   let pot = 0
@@ -136,13 +147,12 @@ export function computeSkins(ctx, config) {
     const nets = members.map(m => ({
       id: m.id,
       name: m.short_name,
-      net: memberNetOnHoleLowMan(ctx, m, h, members),
+      net: netFn(m, h),
     }))
 
     if (nets.some(n => n.net === null)) {
       holeResults.push({ hole: h, winner: null, pot: potValue, reason: 'incomplete' })
-      pot += ppt
-      potValue += ppt
+      if (carry) { pot += ppt; potValue += ppt }
       continue
     }
 
@@ -154,10 +164,20 @@ export function computeSkins(ctx, config) {
       pot = 0
       potValue = ppt
     } else {
-      // Tie — carry pot
-      holeResults.push({ hole: h, winner: null, pot: potValue, reason: 'tie', tied: winners.map(w => w.id) })
-      pot += ppt
-      potValue += ppt
+      // Tie
+      if (h === to && lastHoleTie === 'split' && winners.length > 0) {
+        // Split pot among tied players on last hole
+        holeResults.push({ hole: h, winner: null, pot: potValue, reason: 'split', tied: winners.map(w => w.id), splitAmount: potValue / winners.length })
+      } else if (carry) {
+        holeResults.push({ hole: h, winner: null, pot: potValue, reason: 'tie', tied: winners.map(w => w.id) })
+        pot += ppt
+        potValue += ppt
+      } else {
+        // Dead skins — pot doesn't carry
+        holeResults.push({ hole: h, winner: null, pot: ppt, reason: 'dead', tied: winners.map(w => w.id) })
+        pot = 0
+        potValue = ppt
+      }
     }
   }
 
@@ -168,19 +188,41 @@ export function computeSkins(ctx, config) {
     if (hr.winner) {
       totals[hr.winner].skins += 1
       totals[hr.winner].winnings += hr.pot
+    } else if (hr.reason === 'split' && hr.tied) {
+      for (const tid of hr.tied) {
+        totals[tid].winnings += hr.splitAmount
+      }
     }
   }
 
-  // Settlement: every player owes skins × ppt for holes they didn't win
+  // Settlement
+  if (payoutModel === 'perPlayer') {
+    // Each player pays ppt for every skin won by someone else
+    const totalSkins = Object.values(totals).reduce((s, t) => s + t.skins, 0)
+    const settlements = members.map(m => {
+      const mySkins = totals[m.id].skins
+      const othersSkins = totalSkins - mySkins
+      return {
+        id: m.id,
+        name: m.short_name,
+        skins: mySkins,
+        net: (mySkins * ppt * (members.length - 1)) - (othersSkins * ppt),
+      }
+    })
+    return { holeResults, totals, settlements, potValue, ppt, payoutModel }
+  }
+
+  // Pool model (default)
   const totalSkins = Object.values(totals).reduce((s, t) => s + t.skins, 0)
-  const perPlayerCost = totalSkins * ppt  // each player owes this
+  const perPlayerCost = totalSkins * ppt
   const settlements = members.map(m => ({
     id: m.id,
     name: m.short_name,
+    skins: totals[m.id].skins,
     net: totals[m.id].winnings - perPlayerCost,
   }))
 
-  return { holeResults, totals, settlements, potValue, ppt }
+  return { holeResults, totals, settlements, potValue, ppt, payoutModel }
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -192,67 +234,87 @@ export function computeNassau(ctx, config) {
     pressAt = 2,
     team1 = [], team2 = [],
     hcpPct = 0.9,  // 90% for best ball
+    hcpMode = 'lowman',  // 'lowman' or 'course'
   } = config
 
   const t1 = ctx.members.filter(m => team1.includes(m.id))
   const t2 = ctx.members.filter(m => team2.includes(m.id))
   const allPlayers = [...t1, ...t2]
 
+  const netFn = hcpMode === 'course'
+    ? (m, h) => memberNetOnHole(ctx, m, h)
+    : (m, h) => memberNetOnHoleLowMan(ctx, m, h, allPlayers)
+
   function bestNetOnHole(teamMembers, hole) {
-    const nets = teamMembers.map(m => memberNetOnHoleLowMan(ctx, m, hole, allPlayers)).filter(n => n != null)
+    const nets = teamMembers.map(m => netFn(m, hole)).filter(n => n != null)
     if (!nets.length) return null
     return Math.min(...nets)
   }
 
   function processSegment(fromH, toH, betValue) {
     const holeResults = []
-    let t1Up = 0
-    const presses = []
-    let currentPressStart = fromH
-    let currentPressValue = betValue
+    // Each bet: { start, score (positive=t1 leading), value, pressed }
+    const bets = [{ start: fromH, score: 0, value: betValue, pressed: false }]
 
     for (let h = fromH; h <= toH; h++) {
       const n1 = bestNetOnHole(t1, h)
       const n2 = bestNetOnHole(t2, h)
 
       if (n1 === null || n2 === null) {
-        holeResults.push({ hole: h, winner: null, t1Up })
+        holeResults.push({ hole: h, winner: null, n1: null, n2: null })
         continue
       }
 
       let holeWinner = null
-      if (n1 < n2) { t1Up += 1; holeWinner = 't1' }
-      else if (n2 < n1) { t1Up -= 1; holeWinner = 't2' }
-      holeResults.push({ hole: h, winner: holeWinner, t1Up, n1, n2 })
+      if (n1 < n2) holeWinner = 't1'
+      else if (n2 < n1) holeWinner = 't2'
 
-      // Check press condition
-      const remaining = toH - h
-      if (pressAt > 0 && Math.abs(t1Up) >= pressAt && remaining > 0) {
-        presses.push({ start: h + 1, value: currentPressValue, t1UpAtStart: t1Up })
-        currentPressStart = h + 1
-        currentPressValue = betValue // each press is worth original bet
+      // Update all active bets
+      for (const bet of bets) {
+        if (h < bet.start) continue
+        if (holeWinner === 't1') bet.score += 1
+        else if (holeWinner === 't2') bet.score -= 1
+      }
+
+      holeResults.push({ hole: h, winner: holeWinner, n1, n2 })
+
+      // Check for new press: any active bet where trailing team is down by pressAt
+      if (pressAt > 0) {
+        const rem = toH - h
+        const newPresses = []
+        for (const bet of bets) {
+          if (bet.pressed) continue // already pressed this bet
+          if (h < bet.start) continue
+          // A team presses when they're down by pressAt on THIS bet
+          if (Math.abs(bet.score) >= pressAt && rem > 0) {
+            bet.pressed = true
+            newPresses.push({ start: h + 1, score: 0, value: betValue, pressed: false })
+          }
+        }
+        bets.push(...newPresses)
       }
     }
 
-    const holesPlayed = holeResults.filter(r => r.winner !== undefined && r.winner !== null || (r.n1 != null && r.n2 != null)).length
-    const t1UpFinal = holeResults.at(-1)?.t1Up ?? 0
-
-    let t1Wins = 0
-    if (holesPlayed > 0) {
-      t1Wins = t1UpFinal > 0 ? betValue : t1UpFinal < 0 ? -betValue : 0
+    // Compute running t1Up for display
+    let runUp = 0
+    for (const hr of holeResults) {
+      if (hr.winner === 't1') runUp++
+      else if (hr.winner === 't2') runUp--
+      hr.t1Up = runUp
     }
 
-    // Process presses
+    const t1UpFinal = holeResults.length ? holeResults.at(-1).t1Up : 0
+
+    // Settlement: main bet = bets[0], presses = bets[1..]
+    const mainBet = bets[0]
+    const t1Wins = mainBet.score > 0 ? betValue : mainBet.score < 0 ? -betValue : 0
+
     let pressWins = 0
-    for (const press of presses) {
-      const pressHoles = holeResults.filter(r => r.hole >= press.start)
-      if (pressHoles.length === 0) continue
-      const pressUp = pressHoles.reduce((acc, r) => {
-        if (r.winner === 't1') return acc + 1
-        if (r.winner === 't2') return acc - 1
-        return acc
-      }, 0)
-      pressWins += pressUp > 0 ? press.value : pressUp < 0 ? -press.value : 0
+    const presses = []
+    for (let i = 1; i < bets.length; i++) {
+      const b = bets[i]
+      presses.push({ start: b.start, value: b.value, score: b.score })
+      pressWins += b.score > 0 ? b.value : b.score < 0 ? -b.value : 0
     }
 
     return { holeResults, t1Up: t1UpFinal, t1Wins, pressWins, presses }
@@ -293,19 +355,23 @@ export function computeNassau(ctx, config) {
 // ── MATCH PLAY (1v1 or 2v2) ──────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────
 export function computeMatch(ctx, config) {
-  const { player1, player2, ppt = 10 } = config
+  const { player1, player2, ppt = 10, hcpMode = 'lowman' } = config
   const m1 = ctx.members.find(m => m.id === player1)
   const m2 = ctx.members.find(m => m.id === player2)
   if (!m1 || !m2) return null
   const matchPlayers = [m1, m2]
+
+  const netFn = hcpMode === 'course'
+    ? (m, h) => memberNetOnHole(ctx, m, h)
+    : (m, h) => memberNetOnHoleLowMan(ctx, m, h, matchPlayers)
 
   const { from, to } = holeRange(ctx.holesMode)
   const holeResults = []
   let p1Up = 0
 
   for (let h = from; h <= to; h++) {
-    const n1 = memberNetOnHoleLowMan(ctx, m1, h, matchPlayers)
-    const n2 = memberNetOnHoleLowMan(ctx, m2, h, matchPlayers)
+    const n1 = netFn(m1, h)
+    const n2 = netFn(m2, h)
 
     if (n1 === null || n2 === null) {
       holeResults.push({ hole: h, winner: null, p1Up, incomplete: true })
@@ -625,9 +691,13 @@ export function computeBestBallNet(ctx, config = {}) {
 export function computeVegas(ctx, config) {
   const {
     team1 = [], team2 = [],
-    ppt = 1,       // $ per point difference
-    birdieFlip = true,
+    ppt = 1,                   // $ per point difference
+    birdieFlip = true,         // flip opponent's number on birdie
+    eagleFlip = true,          // flip + double on eagle
+    doubleBirdie = false,      // double the diff when both teammates birdie
+    penaltyThreshold = 0,      // "7-flip": if a player scores >= this, flip their team's number (0 = off)
     scoring = 'net',
+    hcpMode = 'lowman',
   } = config
   const useGross = scoring === 'gross'
 
@@ -638,6 +708,7 @@ export function computeVegas(ctx, config) {
 
   function playerScore(m, hole) {
     if (useGross) return getScore(ctx, m.id, hole)
+    if (hcpMode === 'course') return memberNetOnHole(ctx, m, hole)
     return memberNetOnHoleLowMan(ctx, m, hole, allPlayers)
   }
 
@@ -647,17 +718,16 @@ export function computeVegas(ctx, config) {
       .filter(n => n != null)
     if (nets.length < 2) return null
     const sorted = [...nets].sort((a, b) => a - b)
-    // Floor at 1 (house rule)
     const lo = Math.max(sorted[0], 1)
     const hi = Math.max(sorted[1], 1)
-    return lo * 10 + hi  // low in tens place, high in ones
+    return lo * 10 + hi
   }
 
   function flipNumber(num) {
     if (num == null) return null
     const lo = Math.floor(num / 10)
     const hi = num % 10
-    return hi * 10 + lo // swap: high in tens place = worse
+    return hi * 10 + lo
   }
 
   const holeResults = []
@@ -673,20 +743,41 @@ export function computeVegas(ctx, config) {
       continue
     }
 
-    // Birdie flip: if one team has a player with net birdie or better, flip opponent
-    if (birdieFlip) {
-      const par = holePar(ctx.course, h)
-      const t1HasBirdie = t1.some(m => { const n = playerScore(m, h); return n != null && n <= par - 1 })
-      const t2HasBirdie = t2.some(m => { const n = playerScore(m, h); return n != null && n <= par - 1 })
+    const par = holePar(ctx.course, h)
+    let holeMultiplier = 1
 
-      // Only flip if one team birdies and the other doesn't
+    // Penalty threshold (7-flip): if any player scored gross >= threshold, flip their team's number
+    if (penaltyThreshold > 0) {
+      const t1HasPenalty = t1.some(m => { const g = getScore(ctx, m.id, h); return g != null && g >= penaltyThreshold })
+      const t2HasPenalty = t2.some(m => { const g = getScore(ctx, m.id, h); return g != null && g >= penaltyThreshold })
+      if (t1HasPenalty && !t2HasPenalty) n1 = flipNumber(n1)
+      else if (t2HasPenalty && !t1HasPenalty) n2 = flipNumber(n2)
+    }
+
+    // Birdie/Eagle flip logic
+    const t1BirdieCount = t1.filter(m => { const n = playerScore(m, h); return n != null && n <= par - 1 }).length
+    const t2BirdieCount = t2.filter(m => { const n = playerScore(m, h); return n != null && n <= par - 1 }).length
+    const t1HasEagle = eagleFlip && t1.some(m => { const n = playerScore(m, h); return n != null && n <= par - 2 })
+    const t2HasEagle = eagleFlip && t2.some(m => { const n = playerScore(m, h); return n != null && n <= par - 2 })
+
+    if (t1HasEagle && !t2HasEagle) {
+      n2 = flipNumber(n2); holeMultiplier = 2  // eagle = flip + double
+    } else if (t2HasEagle && !t1HasEagle) {
+      n1 = flipNumber(n1); holeMultiplier = 2
+    } else if (birdieFlip) {
+      const t1HasBirdie = t1BirdieCount > 0
+      const t2HasBirdie = t2BirdieCount > 0
       if (t1HasBirdie && !t2HasBirdie) n2 = flipNumber(n2)
       else if (t2HasBirdie && !t1HasBirdie) n1 = flipNumber(n1)
     }
 
-    const diff = n2 - n1 // positive = t1 wins
+    // Double-birdie: both teammates birdie = double the diff
+    if (doubleBirdie && t1BirdieCount >= 2) holeMultiplier = Math.max(holeMultiplier, 2)
+    if (doubleBirdie && t2BirdieCount >= 2) holeMultiplier = Math.max(holeMultiplier, 2)
+
+    const diff = (n2 - n1) * holeMultiplier
     t1Total += diff
-    holeResults.push({ hole: h, t1Num: n1, t2Num: n2, diff })
+    holeResults.push({ hole: h, t1Num: n1, t2Num: n2, diff, multiplier: holeMultiplier })
   }
 
   const t1Net = t1Total * ppt
@@ -712,7 +803,10 @@ export function computeVegas(ctx, config) {
 export function computeHiLow(ctx, config) {
   const {
     team1 = [], team2 = [],
-    ppt = 5,  // $ per hole (3 pts per hole: low, high, aggregate)
+    ppt = 5,               // $ per point
+    carryOnTie = true,     // carry points on tie to next hole
+    birdieDouble = false,  // birdie on low ball doubles the point value for that hole
+    hcpMode = 'lowman',
   } = config
 
   const t1 = ctx.members.filter(m => team1.includes(m.id))
@@ -720,13 +814,20 @@ export function computeHiLow(ctx, config) {
   const allPlayers = [...t1, ...t2]
   const { from, to } = holeRange(ctx.holesMode)
 
+  const netFn = hcpMode === 'course'
+    ? (m, h) => memberNetOnHole(ctx, m, h)
+    : (m, h) => memberNetOnHoleLowMan(ctx, m, h, allPlayers)
+
   const holeResults = []
   let t1Pts = 0
   let t2Pts = 0
+  let lowCarry = 0
+  let highCarry = 0
+  let aggCarry = 0
 
   for (let h = from; h <= to; h++) {
-    const t1Nets = t1.map(m => memberNetOnHoleLowMan(ctx, m, h, allPlayers)).filter(n => n != null).sort((a, b) => a - b)
-    const t2Nets = t2.map(m => memberNetOnHoleLowMan(ctx, m, h, allPlayers)).filter(n => n != null).sort((a, b) => a - b)
+    const t1Nets = t1.map(m => netFn(m, h)).filter(n => n != null).sort((a, b) => a - b)
+    const t2Nets = t2.map(m => netFn(m, h)).filter(n => n != null).sort((a, b) => a - b)
 
     if (t1Nets.length < 1 || t2Nets.length < 1) {
       holeResults.push({ hole: h, incomplete: true })
@@ -737,27 +838,44 @@ export function computeHiLow(ctx, config) {
     const t1High = t1Nets[t1Nets.length - 1]
     const t2Low = t2Nets[0]
     const t2High = t2Nets[t2Nets.length - 1]
+    const par = holePar(ctx.course, h)
+
+    // Birdie bonus: check if the winning low-ball is a birdie or better
+    let lowMultiplier = 1
+    if (birdieDouble) {
+      const bestLow = Math.min(t1Low, t2Low)
+      if (bestLow <= par - 1) lowMultiplier = 2
+    }
 
     // Low ball point
     let lowWin = null
-    if (t1Low < t2Low) { lowWin = 't1'; t1Pts += 1 }
-    else if (t2Low < t1Low) { lowWin = 't2'; t2Pts += 1 }
+    const lowPts = (1 + lowCarry) * lowMultiplier
+    if (t1Low < t2Low) { lowWin = 't1'; t1Pts += lowPts; lowCarry = 0 }
+    else if (t2Low < t1Low) { lowWin = 't2'; t2Pts += lowPts; lowCarry = 0 }
+    else if (carryOnTie) { lowCarry += 1 }
+    else { lowCarry = 0 }
 
     // High ball point
     let highWin = null
-    if (t1High < t2High) { highWin = 't1'; t1Pts += 1 }
-    else if (t2High < t1High) { highWin = 't2'; t2Pts += 1 }
+    const highPts = 1 + highCarry
+    if (t1High < t2High) { highWin = 't1'; t1Pts += highPts; highCarry = 0 }
+    else if (t2High < t1High) { highWin = 't2'; t2Pts += highPts; highCarry = 0 }
+    else if (carryOnTie) { highCarry += 1 }
+    else { highCarry = 0 }
 
-    // Aggregate point (sum of both)
+    // Aggregate point
     const t1Agg = t1Low + t1High
     const t2Agg = t2Low + t2High
     let aggWin = null
-    if (t1Agg < t2Agg) { aggWin = 't1'; t1Pts += 1 }
-    else if (t2Agg < t1Agg) { aggWin = 't2'; t2Pts += 1 }
+    const aggPts = 1 + aggCarry
+    if (t1Agg < t2Agg) { aggWin = 't1'; t1Pts += aggPts; aggCarry = 0 }
+    else if (t2Agg < t1Agg) { aggWin = 't2'; t2Pts += aggPts; aggCarry = 0 }
+    else if (carryOnTie) { aggCarry += 1 }
+    else { aggCarry = 0 }
 
     holeResults.push({
       hole: h, t1Low, t1High, t2Low, t2High, t1Agg, t2Agg,
-      lowWin, highWin, aggWin,
+      lowWin, highWin, aggWin, lowMultiplier,
     })
   }
 
@@ -785,6 +903,9 @@ export function computeStableford(ctx, config) {
     ppt = 1,       // $ per point
     variant = 'standard', // 'standard' or 'modified'
     players: pids,
+    teamMode = 'individual', // 'individual', 'aggregate' (sum team pts), 'bestball' (best per hole)
+    team1 = [], team2 = [],
+    hcpMode = 'lowman',
   } = config
 
   const members = pids
@@ -854,6 +975,8 @@ export function computeWolf(ctx, config) {
   const {
     ppt = 5,
     wolfLoneMultiplier = 2,
+    lastPlaceWolf = true,  // holes 17-18: last place in standings picks wolf
+    hcpMode = 'lowman',
     players: pids,
   } = config
 
@@ -874,18 +997,28 @@ export function computeWolf(ctx, config) {
   const wolfChoices = config.wolfChoices || {}
 
   for (let h = from; h <= to; h++) {
-    const wolfIdx = (h - from) % n
+    let wolfIdx = (h - from) % n
+    // Last-place wolf variant: on holes 17 & 18, the player in last picks wolf
+    if (lastPlaceWolf && (h === 17 || h === 18) && Object.keys(totals).some(id => totals[id].net !== 0)) {
+      const ranked = members.map(m => ({ id: m.id, net: totals[m.id].net })).sort((a, b) => a.net - b.net)
+      const lastIdx = members.findIndex(m => m.id === ranked[0].id)
+      if (lastIdx >= 0) wolfIdx = lastIdx
+    }
     const wolf = members[wolfIdx]
     const choice = wolfChoices[h]
     const isLone = choice?.partner === 'lone'
-    const partnerId = !isLone ? choice?.partner : null
+    const isBlind = choice?.partner === 'blind'
+    const partnerId = (!isLone && !isBlind) ? choice?.partner : null
     const partner = partnerId ? members.find(m => m.id === partnerId) : null
 
-    // Get all net scores (low-man within foursome)
+    // Get all net scores
+    const wolfNetFn = hcpMode === 'course'
+      ? (m, hole) => memberNetOnHole(ctx, m, hole)
+      : (m, hole) => memberNetOnHoleLowMan(ctx, m, hole, members)
     const nets = {}
     let allScored = true
     for (const m of members) {
-      const net = memberNetOnHoleLowMan(ctx, m, h, members)
+      const net = wolfNetFn(m, h)
       if (net === null) allScored = false
       nets[m.id] = net
     }
@@ -899,30 +1032,32 @@ export function computeWolf(ctx, config) {
       continue
     }
 
-    if (isLone) {
-      // Lone wolf: wolf vs all others
+    if (isLone || isBlind) {
+      // Lone/Blind wolf: wolf vs all others
       const wolfNet = nets[wolf.id]
       const others = members.filter(m => m.id !== wolf.id)
       const otherBest = Math.min(...others.map(m => nets[m.id]))
 
+      // Blind wolf uses 2× multiplier, lone wolf uses configurable multiplier
+      const mult = isBlind ? 2 : wolfLoneMultiplier
+
       let winner = null
       if (wolfNet < otherBest) {
         winner = 'wolf'
-        // Wolf wins multiplied ppt from each other player
-        const winAmount = ppt * wolfLoneMultiplier
+        const winAmount = ppt * mult
         totals[wolf.id].net += winAmount * (n - 1)
         for (const o of others) totals[o.id].net -= winAmount
       } else if (otherBest < wolfNet) {
         winner = 'field'
-        const loseAmount = ppt * wolfLoneMultiplier
+        const loseAmount = ppt * mult
         totals[wolf.id].net -= loseAmount * (n - 1)
         for (const o of others) totals[o.id].net += loseAmount
       }
 
       holeResults.push({
         hole: h, wolf: wolf.id, wolfName: wolf.short_name,
-        isLone: true, winner,
-        wolfNet, otherBest,
+        isLone: isLone, isBlind, winner,
+        wolfNet, otherBest, multiplier: mult,
       })
     } else {
       // Wolf + partner vs others

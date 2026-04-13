@@ -1,7 +1,10 @@
 <template>
   <div class="view home-view">
     <header class="view-header">
-      <div class="header-logo">⛳ GolfWizard</div>
+      <div class="header-logo-group">
+        <div class="header-logo">⛳ GolfWizard</div>
+        <div class="header-version">v{{ appVersion }}</div>
+      </div>
       <div class="header-actions">
         <button v-if="!authStore.isAuthenticated" class="btn-signin" @click="showAuth = true">
           Sign In
@@ -51,11 +54,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useRoundsStore } from '../stores/rounds'
 import AuthModal from '../components/AuthModal.vue'
+
+const appVersion = __APP_VERSION__
 
 const authStore = useAuthStore()
 const roundsStore = useRoundsStore()
@@ -64,6 +69,14 @@ const showAuth = ref(false)
 
 onMounted(async () => {
   if (authStore.isAuthenticated) await roundsStore.fetchRounds()
+})
+
+// Auth might not be restored yet when onMounted fires (async session init).
+// Watch for isAuthenticated becoming true and fetch rounds if we haven't yet.
+watch(() => authStore.isAuthenticated, async (authed) => {
+  if (authed && roundsStore.rounds.length === 0) {
+    await roundsStore.fetchRounds()
+  }
 })
 
 async function openRound(id) {

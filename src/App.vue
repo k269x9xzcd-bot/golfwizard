@@ -27,20 +27,24 @@
           <span class="nav-label">Home</span>
         </RouterLink>
         <RouterLink to="/scoring" class="nav-item" :class="{ active: $route.name === 'scoring' }">
-          <span class="nav-icon">📋</span>
+          <span class="nav-icon">🏌️</span>
           <span class="nav-label">Score</span>
         </RouterLink>
         <button class="nav-item nav-new" @click="showWizard = true">
           <span class="nav-icon nav-plus">＋</span>
-          <span class="nav-label">New Round</span>
+          <span class="nav-label">New</span>
         </button>
+        <RouterLink to="/courses" class="nav-item" :class="{ active: $route.name === 'courses' }">
+          <span class="nav-icon">⛳</span>
+          <span class="nav-label">Courses</span>
+        </RouterLink>
+        <RouterLink to="/players" class="nav-item" :class="{ active: $route.name === 'players' }">
+          <span class="nav-icon">👥</span>
+          <span class="nav-label">Players</span>
+        </RouterLink>
         <RouterLink to="/history" class="nav-item" :class="{ active: $route.name === 'history' }">
           <span class="nav-icon">🕐</span>
           <span class="nav-label">History</span>
-        </RouterLink>
-        <RouterLink to="/metrics" class="nav-item" :class="{ active: $route.name === 'metrics' }">
-          <span class="nav-icon">📊</span>
-          <span class="nav-label">Stats</span>
         </RouterLink>
       </nav>
     </template>

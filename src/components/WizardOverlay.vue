@@ -2,9 +2,9 @@
   <div class="modal-overlay wizard-overlay">
     <div class="modal wizard-modal">
       <div class="wizard-header">
-        <button class="modal-close" @click="$emit('close')">✕</button>
         <div class="wizard-title">New Round</div>
         <div class="wizard-step-indicator">Step {{ step }} of {{ totalSteps }}</div>
+        <button class="wizard-close-btn" @click="$emit('close')">✕</button>
       </div>
 
       <!-- ── Step 1: Course & Date ───────────────────────────── -->
@@ -376,7 +376,47 @@
               </select>
             </div>
           </div>
-          <div class="config-note">Wolf picks a partner each hole (or goes lone). Tee order rotates automatically.</div>
+
+          <!-- Tee Order -->
+          <div class="wolf-tee-order-section">
+            <div class="config-sublabel">🐺 Tee Order (Wolf rotates in this order)</div>
+            <div v-if="mainGame.config.wolfTeeOrder && mainGame.config.wolfTeeOrder.length" class="wolf-order-list">
+              <div v-for="(pid, oi) in mainGame.config.wolfTeeOrder" :key="pid" class="wolf-order-item">
+                <span class="wolf-order-num">{{ oi + 1 }}</span>
+                <span class="wolf-order-name">{{ wolfPlayerName(pid) }}</span>
+                <span v-if="oi === 0" class="wolf-h1-badge">WOLF H1</span>
+                <button v-if="oi > 0" class="wolf-order-btn" @click="wolfMoveUp(oi)">↑</button>
+                <button v-if="oi < mainGame.config.wolfTeeOrder.length - 1" class="wolf-order-btn" @click="wolfMoveDown(oi)">↓</button>
+              </div>
+            </div>
+            <div v-if="!mainGame.config.wolfTeeOrder || !mainGame.config.wolfTeeOrder.length" class="wolf-order-prompt">
+              <div class="config-note">Tap each player in tee order (1st = Wolf on hole 1):</div>
+              <div class="wolf-pick-players">
+                <button v-for="p in form.players" :key="p.id" class="wolf-pick-player-btn" @click="wolfAddToOrder(p.id)">
+                  {{ p.shortName || p.name }}
+                </button>
+              </div>
+            </div>
+            <div v-if="mainGame.config.wolfTeeOrder && mainGame.config.wolfTeeOrder.length && mainGame.config.wolfTeeOrder.length < form.players.length" class="wolf-pick-players">
+              <button v-for="p in form.players.filter(p => !mainGame.config.wolfTeeOrder.includes(p.id))" :key="p.id" class="wolf-pick-player-btn" @click="wolfAddToOrder(p.id)">
+                + {{ p.shortName || p.name }}
+              </button>
+            </div>
+            <button v-if="mainGame.config.wolfTeeOrder && mainGame.config.wolfTeeOrder.length" class="wolf-reset-btn" @click="mainGame.config.wolfTeeOrder = []">Reset Order</button>
+            <button v-if="!mainGame.config.wolfTeeOrder || !mainGame.config.wolfTeeOrder.length" class="wolf-auto-btn" @click="mainGame.config.wolfTeeOrder = form.players.map(p => p.id)">Use Player List Order</button>
+          </div>
+
+          <!-- Options -->
+          <div class="wolf-options">
+            <label class="wolf-option-toggle" @click="mainGame.config.blindWolfEnabled = !mainGame.config.blindWolfEnabled">
+              <span class="wolf-toggle" :class="{ on: mainGame.config.blindWolfEnabled !== false }"></span>
+              <span>🙈 Blind Wolf (declare before tee shots, 2× stakes)</span>
+            </label>
+            <label class="wolf-option-toggle" @click="mainGame.config.lastPlaceWolf = !mainGame.config.lastPlaceWolf">
+              <span class="wolf-toggle" :class="{ on: mainGame.config.lastPlaceWolf }"></span>
+              <span>📉 Last Place Wolf (holes 17-18: trailing player picks)</span>
+            </label>
+          </div>
         </div>
 
         <!-- Hammer config -->
@@ -744,7 +784,7 @@ const GAME_DEFAULTS = {
   skins:       { ppt: 5, carry: true },
   hilow:       { ppt: 5, team1: [], team2: [] },
   stableford:  { ppt: 1 },
-  wolf:        { ppt: 5, wolfLoneMultiplier: 2 },
+  wolf:        { ppt: 5, wolfLoneMultiplier: 2, wolfTeeOrder: [], blindWolfEnabled: true, lastPlaceWolf: false, wolfChoices: {} },
   hammer:      { ppt: 1, team1: [], team2: [] },
   sixes:       { ppt: 1 },
   fiveThreeOne:{ ppt: 1 },
@@ -943,6 +983,17 @@ const apiEnrichedTees = ref({})
 async function selectCourse(c) {
   form.value.courseName = c.name
 
+  // If this is a saved custom course in the store, use its data directly
+  // Don't re-fetch from API — user may have edited tees/SI/par
+  const stored = coursesStore.getCourse(c.name)
+  if (stored?.isCustom && stored.teesData && Object.keys(stored.teesData).length > 0) {
+    console.log('[GW-wizard] Using saved custom course data for', c.name)
+    apiEnrichedTees.value[c.name] = stored.teesData
+    const teeNames = Object.keys(stored.teesData)
+    form.value.tee = teeNames[0] ?? ''
+    return
+  }
+
   // Try to enrich from API if we have an apiId or can search for one
   const apiId = c.apiId || null
 
@@ -996,9 +1047,13 @@ async function fetchAndApplyApiDetail(courseName, apiId, defaultTees) {
     if (detail && Object.keys(detail.teesData || {}).length) {
       // Store the enriched tee data
       apiEnrichedTees.value[courseName] = detail.teesData
-      // Also update/save the course in the store with full API data
+      // Save the course in the store ONLY if it doesn't already exist as a custom course
+      // (custom courses have user edits that should not be overwritten)
       const existing = coursesStore.getCourse(courseName)
-      if (existing && !existing.isCustom) {
+      if (existing?.isCustom) {
+        // Already saved as custom — don't overwrite user edits
+        console.log('[GW-wizard] Skipping API save — course already exists as custom:', courseName)
+      } else if (existing && !existing.isCustom) {
         // Built-in course — save as custom override with full API data
         const teesData = detail.teesData
         const teeNames = Object.keys(teesData)
@@ -1037,6 +1092,30 @@ async function fetchAndApplyApiDetail(courseName, apiId, defaultTees) {
     console.warn('API fetch failed for', courseName, e)
   }
   apiLoadingWizard.value = false
+}
+
+// ── Wolf tee order helpers ────────────────────────────────────────
+function wolfPlayerName(pid) {
+  const p = form.value.players.find(p => p.id === pid)
+  return p?.shortName || p?.name || '?'
+}
+
+function wolfAddToOrder(pid) {
+  if (!mainGame.value.config.wolfTeeOrder) mainGame.value.config.wolfTeeOrder = []
+  if (mainGame.value.config.wolfTeeOrder.includes(pid)) return
+  mainGame.value.config.wolfTeeOrder.push(pid)
+}
+
+function wolfMoveUp(idx) {
+  const order = mainGame.value.config.wolfTeeOrder
+  if (idx <= 0) return
+  ;[order[idx - 1], order[idx]] = [order[idx], order[idx - 1]]
+}
+
+function wolfMoveDown(idx) {
+  const order = mainGame.value.config.wolfTeeOrder
+  if (idx >= order.length - 1) return
+  ;[order[idx], order[idx + 1]] = [order[idx + 1], order[idx]]
 }
 
 function openCourseSetup() {
@@ -1151,18 +1230,28 @@ async function create() {
   creating.value = true
   try {
     const games = buildGameConfigs()
-    const round = await roundsStore.createRound({
-      courseName: form.value.courseName,
-      tee: form.value.tee,
-      date: form.value.date,
-      holesMode: form.value.holesMode,
-      withRoomCode: form.value.withRoomCode,
-      players: form.value.players.map(p => ({
-        ...p,
-        roundHcp: p.ghinIndex != null ? Math.round(p.ghinIndex) : null,
-      })),
-      games,
-    })
+
+    // Timeout protection: if createRound takes > 15s, stop waiting
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Round creation timed out. Check your connection and try again.')), 15000)
+    )
+
+    const round = await Promise.race([
+      roundsStore.createRound({
+        courseName: form.value.courseName,
+        tee: form.value.tee,
+        date: form.value.date,
+        holesMode: form.value.holesMode,
+        withRoomCode: form.value.withRoomCode,
+        players: form.value.players.map(p => ({
+          ...p,
+          roundHcp: p.ghinIndex != null ? Math.round(p.ghinIndex) : null,
+        })),
+        games,
+      }),
+      timeoutPromise,
+    ])
+
     if (round) {
       emit('created', round)
     } else {
@@ -1178,3 +1267,51 @@ async function create() {
 }
 </script>
 
+<style scoped>
+/* ── Wolf Tee Order ────────────────────────────────── */
+.wolf-tee-order-section { margin-top: 12px; padding: 12px; border-radius: 12px; background: rgba(96,165,250,.06); border: 1px solid rgba(96,165,250,.2); }
+.config-sublabel { font-size: 12px; font-weight: 700; color: #60a5fa; margin-bottom: 8px; }
+.wolf-order-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 8px; }
+.wolf-order-item {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
+}
+.wolf-order-num { font-size: 18px; font-weight: 900; color: #60a5fa; width: 24px; text-align: center; }
+.wolf-order-name { flex: 1; font-size: 14px; font-weight: 700; color: var(--gw-text, #f0ede0); }
+.wolf-h1-badge {
+  font-size: 9px; background: rgba(212,175,55,.15); border: 1px solid rgba(212,175,55,.3);
+  border-radius: 5px; padding: 2px 7px; color: #d4af37; font-weight: 700;
+}
+.wolf-order-btn {
+  padding: 4px 8px; border-radius: 6px; background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.12); color: #f0ede0; cursor: pointer;
+  font-family: inherit; font-size: 13px;
+}
+.wolf-pick-players { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.wolf-pick-player-btn {
+  padding: 8px 14px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer;
+  border: 1px solid rgba(96,165,250,.3); background: rgba(96,165,250,.1); color: #60a5fa;
+  font-family: inherit;
+}
+.wolf-reset-btn, .wolf-auto-btn {
+  margin-top: 8px; font-size: 10px; padding: 5px 10px; border-radius: 6px;
+  background: none; border: 1px solid rgba(255,255,255,.15); color: rgba(240,237,224,.5);
+  cursor: pointer; font-family: inherit;
+}
+.wolf-options { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.wolf-option-toggle {
+  display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 10px;
+  background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); cursor: pointer;
+  font-size: 12px; font-weight: 600; color: var(--gw-text, #f0ede0);
+}
+.wolf-toggle {
+  width: 28px; height: 16px; border-radius: 8px; background: rgba(255,255,255,.15);
+  position: relative; flex-shrink: 0; transition: background .2s;
+}
+.wolf-toggle::after {
+  content: ''; width: 12px; height: 12px; border-radius: 50%; background: #f0ede0;
+  position: absolute; top: 2px; left: 2px; transition: left .2s;
+}
+.wolf-toggle.on { background: rgba(212,175,55,.5); }
+.wolf-toggle.on::after { left: 14px; }
+</style>
