@@ -46,7 +46,7 @@
           <div
             class="course-card course-card--fav"
             :class="{ 'course-card--custom': c.isCustom }"
-            :style="{ transform: `translateX(${swipeX[c.name] || 0}px)`, transition: swiping === c.name ? 'none' : 'transform .25s ease' }"
+            :style="{ ...swipeCardStyle(c.name), transition: swiping === c.name ? 'none' : 'transform .25s ease, background .1s ease, border-color .1s ease' }"
             @touchstart="onSwipeStart($event, c.name)"
             @touchmove="onSwipeMove($event, c.name)"
             @touchend="onSwipeEnd($event, c)"
@@ -90,7 +90,7 @@
         <div
           class="course-card"
           :class="{ 'course-card--custom': c.isCustom }"
-          :style="{ transform: `translateX(${swipeX[c.name] || 0}px)`, transition: swiping === c.name ? 'none' : 'transform .25s ease' }"
+          :style="{ ...swipeCardStyle(c.name), transition: swiping === c.name ? 'none' : 'transform .25s ease, background .1s ease, border-color .1s ease' }"
           @touchstart="onSwipeStart($event, c.name)"
           @touchmove="onSwipeMove($event, c.name)"
           @touchend="onSwipeEnd($event, c)"
@@ -821,17 +821,30 @@ const swipeStartX = ref(0)
 const swipeStartY = ref(0)
 const SWIPE_THRESHOLD = 80
 
-// Dynamic background color on swipe container: red when swiping left, gold when right
+// Container just clips the sliding card
 function swipeContainerStyle(key) {
+  return {}
+}
+
+// Dynamic background/border on the card itself
+function swipeCardStyle(key) {
   const dx = swipeX[key] || 0
   if (dx < -10) {
     const t = Math.min(1, Math.abs(dx) / SWIPE_THRESHOLD)
-    return { background: `rgba(185,28,28,${t * 0.85})` }
+    return {
+      transform: `translateX(${dx}px)`,
+      background: `rgba(185,28,28,${0.08 + t * 0.55})`,
+      borderColor: `rgba(248,113,113,${t * 0.6})`,
+    }
   } else if (dx > 10) {
     const t = Math.min(1, dx / SWIPE_THRESHOLD)
-    return { background: `rgba(161,98,7,${t * 0.85})` }
+    return {
+      transform: `translateX(${dx}px)`,
+      background: `rgba(161,98,7,${0.08 + t * 0.55})`,
+      borderColor: `rgba(212,175,55,${t * 0.6})`,
+    }
   }
-  return { background: '#1e2b22' }
+  return { transform: `translateX(${dx}px)` }
 }
 
 // Opacity of action label text (fade in as you drag past 20px)
@@ -856,7 +869,7 @@ function onSwipeMove(e, key) {
   swipeX[key] = Math.max(-120, Math.min(120, dx))
 }
 
-function onSwipeEnd(e, course) {
+async function onSwipeEnd(e, course) {
   const key = course.name
   const dx = swipeX[key] || 0
   swiping.value = null
@@ -865,9 +878,9 @@ function onSwipeEnd(e, course) {
     swipeX[key] = 0
     confirmDelete(course)
   } else if (dx > SWIPE_THRESHOLD) {
-    swipeX[key] = 0
     const wasFav = coursesStore.favoriteNames.has(course.name)
-    coursesStore.toggleFavorite(course.name)
+    swipeX[key] = 0
+    await coursesStore.toggleFavorite(course.name)
     showToast(wasFav ? 'Removed from favorites' : '★ Added to favorites!', wasFav ? 'neutral' : 'gold')
   } else {
     swipeX[key] = 0

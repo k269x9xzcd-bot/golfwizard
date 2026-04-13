@@ -34,7 +34,7 @@
       <div class="swipe-reveal swipe-reveal-right" :style="{ opacity: swipeRevealOpacity(p.id, 'right') }">☆ Unfav</div>
       <div
         class="player-card player-card--fav"
-        :style="{ transform: `translateX(${swipeX[p.id] || 0}px)`, transition: swiping === p.id ? 'none' : 'transform .25s ease' }"
+        :style="{ ...swipeCardStyle(p.id), transition: swiping === p.id ? 'none' : 'transform .25s ease, background .1s ease, border-color .1s ease' }"
         @touchstart="onSwipeStart($event, p.id)"
         @touchmove="onSwipeMove($event, p.id)"
         @touchend="onSwipeEnd($event, p)"
@@ -64,7 +64,7 @@
       <div class="swipe-reveal swipe-reveal-right" :style="{ opacity: swipeRevealOpacity(p.id, 'right') }">★ Fav</div>
       <div
         class="player-card"
-        :style="{ transform: `translateX(${swipeX[p.id] || 0}px)`, transition: swiping === p.id ? 'none' : 'transform .25s ease' }"
+        :style="{ ...swipeCardStyle(p.id), transition: swiping === p.id ? 'none' : 'transform .25s ease, background .1s ease, border-color .1s ease' }"
         @touchstart="onSwipeStart($event, p.id)"
         @touchmove="onSwipeMove($event, p.id)"
         @touchend="onSwipeEnd($event, p)"
@@ -198,15 +198,30 @@ const swipeStartY = ref(0)
 const SWIPE_THRESHOLD = 80
 
 function swipeContainerStyle(id) {
+  // Container just needs to clip the sliding card; no background needed now
+  return {}
+}
+
+function swipeCardStyle(id) {
   const dx = swipeX[id] || 0
   if (dx < -10) {
     const t = Math.min(1, Math.abs(dx) / SWIPE_THRESHOLD)
-    return { background: `rgba(185,28,28,${t * 0.85})` }
+    return {
+      transform: `translateX(${dx}px)`,
+      background: `rgba(185,28,28,${0.08 + t * 0.55})`,
+      borderColor: `rgba(248,113,113,${t * 0.6})`,
+    }
   } else if (dx > 10) {
     const t = Math.min(1, dx / SWIPE_THRESHOLD)
-    return { background: `rgba(161,98,7,${t * 0.85})` }
+    return {
+      transform: `translateX(${dx}px)`,
+      background: `rgba(161,98,7,${0.08 + t * 0.55})`,
+      borderColor: `rgba(212,175,55,${t * 0.6})`,
+    }
   }
-  return { background: '#1e2b22' }
+  return {
+    transform: `translateX(${dx}px)`,
+  }
 }
 
 function swipeRevealOpacity(id, side) {
@@ -232,7 +247,7 @@ function onSwipeMove(e, id) {
   swipeX[id] = Math.max(-120, Math.min(120, dx))
 }
 
-function onSwipeEnd(e, player) {
+async function onSwipeEnd(e, player) {
   const id = player.id
   const dx = swipeX[id] || 0
   swiping.value = null
@@ -243,9 +258,10 @@ function onSwipeEnd(e, player) {
     confirmDelete(id, player.name)
   } else if (dx > SWIPE_THRESHOLD) {
     // Swipe right → toggle favorite
+    const wasFav = player.is_favorite
     swipeX[id] = 0
-    rosterStore.toggleFavorite(id)
-    if (player.is_favorite) {
+    await rosterStore.toggleFavorite(id)
+    if (wasFav) {
       showToast('Removed from favorites', 'neutral')
     } else {
       showToast('★ Added to favorites!', 'gold')

@@ -322,8 +322,10 @@ body {
 .view-header h2 {
   margin: 0;
   font-family: var(--gw-font-display);
-  font-size: 22px;
-  color: var(--gw-text);
+  font-size: 24px;
+  font-weight: 400; /* DM Serif Display has a lighter weight look at 400 */
+  color: var(--gw-gold);
+  letter-spacing: -0.2px;
 }
 
 /* ── Cards ─────────────────────────────────────────────────── */

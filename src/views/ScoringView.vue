@@ -27,6 +27,12 @@
           <button class="round-menu-item" @click="showRoundMenu = false; showGameEditor = true">
             🎲 Edit Games & Stakes
           </button>
+          <button class="round-menu-item" @click="showNotations = !showNotations">
+            {{ showNotations ? '◉ Notations On' : '◎ Notations Off' }}
+          </button>
+          <button class="round-menu-item" @click="showFullHcp = !showFullHcp">
+            {{ showFullHcp ? '● Full HCP' : '○ Low-Man HCP' }}
+          </button>
           <button class="round-menu-item" @click="showRoundMenu = false; finishRound()" v-if="!roundsStore.activeRound?.is_complete">
             ✅ Finish Round
           </button>
@@ -149,36 +155,41 @@
           </div>
         </div>
 
+        <!-- Settle Up Panel -->
+        <div v-if="liveSettlements && roundsStore.activeGames.length > 0" class="settle-box">
+          <div class="settle-box-label">💵 Settle Up</div>
+          <!-- Player totals row -->
+          <div class="settle-totals">
+            <div
+              v-for="(pt, id) in liveSettlements.playerTotals"
+              :key="'pt-'+id"
+              class="settle-player"
+              :class="pt.total > 0 ? 'settle-up' : pt.total < 0 ? 'settle-down' : 'settle-even'"
+            >
+              <span class="settle-name">{{ pt.name }}</span>
+              <span class="settle-amount">{{ pt.total > 0 ? '+' : '' }}${{ pt.total.toFixed(0) }}</span>
+            </div>
+          </div>
+          <!-- Ledger -->
+          <div v-if="liveSettlements.ledger.length > 0" class="settle-ledger">
+            <div v-for="(entry, i) in liveSettlements.ledger" :key="'le-'+i" class="settle-entry">
+              <span class="settle-from">{{ entry.from_name }}</span>
+              <span class="settle-arrow">→</span>
+              <span class="settle-to">{{ entry.to_name }}</span>
+              <span class="settle-pay">${{ entry.amount.toFixed(0) }}</span>
+            </div>
+          </div>
+          <div v-else class="settle-even-msg">All square 🤝</div>
+        </div>
+
         <!-- Scorecard controls -->
         <div class="scorecard-controls">
-          <button class="hcp-toggle-btn" @click="showFullHcp = !showFullHcp" :class="{ active: showFullHcp }">
-            {{ showFullHcp ? '● Full HCP' : '○ Low-Man' }}
-          </button>
           <button v-if="gameNotationRows.length > 0" class="notation-toggle-btn" @click="showNotations = !showNotations">
             {{ showNotations ? '▼ Games' : '▶ Games' }}
           </button>
-          <button class="legend-toggle-btn" @click="showLegend = !showLegend">
-            {{ showLegend ? '✕ Legend' : '? Legend' }}
-          </button>
           <button class="sim-btn" @click="simulateFill" title="Fill random scores">🎲</button>
           <button class="sim-btn sim-btn-reset" @click="resetScores" title="Reset all scores">↺</button>
-        </div>
-
-        <!-- Scorecard legend -->
-        <div v-if="showLegend" class="scorecard-legend">
-          <div class="legend-title">Scorecard Legend</div>
-          <div class="legend-grid">
-            <span class="nota-eagle legend-swatch">-2</span><span class="legend-label">Eagle or better</span>
-            <span class="nota-birdie legend-swatch">-1</span><span class="legend-label">Birdie</span>
-            <span class="nota-par legend-swatch">E</span><span class="legend-label">Par</span>
-            <span class="nota-bogey legend-swatch">+1</span><span class="legend-label">Bogey</span>
-            <span class="nota-double legend-swatch">+2</span><span class="legend-label">Double bogey</span>
-            <span class="nota-triple legend-swatch">+3</span><span class="legend-label">Triple+</span>
-            <span class="stroke-dots legend-swatch">•</span><span class="legend-label">Stroke received (vs {{ showFullHcp ? 'full HCP' : 'low-man' }})</span>
-            <template v-for="game in roundsStore.activeGames" :key="game.id">
-              <span class="legend-game-icon">{{ gameIcon(game.type) }}</span><span class="legend-label">{{ gameLabel(game.type, game.config) }}</span>
-            </template>
-          </div>
+          <button class="sim-btn sim-btn-tournament" @click="simulateTournament" title="Simulate tournament scores">🏆</button>
         </div>
 
         <!-- Horizontal Scorecard Grid -->
@@ -361,9 +372,6 @@
             <div class="hole-big-number">Par {{ parForHole(activeHole) }}</div>
             <div class="hole-course-meta">SI {{ siForHole(activeHole) }}<template v-if="yardsForHole(activeHole)"> · {{ yardsForHole(activeHole) }}y</template></div>
           </div>
-          <button class="hole-notation-toggle" @click="showNotations = !showNotations" :class="{ active: showNotations }">
-            {{ showNotations ? '◉' : '◎' }}
-          </button>
         </div>
 
         <!-- Hole watermark -->
@@ -402,8 +410,8 @@
             </div>
             <div class="phc-net-col">
               <div class="phc-net-label">NET</div>
-              <div class="phc-net-value" :class="getScore(member.id, activeHole) ? (showNotations ? scoreNotation(netScore(getScore(member.id, activeHole), memberHandicapValue(member), siForHole(activeHole)), parForHole(activeHole)) : '') : 'muted'">
-                {{ getScore(member.id, activeHole) ? netScore(getScore(member.id, activeHole), memberHandicapValue(member), siForHole(activeHole)) : '—' }}
+              <div class="phc-net-value" :class="getScore(member.id, activeHole) ? (showNotations ? scoreNotation(netScore(getScore(member.id, activeHole), memberEffectiveHcp(member), siForHole(activeHole)), parForHole(activeHole)) : '') : 'muted'">
+                {{ getScore(member.id, activeHole) ? netScore(getScore(member.id, activeHole), memberEffectiveHcp(member), siForHole(activeHole)) : '—' }}
               </div>
               <div class="phc-net-sublabel">net</div>
             </div>
@@ -533,6 +541,7 @@ import {
   computeFiveThreeOne, computeDots, computeFidget, computeBestBallNet,
   holeRange
 } from '../modules/gameEngine'
+import { computeAllSettlements } from '../modules/settlements'
 
 const roundsStore = useRoundsStore()
 const router = useRouter()
@@ -546,7 +555,6 @@ const showGameEditor = ref(false)
 const showNotations = ref(true)
 const showFinishReview = ref(false)
 const showFullHcp = ref(false) // false = low-man dots (default), true = full course HCP dots
-const showLegend = ref(false)
 
 // ── Game editor helpers ──────────────────────────────────────────
 const addableGameTypes = computed(() => {
@@ -735,6 +743,13 @@ function lowManStrokes(member) {
   return myHcp - lowest
 }
 
+// Returns the effective handicap to use for net scoring given the current HCP toggle
+function memberEffectiveHcp(member) {
+  if (showFullHcp.value) return memberHandicapValue(member)
+  const lm = lowManStrokes(member)
+  return lm != null ? lm : memberHandicapValue(member)
+}
+
 function netScore(gross, hcp, si) {
   if (gross == null) return null
   return gross - strokesOnHole(hcp, si)
@@ -811,7 +826,7 @@ function memberNetTotal(memberId, startHole, endHole) {
   let total = 0, count = 0
   const member = roundsStore.activeMembers.find(m => m.id === memberId)
   if (!member) return '—'
-  const hcp = memberHandicapValue(member)
+  const hcp = memberEffectiveHcp(member)
   for (let h = startHole; h <= endHole; h++) {
     const s = getScore(memberId, h)
     if (s !== null) {
@@ -1132,6 +1147,17 @@ function buildCtx() {
   }
 }
 
+// ── Live settlements (who owes who) ─────────────────────────────
+const liveSettlements = computed(() => {
+  if (!roundsStore.activeRound || roundsStore.activeGames.length === 0) return null
+  const ctx = buildCtx()
+  try {
+    return computeAllSettlements(ctx, roundsStore.activeGames)
+  } catch (e) {
+    return null
+  }
+})
+
 function gameLiveSummary(game) {
   const ctx = buildCtx()
   const t = game.type?.toLowerCase()
@@ -1348,6 +1374,50 @@ function resetScores() {
   // Clear all scores from local reactive state
   for (const memberId of Object.keys(roundsStore.activeScores)) {
     roundsStore.activeScores[memberId] = {}
+  }
+}
+
+// Simulate tournament: each player gets a distinct score profile
+// Profiles: scratch, good amateur, mid handicapper, high handicapper
+function simulateTournament() {
+  const members = roundsStore.activeMembers
+  const holes = visibleHoles.value
+  // Profiles ordered by skill: best player gets more birdies, worst gets more bogeys
+  const profiles = [
+    // Scratch: lots of pars/birdies
+    [{ offset: -2, w: 3 }, { offset: -1, w: 20 }, { offset: 0, w: 45 }, { offset: 1, w: 20 }, { offset: 2, w: 10 }, { offset: 3, w: 2 }],
+    // Good amateur
+    [{ offset: -2, w: 1 }, { offset: -1, w: 12 }, { offset: 0, w: 35 }, { offset: 1, w: 30 }, { offset: 2, w: 15 }, { offset: 3, w: 7 }],
+    // Mid handicapper
+    [{ offset: -1, w: 5 }, { offset: 0, w: 25 }, { offset: 1, w: 35 }, { offset: 2, w: 25 }, { offset: 3, w: 10 }],
+    // High handicapper
+    [{ offset: 0, w: 15 }, { offset: 1, w: 30 }, { offset: 2, w: 30 }, { offset: 3, w: 20 }, { offset: 4, w: 5 }],
+  ]
+
+  function randomOffsetFromProfile(profile) {
+    const total = profile.reduce((s, x) => s + x.w, 0)
+    let r = Math.random() * total
+    for (const { offset, w } of profile) {
+      r -= w
+      if (r <= 0) return offset
+    }
+    return 1
+  }
+
+  // Sort members by HCP ascending (best player first)
+  const sorted = [...members].sort((a, b) => {
+    const ha = memberHandicapValue(a) ?? 36
+    const hb = memberHandicapValue(b) ?? 36
+    return ha - hb
+  })
+
+  for (let i = 0; i < sorted.length; i++) {
+    const profile = profiles[Math.min(i, profiles.length - 1)]
+    for (const h of holes) {
+      const par = parForHole(h)
+      const score = Math.max(1, par + randomOffsetFromProfile(profile))
+      roundsStore.setScore(sorted[i].id, h, score)
+    }
   }
 }
 
@@ -1725,6 +1795,48 @@ function formatDate(dateStr) {
 :deep(.gw-winning) { color: #4ade80; font-weight: 700; }
 :deep(.gw-losing) { color: #f87171; font-weight: 700; }
 
+/* ── Settle Up box ───────────────────────────────────────────── */
+.settle-box {
+  background: rgba(212,175,55,.05);
+  border: 1px solid rgba(212,175,55,.2);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 8px 12px;
+}
+.settle-box-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .8px; color: rgba(240,237,224,.45); margin-bottom: 8px;
+}
+.settle-totals {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px;
+}
+.settle-player {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 6px 10px; border-radius: 8px; min-width: 54px;
+  background: rgba(255,255,255,.05);
+}
+.settle-up { border: 1px solid rgba(74,222,128,.3); }
+.settle-down { border: 1px solid rgba(248,113,113,.3); }
+.settle-even { border: 1px solid rgba(255,255,255,.08); }
+.settle-name { font-size: 11px; color: rgba(240,237,224,.55); font-weight: 600; }
+.settle-amount { font-size: 14px; font-weight: 800; margin-top: 2px; }
+.settle-up .settle-amount { color: #4ade80; }
+.settle-down .settle-amount { color: #f87171; }
+.settle-even .settle-amount { color: rgba(240,237,224,.4); }
+.settle-ledger {
+  display: flex; flex-direction: column; gap: 4px;
+  border-top: 1px solid rgba(255,255,255,.07); padding-top: 8px;
+}
+.settle-entry {
+  display: flex; align-items: center; gap: 6px; font-size: 12px;
+  color: rgba(240,237,224,.75);
+}
+.settle-from { font-weight: 700; color: #f87171; }
+.settle-arrow { color: rgba(240,237,224,.3); }
+.settle-to { font-weight: 700; color: #4ade80; }
+.settle-pay { margin-left: auto; font-weight: 800; color: var(--gw-gold, #d4af37); }
+.settle-even-msg { font-size: 12px; color: rgba(240,237,224,.4); text-align: center; padding: 4px 0; }
+
 /* ── Scorecard Grid ──────────────────────────────────────────── */
 .scorecard-scroll {
   overflow-x: auto;
@@ -1735,7 +1847,8 @@ function formatDate(dateStr) {
 }
 
 .scorecard-grid {
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 11px;
   min-width: 100%;
   font-family: var(--gw-font-mono, 'DM Mono', monospace);
@@ -1913,32 +2026,49 @@ function formatDate(dateStr) {
 }
 
 /* ── Score notation classes ───────────────────────────────────── */
+/* Albatross: triple concentric circle rings (gold) */
 .sn-alb {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 22px; height: 22px; border-radius: 50%;
-  border: 2px solid #f59e0b; color: #f59e0b; font-weight: 900;
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 1.5px solid #f59e0b; color: #f59e0b; font-weight: 900;
+  box-shadow:
+    0 0 0 2px rgba(12, 15, 13, 0.97),
+    0 0 0 4px #f59e0b,
+    0 0 0 6px rgba(12, 15, 13, 0.97),
+    0 0 0 8px #f59e0b;
 }
+/* Eagle: double concentric circle rings (green) */
 .sn-eagle {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 22px; height: 22px; border-radius: 50%;
-  border: 2px solid #4ade80; color: #4ade80; font-weight: 900;
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 1.5px solid #4ade80; color: #4ade80; font-weight: 900;
+  box-shadow:
+    0 0 0 2px rgba(12, 15, 13, 0.97),
+    0 0 0 4px #4ade80;
 }
+/* Birdie: single circle (blue) */
 .sn-birdie {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 22px; height: 22px; border-radius: 50%;
+  width: 24px; height: 24px; border-radius: 50%;
   border: 1.5px solid #60a5fa; color: #60a5fa; font-weight: 900;
 }
 .sn-par { color: var(--gw-text, #f0ede0); font-weight: 700; }
+/* Bogey: single rounded square (gray border, red text) */
 .sn-bogey {
   display: inline-flex; align-items: center; justify-content: center;
   width: 22px; height: 22px; border-radius: 3px;
   border: 1.5px solid #94a3b8; color: #f87171; font-weight: 900;
 }
+/* Double bogey: double rounded square rings (red) */
 .sn-dbl {
   display: inline-flex; align-items: center; justify-content: center;
   width: 22px; height: 22px; border-radius: 3px;
-  border: 2px solid #f87171; color: #f87171; font-weight: 900;
+  border: 1.5px solid #f87171; color: #f87171; font-weight: 900;
+  box-shadow:
+    0 0 0 2px rgba(12, 15, 13, 0.97),
+    0 0 0 4px #f87171;
 }
+/* Triple+: no box, just red text */
 .sn-trip {
   color: #dc2626; font-weight: 900;
 }
@@ -1986,8 +2116,9 @@ function formatDate(dateStr) {
   position: relative;
 }
 .hole-big-number {
+  font-family: var(--gw-font-display, Georgia, serif);
   font-size: 28px;
-  font-weight: 900;
+  font-weight: 400;
   line-height: 1;
   color: var(--gw-text, #f0ede0);
 }
@@ -2135,16 +2266,17 @@ function formatDate(dateStr) {
 /* Hole watermark */
 .hole-watermark {
   position: absolute;
-  top: 50%;
+  top: 60px; /* sit just below the banner, behind the player cards */
   left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 280px;
+  transform: translateX(-50%);
+  font-size: 260px;
   font-weight: 900;
   color: rgba(255,255,255,.03);
   pointer-events: none;
   z-index: 0;
   line-height: 1;
   font-family: var(--gw-font-display, Georgia, serif);
+  user-select: none;
 }
 
 /* Redesigned player card layout */
