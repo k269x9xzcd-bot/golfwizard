@@ -255,7 +255,7 @@
                 >
                   <td class="col-sticky col-player-name" :class="teamStickyClass(group.member)">
                     <span class="team-color-bar" :class="teamBarClass(group.member)"></span>
-                    <span class="player-nm" :class="teamTextClass(group.member)">{{ group.member.short_name || group.member.guest_name }}</span>
+                    <span class="player-nm" :class="teamTextClass(group.member)">{{ memberInitials(group.member) }}</span>
                     <span class="player-hcp">{{ memberHandicapDisplay(group.member) }}<span v-if="lowManStrokes(group.member) !== null" class="hcp-lowman">({{ lowManStrokes(group.member) }})</span></span>
                   </td>
                   <!-- Front 9 scores -->
@@ -867,9 +867,10 @@ function nameToInitials(name) {
 }
 
 // Helper: get member initials preferring full name for first+last initial
+// round_members rows use guest_name for the full name, not .name
 function memberInitials(m) {
   if (!m) return '??'
-  return nameToInitials(m.name || m.short_name || m.guest_name || '?')
+  return nameToInitials(m.guest_name || m.name || m.short_name || '?')
 }
 
 // Helper: build team initials string like "JS+BC"
@@ -1828,15 +1829,15 @@ function formatDate(dateStr) {
   white-space: nowrap;
   position: sticky; left: 0; z-index: 2;
 }
-.notation-icon { font-size: 10px; margin-right: 3px; }
-.notation-name { font-size: 9px; font-weight: 700; color: rgba(240,237,224,.5); text-transform: uppercase; letter-spacing: .3px; }
+.notation-icon { font-size: 11px; margin-right: 3px; }
+.notation-name { font-size: 11px; font-weight: 700; color: rgba(240,237,224,.65); text-transform: uppercase; letter-spacing: .3px; }
 
 .col-notation-cell {
-  padding: 2px 3px; text-align: center;
-  font-size: 9px; font-weight: 700; min-width: 24px;
+  padding: 3px 3px; text-align: center;
+  font-size: 12px; font-weight: 700; min-width: 24px;
 }
-.col-notation-sub { font-size: 8px; font-weight: 700; color: rgba(240,237,224,.5); }
-.col-notation-total { font-size: 8px; font-weight: 700; color: rgba(240,237,224,.6); }
+.col-notation-sub { font-size: 10px; font-weight: 700; color: rgba(240,237,224,.5); }
+.col-notation-total { font-size: 10px; font-weight: 700; color: rgba(240,237,224,.6); }
 
 /* Notation cell classes */
 .nota-t1 { color: #60a5fa; }
@@ -1946,8 +1947,8 @@ function formatDate(dateStr) {
   transition: border-color .12s, background .12s;
   -webkit-tap-highlight-color: transparent;
 }
-.card-t1 { background: rgba(96,165,250,.06); border-color: rgba(96,165,250,.2); }
-.card-t2 { background: rgba(248,113,113,.06); border-color: rgba(248,113,113,.2); }
+.card-t1 { background: rgba(96,165,250,.10); border-color: rgba(96,165,250,.35); border-left: 3px solid #60a5fa; }
+.card-t2 { background: rgba(248,113,113,.10); border-color: rgba(248,113,113,.35); border-left: 3px solid #f87171; }
 .card-winner { border-color: rgba(74,222,128,.4) !important; background: rgba(74,222,128,.07) !important; }
 
 .phc-left { display: flex; align-items: center; gap: 10px; }

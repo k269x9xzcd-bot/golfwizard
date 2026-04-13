@@ -955,17 +955,18 @@ function showToast(msg, type = 'neutral') {
 .course-card {
   display: flex;
   align-items: center;
-  background: var(--gw-card-bg);
+  background: var(--gw-card-bg, #1a2a1e);
   border-radius: var(--gw-radius-lg);
   padding: 14px 12px 14px 16px;
   margin-bottom: 8px;
   box-shadow: var(--gw-shadow-card);
   cursor: pointer;
-  border-left: 3px solid transparent;
   border: 1px solid var(--gw-card-border);
   transition: transform .12s, box-shadow .12s;
   -webkit-tap-highlight-color: transparent;
   animation: card-in 250ms ease-out both;
+  position: relative; z-index: 1;
+  will-change: transform;
 }
 .course-card:active { transform: scale(.98); box-shadow: var(--gw-shadow-sm); }
 .course-card--custom { border-left-color: var(--gw-gold); }
@@ -976,25 +977,42 @@ function showToast(msg, type = 'neutral') {
 
 /* ── Swipe container ────────────────────────────────── */
 .swipe-container {
-  position: relative; overflow: hidden; border-radius: var(--gw-radius-lg); margin-bottom: 8px;
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--gw-radius-lg);
+  margin-bottom: 8px;
+  background: var(--gw-card-bg, #1a2a1e);
 }
 .swipe-container .course-card { margin-bottom: 0; }
+
+/* Action labels revealed behind the sliding card */
 .swipe-action {
-  position: absolute; top: 0; bottom: 0; width: 120px;
-  display: flex; align-items: center; justify-content: center;
+  position: absolute; top: 0; bottom: 0; width: 50%;
+  display: flex; align-items: center;
   font-size: 13px; font-weight: 700; letter-spacing: .02em;
+  z-index: 0;
+  pointer-events: none;
 }
 .swipe-action-delete {
-  left: 0; background: linear-gradient(90deg, #dc2626 0%, #b91c1c 100%); color: white;
-  border-radius: var(--gw-radius-lg) 0 0 var(--gw-radius-lg);
+  left: 0;
+  background: linear-gradient(90deg, #b91c1c 0%, #dc2626 60%, transparent 100%);
+  color: white;
+  justify-content: flex-start;
+  padding-left: 20px;
 }
 .swipe-action-fav {
-  right: 0; background: linear-gradient(270deg, #ca8a04 0%, #a16207 100%); color: white;
-  border-radius: 0 var(--gw-radius-lg) var(--gw-radius-lg) 0;
+  right: 0;
+  background: linear-gradient(270deg, #a16207 0%, #ca8a04 60%, transparent 100%);
+  color: white;
+  justify-content: flex-end;
+  padding-right: 20px;
 }
 .swipe-action-unfav {
-  right: 0; background: linear-gradient(270deg, rgba(240,237,224,.15) 0%, rgba(240,237,224,.08) 100%);
-  color: rgba(240,237,224,.6); border-radius: 0 var(--gw-radius-lg) var(--gw-radius-lg) 0;
+  right: 0;
+  background: linear-gradient(270deg, rgba(100,100,100,.4) 0%, rgba(100,100,100,.2) 60%, transparent 100%);
+  color: rgba(240,237,224,.7);
+  justify-content: flex-end;
+  padding-right: 20px;
 }
 
 .course-fav-badge {

@@ -288,8 +288,27 @@ export const useRoundsStore = defineStore('rounds', () => {
     if (error) throw error
 
     activeRound.value = data
-    activeMembers.value = data.round_members ?? []
     activeGames.value = data.game_configs ?? []
+
+    // Derive team from game config if round_member.team is null
+    // (handles rounds created before the team-derivation fix)
+    const members = data.round_members ?? []
+    const needsTeamDerive = members.some(m => m.team == null)
+    if (needsTeamDerive) {
+      // Find first game config with team1/team2 arrays
+      const gameWithTeams = (data.game_configs ?? []).find(g => g.config?.team1?.length || g.config?.team2?.length)
+      if (gameWithTeams) {
+        const t1 = gameWithTeams.config.team1 || []
+        const t2 = gameWithTeams.config.team2 || []
+        for (const m of members) {
+          if (m.team == null) {
+            if (t1.includes(m.id)) m.team = 1
+            else if (t2.includes(m.id)) m.team = 2
+          }
+        }
+      }
+    }
+    activeMembers.value = members
 
     // Build scores map: { memberId: { hole: score } }
     const sm = {}
