@@ -2,7 +2,10 @@
   <div class="players-view">
     <header class="view-header">
       <h2>Players</h2>
-      <button class="btn-ghost btn-sm" @click="showAdd = !showAdd">{{ showAdd ? 'Cancel' : '+ Add' }}</button>
+      <div class="header-actions">
+        <button class="btn-ghost btn-sm sort-btn" @click="toggleSort" :title="sortLabel">⇅ {{ sortLabel }}</button>
+        <button class="btn-ghost btn-sm" @click="showAdd = !showAdd">{{ showAdd ? 'Cancel' : '+ Add' }}</button>
+      </div>
     </header>
 
     <!-- Add form -->
@@ -41,9 +44,9 @@
           <div class="player-meta">
             <span class="player-ghin">GHIN {{ p.ghin_index != null ? p.ghin_index : '—' }}</span>
             <span v-if="p.nickname" class="player-nick-badge" :class="{ active: p.use_nickname }">{{ p.nickname }}</span>
-            <span class="player-fav-badge">★ Saved</span>
           </div>
         </div>
+        <span class="player-fav-star">★</span>
       </div>
     </div>
 
@@ -148,8 +151,27 @@ const newGhin = ref('')
 const newNickname = ref('')
 const newEmail = ref('')
 
-const favoritePlayers = computed(() => rosterStore.players.filter(p => p.is_favorite))
-const otherPlayers = computed(() => rosterStore.players.filter(p => !p.is_favorite))
+// Sort: 'added' (default) or 'name' (last name)
+const sortMode = ref('name')
+const sortLabel = computed(() => sortMode.value === 'name' ? 'A–Z' : 'Added')
+
+function toggleSort() {
+  sortMode.value = sortMode.value === 'name' ? 'added' : 'name'
+}
+
+function sortByLastName(arr) {
+  if (sortMode.value !== 'name') return arr
+  return [...arr].sort((a, b) => {
+    const lastName = n => {
+      const parts = (n.name || '').trim().split(' ')
+      return (parts[parts.length - 1] || '').toLowerCase()
+    }
+    return lastName(a).localeCompare(lastName(b))
+  })
+}
+
+const favoritePlayers = computed(() => sortByLastName(rosterStore.players.filter(p => p.is_favorite)))
+const otherPlayers = computed(() => sortByLastName(rosterStore.players.filter(p => !p.is_favorite)))
 
 async function add() {
   const first = newFirst.value.trim()
@@ -306,6 +328,8 @@ async function saveEdit() {
 .players-view { padding: 16px; padding-bottom: 80px; }
 .view-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .view-header h2 { font-size: 22px; font-weight: 700; margin: 0; color: var(--gw-text); }
+.header-actions { display: flex; gap: 8px; align-items: center; }
+.sort-btn { font-size: 11px; padding: 5px 9px; opacity: .75; }
 
 .add-form {
   display: flex; flex-direction: column; gap: 8px;
@@ -352,35 +376,35 @@ async function saveEdit() {
 
 /* ── Player Card (slides on top of the action reveal) ─ */
 .player-card {
-  display: flex; align-items: center; gap: 12px;
-  padding: 14px 16px;
-  background: var(--gw-card-bg, #1a2a1e);
-  border: 1px solid rgba(255,255,255,.1);
-  border-radius: 14px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  background: #1e2b22;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 12px;
   position: relative; z-index: 1;
   -webkit-tap-highlight-color: transparent;
   will-change: transform;
 }
 .player-card--fav {
-  border-color: rgba(212,175,55,.3);
-  background: #1f2b1a;
+  border-color: rgba(212,175,55,.2);
+  background: #1e2b22;
 }
 
-.player-info { flex: 1; cursor: pointer; }
+.player-info { flex: 1; cursor: pointer; min-width: 0; }
 .player-name {
-  font-weight: 700; font-size: 16px; color: #f0ede0;
-  letter-spacing: -.01em;
+  font-weight: 600; font-size: 15px; color: #f0ede0;
+  letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .player-meta {
-  display: flex; align-items: center; gap: 8px; margin-top: 2px;
+  display: flex; align-items: center; gap: 7px; margin-top: 2px;
 }
 .player-ghin {
-  font-size: 13px; color: rgba(240,237,224,.6); font-weight: 500;
+  font-size: 12px; color: rgba(240,237,224,.5); font-weight: 500;
 }
-.player-fav-badge {
-  font-size: 10px; font-weight: 700; color: #d4af37;
-  background: rgba(212,175,55,.12); border: 1px solid rgba(212,175,55,.25);
-  padding: 1px 7px; border-radius: 10px;
+/* Fav star — right side, no text */
+.player-fav-star {
+  font-size: 14px; color: #d4af37; flex-shrink: 0; margin-left: auto;
+  line-height: 1;
 }
 
 .empty-state { text-align: center; padding: 40px 20px; color: rgba(240,237,224,.5); }

@@ -197,47 +197,63 @@ body {
   line-height: 1;
 }
 
+/* ── Centre FAB button ─────────────────────────────────── */
 .nav-new {
-  flex: 1.2;
+  /* Not flex:1 — fixed width so the button always sits dead-center */
+  width: 72px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  padding-bottom: 8px;
+  padding-bottom: 10px;
   position: relative;
+  background: none;
+  border: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .nav-plus {
-  width: 58px;
-  height: 58px;
+  width: 56px;
+  height: 56px;
   border-radius: var(--gw-radius-full);
-  background: linear-gradient(135deg, var(--gw-gold) 0%, var(--gw-gold-lt) 100%);
+  background: linear-gradient(145deg, #e8c84a 0%, var(--gw-gold) 50%, #b8961e 100%);
   color: #0c0f0d;
-  font-size: 30px;
+  font-size: 28px;
+  font-weight: 300;
   line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 -4px 18px rgba(212, 175, 55, 0.45), 0 4px 14px rgba(0, 0, 0, 0.4);
-  /* Pop the button above the nav bar */
-  transform: translateY(-14px);
+  /* Lift above the nav bar strip */
+  transform: translateY(-16px);
+  /* Glow ring: inner shadow matches nav bg, outer is gold */
+  box-shadow:
+    0 0 0 3px rgba(20, 26, 22, 0.95),
+    0 0 0 4px rgba(212, 175, 55, 0.5),
+    0 -6px 20px rgba(212, 175, 55, 0.35),
+    0 4px 16px rgba(0, 0, 0, 0.5);
   transition: transform 0.15s, box-shadow 0.15s;
-  border: 3px solid rgba(20, 26, 22, 0.95);
 }
 
 .nav-plus-label {
   font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.3px;
-  color: rgba(240, 237, 224, 0.45);
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: var(--gw-gold);
   line-height: 1;
-  /* Label stays inside bar, shift up slightly to compensate for button lift */
-  margin-top: -6px;
+  /* Sits just inside the bar below the lifted button */
+  margin-top: -12px;
 }
 
 .nav-new:active .nav-plus {
-  transform: translateY(-14px) scale(0.9);
-  box-shadow: 0 -2px 10px rgba(212, 175, 55, .25), 0 2px 8px rgba(26,122,85,.3);
+  transform: translateY(-16px) scale(0.92);
+  box-shadow:
+    0 0 0 3px rgba(20, 26, 22, 0.95),
+    0 0 0 4px rgba(212, 175, 55, 0.35),
+    0 -3px 10px rgba(212, 175, 55, 0.2),
+    0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
 /* ── Loading splash ────────────────────────────────────────── */
@@ -973,7 +989,23 @@ body {
   align-items: center;
   justify-content: center;
   -webkit-tap-highlight-color: transparent;
-  order: -1;
+}
+.drag-handle {
+  flex-shrink: 0;
+  color: var(--gw-text-muted, #7d9283);
+  font-size: 18px;
+  cursor: grab;
+  padding: 0 4px;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  line-height: 1;
+  opacity: 0.6;
+}
+.player-card.dragging {
+  opacity: 0.5;
+  background: rgba(212, 175, 55, 0.1);
+  border-color: rgba(212, 175, 55, 0.4);
 }
 .player-card-field {
   display: flex;

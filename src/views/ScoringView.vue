@@ -160,6 +160,8 @@
           <button class="legend-toggle-btn" @click="showLegend = !showLegend">
             {{ showLegend ? '✕ Legend' : '? Legend' }}
           </button>
+          <button class="sim-btn" @click="simulateFill" title="Fill random scores">🎲</button>
+          <button class="sim-btn sim-btn-reset" @click="resetScores" title="Reset all scores">↺</button>
         </div>
 
         <!-- Scorecard legend -->
@@ -359,6 +361,9 @@
             <div class="hole-big-number">Par {{ parForHole(activeHole) }}</div>
             <div class="hole-course-meta">SI {{ siForHole(activeHole) }}<template v-if="yardsForHole(activeHole)"> · {{ yardsForHole(activeHole) }}y</template></div>
           </div>
+          <button class="hole-notation-toggle" @click="showNotations = !showNotations" :class="{ active: showNotations }">
+            {{ showNotations ? '◉' : '◎' }}
+          </button>
         </div>
 
         <!-- Hole watermark -->
@@ -386,7 +391,7 @@
               <button class="score-tap score-tap-minus" @click="inlineDec(member)">−</button>
               <div
                 class="score-display"
-                :class="getScore(member.id, activeHole) ? 'has-score' : ''"
+                :class="[getScore(member.id, activeHole) ? 'has-score' : '', showNotations ? 'nota-mode' : '']"
                 @click="inlineSetPar(member)"
               >
                 <span :class="getScore(member.id, activeHole) ? scoreNotation(getScore(member.id, activeHole), parForHole(activeHole)) : 'muted'">
@@ -397,7 +402,7 @@
             </div>
             <div class="phc-net-col">
               <div class="phc-net-label">NET</div>
-              <div class="phc-net-value" :class="getScore(member.id, activeHole) ? '' : 'muted'">
+              <div class="phc-net-value" :class="getScore(member.id, activeHole) ? (showNotations ? scoreNotation(netScore(getScore(member.id, activeHole), memberHandicapValue(member), siForHole(activeHole)), parForHole(activeHole)) : '') : 'muted'">
                 {{ getScore(member.id, activeHole) ? netScore(getScore(member.id, activeHole), memberHandicapValue(member), siForHole(activeHole)) : '—' }}
               </div>
               <div class="phc-net-sublabel">net</div>
@@ -1134,29 +1139,21 @@ function gameLiveSummary(game) {
     if (t === 'nassau') {
       const r = computeNassau(ctx, game.config)
       function fmtNassauSeg(seg, segFrom, segTo) {
-        // Format: +3/+1 meaning 3 up on main, 1 on press(es)
+        // Format: +9/+7/+5/+3/+1 — one score per bet (base + each press)
         const up = seg.t1Up
-        const mainStr = up === 0 ? 'AS' : (up > 0 ? `+${up}` : `${up}`)
-        // Dormie check: played holes in this segment
         const played = seg.holeResults?.filter(hr => hr.n1 != null || hr.n2 != null).length || 0
         const segHoles = segTo - segFrom + 1
         const remaining = segHoles - played
         const isDormie = remaining > 0 && Math.abs(up) === remaining
-        const pressTotal = seg.presses?.length || 0
-        let result = mainStr
-        if (pressTotal > 0) {
-          let pressUp = 0
-          for (const press of seg.presses) {
-            const pressHoles = seg.holeResults.filter(r => r.hole >= press.start)
-            pressUp += pressHoles.reduce((acc, r) => {
-              if (r.winner === 't1') return acc + 1
-              if (r.winner === 't2') return acc - 1
-              return acc
-            }, 0)
-          }
-          const pressStr = pressUp === 0 ? 'AS' : (pressUp > 0 ? `+${pressUp}` : `${pressUp}`)
-          result = `${mainStr}/${pressStr}`
-        }
+        const fmtUp = (v) => v === 0 ? 'AS' : (v > 0 ? `+${v}` : `${v}`)
+        // Base bet score from holeResults
+        const mainStr = fmtUp(up)
+        // Press scores: each press has its own score from presses array
+        const pressStrs = (seg.presses || []).map(press => {
+          const s = press.score || 0
+          return fmtUp(s)
+        })
+        let result = [mainStr, ...pressStrs].join('/')
         if (isDormie) result += ' D!'
         return result
       }
@@ -1311,6 +1308,48 @@ function inlineDec(member) {
 }
 
 // saveScore removed — inline entry auto-saves
+
+// ── Score Simulator ─────────────────────────────────────────────
+function simulateFill() {
+  const members = roundsStore.activeMembers
+  const holes = visibleHoles.value
+  // Weighted random score relative to par: heavy on bogey/par, some birdies/doubles
+  // Distribution: eagle(1%), birdie(12%), par(35%), bogey(30%), double(15%), triple+(7%)
+  const weights = [
+    { offset: -2, w: 1 },   // eagle
+    { offset: -1, w: 12 },  // birdie
+    { offset:  0, w: 35 },  // par
+    { offset:  1, w: 30 },  // bogey
+    { offset:  2, w: 15 },  // double
+    { offset:  3, w: 7 },   // triple
+  ]
+  const totalWeight = weights.reduce((s, x) => s + x.w, 0)
+
+  function randomOffset() {
+    let r = Math.random() * totalWeight
+    for (const { offset, w } of weights) {
+      r -= w
+      if (r <= 0) return offset
+    }
+    return 1
+  }
+
+  for (const m of members) {
+    for (const h of holes) {
+      const par = parForHole(h)
+      const score = Math.max(1, par + randomOffset())
+      roundsStore.setScore(m.id, h, score)
+    }
+  }
+}
+
+function resetScores() {
+  if (!confirm('Reset all scores? This cannot be undone.')) return
+  // Clear all scores from local reactive state
+  for (const memberId of Object.keys(roundsStore.activeScores)) {
+    roundsStore.activeScores[memberId] = {}
+  }
+}
 
 // ── Snake 3-putt ────────────────────────────────────────────────
 const snakeGame = computed(() => roundsStore.activeGames.find(g => g.type?.toLowerCase() === 'snake') || null)
@@ -1905,6 +1944,25 @@ function formatDate(dateStr) {
 }
 .sn-empty { color: rgba(240,237,224,.2); }
 
+/* Hole view: when nota-mode is on, show only color (no box/circle) */
+.score-display.nota-mode .sn-alb,
+.score-display.nota-mode .sn-eagle,
+.score-display.nota-mode .sn-birdie,
+.score-display.nota-mode .sn-bogey,
+.score-display.nota-mode .sn-dbl {
+  display: inline;
+  width: auto; height: auto;
+  border: none;
+  border-radius: 0;
+}
+/* Net score notation color classes (reuse sn- for coloring) */
+.phc-net-value.sn-eagle, .phc-net-value.sn-alb { color: #4ade80; }
+.phc-net-value.sn-birdie { color: #60a5fa; }
+.phc-net-value.sn-par { color: var(--gw-text, #f0ede0); }
+.phc-net-value.sn-bogey { color: #f87171; }
+.phc-net-value.sn-dbl { color: #f87171; }
+.phc-net-value.sn-trip { color: #dc2626; }
+
 /* ═══════════════════════════════════════════════════════════════════
    HOLE VIEW — Per-hole entry
    ═══════════════════════════════════════════════════════════════════ */
@@ -1925,6 +1983,7 @@ function formatDate(dateStr) {
   margin-bottom: 12px;
   background: linear-gradient(135deg, rgba(13,59,13,.7), rgba(7,21,7,.9));
   border: 1px solid rgba(212,175,55,.25);
+  position: relative;
 }
 .hole-big-number {
   font-size: 28px;
@@ -1938,6 +1997,16 @@ function formatDate(dateStr) {
   color: rgba(240,237,224,.45);
   margin-top: 4px;
 }
+.hole-notation-toggle {
+  position: absolute;
+  top: 10px; right: 10px;
+  background: none; border: none; cursor: pointer;
+  font-size: 18px; color: rgba(240,237,224,.4);
+  -webkit-tap-highlight-color: transparent;
+  transition: color .15s;
+  padding: 4px;
+}
+.hole-notation-toggle.active { color: var(--gw-gold); }
 
 .hole-players-list {
   display: flex;
@@ -2232,6 +2301,13 @@ function formatDate(dateStr) {
 }
 .notation-toggle-btn:active, .hcp-toggle-btn:active, .legend-toggle-btn:active { color: var(--gw-gold); }
 .hcp-toggle-btn.active { color: #60a5fa; border-color: rgba(96,165,250,.4); background: rgba(96,165,250,.08); }
+.sim-btn {
+  font-size: 14px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1);
+  cursor: pointer; padding: 3px 8px; border-radius: 12px;
+  -webkit-tap-highlight-color: transparent; transition: background .15s;
+}
+.sim-btn:active { background: rgba(212,175,55,.15); }
+.sim-btn-reset { opacity: .7; font-size: 16px; }
 
 /* Scorecard legend */
 .scorecard-legend {

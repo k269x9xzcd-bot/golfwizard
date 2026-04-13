@@ -100,10 +100,22 @@
       <div v-if="step === 2" class="wizard-step">
         <h3>Who's playing?</h3>
 
-        <!-- Added players -->
+        <!-- Added players with drag-to-reorder -->
         <div v-if="form.players.length" class="player-cards">
-          <div v-for="(p, i) in form.players" :key="p.id" class="player-card">
-            <button class="player-card-remove" @click="form.players.splice(i, 1)" title="Remove">×</button>
+          <div
+            v-for="(p, i) in form.players"
+            :key="p.id"
+            class="player-card"
+            :class="{ 'dragging': dragIdx === i }"
+            draggable="true"
+            @dragstart="onDragStart(i)"
+            @dragover.prevent="onDragOver(i)"
+            @dragend="onDragEnd"
+            @touchstart.passive="onTouchDragStart($event, i)"
+            @touchmove.prevent="onTouchDragMove"
+            @touchend="onTouchDragEnd"
+          >
+            <span class="drag-handle" title="Drag to reorder">⠿</span>
             <span class="player-card-name">{{ p.name }}</span>
             <label class="player-card-field">
               <span class="player-card-label">IDX</span>
@@ -116,6 +128,7 @@
                 placeholder="—"
               />
             </label>
+            <button class="player-card-remove" @click="form.players.splice(i, 1)" title="Remove">×</button>
           </div>
         </div>
 
@@ -126,21 +139,57 @@
           @focus="scrollInputIntoView"
         />
         <div class="roster-list">
-          <!-- Favorites first -->
-          <div v-if="!playerSearch" class="section-label-sm">Favorites</div>
-          <div
-            v-for="p in filteredRoster"
-            :key="p.id"
-            class="roster-option"
-            :class="{ selected: isPlayerAdded(p) }"
-            @click="togglePlayer(p)"
-          >
-            <div class="roster-info">
-              <span class="roster-name">{{ p.name }}</span>
-              <span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span>
+          <!-- Favorites section -->
+          <template v-if="!playerSearch">
+            <template v-if="rosterFavorites.length">
+              <div class="section-label-sm">Favorites</div>
+              <div
+                v-for="p in rosterFavorites"
+                :key="p.id"
+                class="roster-option"
+                :class="{ selected: isPlayerAdded(p) }"
+                @click="togglePlayer(p)"
+              >
+                <div class="roster-info">
+                  <span class="roster-name">{{ p.name }}</span>
+                  <span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span>
+                </div>
+                <span class="roster-check">{{ isPlayerAdded(p) ? '✓' : '+' }}</span>
+              </div>
+            </template>
+            <template v-if="rosterOthers.length">
+              <div class="section-label-sm" style="margin-top:6px">All Players</div>
+              <div
+                v-for="p in rosterOthers"
+                :key="p.id"
+                class="roster-option"
+                :class="{ selected: isPlayerAdded(p) }"
+                @click="togglePlayer(p)"
+              >
+                <div class="roster-info">
+                  <span class="roster-name">{{ p.name }}</span>
+                  <span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span>
+                </div>
+                <span class="roster-check">{{ isPlayerAdded(p) ? '✓' : '+' }}</span>
+              </div>
+            </template>
+          </template>
+          <!-- Search results -->
+          <template v-else>
+            <div
+              v-for="p in filteredRoster"
+              :key="p.id"
+              class="roster-option"
+              :class="{ selected: isPlayerAdded(p) }"
+              @click="togglePlayer(p)"
+            >
+              <div class="roster-info">
+                <span class="roster-name">{{ p.name }}</span>
+                <span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span>
+              </div>
+              <span class="roster-check">{{ isPlayerAdded(p) ? '✓' : '+' }}</span>
             </div>
-            <span class="roster-check">{{ isPlayerAdded(p) ? '✓' : '+' }}</span>
-          </div>
+          </template>
         </div>
 
         <!-- Quick add guest -->
@@ -955,15 +1004,57 @@ const teesForCourse = computed(() => {
 })
 
 // ── Roster ───────────────────────────────────────────────────────
+const rosterFavorites = computed(() => rosterStore.players.filter(p => p.is_favorite))
+const rosterOthers = computed(() => rosterStore.players.filter(p => !p.is_favorite))
+
 const filteredRoster = computed(() => {
   const q = playerSearch.value.toLowerCase()
   const all = rosterStore.players
   if (!q) {
-    // favorites first
-    return [...all.filter(p => p.is_favorite), ...all.filter(p => !p.is_favorite)]
+    return [...rosterFavorites.value, ...rosterOthers.value]
   }
   return all.filter(p => p.name.toLowerCase().includes(q))
 })
+
+// ── Drag-to-reorder selected players ────────────────────────────
+const dragIdx = ref(null)
+let touchDragIdx = null
+let touchDragTargetIdx = null
+
+function onDragStart(i) { dragIdx.value = i }
+function onDragOver(i) {
+  if (dragIdx.value === null || dragIdx.value === i) return
+  const arr = form.value.players
+  const moved = arr.splice(dragIdx.value, 1)[0]
+  arr.splice(i, 0, moved)
+  dragIdx.value = i
+}
+function onDragEnd() { dragIdx.value = null }
+
+function onTouchDragStart(e, i) {
+  touchDragIdx = i
+  touchDragTargetIdx = i
+}
+function onTouchDragMove(e) {
+  if (touchDragIdx === null) return
+  const touch = e.touches[0]
+  const el = document.elementFromPoint(touch.clientX, touch.clientY)
+  const card = el?.closest?.('.player-card')
+  if (!card) return
+  const cards = [...document.querySelectorAll('.player-cards .player-card')]
+  const idx = cards.indexOf(card)
+  if (idx >= 0 && idx !== touchDragTargetIdx) {
+    const arr = form.value.players
+    const moved = arr.splice(touchDragIdx, 1)[0]
+    arr.splice(idx, 0, moved)
+    touchDragIdx = idx
+    touchDragTargetIdx = idx
+  }
+}
+function onTouchDragEnd() {
+  touchDragIdx = null
+  touchDragTargetIdx = null
+}
 
 // ── Navigation guards ────────────────────────────────────────────
 const canNext = computed(() => {
@@ -1269,9 +1360,9 @@ async function create() {
   try {
     const games = buildGameConfigs()
 
-    // Timeout protection: if createRound takes > 15s, stop waiting
+    // Timeout protection: if createRound takes > 30s, stop waiting
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Round creation timed out. Check your connection and try again.')), 15000)
+      setTimeout(() => reject(new Error('Round creation timed out. Check your connection and try again.')), 30000)
     )
 
     const round = await Promise.race([

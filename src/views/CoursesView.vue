@@ -3,9 +3,12 @@
     <!-- Header -->
     <header class="courses-header">
       <h1 class="courses-title">Courses</h1>
-      <button class="add-course-btn" @click="openAddCourse" aria-label="Add course">
-        <span class="add-icon">＋</span>
-      </button>
+      <div class="header-actions">
+        <button class="btn-ghost btn-sm sort-btn" @click="toggleCourseSort" :title="courseSortLabel">⇅ {{ courseSortLabel }}</button>
+        <button class="add-course-btn" @click="openAddCourse" aria-label="Add course">
+          <span class="add-icon">＋</span>
+        </button>
+      </div>
     </header>
 
     <!-- Search -->
@@ -54,9 +57,9 @@
               <div class="course-meta">
                 <span v-if="c.isCustom" class="custom-badge">Custom</span>
                 <span class="tee-count">{{ teeSummary(c) }}</span>
-                <span class="course-fav-badge">★ Saved</span>
               </div>
             </div>
+            <span class="course-fav-star">★</span>
           </div>
         </div>
       </template>
@@ -420,22 +423,34 @@ onMounted(async () => {
   }
 })
 
-// ── Search ──────────────────────────────────────────────────
+// ── Search & Sort ───────────────────────────────────────────
 const search = ref('')
+const courseSortMode = ref('alpha')
+const courseSortLabel = computed(() => courseSortMode.value === 'alpha' ? 'A–Z' : 'Added')
+
+function toggleCourseSort() {
+  courseSortMode.value = courseSortMode.value === 'alpha' ? 'added' : 'alpha'
+}
+
+function sortCourses(arr) {
+  if (courseSortMode.value !== 'alpha') return arr
+  return [...arr].sort((a, b) => a.name.localeCompare(b.name))
+}
 
 const favoriteCourses = computed(() => {
   if (search.value) return []
-  return coursesStore.allCourses.filter(c => coursesStore.favoriteNames.has(c.name))
+  return sortCourses(coursesStore.allCourses.filter(c => coursesStore.favoriteNames.has(c.name)))
 })
 
 const filteredCourses = computed(() => {
   const q = search.value.toLowerCase().trim()
   const favSet = coursesStore.favoriteNames
-  return coursesStore.allCourses.filter(c => {
+  const base = coursesStore.allCourses.filter(c => {
     if (!q && favSet.has(c.name)) return false // shown in favorites
     if (q) return c.name.toLowerCase().includes(q)
     return true
   })
+  return sortCourses(base)
 })
 
 function teeSummary(course) {
@@ -888,6 +903,8 @@ function showToast(msg, type = 'neutral') {
   justify-content: space-between;
   padding: 20px 20px 0;
 }
+.header-actions { display: flex; gap: 8px; align-items: center; }
+.sort-btn { font-size: 11px; padding: 5px 9px; opacity: .75; }
 
 .courses-title {
   font-family: var(--gw-font-display);
@@ -980,24 +997,26 @@ function showToast(msg, type = 'neutral') {
 .course-card {
   display: flex;
   align-items: center;
-  background: var(--gw-card-bg, #1a2a1e);
+  background: #1e2b22;
   border-radius: var(--gw-radius-lg);
-  padding: 14px 12px 14px 16px;
-  margin-bottom: 8px;
-  box-shadow: var(--gw-shadow-card);
+  padding: 10px 14px;
+  margin-bottom: 0;
   cursor: pointer;
-  border: 1px solid var(--gw-card-border);
-  transition: transform .12s, box-shadow .12s;
+  border: 1px solid rgba(255,255,255,.07);
+  transition: transform .12s;
   -webkit-tap-highlight-color: transparent;
-  animation: card-in 250ms ease-out both;
   position: relative; z-index: 1;
   will-change: transform;
 }
-.course-card:active { transform: scale(.98); box-shadow: var(--gw-shadow-sm); }
-.course-card--custom { border-left-color: var(--gw-gold); }
+.course-card:active { transform: scale(.98); }
+.course-card--custom { border-left: 2px solid var(--gw-gold); }
 .course-card--fav {
-  border-color: rgba(212,175,55,.25);
-  background: #1f2b1a;
+  border-color: rgba(212,175,55,.2);
+  background: #1e2b22;
+}
+.course-fav-star {
+  font-size: 14px; color: #d4af37; flex-shrink: 0; margin-left: auto;
+  line-height: 1;
 }
 
 /* ── Swipe container ────────────────────────────────── */
@@ -1030,11 +1049,7 @@ function showToast(msg, type = 'neutral') {
   right: 0; padding-right: 20px;
 }
 
-.course-fav-badge {
-  font-size: 10px; font-weight: 700; color: #d4af37;
-  background: rgba(212,175,55,.12); border: 1px solid rgba(212,175,55,.25);
-  padding: 1px 7px; border-radius: 10px;
-}
+/* legacy, no longer used */
 
 /* ── Toast ──────────────────────────────────────────── */
 .swipe-toast {
@@ -1382,17 +1397,17 @@ function showToast(msg, type = 'neutral') {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   margin: 0 -20px;
-  padding: 0 20px;
+  padding: 0 20px 4px;
   margin-bottom: 8px;
 }
 .holes-grid {
   display: grid;
   /* hole# | par | SI | tees... */
-  grid-template-columns: 32px 80px 56px repeat(var(--tee-cols, 2), 64px);
+  grid-template-columns: 28px 82px 44px repeat(var(--tee-cols, 1), 56px);
   gap: 2px;
-  min-width: fit-content;
+  min-width: max-content;
+  --tee-cols: v-bind('newCourse.tees.length');
 }
-.holes-grid { --tee-cols: v-bind('newCourse.tees.length'); }
 
 .hole-header {
   font-family: var(--gw-font-body);
@@ -1434,9 +1449,11 @@ function showToast(msg, type = 'neutral') {
 .par-buttons {
   display: flex;
   gap: 2px;
+  width: 100%;
+  padding: 0 4px;
 }
 .par-btn {
-  width: 24px;
+  flex: 1;
   height: 32px;
   border: none;
   background: rgba(255, 255, 255, 0.08);
