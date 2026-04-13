@@ -1,0 +1,25 @@
+{
+  "name": "GolfWizard",
+  "short_name": "GolfWizard",
+  "description": "Golf scoring and game management",
+  "start_url": "/golfwizard/",
+  "scope": "/golfwizard/",
+  "display": "standalone",
+  "background_color": "#0a1208",
+  "theme_color": "#0a1208",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/golfwizard/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/golfwizard/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
