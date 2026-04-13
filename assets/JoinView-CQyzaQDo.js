@@ -1,0 +1,1 @@
+import{C as e,T as t,k as n}from"./vendor-CORx5MFR.js";import{t as r}from"./JoinOverlay-DPOH5kfv.js";var i={class:`view join-view`},a={__name:`JoinView`,setup(a){return(a,o)=>(n(),e(`div`,i,[t(r,{onClose:o[0]||=e=>a.$router.push(`/`)})]))}};export{a as default};
