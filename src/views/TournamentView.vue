@@ -6,22 +6,25 @@
       <div class="t-header-top">
         <div class="t-trophy">🏆</div>
         <div class="t-header-text">
-          <div class="t-title">{{ TOURNAMENT.name }}</div>
-          <div class="t-subtitle">{{ TOURNAMENT.season }} · {{ TOURNAMENT.format }}</div>
+          <div class="t-title">{{ editedName || TOURNAMENT.name }}</div>
+          <div class="t-subtitle">{{ TOURNAMENT.season }} · {{ editedFormat || TOURNAMENT.format }}</div>
         </div>
+        <button class="t-edit-btn" @click="openEdit" title="Edit tournament">✎</button>
       </div>
 
       <!-- Next match countdown -->
       <div v-if="upcoming" class="next-match-banner">
         <div class="nm-label">NEXT MATCH</div>
         <div class="nm-matchup">
-          <span class="nm-team" :style="{ color: getTeam(upcoming.match.team1).color }">{{ getTeam(upcoming.match.team1).short }}</span>
+          <span class="nm-team" :style="{ color: getTeam(upcoming.match.team1).color }">{{ teamLabel(upcoming.match.team1) }}</span>
           <span class="nm-vs">vs</span>
-          <span class="nm-team" :style="{ color: getTeam(upcoming.match.team2).color }">{{ getTeam(upcoming.match.team2).short }}</span>
-          <span class="nm-sep">·</span>
-          <span class="nm-team" :style="{ color: getTeam(upcoming.match2?.team1 || otherUpcoming?.team1).color }">{{ getTeam(upcoming.match2?.team1 || otherUpcoming?.team1)?.short }}</span>
-          <span class="nm-vs">vs</span>
-          <span class="nm-team" :style="{ color: getTeam(upcoming.match2?.team2 || otherUpcoming?.team2).color }">{{ getTeam(upcoming.match2?.team2 || otherUpcoming?.team2)?.short }}</span>
+          <span class="nm-team" :style="{ color: getTeam(upcoming.match.team2).color }">{{ teamLabel(upcoming.match.team2) }}</span>
+          <template v-if="upcoming.match2">
+            <span class="nm-sep">·</span>
+            <span class="nm-team" :style="{ color: getTeam(upcoming.match2.team1).color }">{{ teamLabel(upcoming.match2.team1) }}</span>
+            <span class="nm-vs">vs</span>
+            <span class="nm-team" :style="{ color: getTeam(upcoming.match2.team2).color }">{{ teamLabel(upcoming.match2.team2) }}</span>
+          </template>
         </div>
         <div class="nm-date">{{ fmtDate(upcoming.round.deadline) }}
           <span class="nm-countdown" :class="countdownClass">{{ countdownLabel }}</span>
@@ -38,6 +41,7 @@
       <button class="t-tab" :class="{ active: tab === 'standings' }" @click="tab = 'standings'">Standings</button>
       <button class="t-tab" :class="{ active: tab === 'schedule' }"  @click="tab = 'schedule'">Schedule</button>
       <button class="t-tab" :class="{ active: tab === 'teams' }"     @click="tab = 'teams'">Teams</button>
+      <button class="t-tab" :class="{ active: tab === 'rules' }"     @click="tab = 'rules'">Rules</button>
     </div>
 
     <!-- ── STANDINGS TAB ─────────────────────────────────────── -->
@@ -97,7 +101,7 @@
                 <th class="h2h-corner"></th>
                 <th v-for="t in TEAMS" :key="t.id" class="h2h-col-head">
                   <span class="h2h-team-dot" :style="{ background: t.color }"></span>
-                  {{ t.short }}
+                  {{ teamLabel(t.id) }}
                 </th>
               </tr>
             </thead>
@@ -105,7 +109,7 @@
               <tr v-for="rowTeam in TEAMS" :key="rowTeam.id">
                 <td class="h2h-row-head">
                   <span class="h2h-team-dot" :style="{ background: rowTeam.color }"></span>
-                  {{ rowTeam.short }}
+                  {{ teamLabel(rowTeam.id) }}
                 </td>
                 <td
                   v-for="colTeam in TEAMS"
@@ -181,11 +185,11 @@
               </div>
               <div class="mc-pts-row">
                 <span class="mc-pts-team" :style="{ color: getTeam(match.team1).color }">
-                  {{ getTeam(match.team1).short }} {{ matchPoints(match.result).t1pts }}
+                  {{ teamLabel(match.team1) }} {{ matchPoints(match.result).t1pts }}
                 </span>
                 <span class="mc-pts-sep">—</span>
                 <span class="mc-pts-team" :style="{ color: getTeam(match.team2).color }">
-                  {{ matchPoints(match.result).t2pts }} {{ getTeam(match.team2).short }}
+                  {{ matchPoints(match.result).t2pts }} {{ teamLabel(match.team2) }}
                 </span>
               </div>
             </div>
@@ -245,7 +249,7 @@
             <span class="tdc-match-opp">
               vs
               <span :style="{ color: getTeam(match.team1 === team.id ? match.team2 : match.team1).color }">
-                {{ getTeam(match.team1 === team.id ? match.team2 : match.team1).short }}
+                {{ teamLabel(match.team1 === team.id ? match.team2 : match.team1) }}
               </span>
             </span>
             <span class="tdc-match-result" v-if="match.result">
@@ -254,6 +258,76 @@
               </span>
             </span>
             <span v-else class="tdc-match-tbd">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── RULES TAB ──────────────────────────────────────────── -->
+    <div v-if="tab === 'rules'" class="t-section rules-section">
+      <div class="rule-card">
+        <div class="rule-icon">🏆</div>
+        <div class="rule-content">
+          <div class="rule-title">Tournament Format</div>
+          <div class="rule-body">
+            Round Robin — each team plays every other team twice (6 rounds total, 2 matches per round). The top 2 teams by points advance to the Championship Final.
+          </div>
+        </div>
+      </div>
+
+      <div class="rule-card">
+        <div class="rule-icon">⛳</div>
+        <div class="rule-content">
+          <div class="rule-title">Each Match — 4 Points Total</div>
+          <div class="rule-body">
+            Every match is worth 4 points:
+          </div>
+          <div class="rule-breakdown">
+            <div class="rb-row">
+              <span class="rb-pts">2 pts</span>
+              <span class="rb-desc">Best Ball — all 4 players together, team with lower score wins</span>
+            </div>
+            <div class="rb-row">
+              <span class="rb-pts">1 pt</span>
+              <span class="rb-desc">Singles Match #1 — one player from each team</span>
+            </div>
+            <div class="rb-row">
+              <span class="rb-pts">1 pt</span>
+              <span class="rb-desc">Singles Match #2 — the other player from each team</span>
+            </div>
+          </div>
+          <div class="rule-body" style="margin-top:8px">
+            Halved matches split the points (1 each for best ball, 0.5 each for singles).
+          </div>
+        </div>
+      </div>
+
+      <div class="rule-card">
+        <div class="rule-icon">🔄</div>
+        <div class="rule-content">
+          <div class="rule-title">Singles Rotation</div>
+          <div class="rule-body">
+            In the first match between two teams, Player A faces Player A and Player B faces Player B. In the rematch (rounds 4–6), the singles opponents swap — Player A faces Player B and vice versa.
+          </div>
+        </div>
+      </div>
+
+      <div class="rule-card">
+        <div class="rule-icon">📊</div>
+        <div class="rule-content">
+          <div class="rule-title">Standings &amp; Tiebreaker</div>
+          <div class="rule-body">
+            Teams are ranked by total points earned across all matches. In the event of a tie, point differential (points for minus points against) is used as the tiebreaker.
+          </div>
+        </div>
+      </div>
+
+      <div class="rule-card rule-card--gold">
+        <div class="rule-icon">🥇</div>
+        <div class="rule-content">
+          <div class="rule-title">Championship Final</div>
+          <div class="rule-body">
+            The top 2 teams after all 6 rounds meet in an 18-hole Championship Final — same format: Best Ball + 2 singles matches, 4 points total.
           </div>
         </div>
       </div>
@@ -337,14 +411,23 @@
               <div v-if="editResultReady" class="mm-pts-preview">
                 <div class="mm-pts-team" :style="{ color: getTeam(activeMatch.match.team1).color }">
                   <span class="mm-pts-num">{{ editPoints.t1pts }}</span>
-                  <span class="mm-pts-lbl">{{ getTeam(activeMatch.match.team1).short }}</span>
+                  <span class="mm-pts-lbl">{{ teamLabel(activeMatch.match.team1) }}</span>
                 </div>
                 <div class="mm-pts-dash">—</div>
                 <div class="mm-pts-team" :style="{ color: getTeam(activeMatch.match.team2).color }">
-                  <span class="mm-pts-lbl">{{ getTeam(activeMatch.match.team2).short }}</span>
+                  <span class="mm-pts-lbl">{{ teamLabel(activeMatch.match.team2) }}</span>
                   <span class="mm-pts-num">{{ editPoints.t2pts }}</span>
                 </div>
               </div>
+            </div>
+
+            <!-- Launch round wizard button -->
+            <div class="mm-launch-wrap">
+              <button class="mm-btn-launch" @click="launchRound">
+                <span class="mm-launch-icon">⛳</span>
+                Start Round in Wizard
+              </button>
+              <div class="mm-launch-hint">Pre-fills Best Ball + 2 Singles with tournament players</div>
             </div>
 
             <div class="mm-footer">
@@ -360,18 +443,80 @@
       </transition>
     </Teleport>
 
+    <!-- ── EDIT TOURNAMENT MODAL ──────────────────────────────── -->
+    <Teleport to="body">
+      <transition name="sheet">
+        <div v-if="showEditModal" class="match-modal-backdrop" @click.self="showEditModal = false">
+          <div class="match-modal">
+            <div class="mm-handle"></div>
+            <div class="mm-header">
+              <div class="mm-round">Edit Tournament</div>
+              <button class="mm-close" @click="showEditModal = false">✕</button>
+            </div>
+            <div class="mm-result-section">
+              <div class="field-group-edit">
+                <label class="mm-section-label">Tournament Name</label>
+                <input v-model="editModalName" class="mm-text-input" placeholder="e.g. 2025 Match Play Championship" />
+              </div>
+              <div class="field-group-edit">
+                <label class="mm-section-label">Format</label>
+                <input v-model="editModalFormat" class="mm-text-input" placeholder="e.g. Round Robin" />
+              </div>
+            </div>
+            <div class="mm-footer">
+              <button class="mm-btn-cancel" @click="showEditModal = false">Cancel</button>
+              <button class="mm-btn-save" @click="saveEdit">Save</button>
+            </div>
+          </div>
+        </div>
+      </transition>
+    </Teleport>
+
   </div>
 </template>
 
 <script setup>
 import { ref, computed, reactive } from 'vue'
+import { useRouter } from 'vue-router'
 import {
   TOURNAMENT, TEAMS, SCHEDULE,
   getTeam, matchPoints, computeStandings, teamMatches,
   nextMatch, fmtDate, daysUntil,
 } from '../stores/tournament.js'
 
+const router = useRouter()
 const tab = ref('standings')
+
+// ── Tournament name/format override (persisted to localStorage) ─
+const EDIT_KEY = 'gw_tournament_meta_2025'
+const savedMeta = (() => { try { return JSON.parse(localStorage.getItem(EDIT_KEY) || '{}') } catch { return {} } })()
+const editedName = ref(savedMeta.name || '')
+const editedFormat = ref(savedMeta.format || '')
+
+// Edit modal
+const showEditModal = ref(false)
+const editModalName = ref('')
+const editModalFormat = ref('')
+
+function openEdit() {
+  editModalName.value = editedName.value || TOURNAMENT.name
+  editModalFormat.value = editedFormat.value || TOURNAMENT.format
+  showEditModal.value = true
+}
+
+function saveEdit() {
+  editedName.value = editModalName.value.trim()
+  editedFormat.value = editModalFormat.value.trim()
+  localStorage.setItem(EDIT_KEY, JSON.stringify({ name: editedName.value, format: editedFormat.value }))
+  showEditModal.value = false
+}
+
+// ── teamLabel: "Spiels+Matt" style using player nicknames ──────
+function teamLabel(teamId) {
+  const team = getTeam(teamId)
+  if (!team) return ''
+  return team.players.map(p => p.nickname || p.name.split(' ')[0]).join('+')
+}
 
 // ── Standings ───────────────────────────────────────────────────
 const standings = computed(() => computeStandings())
@@ -490,7 +635,7 @@ function bestBallLabel(match) {
   if (!match.result) return ''
   if (match.result.bestBall === 'halved') return 'Halved'
   const winner = match.result.bestBall === 't1' ? match.team1 : match.team2
-  return getTeam(winner).short + ' win'
+  return teamLabel(winner) + ' win'
 }
 function resultClass(match, field) {
   if (field === 'bestBall') {
@@ -508,11 +653,8 @@ function singlesClass(match, s) {
 }
 function singlesWinnerLabel(match, s) {
   if (s.winner === 'halved') return 'Halved'
-  const team = s.winner === 't1' ? match.team1 : match.team2
-  const t = getTeam(team)
-  // Identify which player won
-  const order = singlesMatchups(match)
-  return t.short + ' win'
+  const teamId = s.winner === 't1' ? match.team1 : match.team2
+  return teamLabel(teamId) + ' win'
 }
 
 // Singles matchup builder
@@ -548,9 +690,9 @@ function bbOptions(match) {
   const t1 = getTeam(match.team1)
   const t2 = getTeam(match.team2)
   return [
-    { val: 't1',     label: t1.short + ' win', color: t1.color },
-    { val: 'halved', label: 'Halved',           color: null },
-    { val: 't2',     label: t2.short + ' win', color: t2.color },
+    { val: 't1',     label: teamLabel(match.team1) + ' win', color: t1.color },
+    { val: 'halved', label: 'Halved',                        color: null },
+    { val: 't2',     label: teamLabel(match.team2) + ' win', color: t2.color },
   ]
 }
 
@@ -584,6 +726,37 @@ function saveResult() {
   activeMatch.value = null
   // Persist to localStorage so results survive refresh
   _saveResults()
+}
+
+// Launch round wizard pre-configured for this match
+function launchRound() {
+  if (!activeMatch.value) return
+  const match = activeMatch.value.match
+  const t1 = getTeam(match.team1)
+  const t2 = getTeam(match.team2)
+  // Build player list: team1 players first, then team2
+  const allPlayers = [...t1.players, ...t2.players]
+  const playerIds = allPlayers.map(p => p.id)
+  // Encode match config into query params for the wizard to pick up
+  const params = new URLSearchParams({
+    tournament: '1',
+    matchId: match.id,
+    t1players: t1.players.map(p => p.email || p.id).join(','),
+    t2players: t2.players.map(p => p.email || p.id).join(','),
+  })
+  activeMatch.value = null
+  // Navigate home and trigger wizard (store config in sessionStorage for wizard to read)
+  sessionStorage.setItem('gw_wizard_tournament_prefill', JSON.stringify({
+    matchId: match.id,
+    team1Id: match.team1,
+    team2Id: match.team2,
+    team1Name: t1.name,
+    team2Name: t2.name,
+    team1Players: t1.players.map(p => ({ id: p.id, name: p.name, nickname: p.nickname, email: p.email })),
+    team2Players: t2.players.map(p => ({ id: p.id, name: p.name, nickname: p.nickname, email: p.email })),
+    games: ['best_ball', 'singles', 'singles'],
+  }))
+  router.push({ path: '/', query: { launchWizard: '1' } })
 }
 
 // Persist/restore match results to localStorage
@@ -1097,6 +1270,89 @@ _loadResults()
   -webkit-appearance: none;
 }
 .round-date-dl { color: rgba(240,237,224,.3); margin-right: 2px; font-weight: 400; }
+
+/* ── Edit button ─────────────────────────────────────── */
+.t-edit-btn {
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 8px;
+  color: rgba(240,237,224,.5);
+  font-size: 16px;
+  padding: 6px 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background .15s, color .15s;
+}
+.t-edit-btn:active { background: rgba(255,255,255,.1); color: #f0ede0; }
+
+/* ── Edit modal fields ───────────────────────────────── */
+.field-group-edit { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
+.mm-text-input {
+  width: 100%; padding: 12px 14px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 10px;
+  color: #f0ede0; font-size: 15px;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+}
+.mm-text-input:focus { outline: none; border-color: rgba(34,160,107,.5); }
+
+/* ── Launch round button ─────────────────────────────── */
+.mm-launch-wrap {
+  padding: 12px 16px 0;
+}
+.mm-btn-launch {
+  width: 100%;
+  padding: 13px 16px;
+  background: linear-gradient(135deg, rgba(26,122,85,.3) 0%, rgba(22,96,68,.2) 100%);
+  border: 1px solid rgba(26,122,85,.4);
+  border-radius: 12px;
+  color: #34d399;
+  font-size: 14px; font-weight: 700;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  transition: background .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.mm-btn-launch:active { background: rgba(26,122,85,.4); }
+.mm-launch-icon { font-size: 18px; }
+.mm-launch-hint {
+  font-size: 11px; color: rgba(240,237,224,.35);
+  text-align: center; margin-top: 6px;
+}
+
+/* ── Rules tab ───────────────────────────────────────── */
+.rules-section { display: flex; flex-direction: column; gap: 10px; }
+.rule-card {
+  display: flex; gap: 14px;
+  background: #1e2b22;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 14px;
+  padding: 16px;
+  animation: card-in 250ms ease-out both;
+}
+.rule-card--gold {
+  background: rgba(212,175,55,.06);
+  border-color: rgba(212,175,55,.2);
+}
+.rule-icon { font-size: 24px; flex-shrink: 0; line-height: 1; margin-top: 1px; }
+.rule-content { flex: 1; }
+.rule-title {
+  font-size: 14px; font-weight: 700; color: #f0ede0;
+  margin-bottom: 6px;
+}
+.rule-body {
+  font-size: 13px; color: rgba(240,237,224,.6); line-height: 1.55;
+}
+.rule-breakdown { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.rb-row { display: flex; align-items: baseline; gap: 10px; }
+.rb-pts {
+  font-size: 13px; font-weight: 800; color: #fbbf24;
+  background: rgba(251,191,36,.1); border: 1px solid rgba(251,191,36,.2);
+  padding: 2px 8px; border-radius: 6px; white-space: nowrap; flex-shrink: 0;
+}
+.rb-desc { font-size: 12px; color: rgba(240,237,224,.55); line-height: 1.4; }
 
 @keyframes card-in {
   from { opacity: 0; transform: translateY(10px); }

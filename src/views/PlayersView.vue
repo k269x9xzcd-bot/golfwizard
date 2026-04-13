@@ -19,15 +19,16 @@
 
     <!-- Favorites section -->
     <div v-if="favoritePlayers.length" class="section-label">
-      Favorites <span class="swipe-hint">← delete &nbsp;·&nbsp; favorite →</span>
+      Favorites <span class="swipe-hint">← delete &nbsp;·&nbsp; unfav →</span>
     </div>
     <div
       v-for="p in favoritePlayers"
       :key="p.id"
       class="swipe-container"
+      :style="swipeContainerStyle(p.id)"
     >
-      <div class="swipe-action swipe-action-delete">🗑 Delete</div>
-      <div class="swipe-action swipe-action-unfav">☆ Unfavorite</div>
+      <div class="swipe-reveal swipe-reveal-left" :style="{ opacity: swipeRevealOpacity(p.id, 'left') }">🗑 Delete</div>
+      <div class="swipe-reveal swipe-reveal-right" :style="{ opacity: swipeRevealOpacity(p.id, 'right') }">☆ Unfav</div>
       <div
         class="player-card player-card--fav"
         :style="{ transform: `translateX(${swipeX[p.id] || 0}px)`, transition: swiping === p.id ? 'none' : 'transform .25s ease' }"
@@ -54,9 +55,10 @@
       v-for="p in otherPlayers"
       :key="p.id"
       class="swipe-container"
+      :style="swipeContainerStyle(p.id)"
     >
-      <div class="swipe-action swipe-action-delete">🗑 Delete</div>
-      <div class="swipe-action swipe-action-fav">★ Favorite</div>
+      <div class="swipe-reveal swipe-reveal-left" :style="{ opacity: swipeRevealOpacity(p.id, 'left') }">🗑 Delete</div>
+      <div class="swipe-reveal swipe-reveal-right" :style="{ opacity: swipeRevealOpacity(p.id, 'right') }">★ Fav</div>
       <div
         class="player-card"
         :style="{ transform: `translateX(${swipeX[p.id] || 0}px)`, transition: swiping === p.id ? 'none' : 'transform .25s ease' }"
@@ -172,6 +174,25 @@ const swiping = ref(null)
 const swipeStartX = ref(0)
 const swipeStartY = ref(0)
 const SWIPE_THRESHOLD = 80
+
+function swipeContainerStyle(id) {
+  const dx = swipeX[id] || 0
+  if (dx < -10) {
+    const t = Math.min(1, Math.abs(dx) / SWIPE_THRESHOLD)
+    return { background: `rgba(185,28,28,${t * 0.85})` }
+  } else if (dx > 10) {
+    const t = Math.min(1, dx / SWIPE_THRESHOLD)
+    return { background: `rgba(161,98,7,${t * 0.85})` }
+  }
+  return { background: '#1e2b22' }
+}
+
+function swipeRevealOpacity(id, side) {
+  const dx = swipeX[id] || 0
+  if (side === 'left' && dx < -20) return Math.min(1, (Math.abs(dx) - 20) / 40)
+  if (side === 'right' && dx > 20) return Math.min(1, (dx - 20) / 40)
+  return 0
+}
 
 function onSwipeStart(e, id) {
   swipeStartX.value = e.touches[0].clientX
@@ -314,38 +335,20 @@ async function saveEdit() {
   overflow: hidden;
   border-radius: 14px;
   margin-bottom: 8px;
-  /* Background fills — behind the sliding card */
-  background: var(--gw-card-bg, rgba(255,255,255,.04));
+  background: #1e2b22;
+  transition: background 0.05s linear;
 }
-/* Swipe action labels: fixed behind the card (z-index: 0) */
-.swipe-action {
-  position: absolute; top: 0; bottom: 0; width: 50%;
+
+/* Reveal labels behind the card */
+.swipe-reveal {
+  position: absolute; top: 0; bottom: 0;
   display: flex; align-items: center;
-  font-size: 13px; font-weight: 700; letter-spacing: .02em;
-  z-index: 0;
-  pointer-events: none;
+  font-size: 13px; font-weight: 700; letter-spacing: .04em;
+  color: white; pointer-events: none; z-index: 0;
+  transition: opacity 0.1s;
 }
-.swipe-action-delete {
-  left: 0;
-  background: linear-gradient(90deg, #b91c1c 0%, #dc2626 60%, transparent 100%);
-  color: white;
-  justify-content: flex-start;
-  padding-left: 20px;
-}
-.swipe-action-fav {
-  right: 0;
-  background: linear-gradient(270deg, #a16207 0%, #ca8a04 60%, transparent 100%);
-  color: white;
-  justify-content: flex-end;
-  padding-right: 20px;
-}
-.swipe-action-unfav {
-  right: 0;
-  background: linear-gradient(270deg, rgba(100,100,100,.4) 0%, rgba(100,100,100,.2) 60%, transparent 100%);
-  color: rgba(240,237,224,.7);
-  justify-content: flex-end;
-  padding-right: 20px;
-}
+.swipe-reveal-left { left: 0; padding-left: 20px; }
+.swipe-reveal-right { right: 0; padding-right: 20px; }
 
 /* ── Player Card (slides on top of the action reveal) ─ */
 .player-card {
@@ -360,7 +363,7 @@ async function saveEdit() {
 }
 .player-card--fav {
   border-color: rgba(212,175,55,.3);
-  background: rgba(212,175,55,.06);
+  background: #1f2b1a;
 }
 
 .player-info { flex: 1; cursor: pointer; }

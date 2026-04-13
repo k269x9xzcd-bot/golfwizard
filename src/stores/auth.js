@@ -54,15 +54,34 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function updateProfile(updates) {
     if (!user.value) return
-    // Use upsert so it creates the profile row if it doesn't exist yet
-    const { data, error } = await supabase
+    // Upsert profile row — use maybeSingle to avoid hang if RLS blocks the select
+    const { error } = await supabase
       .from('profiles')
       .upsert({ id: user.value.id, ...updates }, { onConflict: 'id' })
-      .select()
-      .single()
     if (error) throw error
-    profile.value = data
-    return data
+    // Refresh profile from DB (don't rely on upsert returning the row)
+    await fetchProfile()
+    return profile.value
+  }
+
+  // Upsert the user into roster_players (called after profile setup)
+  async function upsertRosterEntry({ name, nickname, useNickname }) {
+    if (!user.value?.email) return
+    const email = user.value.email.toLowerCase().trim()
+    // Build short_name from last word of name
+    const parts = name.trim().split(/\s+/)
+    const short_name = parts.length >= 2 ? parts[parts.length - 1].slice(0, 8) : name.slice(0, 8)
+    const { error } = await supabase
+      .from('roster_players')
+      .upsert({
+        name: name.trim(),
+        short_name,
+        email,
+        nickname: nickname || null,
+        use_nickname: useNickname || false,
+        // Don't overwrite ghin_index or is_favorite — only set if new row
+      }, { onConflict: 'email', ignoreDuplicates: false })
+    if (error) console.warn('upsertRosterEntry error:', error)
   }
 
   async function signInWithGoogle() {
@@ -112,7 +131,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   return {
     user, profile, loading, isGuest, isAuthenticated,
-    init, fetchProfile, updateProfile,
+    init, fetchProfile, updateProfile, upsertRosterEntry,
     signInWithGoogle, signInWithApple, signInWithEmail, verifyOtp, signOut,
   }
 })

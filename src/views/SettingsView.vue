@@ -1,61 +1,274 @@
 <template>
-  <div class="view settings-view">
-    <header class="view-header"><h2>Settings</h2></header>
-    <div v-if="authStore.isAuthenticated" class="settings-section card">
-      <div class="settings-title">Account</div>
-      <div class="settings-row">
-        <label>Display name</label>
-        <input v-model="displayName" class="wiz-input" />
+  <div class="settings-view">
+    <header class="settings-header">
+      <h1 class="settings-title">Profile</h1>
+    </header>
+
+    <!-- Authenticated view -->
+    <template v-if="authStore.isAuthenticated">
+      <!-- Avatar card -->
+      <div class="profile-card">
+        <div class="avatar-ring">
+          <div class="avatar-initials">{{ avatarInitials }}</div>
+        </div>
+        <div class="profile-email">{{ authStore.user?.email }}</div>
       </div>
-      <div class="settings-row">
-        <label>Short name</label>
-        <input v-model="shortName" class="wiz-input wiz-input-sm" maxlength="6" />
+
+      <!-- Form -->
+      <div class="settings-form">
+        <div class="form-section-label">Your Info</div>
+
+        <div class="field-group">
+          <label class="field-label">Email</label>
+          <input class="wiz-input field-readonly" :value="authStore.user?.email" readonly type="email" />
+        </div>
+
+        <div class="field-group">
+          <label class="field-label">Full Name</label>
+          <input v-model="displayName" class="wiz-input" placeholder="e.g. Jason Spieler" type="text" autocomplete="name" />
+        </div>
+
+        <div class="field-group">
+          <label class="field-label">
+            Nickname
+            <span class="field-hint"> — shown on scorecards when toggled on</span>
+          </label>
+          <input v-model="nickname" class="wiz-input" placeholder="e.g. Spiels" type="text" autocomplete="off" />
+        </div>
+
+        <div class="nickname-toggle-row" v-if="nickname.trim()">
+          <span class="toggle-label">Use nickname on scorecards</span>
+          <button class="toggle-btn" :class="{ active: useNickname }" @click="useNickname = !useNickname" type="button">
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label">GHIN Index</label>
+          <input v-model="ghinIndex" class="wiz-input" placeholder="e.g. 14.2" type="number" step="0.1" />
+        </div>
+
+        <div v-if="saveError" class="error-msg">{{ saveError }}</div>
+        <div v-if="saveSuccess" class="success-msg">✓ Profile saved!</div>
+
+        <button class="btn-primary save-btn" :disabled="saving || !displayName.trim()" @click="save">
+          <span v-if="saving" class="saving-spinner">⟳</span>
+          {{ saving ? 'Saving…' : 'Save Profile' }}
+        </button>
       </div>
-      <div class="settings-row">
-        <label>GHIN index</label>
-        <input v-model="ghin" type="number" step="0.1" class="wiz-input wiz-input-sm" />
+
+      <div class="settings-footer">
+        <button class="signout-btn btn-ghost" @click="authStore.signOut()">Sign Out</button>
       </div>
-      <button class="btn-primary btn-sm" :disabled="saving" @click="save">
-        {{ saving ? 'Saving…' : saveSuccess ? 'Saved ✓' : 'Save' }}
-      </button>
-      <div v-if="saveError" style="color:#dc2626;font-size:13px;margin-top:8px">{{ saveError }}</div>
-      <button class="btn-ghost btn-sm" @click="authStore.signOut()">Sign Out</button>
-    </div>
-    <div v-else class="settings-section card">
-      <p>Sign in to sync your data across devices.</p>
-      <button class="btn-primary" @click="showAuth = true">Sign In</button>
-    </div>
-    <div class="settings-version">GolfWizard v3 · Supabase</div>
+    </template>
+
+    <!-- Guest view -->
+    <template v-else>
+      <div class="guest-card">
+        <div class="guest-icon">⛳</div>
+        <div class="guest-title">Sign in to GolfWizard</div>
+        <div class="guest-sub">Save your rounds, sync across devices, and join tournaments.</div>
+        <button class="btn-primary" @click="showAuth = true">Sign In</button>
+      </div>
+    </template>
+
+    <div class="settings-version">GolfWizard v{{ appVersion }}</div>
     <AuthModal v-if="showAuth" @close="showAuth = false" />
   </div>
 </template>
+
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import AuthModal from '../components/AuthModal.vue'
+
 const authStore = useAuthStore()
 const showAuth = ref(false)
+
+const displayName = ref('')
+const nickname = ref('')
+const useNickname = ref(false)
+const ghinIndex = ref('')
 const saving = ref(false)
-const saveSuccess = ref(false)
 const saveError = ref('')
-const displayName = ref(authStore.profile?.display_name ?? '')
-const shortName = ref(authStore.profile?.short_name ?? '')
-const ghin = ref(authStore.profile?.ghin_index ?? '')
-watch(() => authStore.profile, p => {
-  if (p) { displayName.value = p.display_name; shortName.value = p.short_name; ghin.value = p.ghin_index }
+const saveSuccess = ref(false)
+
+const appVersion = __APP_VERSION__
+
+const avatarInitials = computed(() => {
+  const n = displayName.value.trim() || authStore.user?.email || '?'
+  if (n.includes('@') && !displayName.value.trim()) return n[0].toUpperCase()
+  const parts = n.split(/\s+/)
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+  return n.slice(0, 2).toUpperCase()
 })
+
+// Populate form when profile loads
+function populateFromProfile(p) {
+  if (!p) return
+  displayName.value = p.display_name || ''
+  nickname.value = p.nickname || ''
+  useNickname.value = p.use_nickname || false
+  ghinIndex.value = p.ghin_index != null ? String(p.ghin_index) : ''
+}
+
+onMounted(() => populateFromProfile(authStore.profile))
+watch(() => authStore.profile, populateFromProfile)
+
 async function save() {
+  if (saving.value || !displayName.value.trim()) return
   saving.value = true
   saveError.value = ''
   saveSuccess.value = false
   try {
-    await authStore.updateProfile({ display_name: displayName.value, short_name: shortName.value, ghin_index: ghin.value || null })
+    const trimmedName = displayName.value.trim()
+    const trimmedNick = nickname.value.trim() || null
+    await authStore.updateProfile({
+      display_name: trimmedName,
+      short_name: trimmedNick || trimmedName.split(/\s+/).pop()?.slice(0, 8),
+      nickname: trimmedNick,
+      use_nickname: useNickname.value,
+      ghin_index: ghinIndex.value !== '' ? parseFloat(ghinIndex.value) : null,
+    })
+    // Sync to roster_players so this user appears in the player list
+    await authStore.upsertRosterEntry({
+      name: trimmedName,
+      nickname: trimmedNick,
+      useNickname: useNickname.value,
+    })
     saveSuccess.value = true
-    setTimeout(() => { saveSuccess.value = false }, 2000)
-  } catch (e) {
-    saveError.value = e.message || 'Failed to save.'
+    setTimeout(() => { saveSuccess.value = false }, 2500)
+  } catch (err) {
+    saveError.value = err?.message || 'Save failed — please try again.'
   } finally {
     saving.value = false
   }
 }
 </script>
+
+<style scoped>
+.settings-view {
+  padding: 16px;
+  padding-bottom: 100px;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.settings-header { margin-bottom: 20px; }
+.settings-title {
+  font-family: var(--gw-font-display);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--gw-text);
+  margin: 0;
+}
+
+/* Profile avatar card */
+.profile-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 24px 16px 20px;
+  background: var(--gw-card-bg);
+  border: 1px solid var(--gw-card-border);
+  border-radius: var(--gw-radius-lg);
+  margin-bottom: 20px;
+}
+.avatar-ring {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--gw-green-700, #166534), var(--gw-green-900, #052e16));
+  border: 3px solid rgba(212,175,55,.4);
+  display: flex; align-items: center; justify-content: center;
+}
+.avatar-initials {
+  font-family: var(--gw-font-display);
+  font-size: 26px; font-weight: 700;
+  color: var(--gw-gold);
+  letter-spacing: .02em;
+}
+.profile-email {
+  font-size: 13px;
+  color: rgba(240,237,224,.5);
+}
+
+/* Form */
+.settings-form {
+  background: var(--gw-card-bg);
+  border: 1px solid var(--gw-card-border);
+  border-radius: var(--gw-radius-lg);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.form-section-label {
+  font-size: 11px; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: rgba(240,237,224,.5);
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+.field-group { display: flex; flex-direction: column; gap: 5px; }
+.field-label {
+  font-size: 12px; font-weight: 600; color: rgba(240,237,224,.65);
+}
+.field-hint { font-weight: 400; color: rgba(240,237,224,.3); }
+.field-readonly { opacity: 0.55; cursor: default; }
+
+/* Toggle */
+.nickname-toggle-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 2px 0;
+}
+.toggle-label { font-size: 13px; color: rgba(240,237,224,.7); font-weight: 500; }
+.toggle-btn {
+  width: 44px; height: 26px; border-radius: 13px;
+  background: rgba(255,255,255,.12); border: none; cursor: pointer;
+  position: relative; transition: background .2s; padding: 0; flex-shrink: 0;
+}
+.toggle-btn.active { background: #1a7a55; }
+.toggle-knob {
+  position: absolute; top: 3px; left: 3px;
+  width: 20px; height: 20px; border-radius: 50%; background: white;
+  transition: transform .2s;
+}
+.toggle-btn.active .toggle-knob { transform: translateX(18px); }
+
+/* Messages */
+.error-msg {
+  font-size: 13px; color: #f87171;
+  background: rgba(248,113,113,.1); border: 1px solid rgba(248,113,113,.2);
+  border-radius: 8px; padding: 10px 12px;
+}
+.success-msg {
+  font-size: 13px; color: #34d399; font-weight: 600;
+  background: rgba(52,211,153,.1); border: 1px solid rgba(52,211,153,.2);
+  border-radius: 8px; padding: 10px 12px;
+}
+.save-btn { opacity: 1; transition: opacity .15s; }
+.save-btn:disabled { opacity: 0.5; }
+.saving-spinner { display: inline-block; animation: spin .8s linear infinite; margin-right: 4px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Footer */
+.settings-footer { display: flex; justify-content: center; margin-top: 4px; }
+.signout-btn { color: rgba(240,237,224,.4); font-size: 14px; padding: 10px 24px; }
+
+/* Guest card */
+.guest-card {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: 40px 20px; text-align: center;
+  background: var(--gw-card-bg); border: 1px solid var(--gw-card-border);
+  border-radius: var(--gw-radius-lg);
+}
+.guest-icon { font-size: 40px; }
+.guest-title { font-size: 20px; font-weight: 700; color: var(--gw-text); }
+.guest-sub { font-size: 14px; color: rgba(240,237,224,.55); line-height: 1.5; max-width: 280px; }
+
+.settings-version {
+  text-align: center; margin-top: 24px;
+  font-size: 11px; color: rgba(240,237,224,.2); letter-spacing: .05em;
+}
+</style>

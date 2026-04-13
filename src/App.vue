@@ -30,9 +30,9 @@
           <span class="nav-icon">🏌️</span>
           <span class="nav-label">Score</span>
         </RouterLink>
-        <button class="nav-item nav-new" @click="showWizard = true">
-          <span class="nav-icon nav-plus">＋</span>
-          <span class="nav-label">New</span>
+        <button class="nav-new" @click="showWizard = true">
+          <span class="nav-plus">＋</span>
+          <span class="nav-plus-label">New</span>
         </button>
         <RouterLink to="/courses" class="nav-item" :class="{ active: $route.name === 'courses' }">
           <span class="nav-icon">⛳</span>
@@ -97,6 +97,14 @@ onMounted(async () => {
   const hash = window.location.hash
   const joinMatch = hash.match(/\/join\/([A-Z0-9]{6})/i)
   if (joinMatch) showJoin.value = true
+
+  // Auto-launch wizard if navigated from tournament match
+  const urlParams = new URLSearchParams(window.location.search)
+  if (urlParams.get('launchWizard') === '1') {
+    showWizard.value = true
+    // Clean URL
+    router.replace({ query: {} })
+  }
 })
 
 function onRoundCreated(round) {

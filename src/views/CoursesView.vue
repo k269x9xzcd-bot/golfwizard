@@ -35,9 +35,11 @@
           v-for="c in favoriteCourses"
           :key="'fav-' + c.name"
           class="swipe-container"
+          :style="swipeContainerStyle(c.name, true)"
         >
-          <div class="swipe-action swipe-action-delete">🗑 Delete</div>
-          <div class="swipe-action swipe-action-unfav">☆ Unfavorite</div>
+          <!-- Reveal labels -->
+          <div class="swipe-reveal swipe-reveal-left" :style="{ opacity: swipeRevealOpacity(c.name, 'left') }">🗑 Delete</div>
+          <div class="swipe-reveal swipe-reveal-right" :style="{ opacity: swipeRevealOpacity(c.name, 'right') }">☆ Unfav</div>
           <div
             class="course-card course-card--fav"
             :class="{ 'course-card--custom': c.isCustom }"
@@ -75,10 +77,12 @@
         v-for="c in filteredCourses"
         :key="c.name"
         class="swipe-container"
+        :style="swipeContainerStyle(c.name, false)"
       >
-        <div class="swipe-action swipe-action-delete">🗑 Delete</div>
-        <div class="swipe-action" :class="coursesStore.favoriteNames.has(c.name) ? 'swipe-action-unfav' : 'swipe-action-fav'">
-          {{ coursesStore.favoriteNames.has(c.name) ? '☆ Unfavorite' : '★ Favorite' }}
+        <!-- Reveal labels -->
+        <div class="swipe-reveal swipe-reveal-left" :style="{ opacity: swipeRevealOpacity(c.name, 'left') }">🗑 Delete</div>
+        <div class="swipe-reveal swipe-reveal-right" :style="{ opacity: swipeRevealOpacity(c.name, 'right') }">
+          {{ coursesStore.favoriteNames.has(c.name) ? '☆ Unfav' : '★ Fav' }}
         </div>
         <div
           class="course-card"
@@ -802,6 +806,27 @@ const swipeStartX = ref(0)
 const swipeStartY = ref(0)
 const SWIPE_THRESHOLD = 80
 
+// Dynamic background color on swipe container: red when swiping left, gold when right
+function swipeContainerStyle(key) {
+  const dx = swipeX[key] || 0
+  if (dx < -10) {
+    const t = Math.min(1, Math.abs(dx) / SWIPE_THRESHOLD)
+    return { background: `rgba(185,28,28,${t * 0.85})` }
+  } else if (dx > 10) {
+    const t = Math.min(1, dx / SWIPE_THRESHOLD)
+    return { background: `rgba(161,98,7,${t * 0.85})` }
+  }
+  return { background: '#1e2b22' }
+}
+
+// Opacity of action label text (fade in as you drag past 20px)
+function swipeRevealOpacity(key, side) {
+  const dx = swipeX[key] || 0
+  if (side === 'left' && dx < -20) return Math.min(1, (Math.abs(dx) - 20) / 40)
+  if (side === 'right' && dx > 20) return Math.min(1, (dx - 20) / 40)
+  return 0
+}
+
 function onSwipeStart(e, key) {
   swipeStartX.value = e.touches[0].clientX
   swipeStartY.value = e.touches[0].clientY
@@ -972,7 +997,7 @@ function showToast(msg, type = 'neutral') {
 .course-card--custom { border-left-color: var(--gw-gold); }
 .course-card--fav {
   border-color: rgba(212,175,55,.25);
-  background: rgba(212,175,55,.04);
+  background: #1f2b1a;
 }
 
 /* ── Swipe container ────────────────────────────────── */
@@ -981,38 +1006,28 @@ function showToast(msg, type = 'neutral') {
   overflow: hidden;
   border-radius: var(--gw-radius-lg);
   margin-bottom: 8px;
-  background: var(--gw-card-bg, #1a2a1e);
+  background: #1e2b22;
+  transition: background 0.05s linear;
 }
 .swipe-container .course-card { margin-bottom: 0; }
 
-/* Action labels revealed behind the sliding card */
-.swipe-action {
-  position: absolute; top: 0; bottom: 0; width: 50%;
-  display: flex; align-items: center;
-  font-size: 13px; font-weight: 700; letter-spacing: .02em;
-  z-index: 0;
+/* Reveal text labels (shown behind card as it slides) */
+.swipe-reveal {
+  position: absolute;
+  top: 0; bottom: 0;
+  display: flex;
+  align-items: center;
+  font-size: 13px; font-weight: 700; letter-spacing: .04em;
+  color: white;
   pointer-events: none;
+  z-index: 0;
+  transition: opacity 0.1s;
 }
-.swipe-action-delete {
-  left: 0;
-  background: linear-gradient(90deg, #b91c1c 0%, #dc2626 60%, transparent 100%);
-  color: white;
-  justify-content: flex-start;
-  padding-left: 20px;
+.swipe-reveal-left {
+  left: 0; padding-left: 20px;
 }
-.swipe-action-fav {
-  right: 0;
-  background: linear-gradient(270deg, #a16207 0%, #ca8a04 60%, transparent 100%);
-  color: white;
-  justify-content: flex-end;
-  padding-right: 20px;
-}
-.swipe-action-unfav {
-  right: 0;
-  background: linear-gradient(270deg, rgba(100,100,100,.4) 0%, rgba(100,100,100,.2) 60%, transparent 100%);
-  color: rgba(240,237,224,.7);
-  justify-content: flex-end;
-  padding-right: 20px;
+.swipe-reveal-right {
+  right: 0; padding-right: 20px;
 }
 
 .course-fav-badge {
