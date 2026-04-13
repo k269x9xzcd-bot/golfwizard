@@ -63,36 +63,40 @@ export const useRosterStore = defineStore('roster', () => {
         if (data && data.length > 0) {
           players.value = data
         } else {
-          // Supabase roster is empty — seed with defaults
-          // Try to insert them, but don't fail if the table doesn't exist
-          try {
-            const rows = DEFAULT_PLAYERS.map(p => ({
-              owner_id: auth.user.id,
-              name: p.name,
-              short_name: p.short_name,
-              ghin_index: p.ghin_index,
-              is_favorite: p.is_favorite,
-            }))
-            const { error: insertErr } = await supabase.from('roster_players').insert(rows)
-            if (!insertErr) {
-              // Re-fetch to get proper IDs
-              const { data: freshData } = await supabase
-                .from('roster_players')
-                .select('*')
-                .eq('owner_id', auth.user.id)
-                .order('is_favorite', { ascending: false })
-                .order('name')
-              players.value = freshData ?? [...DEFAULT_PLAYERS]
-            } else {
-              // Table might not exist yet — fall back to defaults in memory
+          // Supabase roster is empty — seed with defaults ONCE
+          // Guard against re-seeding: check localStorage flag keyed by user id
+          const seedKey = `gw_roster_seeded_${auth.user.id}`
+          if (localStorage.getItem(seedKey)) {
+            // Already seeded before — user deleted all players intentionally, don't re-seed
+            players.value = []
+          } else {
+            try {
+              const rows = DEFAULT_PLAYERS.map(p => ({
+                owner_id: auth.user.id,
+                name: p.name,
+                short_name: p.short_name,
+                ghin_index: p.ghin_index,
+                is_favorite: p.is_favorite,
+              }))
+              const { error: insertErr } = await supabase.from('roster_players').insert(rows)
+              localStorage.setItem(seedKey, '1')
+              if (!insertErr) {
+                const { data: freshData } = await supabase
+                  .from('roster_players')
+                  .select('*')
+                  .eq('owner_id', auth.user.id)
+                  .order('is_favorite', { ascending: false })
+                  .order('name')
+                players.value = freshData ?? [...DEFAULT_PLAYERS]
+              } else {
+                players.value = [...DEFAULT_PLAYERS]
+              }
+            } catch {
               players.value = [...DEFAULT_PLAYERS]
             }
-          } catch {
-            players.value = [...DEFAULT_PLAYERS]
           }
         }
       } else {
-        // Query failed (table doesn't exist?) — use defaults
         players.value = [...DEFAULT_PLAYERS]
       }
     } catch {
@@ -103,8 +107,20 @@ export const useRosterStore = defineStore('roster', () => {
 
   async function addPlayer(player) {
     const auth = useAuthStore()
+    // Prevent duplicate names (case-insensitive)
+    const nameNorm = player.name.trim().toLowerCase()
+    const existing = players.value.find(p => p.name.trim().toLowerCase() === nameNorm)
+    if (existing) {
+      // Update the existing player's GHIN instead of creating a dupe
+      await updatePlayer(existing.id, {
+        ghin_index: player.ghin_index ?? existing.ghin_index,
+        is_favorite: player.is_favorite ?? existing.is_favorite,
+      })
+      return existing
+    }
+
     if (!auth.isAuthenticated) {
-      const p = { ...player, id: `local_${Date.now()}`, is_favorite: false }
+      const p = { ...player, id: `local_${Date.now()}` }
       players.value.push(p)
       _saveLocal()
       return p

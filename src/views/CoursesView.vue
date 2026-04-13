@@ -31,34 +31,27 @@
         <div
           v-for="c in favoriteCourses"
           :key="'fav-' + c.name"
-          class="course-card"
-          :class="{ 'course-card--custom': c.isCustom }"
-          @click="selectCourse(c)"
+          class="swipe-container"
         >
-          <div class="course-card-main">
-            <div class="course-name">{{ c.name }}</div>
-            <div class="course-meta">
-              <span v-if="c.isCustom" class="custom-badge">Custom</span>
-              <span class="tee-count">{{ teeSummary(c) }}</span>
+          <div class="swipe-action swipe-action-delete">🗑 Delete</div>
+          <div class="swipe-action swipe-action-unfav">☆ Unfavorite</div>
+          <div
+            class="course-card course-card--fav"
+            :class="{ 'course-card--custom': c.isCustom }"
+            :style="{ transform: `translateX(${swipeX[c.name] || 0}px)`, transition: swiping === c.name ? 'none' : 'transform .25s ease' }"
+            @touchstart="onSwipeStart($event, c.name)"
+            @touchmove="onSwipeMove($event, c.name)"
+            @touchend="onSwipeEnd($event, c)"
+            @click="selectCourse(c)"
+          >
+            <div class="course-card-main">
+              <div class="course-name">{{ c.name }}</div>
+              <div class="course-meta">
+                <span v-if="c.isCustom" class="custom-badge">Custom</span>
+                <span class="tee-count">{{ teeSummary(c) }}</span>
+                <span class="course-fav-badge">★ Saved</span>
+              </div>
             </div>
-          </div>
-          <div class="course-actions">
-            <button
-              class="fav-btn fav-btn--active"
-              @click.stop="coursesStore.toggleFavorite(c.name)"
-              aria-label="Remove from favorites"
-            >★</button>
-            <button
-              class="edit-btn"
-              @click.stop="openEditCourse(c)"
-              aria-label="Edit course"
-            >✏️</button>
-            <button
-              v-if="c.isCustom"
-              class="delete-btn"
-              @click.stop="confirmDelete(c)"
-              aria-label="Delete course"
-            >🗑</button>
           </div>
         </div>
       </template>
@@ -75,38 +68,38 @@
       <div
         v-for="c in filteredCourses"
         :key="c.name"
-        class="course-card"
-        :class="{ 'course-card--custom': c.isCustom }"
-        @click="selectCourse(c)"
+        class="swipe-container"
       >
-        <div class="course-card-main">
-          <div class="course-name">{{ c.name }}</div>
-          <div class="course-meta">
-            <span v-if="c.isCustom" class="custom-badge">Custom</span>
-            <span class="tee-count">{{ teeSummary(c) }}</span>
-          </div>
+        <div class="swipe-action swipe-action-delete">🗑 Delete</div>
+        <div class="swipe-action" :class="coursesStore.favoriteNames.has(c.name) ? 'swipe-action-unfav' : 'swipe-action-fav'">
+          {{ coursesStore.favoriteNames.has(c.name) ? '☆ Unfavorite' : '★ Favorite' }}
         </div>
-        <div class="course-actions">
-          <button
-            class="fav-btn"
-            :class="{ 'fav-btn--active': coursesStore.favoriteNames.has(c.name) }"
-            @click.stop="coursesStore.toggleFavorite(c.name)"
-            :aria-label="coursesStore.favoriteNames.has(c.name) ? 'Remove from favorites' : 'Add to favorites'"
-          >{{ coursesStore.favoriteNames.has(c.name) ? '★' : '☆' }}</button>
-          <button
-            class="edit-btn"
-            @click.stop="openEditCourse(c)"
-            aria-label="Edit course"
-          >✏️</button>
-          <button
-            v-if="c.isCustom"
-            class="delete-btn"
-            @click.stop="confirmDelete(c)"
-            aria-label="Delete course"
-          >🗑</button>
+        <div
+          class="course-card"
+          :class="{ 'course-card--custom': c.isCustom }"
+          :style="{ transform: `translateX(${swipeX[c.name] || 0}px)`, transition: swiping === c.name ? 'none' : 'transform .25s ease' }"
+          @touchstart="onSwipeStart($event, c.name)"
+          @touchmove="onSwipeMove($event, c.name)"
+          @touchend="onSwipeEnd($event, c)"
+          @click="selectCourse(c)"
+        >
+          <div class="course-card-main">
+            <div class="course-name">{{ c.name }}</div>
+            <div class="course-meta">
+              <span v-if="c.isCustom" class="custom-badge">Custom</span>
+              <span class="tee-count">{{ teeSummary(c) }}</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
+
+    <!-- Swipe toast -->
+    <Teleport to="body">
+      <transition name="toast">
+        <div v-if="toastMsg" class="swipe-toast" :class="toastType">{{ toastMsg }}</div>
+      </transition>
+    </Teleport>
 
     <!-- ── Add Course Overlay ──────────────────────────────── -->
     <Teleport to="body">
@@ -145,9 +138,9 @@
                   v-if="newCourse.name.length >= 3"
                   class="btn-fetch-api"
                   :disabled="apiFetching"
-                  @click="fetchCourseFromApi"
+                  @click="resetFromApi"
                 >
-                  {{ apiFetching ? '⟳ Fetching…' : '🔄 Fetch tees from golf database' }}
+                  {{ apiFetching ? '⟳ Fetching…' : (editingCourse?.isCustom ? '🔄 Reset from API (overwrites edits)' : '🔄 Fetch tees from golf database') }}
                 </button>
                 <div v-if="apiFetchMsg" class="api-fetch-msg" :class="{ 'api-fetch-err': apiFetchErr }">{{ apiFetchMsg }}</div>
               </div>
@@ -353,10 +346,10 @@
           <div class="confirm-sheet">
             <div class="confirm-icon">⚠️</div>
             <div class="confirm-title">Delete "{{ deleteTarget.name }}"?</div>
-            <div class="confirm-sub">This course will be removed from your list. Rounds that used it are not affected.</div>
+            <div class="confirm-sub">This will permanently remove this course and all its data (tees, SI, yardage). Past rounds are not affected.</div>
             <div class="confirm-actions">
               <button class="btn-ghost" @click="deleteTarget = null">Cancel</button>
-              <button class="btn-danger" @click="doDelete">Delete</button>
+              <button class="btn-danger" @click="doDelete">Delete Permanently</button>
             </div>
           </div>
         </div>
@@ -366,7 +359,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, reactive, onMounted, watch } from 'vue'
 import { useCoursesStore } from '../stores/courses'
 import { useRoute } from 'vue-router'
 
@@ -507,8 +500,6 @@ const editingCourse = ref(null)
 
 async function openEditCourse(c) {
   editingCourse.value = c
-  // Show overlay immediately with loading state — API-first approach
-  newCourse.value = { name: c.name, tees: [], holes: [] }
   addStep.value = 1
   step1Error.value = ''
   step2Error.value = ''
@@ -517,15 +508,38 @@ async function openEditCourse(c) {
   selectedTeeIdx.value = 0
   showAddOverlay.value = true
 
-  // Try API fetch first
+  // If this is a saved custom course, use saved data — don't re-fetch from API
+  // (User may have edited tees, deleted tees, changed SI, etc.)
+  const teesData = c.teesData || {}
+  const teeNames = Object.keys(teesData)
+
+  if (c.isCustom && teeNames.length > 0) {
+    console.log('[GW] openEditCourse: using saved custom course data for', c.name)
+    const tees = teeNames.map(name => ({
+      name,
+      rating: teesData[name].rating ?? null,
+      slope: teesData[name].slope ?? null,
+    }))
+    const par = c.par || Array(18).fill(4)
+    const globalSi = c.si || Array.from({ length: 18 }, (_, i) => i + 1)
+    const holes = Array.from({ length: 18 }, (_, i) => ({
+      par: par[i] || 4,
+      siByTee: teeNames.map(name => teesData[name]?.siByHole?.[i] ?? globalSi[i] ?? (i + 1)),
+      yards: teeNames.map(name => (teesData[name]?.yardsByHole?.[i]) || null),
+    }))
+    newCourse.value = { name: c.name, tees, holes }
+    apiFetchMsg.value = 'Loaded from saved data. Use "Reset from API" to re-fetch.'
+    return
+  }
+
+  // Non-custom (built-in) course — try API first, fall back to built-in data
+  newCourse.value = { name: c.name, tees: [], holes: [] }
   console.log('[GW] openEditCourse: fetching API data for', c.name)
   await fetchCourseFromApi()
 
   // If API fetch didn't populate tees, fall back to existing course data
   if (newCourse.value.tees.length === 0) {
     console.log('[GW] API fetch returned no tees, falling back to existing data')
-    const teesData = c.teesData || {}
-    const teeNames = Object.keys(teesData)
     const tees = teeNames.length
       ? teeNames.map(name => ({
           name,
@@ -662,6 +676,13 @@ async function fetchCourseFromApi() {
   apiFetching.value = false
 }
 
+function resetFromApi() {
+  // Force re-fetch from API — clear any cached data
+  coursesStore.apiDetailCache = {}
+  coursesStore.apiSearchCache = {}
+  fetchCourseFromApi()
+}
+
 function step1Next() {
   step1Error.value = ''
   const name = newCourse.value.name.trim()
@@ -757,8 +778,66 @@ const deleteTarget = ref(null)
 function confirmDelete(course) { deleteTarget.value = course }
 async function doDelete() {
   if (!deleteTarget.value) return
-  await coursesStore.deleteCourse(deleteTarget.value.id)
+  // Remove from favorites
+  if (coursesStore.favoriteNames.has(deleteTarget.value.name)) {
+    coursesStore.toggleFavorite(deleteTarget.value.name)
+  }
+  // Delete from database / localStorage
+  if (deleteTarget.value.isCustom && deleteTarget.value.id) {
+    await coursesStore.deleteCourse(deleteTarget.value.id)
+  }
   deleteTarget.value = null
+}
+
+// ── Swipe gestures ──────────────────────────────────────────────
+const swipeX = reactive({})
+const swiping = ref(null)
+const swipeStartX = ref(0)
+const swipeStartY = ref(0)
+const SWIPE_THRESHOLD = 80
+
+function onSwipeStart(e, key) {
+  swipeStartX.value = e.touches[0].clientX
+  swipeStartY.value = e.touches[0].clientY
+  swiping.value = key
+}
+
+function onSwipeMove(e, key) {
+  if (swiping.value !== key) return
+  const dx = e.touches[0].clientX - swipeStartX.value
+  const dy = e.touches[0].clientY - swipeStartY.value
+  if (Math.abs(dy) > Math.abs(dx) * 0.8) return
+  swipeX[key] = Math.max(-120, Math.min(120, dx))
+}
+
+function onSwipeEnd(e, course) {
+  const key = course.name
+  const dx = swipeX[key] || 0
+  swiping.value = null
+
+  if (dx < -SWIPE_THRESHOLD) {
+    swipeX[key] = 0
+    confirmDelete(course)
+  } else if (dx > SWIPE_THRESHOLD) {
+    swipeX[key] = 0
+    const wasFav = coursesStore.favoriteNames.has(course.name)
+    coursesStore.toggleFavorite(course.name)
+    showToast(wasFav ? 'Removed from favorites' : '★ Added to favorites!', wasFav ? 'neutral' : 'gold')
+  } else {
+    swipeX[key] = 0
+  }
+}
+
+// ── Toast ────────────────────────────────────────────────────────
+const toastMsg = ref('')
+const toastType = ref('')
+let toastTimer = null
+
+function showToast(msg, type = 'neutral') {
+  toastMsg.value = msg
+  toastType.value = type
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => { toastMsg.value = '' }, 1800)
 }
 </script>
 
@@ -879,6 +958,53 @@ async function doDelete() {
 }
 .course-card:active { transform: scale(.98); box-shadow: var(--gw-shadow-sm); }
 .course-card--custom { border-left-color: var(--gw-gold); }
+.course-card--fav {
+  border-color: rgba(212,175,55,.25);
+  background: rgba(212,175,55,.04);
+}
+
+/* ── Swipe container ────────────────────────────────── */
+.swipe-container {
+  position: relative; overflow: hidden; border-radius: var(--gw-radius-lg); margin-bottom: 8px;
+}
+.swipe-container .course-card { margin-bottom: 0; }
+.swipe-action {
+  position: absolute; top: 0; bottom: 0; width: 120px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; letter-spacing: .02em;
+}
+.swipe-action-delete {
+  left: 0; background: linear-gradient(90deg, #dc2626 0%, #b91c1c 100%); color: white;
+  border-radius: var(--gw-radius-lg) 0 0 var(--gw-radius-lg);
+}
+.swipe-action-fav {
+  right: 0; background: linear-gradient(270deg, #ca8a04 0%, #a16207 100%); color: white;
+  border-radius: 0 var(--gw-radius-lg) var(--gw-radius-lg) 0;
+}
+.swipe-action-unfav {
+  right: 0; background: linear-gradient(270deg, rgba(240,237,224,.15) 0%, rgba(240,237,224,.08) 100%);
+  color: rgba(240,237,224,.6); border-radius: 0 var(--gw-radius-lg) var(--gw-radius-lg) 0;
+}
+
+.course-fav-badge {
+  font-size: 10px; font-weight: 700; color: #d4af37;
+  background: rgba(212,175,55,.12); border: 1px solid rgba(212,175,55,.25);
+  padding: 1px 7px; border-radius: 10px;
+}
+
+/* ── Toast ──────────────────────────────────────────── */
+.swipe-toast {
+  position: fixed; bottom: calc(var(--gw-nav-height, 60px) + env(safe-area-inset-bottom) + 16px);
+  left: 50%; transform: translateX(-50%);
+  padding: 10px 20px; border-radius: 20px; font-size: 13px; font-weight: 600;
+  z-index: 400; pointer-events: none;
+  background: rgba(30,40,30,.92); color: #f0ede0;
+  border: 1px solid rgba(255,255,255,.1);
+  backdrop-filter: blur(8px);
+}
+.swipe-toast.gold { color: #d4af37; border-color: rgba(212,175,55,.3); }
+.toast-enter-active, .toast-leave-active { transition: all .3s ease; }
+.toast-enter-from, .toast-leave-to { opacity: 0; transform: translateX(-50%) translateY(10px); }
 
 .course-card-main { flex: 1; min-width: 0; }
 .course-name {
@@ -912,46 +1038,14 @@ async function doDelete() {
   color: var(--gw-text-muted);
 }
 
-.course-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
+.tap-edit-hint {
+  font-size: 10px;
+  color: rgba(240,237,224,.3);
+  display: block;
+  margin-top: 2px;
 }
-.fav-btn {
-  width: 40px;
-  height: 40px;
-  border: none;
-  background: none;
-  font-size: 20px;
-  color: rgba(240, 237, 224, 0.3);
-  cursor: pointer;
-  border-radius: var(--gw-radius-full);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  -webkit-tap-highlight-color: transparent;
-  transition: color .15s, transform .15s;
-}
-.fav-btn:active { transform: scale(.85); }
-.fav-btn--active { color: var(--gw-gold); }
 
-.delete-btn {
-  width: 36px;
-  height: 36px;
-  border: none;
-  background: none;
-  font-size: 16px;
-  cursor: pointer;
-  border-radius: var(--gw-radius-full);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  -webkit-tap-highlight-color: transparent;
-  opacity: .6;
-  transition: opacity .15s;
-}
-.delete-btn:active { opacity: 1; }
+/* old button actions removed — using swipe gestures now */
 
 /* ── Empty state ─────────────────────────────────────────── */
 .empty-state {
