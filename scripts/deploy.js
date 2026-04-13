@@ -46,6 +46,19 @@ run('git push origin main')
 
 // ── 3. Poll live URL ─────────────────────────────────────────────
 console.log(`\n━━━ Waiting for live deploy (polling ${LIVE_URL})… ━━`)
+
+// Quick network check — if GitHub Pages is unreachable from this environment,
+// print instructions and exit cleanly rather than timing out.
+const networkCheck = spawnSync('curl', ['-sf', '--max-time', '5', LIVE_URL], { encoding: 'utf-8' })
+if (networkCheck.status !== 0) {
+  console.log('\n⚠️  Network check: GitHub Pages not reachable from this environment.')
+  console.log('   Push succeeded. Verify the deploy manually:\n')
+  console.log(`   curl -s "${LIVE_URL}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('✅ LIVE' if d['stamp']=='${localVersion.stamp}' else '❌ STALE', d)"`)
+  console.log(`\n   Or open: ${LIVE_URL}`)
+  console.log(`   Expected stamp: ${localVersion.stamp}`)
+  process.exit(0)
+}
+
 const start = Date.now()
 let verified = false
 
@@ -54,10 +67,8 @@ while (Date.now() - start < TIMEOUT_MS) {
   const elapsed = Math.round((Date.now() - start) / 1000)
 
   try {
-    // Use curl so we get a fresh response with no local caching
     const result = spawnSync('curl', [
-      '-sf',
-      '--max-time', '10',
+      '-sf', '--max-time', '10',
       '--header', 'Cache-Control: no-cache',
       LIVE_URL,
     ], { encoding: 'utf-8' })
@@ -73,7 +84,7 @@ while (Date.now() - start < TIMEOUT_MS) {
       verified = true
       break
     } else {
-      console.log(`[${elapsed}s] Live: ${live.version}/${live.stamp} ≠ Local: ${localVersion.stamp} — waiting…`)
+      console.log(`[${elapsed}s] Live: ${live.version}/${live.stamp} ≠ Expected: ${localVersion.stamp} — waiting…`)
     }
   } catch (err) {
     console.log(`[${elapsed}s] Parse error — retrying… (${err.message})`)
@@ -83,6 +94,6 @@ while (Date.now() - start < TIMEOUT_MS) {
 if (!verified) {
   console.error(`\n❌ DEPLOY TIMEOUT — live site did not update within ${TIMEOUT_MS / 1000}s`)
   console.error(`   Expected stamp: ${localVersion.stamp}`)
-  console.error(`   Check GitHub Actions at: https://github.com/k269x9xzcd-bot/golfwizard/actions`)
+  console.error(`   GitHub Actions: https://github.com/k269x9xzcd-bot/golfwizard/actions`)
   process.exit(1)
 }
