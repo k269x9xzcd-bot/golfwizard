@@ -256,14 +256,14 @@
                 <label>Player 1</label>
                 <select v-model="mainGame.config.player1" class="config-select">
                   <option value="">— select —</option>
-                  <option v-for="p in form.players" :key="p.id" :value="p.id">{{ p.shortName || p.name }}</option>
+                  <option v-for="p in form.players" :key="p.id" :value="p.id">{{ wizDisplayName(p) }}</option>
                 </select>
               </div>
               <div class="config-field">
                 <label>Player 2</label>
                 <select v-model="mainGame.config.player2" class="config-select">
                   <option value="">— select —</option>
-                  <option v-for="p in form.players" :key="p.id" :value="p.id">{{ p.shortName || p.name }}</option>
+                  <option v-for="p in form.players" :key="p.id" :value="p.id">{{ wizDisplayName(p) }}</option>
                 </select>
               </div>
             </div>
@@ -389,13 +389,13 @@
               <div class="config-note">Tap each player in tee order (1st = Wolf on hole 1):</div>
               <div class="wolf-pick-players">
                 <button v-for="p in form.players" :key="p.id" class="wolf-pick-player-btn" @click="wolfAddToOrder(p.id)">
-                  {{ p.shortName || p.name }}
+                  {{ wizDisplayName(p) }}
                 </button>
               </div>
             </div>
             <div v-if="mainGame.config.wolfTeeOrder && mainGame.config.wolfTeeOrder.length && mainGame.config.wolfTeeOrder.length < form.players.length" class="wolf-pick-players">
               <button v-for="p in form.players.filter(p => !mainGame.config.wolfTeeOrder.includes(p.id))" :key="p.id" class="wolf-pick-player-btn" @click="wolfAddToOrder(p.id)">
-                + {{ p.shortName || p.name }}
+                + {{ wizDisplayName(p) }}
               </button>
             </div>
             <button v-if="mainGame.config.wolfTeeOrder && mainGame.config.wolfTeeOrder.length" class="wolf-reset-btn" @click="mainGame.config.wolfTeeOrder = []">Reset Order</button>
@@ -566,14 +566,14 @@
                   <label>Player A</label>
                   <select v-model="sideGames.match1.player1" class="config-select">
                     <option value="">— select —</option>
-                    <option v-for="p in form.players" :key="p.id" :value="p.id">{{ p.shortName || p.name }}</option>
+                    <option v-for="p in form.players" :key="p.id" :value="p.id">{{ wizDisplayName(p) }}</option>
                   </select>
                 </div>
                 <div class="config-field">
                   <label>vs Player B</label>
                   <select v-model="sideGames.match1.player2" class="config-select">
                     <option value="">— select —</option>
-                    <option v-for="p in form.players" :key="p.id" :value="p.id">{{ p.shortName || p.name }}</option>
+                    <option v-for="p in form.players" :key="p.id" :value="p.id">{{ wizDisplayName(p) }}</option>
                   </select>
                 </div>
                 <div class="config-field">
@@ -596,14 +596,14 @@
                   <label>Player A</label>
                   <select v-model="sideGames.match2.player1" class="config-select">
                     <option value="">— select —</option>
-                    <option v-for="p in form.players" :key="p.id" :value="p.id">{{ p.shortName || p.name }}</option>
+                    <option v-for="p in form.players" :key="p.id" :value="p.id">{{ wizDisplayName(p) }}</option>
                   </select>
                 </div>
                 <div class="config-field">
                   <label>vs Player B</label>
                   <select v-model="sideGames.match2.player2" class="config-select">
                     <option value="">— select —</option>
-                    <option v-for="p in form.players" :key="p.id" :value="p.id">{{ p.shortName || p.name }}</option>
+                    <option v-for="p in form.players" :key="p.id" :value="p.id">{{ wizDisplayName(p) }}</option>
                   </select>
                 </div>
                 <div class="config-field">
@@ -1112,10 +1112,17 @@ async function fetchAndApplyApiDetail(courseName, apiId, defaultTees) {
   apiLoadingWizard.value = false
 }
 
+// ── Player display helpers ────────────────────────────────────────
+function wizDisplayName(p) {
+  if (!p) return '?'
+  if (p?.use_nickname && p?.nickname) return p.nickname
+  return p?.shortName || p?.name || '?'
+}
+
 // ── Wolf tee order helpers ────────────────────────────────────────
 function wolfPlayerName(pid) {
   const p = form.value.players.find(p => p.id === pid)
-  return p?.shortName || p?.name || '?'
+  return wizDisplayName(p)
 }
 
 function wolfRandomizeOrder() {
@@ -1181,6 +1188,8 @@ function togglePlayer(p) {
       id: p.id, name: p.name,
       shortName: p.short_name,
       ghinIndex: p.ghin_index,
+      nickname: p.nickname ?? null,
+      use_nickname: p.use_nickname ?? false,
       profileId: null,
     })
   }
@@ -1193,6 +1202,8 @@ function quickAddPlayer() {
     name: newName.value.trim(),
     shortName: newName.value.trim().split(' ')[0].slice(0, 8),
     ghinIndex: newHcp.value ? parseFloat(newHcp.value) : null,
+    nickname: null,
+    use_nickname: false,
     profileId: null,
   })
   newName.value = ''

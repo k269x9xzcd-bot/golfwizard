@@ -151,6 +151,8 @@ export const useRoundsStore = defineStore('rounds', () => {
         team: p.team ?? null,
         group_index: p.groupIndex ?? 0,
         role: i === 0 ? 'admin' : 'player',
+        nickname: p.nickname ?? null,
+        use_nickname: p.use_nickname ?? false,
       }))
 
       const gameConfigs = games.map((g, i) => ({
@@ -205,6 +207,8 @@ export const useRoundsStore = defineStore('rounds', () => {
         team: p.team ?? null,
         group_index: p.groupIndex ?? 0,
         role: i === 0 && auth.user?.id ? 'admin' : 'player',
+        nickname: p.nickname ?? null,
+        use_nickname: p.use_nickname ?? false,
       }))
       const { data: mData, error: mErr } = await supabase.from('round_members').insert(memberRows).select()
       if (mErr) throw mErr

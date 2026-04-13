@@ -232,9 +232,9 @@
         <div class="tdc-players">
           <div v-for="p in team.players" :key="p.id" class="tdc-player">
             <div class="tdc-player-badge" :style="{ background: team.color + '33', color: team.color }">
-              {{ p.name[0] }}
+              {{ (p.nickname || p.name)[0] }}
             </div>
-            <span class="tdc-player-name">{{ p.name }}</span>
+            <span class="tdc-player-name">{{ p.nickname || p.name }}</span>
           </div>
         </div>
         <!-- Mini schedule for this team -->
@@ -274,12 +274,12 @@
             <div class="mm-teams-banner">
               <div class="mm-tb-team" :style="{ color: getTeam(activeMatch.match.team1).color }">
                 <div class="mm-tb-name">{{ getTeam(activeMatch.match.team1).name }}</div>
-                <div class="mm-tb-players">{{ getTeam(activeMatch.match.team1).players.map(p=>p.name).join(' & ') }}</div>
+                <div class="mm-tb-players">{{ getTeam(activeMatch.match.team1).players.map(p => p.nickname || p.name).join(' & ') }}</div>
               </div>
               <div class="mm-tb-vs">VS</div>
               <div class="mm-tb-team mm-tb-team--right" :style="{ color: getTeam(activeMatch.match.team2).color }">
                 <div class="mm-tb-name">{{ getTeam(activeMatch.match.team2).name }}</div>
-                <div class="mm-tb-players">{{ getTeam(activeMatch.match.team2).players.map(p=>p.name).join(' & ') }}</div>
+                <div class="mm-tb-players">{{ getTeam(activeMatch.match.team2).players.map(p => p.nickname || p.name).join(' & ') }}</div>
               </div>
             </div>
 
@@ -521,8 +521,8 @@ function singlesMatchups(match) {
   const t2 = getTeam(match.team2)
   const order = match.singlesOrder || 0
   return [
-    { p1: t1.players[order === 0 ? 0 : 1].name, p2: t2.players[order === 0 ? 0 : 1].name },
-    { p1: t1.players[order === 0 ? 1 : 0].name, p2: t2.players[order === 0 ? 1 : 0].name },
+    { p1: t1.players[order === 0 ? 0 : 1].nickname || t1.players[order === 0 ? 0 : 1].name, p2: t2.players[order === 0 ? 0 : 1].nickname || t2.players[order === 0 ? 0 : 1].name },
+    { p1: t1.players[order === 0 ? 1 : 0].nickname || t1.players[order === 0 ? 1 : 0].name, p2: t2.players[order === 0 ? 1 : 0].nickname || t2.players[order === 0 ? 1 : 0].name },
   ]
 }
 

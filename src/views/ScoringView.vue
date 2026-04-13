@@ -429,7 +429,7 @@
               :key="'snake-' + member.id"
               class="snake-tap-btn"
               @click="addSnakeEvent(member.id)"
-            >{{ member.short_name || member.guest_name }}</button>
+            >{{ memberDisplay(member) }}</button>
           </div>
           <div v-if="snakeEventsOnHole.length" class="snake-hole-events">
             🐍 × {{ snakeEventsOnHole.length }} on this hole
@@ -456,7 +456,7 @@
               class="wolf-pick-btn"
               :class="{ active: wolfChoiceForHole?.partner === member.id }"
               @click="setWolfChoice(member.id)"
-            >{{ member.short_name || member.guest_name }}</button>
+            >{{ memberDisplay(member) }}</button>
           </div>
           <button
             class="wolf-lone-btn"
@@ -496,7 +496,7 @@
             <div class="finish-review-sub">Confirm scores before finishing</div>
             <div class="finish-review-grid">
               <div v-for="member in roundsStore.activeMembers" :key="'fr-'+member.id" class="finish-review-player">
-                <span class="fr-name">{{ member.short_name || member.guest_name }}</span>
+                <span class="fr-name">{{ memberDisplay(member) }}</span>
                 <span class="fr-total">{{ playerTotal(member.id) || '—' }}</span>
                 <span class="fr-net">NET {{ playerNetTotal(member.id) || '—' }}</span>
               </div>
@@ -518,6 +518,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRoundsStore } from '../stores/rounds'
+import { displayName as rosterDisplayName, displayInitials as rosterDisplayInitials } from '../stores/roster'
 import { COURSES } from '../modules/courses'
 import {
   memberHandicap as _memberHandicap, strokesOnHole, holeSI, holePar, holeYards,
@@ -866,11 +867,21 @@ function nameToInitials(name) {
   return (parts[0]?.[0] ?? '?').toUpperCase() + '?'
 }
 
-// Helper: get member initials preferring full name for first+last initial
+// Helper: get member initials with nickname support
 // round_members rows use guest_name for the full name, not .name
 function memberInitials(m) {
   if (!m) return '??'
+  // Use nickname if enabled
+  if (m.use_nickname && m.nickname) return m.nickname.slice(0, 6)
+  // Otherwise first+last initial from full name
   return nameToInitials(m.guest_name || m.name || m.short_name || '?')
+}
+
+// Helper: get member display name with nickname support
+function memberDisplay(m) {
+  if (!m) return '?'
+  if (m.use_nickname && m.nickname) return m.nickname
+  return m.guest_name || m.name || m.short_name || '?'
 }
 
 // Helper: build team initials string like "JS+BC"
@@ -1239,7 +1250,7 @@ function gameLiveSummary(game) {
       const atRisk = r.fidgeters || []
       if (safe.length === 0) return `All ${atRisk.length} players at risk`
       if (atRisk.length === 0) return 'All safe!'
-      const atRiskNames = atRisk.map(m => m.short_name || m.guest_name).join(', ')
+      const atRiskNames = atRisk.map(m => memberDisplay(m)).join(', ')
       return `⚠️ ${atRiskNames} still at risk (${safe.length} safe)`
     }
     if (t === 'bbn') {
@@ -1304,7 +1315,7 @@ function inlineDec(member) {
 // ── Snake 3-putt ────────────────────────────────────────────────
 const snakeGame = computed(() => roundsStore.activeGames.find(g => g.type?.toLowerCase() === 'snake') || null)
 const snakeHolder = computed(() => { const e = snakeGame.value?.config?.events || []; return e.length ? e[e.length - 1].pid : null })
-const snakeHolderName = computed(() => { if (!snakeHolder.value) return null; const m = roundsStore.activeMembers.find(m => m.id === snakeHolder.value); return m?.short_name || m?.guest_name || '?' })
+const snakeHolderName = computed(() => { if (!snakeHolder.value) return null; const m = roundsStore.activeMembers.find(m => m.id === snakeHolder.value); return memberDisplay(m) })
 const snakeEventsOnHole = computed(() => (snakeGame.value?.config?.events || []).filter(e => e.hole === activeHole.value))
 
 const lastScoredHole = computed(() => {
@@ -1388,7 +1399,7 @@ const wolfOnThisHole = computed(() => {
 const wolfOnThisHoleName = computed(() => {
   if (!wolfOnThisHole.value) return '?'
   const m = roundsStore.activeMembers.find(m => m.id === wolfOnThisHole.value)
-  return m?.short_name || m?.guest_name || '?'
+  return memberDisplay(m)
 })
 
 const wolfChoiceForHole = computed(() => {
@@ -1403,7 +1414,7 @@ const wolfPickableMembers = computed(() => {
 
 function memberName(memberId) {
   const m = roundsStore.activeMembers.find(m => m.id === memberId)
-  return m?.short_name || m?.guest_name || '?'
+  return memberDisplay(m)
 }
 
 async function setWolfChoice(partnerId) {

@@ -12,6 +12,8 @@
         <input v-model="newLast" class="wiz-input" placeholder="Last name" />
       </div>
       <input v-model="newGhin" class="wiz-input" placeholder="GHIN Index (e.g. 14.2)" type="number" step="0.1" />
+      <input v-model="newNickname" class="wiz-input" placeholder="Nickname (optional, e.g. Wang)" />
+      <input v-model="newEmail"    class="wiz-input" placeholder="Email address" type="email" autocomplete="email" />
       <button class="btn-primary btn-sm" @click="add">Add Player</button>
     </div>
 
@@ -37,6 +39,7 @@
           <div class="player-name">{{ p.name }}</div>
           <div class="player-meta">
             <span class="player-ghin">GHIN {{ p.ghin_index != null ? p.ghin_index : '—' }}</span>
+            <span v-if="p.nickname" class="player-nick-badge" :class="{ active: p.use_nickname }">{{ p.nickname }}</span>
             <span class="player-fav-badge">★ Saved</span>
           </div>
         </div>
@@ -65,6 +68,7 @@
           <div class="player-name">{{ p.name }}</div>
           <div class="player-meta">
             <span class="player-ghin">GHIN {{ p.ghin_index != null ? p.ghin_index : '—' }}</span>
+            <span v-if="p.nickname" class="player-nick-badge" :class="{ active: p.use_nickname }">{{ p.nickname }}</span>
           </div>
         </div>
       </div>
@@ -111,6 +115,14 @@
             <input v-model="editLast" class="wiz-input" placeholder="Last name" />
           </div>
           <input v-model="editGhin" class="wiz-input" placeholder="GHIN Index" type="number" step="0.1" />
+          <div class="edit-nickname-row">
+            <input v-model="editNickname" class="wiz-input" placeholder="Nickname (e.g. Wang)" style="flex:1" />
+            <label class="nick-toggle-label">
+              <input type="checkbox" v-model="editUseNickname" class="nick-toggle-cb" />
+              <span class="nick-toggle-text">Use nickname</span>
+            </label>
+          </div>
+          <input v-model="editEmail" class="wiz-input" placeholder="Email address" type="email" autocomplete="email" />
           <div class="edit-footer">
             <button class="btn-ghost" @click="editTarget = null">Cancel</button>
             <button class="btn-primary" @click="saveEdit">Save</button>
@@ -131,6 +143,8 @@ const showAdd = ref(false)
 const newFirst = ref('')
 const newLast = ref('')
 const newGhin = ref('')
+const newNickname = ref('')
+const newEmail = ref('')
 
 const favoritePlayers = computed(() => rosterStore.players.filter(p => p.is_favorite))
 const otherPlayers = computed(() => rosterStore.players.filter(p => !p.is_favorite))
@@ -144,9 +158,12 @@ async function add() {
     name: fullName,
     short_name: last || first.slice(0, 8),
     ghin_index: newGhin.value !== '' ? parseFloat(newGhin.value) : null,
+    nickname: newNickname.value.trim() || null,
+    email: newEmail.value.trim() || null,
+    use_nickname: false,
     is_favorite: true,
   })
-  newFirst.value = ''; newLast.value = ''; newGhin.value = ''; showAdd.value = false
+  newFirst.value = ''; newLast.value = ''; newGhin.value = ''; newNickname.value = ''; newEmail.value = ''; showAdd.value = false
 }
 
 // ── Swipe gestures ──────────────────────────────────────────────
@@ -232,6 +249,9 @@ const editTarget = ref(null)
 const editFirst = ref('')
 const editLast = ref('')
 const editGhin = ref('')
+const editNickname = ref('')
+const editUseNickname = ref(false)
+const editEmail = ref('')
 
 function startEdit(p) {
   editTarget.value = p
@@ -239,6 +259,9 @@ function startEdit(p) {
   editFirst.value = parts[0] || ''
   editLast.value = parts.slice(1).join(' ')
   editGhin.value = p.ghin_index ?? ''
+  editNickname.value = p.nickname || ''
+  editUseNickname.value = p.use_nickname || false
+  editEmail.value = p.email || ''
 }
 
 async function saveEdit() {
@@ -250,6 +273,9 @@ async function saveEdit() {
     name: fullName,
     short_name: editLast.value.trim() || editFirst.value.trim().slice(0, 8),
     ghin_index: editGhin.value !== '' ? parseFloat(editGhin.value) : null,
+    nickname: editNickname.value.trim() || null,
+    use_nickname: editUseNickname.value,
+    email: editEmail.value.trim() || null,
   })
   editTarget.value = null
 }
@@ -414,4 +440,26 @@ async function saveEdit() {
 .close-btn { background: none; border: none; font-size: 18px; cursor: pointer; color: rgba(240,237,224,.5); }
 .edit-footer { display: flex; gap: 10px; margin-top: 4px; }
 .edit-footer .btn-ghost, .edit-footer .btn-primary { flex: 1; }
+
+.player-nick-badge {
+  font-size: 10px; font-weight: 700;
+  color: rgba(240,237,224,.4);
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.08);
+  padding: 1px 7px; border-radius: 10px;
+}
+.player-nick-badge.active {
+  color: #22a06b;
+  background: rgba(34,160,107,.12);
+  border-color: rgba(34,160,107,.3);
+}
+.edit-nickname-row {
+  display: flex; align-items: center; gap: 10px;
+}
+.nick-toggle-label {
+  display: flex; align-items: center; gap: 6px;
+  cursor: pointer; white-space: nowrap; flex-shrink: 0;
+}
+.nick-toggle-cb { width: 16px; height: 16px; accent-color: #22a06b; cursor: pointer; }
+.nick-toggle-text { font-size: 12px; color: rgba(240,237,224,.6); }
 </style>

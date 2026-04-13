@@ -5,15 +5,14 @@
 // ─── ACCESS CONTROL ─────────────────────────────────────────────
 // Replace placeholder emails with real ones when provided.
 export const TOURNAMENT_EMAILS = [
-  // 'jason@example.com',   ← fill these in
-  // 'brian@example.com',
-  // 'chris@example.com',
-  // 'jeremy@example.com',
-  // 'al@example.com',
-  // 'marty@example.com',
-  // 'wang@example.com',
-  // 'matt@example.com',
-  '__ALL__',  // ← remove this once real emails are added; allows everyone for now
+  'jayspieler@aol.com',
+  'bcimons19@yahoo.com',
+  'jcourt93@gmail.com',
+  'craggo@recordandreturn.com',
+  'matt@derosasports.com',
+  'bonga13@gmail.com',
+  'martydurkin17@verizon.net',
+  'alexcarroll333@gmail.com',
 ]
 
 export function hasTournamentAccess(email) {
@@ -44,8 +43,8 @@ export const TEAMS = [
     color: '#60a5fa',          // blue
     colorDim: 'rgba(96,165,250,.15)',
     players: [
-      { id: 'brian', name: 'Brian', email: null },
-      { id: 'chris', name: 'Chris', email: null },
+      { id: 'brian', name: 'Brian Cimons',  nickname: 'Brian', email: 'bcimons19@yahoo.com' },
+      { id: 'chris', name: 'Chris Raggo',   nickname: 'Chris', email: 'craggo@recordandreturn.com' },
     ],
   },
   {
@@ -55,8 +54,8 @@ export const TEAMS = [
     color: '#f87171',          // red
     colorDim: 'rgba(248,113,113,.15)',
     players: [
-      { id: 'jeremy', name: 'Jeremy', email: null },
-      { id: 'al',     name: 'Al',     email: null },
+      { id: 'jeremy', name: 'Jeremy Court',  nickname: 'Jeremy', email: 'jcourt93@gmail.com' },
+      { id: 'al',     name: 'Alex Carroll',  nickname: 'Al',     email: 'alexcarroll333@gmail.com' },
     ],
   },
   {
@@ -66,8 +65,8 @@ export const TEAMS = [
     color: '#34d399',          // emerald
     colorDim: 'rgba(52,211,153,.15)',
     players: [
-      { id: 'marty', name: 'Marty', email: null },
-      { id: 'wang',  name: 'Wang',  email: null },
+      { id: 'marty', name: 'Marty Durkin', nickname: 'Marty', email: 'martydurkin17@verizon.net' },
+      { id: 'wang',  name: 'Shang Chen',   nickname: 'Wang',  email: 'bonga13@gmail.com' },
     ],
   },
   {
@@ -77,8 +76,8 @@ export const TEAMS = [
     color: '#fbbf24',          // gold
     colorDim: 'rgba(251,191,36,.15)',
     players: [
-      { id: 'matt',    name: 'Matt',    email: null },
-      { id: 'spieler', name: 'Spieler', email: null },
+      { id: 'matt',    name: 'Matt DeRosa',    nickname: 'Matt',   email: 'matt@derosasports.com' },
+      { id: 'spieler', name: 'Jason Spieler',  nickname: 'Spiels', email: 'jayspieler@aol.com' },
     ],
   },
 ]
