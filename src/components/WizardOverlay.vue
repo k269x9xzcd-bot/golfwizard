@@ -103,23 +103,19 @@
         <!-- Added players -->
         <div v-if="form.players.length" class="player-cards">
           <div v-for="(p, i) in form.players" :key="p.id" class="player-card">
-            <div class="player-card-main">
-              <span class="player-card-name">{{ p.name }}</span>
-              <button class="player-card-remove" @click="form.players.splice(i, 1)" title="Remove">×</button>
-            </div>
-            <div class="player-card-meta">
-              <label class="player-card-field">
-                <span class="player-card-label">Index</span>
-                <input
-                  type="number"
-                  step="0.1"
-                  class="player-card-input"
-                  :value="p.ghinIndex"
-                  @input="p.ghinIndex = $event.target.value ? parseFloat($event.target.value) : null"
-                  placeholder="—"
-                />
-              </label>
-            </div>
+            <button class="player-card-remove" @click="form.players.splice(i, 1)" title="Remove">×</button>
+            <span class="player-card-name">{{ p.name }}</span>
+            <label class="player-card-field">
+              <span class="player-card-label">IDX</span>
+              <input
+                type="number"
+                step="0.1"
+                class="player-card-input"
+                :value="p.ghinIndex"
+                @input="p.ghinIndex = $event.target.value ? parseFloat($event.target.value) : null"
+                placeholder="—"
+              />
+            </label>
           </div>
         </div>
 
@@ -403,6 +399,7 @@
               </button>
             </div>
             <button v-if="mainGame.config.wolfTeeOrder && mainGame.config.wolfTeeOrder.length" class="wolf-reset-btn" @click="mainGame.config.wolfTeeOrder = []">Reset Order</button>
+            <button class="wolf-auto-btn" @click="wolfRandomizeOrder">🎲 Randomize Order</button>
             <button v-if="!mainGame.config.wolfTeeOrder || !mainGame.config.wolfTeeOrder.length" class="wolf-auto-btn" @click="mainGame.config.wolfTeeOrder = form.players.map(p => p.id)">Use Player List Order</button>
           </div>
 
@@ -726,26 +723,47 @@ const TeamPicker = {
           : 'rgba(240,237,224,.5)',
       }
     }
-    return () => h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '12px' } }, [
-      h('div', { style: colStyle(1) }, [
-        h('div', { style: labelStyle(1) }, 'TEAM 1'),
-        ...(props.players || []).map(p =>
-          h('button', {
-            key: 't1-' + p.id,
-            style: btnStyle(p.id, 1),
-            onClick: () => assign(p.id, 1),
-          }, p.shortName || p.name)
-        ),
-      ]),
-      h('div', { style: colStyle(2) }, [
-        h('div', { style: labelStyle(2) }, 'TEAM 2'),
-        ...(props.players || []).map(p =>
-          h('button', {
-            key: 't2-' + p.id,
-            style: btnStyle(p.id, 2),
-            onClick: () => assign(p.id, 2),
-          }, p.shortName || p.name)
-        ),
+    function randomize() {
+      const ids = (props.players || []).map(p => p.id)
+      // Fisher-Yates shuffle
+      for (let i = ids.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [ids[i], ids[j]] = [ids[j], ids[i]]
+      }
+      const half = Math.ceil(ids.length / 2)
+      emit('update:team1', ids.slice(0, half))
+      emit('update:team2', ids.slice(half))
+    }
+    const randomBtnStyle = {
+      display: 'block', width: '100%', padding: '9px', marginBottom: '10px',
+      borderRadius: '10px', fontSize: '12px', fontWeight: '700', cursor: 'pointer',
+      border: '1px solid rgba(212,175,55,.3)', background: 'rgba(212,175,55,.08)',
+      color: '#d4af37', fontFamily: 'inherit', textAlign: 'center',
+      WebkitTapHighlightColor: 'transparent',
+    }
+    return () => h('div', { style: { marginTop: '12px' } }, [
+      h('button', { style: randomBtnStyle, onClick: randomize }, '🎲 Randomize Teams'),
+      h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' } }, [
+        h('div', { style: colStyle(1) }, [
+          h('div', { style: labelStyle(1) }, 'TEAM 1'),
+          ...(props.players || []).map(p =>
+            h('button', {
+              key: 't1-' + p.id,
+              style: btnStyle(p.id, 1),
+              onClick: () => assign(p.id, 1),
+            }, p.shortName || p.name)
+          ),
+        ]),
+        h('div', { style: colStyle(2) }, [
+          h('div', { style: labelStyle(2) }, 'TEAM 2'),
+          ...(props.players || []).map(p =>
+            h('button', {
+              key: 't2-' + p.id,
+              style: btnStyle(p.id, 2),
+              onClick: () => assign(p.id, 2),
+            }, p.shortName || p.name)
+          ),
+        ]),
       ]),
     ])
   },
@@ -1100,6 +1118,15 @@ function wolfPlayerName(pid) {
   return p?.shortName || p?.name || '?'
 }
 
+function wolfRandomizeOrder() {
+  const ids = form.value.players.map(p => p.id)
+  for (let i = ids.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [ids[i], ids[j]] = [ids[j], ids[i]]
+  }
+  mainGame.value.config.wolfTeeOrder = ids
+}
+
 function wolfAddToOrder(pid) {
   if (!mainGame.value.config.wolfTeeOrder) mainGame.value.config.wolfTeeOrder = []
   if (mainGame.value.config.wolfTeeOrder.includes(pid)) return
@@ -1243,10 +1270,17 @@ async function create() {
         date: form.value.date,
         holesMode: form.value.holesMode,
         withRoomCode: form.value.withRoomCode,
-        players: form.value.players.map(p => ({
-          ...p,
-          roundHcp: p.ghinIndex != null ? Math.round(p.ghinIndex) : null,
-        })),
+        players: form.value.players.map(p => {
+          // Derive team from game config team1/team2 arrays
+          const team1 = mainGame.value.config?.team1 || []
+          const team2 = mainGame.value.config?.team2 || []
+          const team = team1.includes(p.id) ? 1 : team2.includes(p.id) ? 2 : null
+          return {
+            ...p,
+            team,
+            roundHcp: p.ghinIndex != null ? Math.round(p.ghinIndex) : null,
+          }
+        }),
         games,
       }),
       timeoutPromise,

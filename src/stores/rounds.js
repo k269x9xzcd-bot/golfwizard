@@ -22,6 +22,46 @@ export const useRoundsStore = defineStore('rounds', () => {
   let scoreSubscription = null
   let memberSubscription = null
 
+  // ── Offline write queue ─────────────────────────────────────
+  // Scores that failed to save get queued and retried when back online
+  const _QUEUE_KEY = 'gw_score_queue'
+  let _flushTimer = null
+
+  function _loadQueue() {
+    try { return JSON.parse(localStorage.getItem(_QUEUE_KEY) || '[]') } catch { return [] }
+  }
+  function _saveQueue(q) {
+    localStorage.setItem(_QUEUE_KEY, JSON.stringify(q))
+  }
+  function _enqueue(entry) {
+    const q = _loadQueue()
+    // Deduplicate: one entry per (round_id, member_id, hole) — keep latest
+    const idx = q.findIndex(e => e.round_id === entry.round_id && e.member_id === entry.member_id && e.hole === entry.hole)
+    if (idx >= 0) q[idx] = entry
+    else q.push(entry)
+    _saveQueue(q)
+  }
+
+  async function _flushQueue() {
+    const auth = useAuthStore()
+    if (!auth.isAuthenticated) return
+    const q = _loadQueue()
+    if (!q.length) return
+    const failed = []
+    for (const entry of q) {
+      try {
+        const { error } = await supabase.from('scores').upsert(entry, { onConflict: 'round_id,member_id,hole' })
+        if (error) failed.push(entry)
+      } catch { failed.push(entry) }
+    }
+    _saveQueue(failed)
+  }
+
+  // Flush whenever we come back online
+  if (typeof window !== 'undefined') {
+    window.addEventListener('online', () => _flushQueue())
+  }
+
   // ── Computed ────────────────────────────────────────────────
   const activeRoundId = computed(() => activeRound.value?.id)
 
@@ -266,7 +306,7 @@ export const useRoundsStore = defineStore('rounds', () => {
   // ── Upsert a score ──────────────────────────────────────────
   async function setScore(memberId, hole, score) {
     const auth = useAuthStore()
-    // Optimistic update always
+    // Optimistic update — always apply immediately to local state
     if (!activeScores.value[memberId]) activeScores.value[memberId] = {}
     activeScores.value[memberId][hole] = score
 
@@ -277,22 +317,31 @@ export const useRoundsStore = defineStore('rounds', () => {
     }
 
     // ── AUTHENTICATED PATH ──────────────────────────────────
-    const { error } = await supabase
-      .from('scores')
-      .upsert({
-        round_id: activeRound.value.id,
-        member_id: memberId,
-        hole,
-        score,
-        entered_by: auth.user?.id ?? null,
-        entered_at: new Date().toISOString(),
-      }, { onConflict: 'round_id,member_id,hole' })
+    // Also persist to localStorage so we have a local copy if offline
+    _persistGuest()
 
-    if (error) {
-      // Rollback optimistic update on error
-      console.error('Score save failed:', error)
-      throw error
+    const entry = {
+      round_id: activeRound.value.id,
+      member_id: memberId,
+      hole,
+      score,
+      entered_by: auth.user?.id ?? null,
+      entered_at: new Date().toISOString(),
     }
+
+    try {
+      const { error } = await supabase.from('scores').upsert(entry, { onConflict: 'round_id,member_id,hole' })
+      if (error) {
+        // Network or DB error — queue for retry when back online
+        console.warn('Score save failed, queuing for retry:', error.message)
+        _enqueue(entry)
+      }
+    } catch (e) {
+      // Offline — queue silently
+      console.warn('Score save offline, queued:', e.message)
+      _enqueue(entry)
+    }
+    // Non-blocking: never throw — the optimistic update already applied
   }
 
   // ── Save game configs ───────────────────────────────────────

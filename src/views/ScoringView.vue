@@ -150,10 +150,33 @@
         </div>
 
         <!-- Scorecard controls -->
-        <div v-if="gameNotationRows.length > 0" class="scorecard-controls">
-          <button class="notation-toggle-btn" @click="showNotations = !showNotations">
-            {{ showNotations ? '🔽 Hide Games' : '🔼 Show Games' }}
+        <div class="scorecard-controls">
+          <button class="hcp-toggle-btn" @click="showFullHcp = !showFullHcp" :class="{ active: showFullHcp }">
+            {{ showFullHcp ? '● Full HCP' : '○ Low-Man' }}
           </button>
+          <button v-if="gameNotationRows.length > 0" class="notation-toggle-btn" @click="showNotations = !showNotations">
+            {{ showNotations ? '▼ Games' : '▶ Games' }}
+          </button>
+          <button class="legend-toggle-btn" @click="showLegend = !showLegend">
+            {{ showLegend ? '✕ Legend' : '? Legend' }}
+          </button>
+        </div>
+
+        <!-- Scorecard legend -->
+        <div v-if="showLegend" class="scorecard-legend">
+          <div class="legend-title">Scorecard Legend</div>
+          <div class="legend-grid">
+            <span class="nota-eagle legend-swatch">-2</span><span class="legend-label">Eagle or better</span>
+            <span class="nota-birdie legend-swatch">-1</span><span class="legend-label">Birdie</span>
+            <span class="nota-par legend-swatch">E</span><span class="legend-label">Par</span>
+            <span class="nota-bogey legend-swatch">+1</span><span class="legend-label">Bogey</span>
+            <span class="nota-double legend-swatch">+2</span><span class="legend-label">Double bogey</span>
+            <span class="nota-triple legend-swatch">+3</span><span class="legend-label">Triple+</span>
+            <span class="stroke-dots legend-swatch">•</span><span class="legend-label">Stroke received (vs {{ showFullHcp ? 'full HCP' : 'low-man' }})</span>
+            <template v-for="game in roundsStore.activeGames" :key="game.id">
+              <span class="legend-game-icon">{{ gameIcon(game.type) }}</span><span class="legend-label">{{ gameLabel(game.type, game.config) }}</span>
+            </template>
+          </div>
         </div>
 
         <!-- Horizontal Scorecard Grid -->
@@ -352,9 +375,9 @@
             <div class="phc-identity">
               <div class="phc-initials" :class="teamBadgeClass(member)">{{ playerInitials(member) }}</div>
               <div class="phc-name-col">
-                <div class="phc-name" :class="teamTextClass(member)">{{ member.short_name || member.guest_name }}</div>
                 <div class="phc-hcp-row">
-                  <span class="phc-hcp-badge">{{ memberHandicapDisplay(member) }}</span>
+                  <span class="phc-hcp-course" :class="teamTextClass(member)">{{ memberHandicapDisplay(member) }}</span>
+                  <span v-if="lowManStrokes(member) !== null" class="phc-hcp-lowman">({{ lowManStrokes(member) }})</span>
                   <span v-if="strokeDotsOnHole(member, activeHole)" class="phc-stroke-dots">{{ '•'.repeat(strokeDotsOnHole(member, activeHole)) }}</span>
                 </div>
               </div>
@@ -516,6 +539,8 @@ const confirmDeleteActive = ref(false)
 const showGameEditor = ref(false)
 const showNotations = ref(true)
 const showFinishReview = ref(false)
+const showFullHcp = ref(false) // false = low-man dots (default), true = full course HCP dots
+const showLegend = ref(false)
 
 // ── Game editor helpers ──────────────────────────────────────────
 const addableGameTypes = computed(() => {
@@ -710,9 +735,14 @@ function netScore(gross, hcp, si) {
 }
 
 function strokeDotsOnHole(member, hole) {
-  const hcp = memberHandicapValue(member)
   const si = siForHole(hole)
-  return strokesOnHole(hcp, si)
+  if (showFullHcp.value) {
+    // Full course HCP dots
+    return strokesOnHole(memberHandicapValue(member), si)
+  }
+  // Default: low-man adjusted dots (strokes vs the best player)
+  const lm = lowManStrokes(member)
+  return lm != null ? strokesOnHole(lm, si) : strokesOnHole(memberHandicapValue(member), si)
 }
 
 function isNetWinner(memberId, hole) {
@@ -804,8 +834,7 @@ function parTotal(startHole, endHole) {
 }
 
 function playerInitials(member) {
-  const name = member.short_name || member.guest_name || '?'
-  return name.slice(0, 2).toUpperCase()
+  return memberInitials(member)
 }
 
 // ── Team styling ────────────────────────────────────────────────
@@ -826,29 +855,35 @@ const sortedPlayerGroups = computed(() => {
 })
 
 // ── Game notation rows for the scorecard grid ───────────────────
-// Shared: "J. Spieler" → "JS", "Jason Spieler" → "JS", "Spieler" → "SP"
+// "Jason Spieler" → "JS", "J. Spieler" → "JS", "Spieler" → "S?"
+// Always first initial + last initial from full name
 function nameToInitials(name) {
   if (!name || name === '?') return '??'
   const parts = name.replace(/\./g, '').trim().split(/\s+/).filter(Boolean)
   if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-  if (parts.length === 1 && parts[0].length >= 2) return parts[0].slice(0, 2).toUpperCase()
-  return name.slice(0, 2).toUpperCase()
+  // Single word — use first two chars (best we can do without full name)
+  if (parts[0]?.length >= 2) return (parts[0][0] + parts[0][1]).toUpperCase()
+  return (parts[0]?.[0] ?? '?').toUpperCase() + '?'
+}
+
+// Helper: get member initials preferring full name for first+last initial
+function memberInitials(m) {
+  if (!m) return '??'
+  return nameToInitials(m.name || m.short_name || m.guest_name || '?')
 }
 
 // Helper: build team initials string like "JS+BC"
 function teamInitialsStr(teamIds) {
   return teamIds.map(id => {
     const m = roundsStore.activeMembers.find(m => m.id === id)
-    const name = m?.short_name || m?.guest_name || '?'
-    return nameToInitials(name)
+    return memberInitials(m)
   }).join('+')
 }
 
 // Helper: player short initial (2 chars) for attribution
 function pInit(memberId) {
   const m = roundsStore.activeMembers.find(m => m.id === memberId)
-  const name = m?.short_name || m?.guest_name || '?'
-  return nameToInitials(name)
+  return memberInitials(m)
 }
 
 const gameNotationRows = computed(() => {
@@ -1747,9 +1782,9 @@ function formatDate(dateStr) {
 .sticky-t2 { background: rgba(18,7,7,.97); }
 .sticky-default { background: rgba(7,14,7,.97); }
 
-.player-nm { font-size: 12px; font-weight: 700; color: var(--gw-text, #f0ede0); }
-.player-hcp { font-size: 9px; color: rgba(240,237,224,.35); margin-left: 4px; }
-.hcp-lowman { color: rgba(96,165,250,.7); margin-left: 2px; }
+.player-nm { font-size: 13px; font-weight: 700; color: var(--gw-text, #f0ede0); }
+.player-hcp { font-size: 10px; color: rgba(240,237,224,.5); margin-left: 4px; }
+.hcp-lowman { color: rgba(96,165,250,.8); margin-left: 2px; font-weight: 700; }
 .t1 { color: #60a5fa; }
 .t2 { color: #f87171; }
 
@@ -1757,10 +1792,10 @@ function formatDate(dateStr) {
   padding: 3px 3px;
   text-align: center;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   position: relative;
-  min-width: 24px;
+  min-width: 26px;
 }
 .col-score-cell:active { background: rgba(255,255,255,.06); }
 .cell-winner { background: rgba(74,222,128,.1); }
@@ -1998,11 +2033,11 @@ function formatDate(dateStr) {
   min-width: 50px; height: 44px; border-radius: 10px;
   display: flex; align-items: center; justify-content: center;
   font-size: 26px; font-weight: 900;
-  background: rgba(255,255,255,.09); border: 2px solid rgba(212,175,55,.35);
+  background: rgba(255,255,255,.09); border: 2px solid rgba(255,255,255,.12);
   color: #f0ede0; cursor: pointer; font-family: var(--gw-font-mono, monospace);
   -webkit-tap-highlight-color: transparent;
 }
-.score-display.has-score { border-color: rgba(212,175,55,.45); background: transparent; }
+.score-display.has-score { border-color: rgba(255,255,255,.15); background: rgba(255,255,255,.04); }
 .phc-net-line {
   font-size: 10px; color: rgba(240,237,224,.45);
   text-align: right; padding-right: 4px; margin-top: -4px;
@@ -2174,13 +2209,44 @@ function formatDate(dateStr) {
 
 /* ── Notation Toggle ────────────────────────────────────────── */
 .scorecard-controls {
-  display: flex; justify-content: flex-end; padding: 4px 12px 0;
+  display: flex; align-items: center; justify-content: flex-end; gap: 4px;
+  padding: 6px 12px 2px;
 }
-.notation-toggle-btn {
-  font-size: 11px; color: var(--gw-text-muted); background: none; border: none;
-  cursor: pointer; padding: 3px 8px;
+.notation-toggle-btn, .hcp-toggle-btn, .legend-toggle-btn {
+  font-size: 11px; color: rgba(240,237,224,.5); background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.1); cursor: pointer; padding: 4px 9px;
+  border-radius: 12px; font-family: inherit; transition: color .15s, border-color .15s;
+  -webkit-tap-highlight-color: transparent;
 }
-.notation-toggle-btn:active { color: var(--gw-gold); }
+.notation-toggle-btn:active, .hcp-toggle-btn:active, .legend-toggle-btn:active { color: var(--gw-gold); }
+.hcp-toggle-btn.active { color: #60a5fa; border-color: rgba(96,165,250,.4); background: rgba(96,165,250,.08); }
+
+/* Scorecard legend */
+.scorecard-legend {
+  margin: 6px 12px 0; padding: 10px 12px; border-radius: 10px;
+  background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08);
+}
+.legend-title {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+  color: rgba(240,237,224,.4); margin-bottom: 8px;
+}
+.legend-grid {
+  display: grid; grid-template-columns: 36px 1fr; gap: 5px 8px; align-items: center;
+}
+.legend-swatch {
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; min-width: 28px; text-align: center;
+}
+.legend-label { font-size: 11px; color: rgba(240,237,224,.6); }
+.legend-game-icon { font-size: 14px; text-align: center; }
+
+/* Hole-by-hole HCP display */
+.phc-hcp-course {
+  font-size: 16px; font-weight: 900; color: var(--gw-text, #f0ede0);
+}
+.phc-hcp-lowman {
+  font-size: 12px; font-weight: 600; color: rgba(96,165,250,.8); margin-left: 3px;
+}
 
 /* ── Finish Review Panel (hole-by-hole) ─────────────────────── */
 .hole-finish-banner {

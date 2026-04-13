@@ -27,7 +27,10 @@
     <div class="courses-list">
       <!-- Favorites section -->
       <template v-if="!search && favoriteCourses.length">
-        <div class="section-label">Favorites</div>
+        <div class="section-label">
+          Favorites
+          <span class="swipe-hint">← delete &nbsp;·&nbsp; favorite →</span>
+        </div>
         <div
           v-for="c in favoriteCourses"
           :key="'fav-' + c.name"
@@ -57,7 +60,10 @@
       </template>
 
       <!-- All / Search results section -->
-      <div class="section-label">{{ search ? `Results (${filteredCourses.length})` : 'All Courses' }}</div>
+      <div class="section-label">
+        {{ search ? `Results (${filteredCourses.length})` : 'All Courses' }}
+        <span v-if="!search" class="swipe-hint">← delete &nbsp;·&nbsp; favorite →</span>
+      </div>
 
       <div v-if="filteredCourses.length === 0" class="empty-state">
         <div class="empty-icon">⛳</div>
@@ -932,6 +938,7 @@ function showToast(msg, type = 'neutral') {
 .courses-list { padding: 0 16px; }
 
 .section-label {
+  display: flex; align-items: center; justify-content: space-between;
   font-family: var(--gw-font-body);
   font-size: 11px;
   font-weight: 600;
@@ -939,6 +946,10 @@ function showToast(msg, type = 'neutral') {
   text-transform: uppercase;
   color: var(--gw-text-muted);
   padding: 12px 4px 6px;
+}
+.swipe-hint {
+  font-size: 10px; font-weight: 500; letter-spacing: 0;
+  color: rgba(240,237,224,.25); text-transform: none;
 }
 
 .course-card {

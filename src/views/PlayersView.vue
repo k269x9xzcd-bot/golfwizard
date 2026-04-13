@@ -16,7 +16,9 @@
     </div>
 
     <!-- Favorites section -->
-    <div v-if="favoritePlayers.length" class="section-label">Favorites</div>
+    <div v-if="favoritePlayers.length" class="section-label">
+      Favorites <span class="swipe-hint">← delete &nbsp;·&nbsp; favorite →</span>
+    </div>
     <div
       v-for="p in favoritePlayers"
       :key="p.id"
@@ -42,7 +44,9 @@
     </div>
 
     <!-- All players section -->
-    <div v-if="otherPlayers.length" class="section-label">All Players</div>
+    <div v-if="otherPlayers.length" class="section-label">
+      All Players <span class="swipe-hint">← delete &nbsp;·&nbsp; favorite →</span>
+    </div>
     <div
       v-for="p in otherPlayers"
       :key="p.id"
@@ -268,9 +272,14 @@ async function saveEdit() {
 .name-row .wiz-input { flex: 1; }
 
 .section-label {
+  display: flex; align-items: center; justify-content: space-between;
   font-size: 11px; font-weight: 700; letter-spacing: .08em;
   text-transform: uppercase; color: rgba(240,237,224,.6);
   padding: 8px 4px 6px; margin-top: 8px;
+}
+.swipe-hint {
+  font-size: 10px; font-weight: 500; letter-spacing: 0;
+  color: rgba(240,237,224,.25); text-transform: none;
 }
 
 /* ── Swipe container ────────────────────────────────── */
