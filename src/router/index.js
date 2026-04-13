@@ -13,7 +13,8 @@ const routes = [
   { path: '/settings', name: 'settings', component: () => import('../views/SettingsView.vue') },
   { path: '/library',  name: 'library',  component: () => import('../views/GameLibraryView.vue') },
   { path: '/metrics',  name: 'metrics',  component: () => import('../views/MetricsView.vue') },
-  { path: '/join/:code?', name: 'join',  component: () => import('../views/JoinView.vue') },
+  { path: '/join/:code?',    name: 'join',       component: () => import('../views/JoinView.vue') },
+  { path: '/tournament',     name: 'tournament', component: () => import('../views/TournamentView.vue') },
 ]
 
 export const router = createRouter({

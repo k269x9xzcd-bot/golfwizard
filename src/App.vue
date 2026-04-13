@@ -42,7 +42,11 @@
           <span class="nav-icon">👥</span>
           <span class="nav-label">Players</span>
         </RouterLink>
-        <RouterLink to="/history" class="nav-item" :class="{ active: $route.name === 'history' }">
+        <RouterLink v-if="showTournament" to="/tournament" class="nav-item nav-item--cup" :class="{ active: $route.name === 'tournament' }">
+          <span class="nav-icon">🏆</span>
+          <span class="nav-label">Cup</span>
+        </RouterLink>
+        <RouterLink v-else to="/history" class="nav-item" :class="{ active: $route.name === 'history' }">
           <span class="nav-icon">🕐</span>
           <span class="nav-label">History</span>
         </RouterLink>
@@ -52,11 +56,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { RouterView, RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 import { useRosterStore } from './stores/roster'
 import { useCoursesStore } from './stores/courses'
+import { hasTournamentAccess } from './stores/tournament.js'
 import WizardOverlay from './components/WizardOverlay.vue'
 import JoinOverlay from './components/JoinOverlay.vue'
 
@@ -64,6 +69,8 @@ const authStore = useAuthStore()
 const rosterStore = useRosterStore()
 const coursesStore = useCoursesStore()
 const router = useRouter()
+
+const showTournament = computed(() => hasTournamentAccess(authStore.user?.email))
 
 const showWizard = ref(false)
 const showJoin = ref(false)
