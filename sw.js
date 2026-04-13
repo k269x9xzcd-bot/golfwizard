@@ -2,7 +2,7 @@
 // Strategy: Network-first for all app assets so new deploys are picked up immediately.
 // Cache is only used as a fallback when offline.
 
-const CACHE_NAME = 'golfwizard-v2.7.0-1776078916983'
+const CACHE_NAME = 'golfwizard-v2.9.0-1776079333647'
 const BASE = '/golfwizard'
 
 // Assets to pre-cache on install (the main shell)
