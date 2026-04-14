@@ -238,9 +238,10 @@
             <span class="tdc-pts-num">{{ teamStanding(team.id)?.pts ?? 0 }}</span>
             <span class="tdc-pts-label">pts</span>
           </div>
+          <button class="tdc-edit-btn" @click="openTeamEdit(team)" title="Edit players">✎</button>
         </div>
         <div class="tdc-players">
-          <div v-for="p in team.players" :key="p.id" class="tdc-player">
+          <div v-for="p in getTeam(team.id).players" :key="p.id" class="tdc-player">
             <div class="tdc-player-badge" :style="{ background: team.color + '33', color: team.color }">
               {{ (p.nickname || p.name)[0] }}
             </div>
@@ -449,6 +450,128 @@
       </transition>
     </Teleport>
 
+    <!-- ── 1v1 PAIRING PICKER ─────────────────────────────────── -->
+    <Teleport to="body">
+      <transition name="sheet">
+        <div v-if="pairingPicker" class="match-modal-backdrop" @click.self="pairingPicker = null">
+          <div class="match-modal">
+            <div class="mm-handle"></div>
+            <div class="mm-header">
+              <div class="mm-round">Set 1v1 Pairings</div>
+              <button class="mm-close" @click="pairingPicker = null">✕</button>
+            </div>
+            <div class="mm-result-section">
+              <div class="pairing-intro">
+                Pick who plays who in the two 1v1 matches. Best Ball (2 pts) + two 1v1s (1 pt each) = 4 points on the line.
+              </div>
+              <div class="pairing-teams">
+                <div class="pairing-team" :style="{ borderColor: pairingPicker.t1.color }">
+                  <div class="pairing-team-name" :style="{ color: pairingPicker.t1.color }">{{ pairingPicker.t1.name }}</div>
+                </div>
+                <div class="pairing-vs">vs</div>
+                <div class="pairing-team" :style="{ borderColor: pairingPicker.t2.color }">
+                  <div class="pairing-team-name" :style="{ color: pairingPicker.t2.color }">{{ pairingPicker.t2.name }}</div>
+                </div>
+              </div>
+
+              <div class="pairing-match-list">
+                <div v-for="(pair, i) in pairingPicker.pairings" :key="i" class="pairing-match-row">
+                  <div class="pairing-match-label">Match {{ i + 1 }}</div>
+                  <div class="pairing-players">
+                    <span class="pairing-player" :style="{ color: pairingPicker.t1.color }">
+                      {{ pairingPicker.t1.players.find(p => p.id === pair.t1pid)?.nickname || '?' }}
+                    </span>
+                    <span class="pairing-vs-sm">vs</span>
+                    <span class="pairing-player" :style="{ color: pairingPicker.t2.color }">
+                      {{ pairingPicker.t2.players.find(p => p.id === pair.t2pid)?.nickname || '?' }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <button class="pairing-swap-btn" @click="swapPairings">🔄 Swap pairings</button>
+
+              <div class="pairing-hint">
+                Default is based on round-robin rotation ({{ pairingPicker.match.singlesOrder === 0 ? 'first meeting' : 'rematch' }}). Tap swap if you want different matchups.
+              </div>
+            </div>
+            <div class="mm-footer">
+              <button class="mm-btn-cancel" @click="pairingPicker = null">Cancel</button>
+              <button class="mm-btn-save" @click="confirmPairingsAndLaunch" :disabled="launchingRound">
+                {{ launchingRound ? 'Creating…' : '⛳ Start Round' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </transition>
+    </Teleport>
+
+    <!-- ── TEAM PLAYER EDITOR ─────────────────────────────────── -->
+    <Teleport to="body">
+      <transition name="sheet">
+        <div v-if="teamEditor" class="match-modal-backdrop" @click.self="teamEditor = null">
+          <div class="match-modal team-editor-modal">
+            <div class="mm-handle"></div>
+            <div class="mm-header">
+              <div class="mm-round">Edit {{ teamEditor.team.name }}</div>
+              <button class="mm-close" @click="teamEditor = null">✕</button>
+            </div>
+            <div class="mm-result-section">
+              <div class="pairing-intro">
+                Pick players from your roster. Team composition is saved locally — changes apply to all tournament matches.
+              </div>
+
+              <div class="team-edit-slots">
+                <div v-for="(player, idx) in teamEditor.players" :key="idx" class="team-edit-slot">
+                  <div class="tes-label">Player {{ idx + 1 }}</div>
+                  <div class="tes-card">
+                    <div class="tes-name">{{ player.name }}</div>
+                    <div class="tes-meta">
+                      <span v-if="player.nickname" class="tes-nick">"{{ player.nickname }}"</span>
+                      <span v-if="player.ghinIndex != null" class="tes-idx">idx {{ player.ghinIndex }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <input
+                v-model="teamEditorSearch"
+                class="mm-text-input"
+                placeholder="Search roster to replace a player…"
+                style="margin-bottom: 8px"
+              />
+
+              <div v-if="teamEditorFilteredRoster.length" class="team-edit-roster">
+                <div
+                  v-for="rp in teamEditorFilteredRoster"
+                  :key="rp.id"
+                  class="team-edit-roster-row"
+                >
+                  <div class="terr-info">
+                    <span class="terr-name">{{ rp.name }}</span>
+                    <span class="terr-idx">idx {{ rp.ghin_index ?? '—' }}</span>
+                  </div>
+                  <div class="terr-actions">
+                    <button
+                      v-for="(_, slotIdx) in teamEditor.players"
+                      :key="slotIdx"
+                      class="terr-assign-btn"
+                      @click="assignRosterPlayer(slotIdx, rp)"
+                    >→ Slot {{ slotIdx + 1 }}</button>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="pairing-hint">No roster players found. Add players in the Players tab first.</div>
+            </div>
+            <div class="mm-footer">
+              <button class="mm-btn-cancel" @click="resetTeamToDefault(teamEditor.team.id)">Reset to default</button>
+              <button class="mm-btn-save" @click="saveTeamEdits">Save</button>
+            </div>
+          </div>
+        </div>
+      </transition>
+    </Teleport>
+
     <!-- ── EDIT TOURNAMENT MODAL ──────────────────────────────── -->
     <Teleport to="body">
       <transition name="sheet">
@@ -485,11 +608,15 @@
 import { ref, computed, reactive, triggerRef } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRoundsStore } from '../stores/rounds'
+import { useRosterStore } from '../stores/roster'
 import {
   TOURNAMENT, TEAMS, SCHEDULE,
   getTeam, matchPoints, computeStandings, teamMatches,
   nextMatch, fmtDate, daysUntil,
+  saveTeamPlayers, clearTeamOverride,
 } from '../stores/tournament.js'
+
+const rosterStore = useRosterStore()
 
 const router = useRouter()
 const roundsStore = useRoundsStore()
@@ -539,6 +666,60 @@ const standings = computed(() => {
 function teamStanding(teamId) {
   return standings.value.find(s => s.team.id === teamId)
 }
+
+// ── Team editor ─────────────────────────────────────────────────
+const teamEditor = ref(null) // { team, players: [{id,name,nickname,ghinIndex,email}, ...] }
+
+function openTeamEdit(team) {
+  const cur = getTeam(team.id)
+  teamEditor.value = {
+    team,
+    players: cur.players.map(p => ({
+      id: p.id,
+      name: p.name,
+      nickname: p.nickname || '',
+      ghinIndex: p.ghinIndex ?? null,
+      email: p.email || '',
+    })),
+  }
+}
+
+// Replace a slot with a roster pick
+function assignRosterPlayer(slotIdx, rosterPlayer) {
+  if (!teamEditor.value) return
+  teamEditor.value.players[slotIdx] = {
+    id: teamEditor.value.players[slotIdx].id, // keep the stable team-player ID
+    name: rosterPlayer.name,
+    nickname: rosterPlayer.nickname || rosterPlayer.short_name || rosterPlayer.name.split(' ')[0],
+    ghinIndex: rosterPlayer.ghin_index ?? null,
+    email: rosterPlayer.email || '',
+    rosterId: rosterPlayer.id,
+  }
+}
+
+function saveTeamEdits() {
+  if (!teamEditor.value) return
+  saveTeamPlayers(teamEditor.value.team.id, teamEditor.value.players)
+  teamEditor.value = null
+  triggerRef(scheduleVersion) // force re-render
+  scheduleVersion.value++
+}
+
+function resetTeamToDefault(teamId) {
+  if (!confirm('Reset this team to the original roster?')) return
+  clearTeamOverride(teamId)
+  teamEditor.value = null
+  scheduleVersion.value++
+}
+
+// Roster search for the team editor
+const teamEditorSearch = ref('')
+const teamEditorFilteredRoster = computed(() => {
+  const q = teamEditorSearch.value.toLowerCase().trim()
+  const all = rosterStore.players || []
+  if (!q) return all.slice(0, 30)
+  return all.filter(p => p.name.toLowerCase().includes(q)).slice(0, 30)
+})
 
 const allDone = computed(() => {
   scheduleVersion.value
@@ -747,18 +928,59 @@ function saveResult() {
   _saveResults()
 }
 
-// Launch a scoring round directly for this tournament match
-async function launchRound() {
+// ── Launch round flow ────────────────────────────────────────────
+// Step 1: click "Start Round" → opens pairing picker (unless final)
+// Step 2: user confirms 1v1 pairings → creates Supabase round + navigates
+const pairingPicker = ref(null) // { match, t1, t2, pairings: [{t1pid, t2pid}, ...], isFinal }
+
+function openLaunchFlow() {
   if (!activeMatch.value) return
   const match = activeMatch.value.match
   const t1 = getTeam(match.team1)
   const t2 = getTeam(match.team2)
+  const isFinal = !!match.isFinal
 
+  if (isFinal) {
+    // Final: no singles, just BB. Skip picker.
+    _doLaunchRound({ match, t1, t2, isFinal: true, pairings: [] })
+    return
+  }
+
+  // Default pairings based on singlesOrder (0 = straight, 1 = swapped)
+  const defaultPairings = match.singlesOrder === 1
+    ? [{ t1pid: t1.players[0].id, t2pid: t2.players[1].id }, { t1pid: t1.players[1].id, t2pid: t2.players[0].id }]
+    : [{ t1pid: t1.players[0].id, t2pid: t2.players[0].id }, { t1pid: t1.players[1].id, t2pid: t2.players[1].id }]
+
+  pairingPicker.value = {
+    match, t1, t2, isFinal: false,
+    pairings: defaultPairings,
+  }
+}
+
+// Swap who t1.player[0] plays (flips both 1v1 pairings)
+function swapPairings() {
+  if (!pairingPicker.value) return
+  const [a, b] = pairingPicker.value.pairings
+  pairingPicker.value.pairings = [
+    { t1pid: a.t1pid, t2pid: b.t2pid },
+    { t1pid: b.t1pid, t2pid: a.t2pid },
+  ]
+}
+
+async function confirmPairingsAndLaunch() {
+  if (!pairingPicker.value) return
+  const { match, t1, t2, isFinal, pairings } = pairingPicker.value
+  pairingPicker.value = null
+  await _doLaunchRound({ match, t1, t2, isFinal, pairings })
+}
+
+async function _doLaunchRound({ match, t1, t2, isFinal, pairings }) {
   // Build player list with team assignments and stable temp IDs
   const ts = Date.now()
   const players = [
     ...t1.players.map((p, i) => ({
       id: `wiz_t1_${i}_${ts}`,
+      _tournId: p.id, // keep a handle to the tournament player ID for pairing lookup
       name: p.name,
       shortName: p.nickname || p.name.split(' ')[0],
       nickname: p.nickname,
@@ -769,6 +991,7 @@ async function launchRound() {
     })),
     ...t2.players.map((p, i) => ({
       id: `wiz_t2_${i}_${ts}`,
+      _tournId: p.id,
       name: p.name,
       shortName: p.nickname || p.name.split(' ')[0],
       nickname: p.nickname,
@@ -779,18 +1002,48 @@ async function launchRound() {
     })),
   ]
 
-  // Pre-configure games: Best Ball (2v2) — IDs match player.id above
-  // so createRound's idMap can remap them to real Supabase member IDs
+  // Build game configs
   const t1Ids = players.filter(p => p.team === 1).map(p => p.id)
   const t2Ids = players.filter(p => p.team === 2).map(p => p.id)
+
   const games = [
-    { type: 'best_ball', config: { team1: t1Ids, team2: t2Ids, ppt: 1 } },
+    // Best Ball match play (worth 2 tournament points)
+    { type: 'best_ball', config: {
+      team1: t1Ids, team2: t2Ids,
+      ballsPerTeam: 1,
+      ppt: 0, // no $ value, this is tournament
+      tournament: true,
+      points: 2,
+      label: '2v2 Best Ball (2 pts)',
+    }},
   ]
+
+  // Regular rounds also get 2 × 1v1 matches (worth 1 pt each)
+  if (!isFinal) {
+    for (const pairing of pairings) {
+      const p1 = players.find(pl => pl._tournId === pairing.t1pid)
+      const p2 = players.find(pl => pl._tournId === pairing.t2pid)
+      if (p1 && p2) {
+        games.push({
+          type: 'match1v1',
+          config: {
+            player1: p1.id,
+            player2: p2.id,
+            ppt: 0,
+            scoring: 'closeout',
+            tournament: true,
+            points: 1,
+            label: `1v1: ${p1.shortName} vs ${p2.shortName} (1 pt)`,
+          },
+        })
+      }
+    }
+  }
 
   launchingRound.value = true
   try {
     const round = await roundsStore.createRound({
-      name: `${t1.name} vs ${t2.name}`,
+      name: isFinal ? `FINAL: ${t1.name} vs ${t2.name}` : `${t1.name} vs ${t2.name}`,
       courseName: TOURNAMENT.defaultCourse || 'Bonnie Briar Country Club',
       tee: TOURNAMENT.defaultTee || 'Blue',
       holesMode: '18',
@@ -813,6 +1066,9 @@ async function launchRound() {
     launchingRound.value = false
   }
 }
+
+// Alias for template compatibility — button now opens the flow
+const launchRound = openLaunchFlow
 
 // ── Simulate & Reset ────────────────────────────────────────────
 function simulateTournament() {
@@ -1433,6 +1689,138 @@ scheduleVersion.value++ // ensure computeds pick up loaded results
   font-size: 11px; color: rgba(240,237,224,.35);
   text-align: center; margin-top: 6px;
 }
+
+/* ── 1v1 Pairing picker ───────────────────────────────── */
+.pairing-intro {
+  font-size: 12px; color: rgba(240,237,224,.65);
+  padding: 0 4px 12px; line-height: 1.4;
+}
+.pairing-teams {
+  display: flex; align-items: center; gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.pairing-team {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 2px solid;
+  background: rgba(255,255,255,.03);
+  text-align: center;
+}
+.pairing-team-name {
+  font-size: 14px; font-weight: 700;
+}
+.pairing-vs {
+  font-size: 12px; font-weight: 700; color: rgba(240,237,224,.5);
+}
+.pairing-match-list {
+  display: flex; flex-direction: column; gap: 8px;
+  margin-bottom: 12px;
+}
+.pairing-match-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 10px;
+}
+.pairing-match-label {
+  font-size: 11px; font-weight: 700; color: rgba(212,175,55,.8);
+  letter-spacing: .5px; text-transform: uppercase;
+}
+.pairing-players {
+  display: flex; align-items: center; gap: 8px;
+}
+.pairing-player {
+  font-size: 14px; font-weight: 700;
+}
+.pairing-vs-sm {
+  font-size: 10px; color: rgba(240,237,224,.4); font-weight: 600;
+}
+.pairing-swap-btn {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(96,165,250,.12);
+  border: 1px solid rgba(96,165,250,.3);
+  color: #60a5fa;
+  font-size: 13px; font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+  margin-bottom: 8px;
+}
+.pairing-swap-btn:active { background: rgba(96,165,250,.2); }
+.pairing-hint {
+  font-size: 11px; color: rgba(240,237,224,.4);
+  text-align: center; line-height: 1.4;
+  padding: 0 4px;
+}
+
+/* ── Team editor ──────────────────────────────────────── */
+.tdc-edit-btn {
+  width: 28px; height: 28px; border-radius: 8px;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
+  color: rgba(240,237,224,.5); font-size: 14px;
+  cursor: pointer; margin-left: 8px;
+  font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.tdc-edit-btn:active { background: rgba(255,255,255,.12); }
+.team-editor-modal {
+  max-height: 85vh; overflow-y: auto;
+}
+.team-edit-slots {
+  display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px;
+}
+.team-edit-slot {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 12px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 10px;
+}
+.tes-label {
+  font-size: 10px; font-weight: 700; letter-spacing: .5px;
+  color: rgba(212,175,55,.8); text-transform: uppercase;
+  flex-shrink: 0;
+}
+.tes-card { flex: 1; min-width: 0; }
+.tes-name { font-size: 14px; font-weight: 700; color: var(--gw-text); }
+.tes-meta { display: flex; gap: 8px; margin-top: 2px; font-size: 11px; color: rgba(240,237,224,.5); }
+.tes-idx { font-family: var(--gw-font-mono, monospace); }
+.team-edit-roster {
+  display: flex; flex-direction: column; gap: 4px;
+  max-height: 40vh; overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 8px;
+}
+.team-edit-roster-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 8px;
+}
+.terr-info { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.terr-name { font-size: 13px; font-weight: 600; color: var(--gw-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.terr-idx { font-size: 10px; color: rgba(240,237,224,.4); font-family: var(--gw-font-mono, monospace); }
+.terr-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.terr-assign-btn {
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: rgba(212,175,55,.1);
+  border: 1px solid rgba(212,175,55,.25);
+  color: var(--gw-gold, #d4af37);
+  font-size: 10px; font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+.terr-assign-btn:active { background: rgba(212,175,55,.2); }
 
 /* ── Rules tab ───────────────────────────────────────── */
 .rules-section { display: flex; flex-direction: column; gap: 10px; }

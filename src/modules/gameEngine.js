@@ -355,7 +355,12 @@ export function computeNassau(ctx, config) {
 // ── MATCH PLAY (1v1 or 2v2) ──────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────
 export function computeMatch(ctx, config) {
-  const { player1, player2, ppt = 10, hcpMode = 'lowman' } = config
+  const {
+    player1, player2,
+    ppt = 10,
+    hcpMode = 'lowman',
+    scoring = 'closeout',  // 'closeout' (default): stake paid once on win. 'nassau': per-hole value. 'skins': each won hole pays ppt
+  } = config
   const m1 = ctx.members.find(m => m.id === player1)
   const m2 = ctx.members.find(m => m.id === player2)
   if (!m1 || !m2) return null
@@ -368,6 +373,8 @@ export function computeMatch(ctx, config) {
   const { from, to } = holeRange(ctx.holesMode)
   const holeResults = []
   let p1Up = 0
+  let p1HolesWon = 0
+  let p2HolesWon = 0
 
   for (let h = from; h <= to; h++) {
     const n1 = netFn(m1, h)
@@ -379,8 +386,8 @@ export function computeMatch(ctx, config) {
     }
 
     let winner = null
-    if (n1 < n2) { winner = 'p1'; p1Up += 1 }
-    else if (n2 < n1) { winner = 'p2'; p1Up -= 1 }
+    if (n1 < n2) { winner = 'p1'; p1Up += 1; p1HolesWon += 1 }
+    else if (n2 < n1) { winner = 'p2'; p1Up -= 1; p2HolesWon += 1 }
     holeResults.push({ hole: h, winner, p1Up, n1, n2 })
   }
 
@@ -396,13 +403,26 @@ export function computeMatch(ctx, config) {
     ? (finalUp > 0 ? `${finalUp}&${holesRemaining}` : `${-finalUp}&${holesRemaining}`)
     : (finalUp > 0 ? `${finalUp} UP` : finalUp < 0 ? `${-finalUp} DOWN` : 'A/S')
 
-  const p1Net = finalUp > 0 ? ppt : finalUp < 0 ? -ppt : 0
+  // Settlement computation depends on scoring mode:
+  // - closeout: fixed stake paid by loser; halved = 0
+  // - nassau: winner gets ppt × final up count
+  // - skins: each won hole pays ppt (so p1Net = (p1HolesWon - p2HolesWon) × ppt)
+  let p1Net = 0
+  if (scoring === 'nassau') {
+    p1Net = finalUp * ppt
+  } else if (scoring === 'skins') {
+    p1Net = (p1HolesWon - p2HolesWon) * ppt
+  } else {
+    // closeout (default)
+    p1Net = finalUp > 0 ? ppt : finalUp < 0 ? -ppt : 0
+  }
 
   return {
     holeResults, finalUp, result, matchOver,
     p1: { id: m1.id, name: m1.short_name },
     p2: { id: m2.id, name: m2.short_name },
-    settlement: { p1Name: m1.short_name, p2Name: m2.short_name, p1Net, ppt },
+    p1HolesWon, p2HolesWon,
+    settlement: { p1Name: m1.short_name, p2Name: m2.short_name, p1Net, ppt, scoring },
   }
 }
 

@@ -1298,23 +1298,46 @@ function gameSummaryHtml(game) {
       const p2n = r.p2?.name || '?'
       const up = r.finalUp
       const ppt = r.settlement?.ppt || cfg.ppt || 5
+      const scoring = r.settlement?.scoring || cfg.scoring || 'closeout'
+      const p1Net = r.settlement?.p1Net || 0
+      const isTournament = !!cfg.tournament
+      const points = cfg.points || 1 // tournament: 1v1 worth 1 pt
+
       let statusStr = r.result
       let dollarLine = ''
+      const played = (r.holeResults || []).filter(h => !h.incomplete).length
 
-      if (!r.matchOver && up !== 0) {
-        const leader = up > 0 ? p1n : p2n
-        statusStr = `${leader} ${Math.abs(up)} UP`
-        const stakes = Math.abs(up) * ppt
-        dollarLine = ` · <span style="color:#4ade80;font-weight:700">${leader} wins $${stakes}</span>`
-      } else if (!r.matchOver && up === 0) {
-        statusStr = 'All Square'
-      } else if (r.matchOver) {
-        const stakes = Math.abs(up) * ppt
+      // Build status
+      if (r.matchOver) {
         const winner = up > 0 ? p1n : p2n
-        dollarLine = ` · <span style="color:#4ade80;font-weight:700">${winner} wins $${stakes}</span>`
+        statusStr = `${winner} wins ${r.result}`
+      } else if (played === 0) {
+        statusStr = 'No scores yet'
+      } else if (up === 0) {
+        statusStr = `AS · thru ${played}`
+      } else {
+        const leader = up > 0 ? p1n : p2n
+        statusStr = `${leader} ${Math.abs(up)} UP · thru ${played}`
       }
 
-      return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Match</span><span class="muted" style="font-size:10px;margin-left:4px">${p1n} vs ${p2n}${dollarLine}</span><br><span class="muted" style="font-size:11px">${statusStr}</span></div>`
+      // Build payout line
+      if (isTournament) {
+        if (r.matchOver || (played > 0 && up !== 0)) {
+          const winner = up > 0 ? p1n : p2n
+          dollarLine = ` · <span style="color:#4ade80;font-weight:700">${winner} +${points}pt</span>`
+        } else if (played > 0 && up === 0) {
+          dollarLine = ` · <span style="color:#9ca3af">halved → ${points/2}pt each</span>`
+        }
+      } else {
+        // Regular game: show $ per scoring mode
+        if (p1Net !== 0) {
+          const winner = p1Net > 0 ? p1n : p2n
+          dollarLine = ` · <span style="color:#4ade80;font-weight:700">${winner} wins $${Math.abs(p1Net)}</span>`
+        }
+      }
+
+      const scoringBadge = scoring === 'nassau' ? ' · Nassau' : scoring === 'skins' ? ' · Skins' : ''
+      return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Match</span><span class="muted" style="font-size:10px;margin-left:4px">${p1n} vs ${p2n}${scoringBadge}${dollarLine}</span><br><span class="muted" style="font-size:11px">${statusStr}</span></div>`
     }
 
     // ── Vegas ──

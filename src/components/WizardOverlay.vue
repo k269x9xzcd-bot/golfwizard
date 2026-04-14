@@ -622,7 +622,15 @@
                   </select>
                 </div>
                 <div class="config-field">
-                  <label>$ closeout</label>
+                  <label>Scoring</label>
+                  <select v-model="sideGames.match1.scoring" class="config-select">
+                    <option value="closeout">Closeout (match play)</option>
+                    <option value="nassau">Nassau (per hole up)</option>
+                    <option value="skins">Skins (per hole won)</option>
+                  </select>
+                </div>
+                <div class="config-field">
+                  <label>{{ sideGames.match1.scoring === 'closeout' ? '$ stake' : '$ per hole' }}</label>
                   <input v-model.number="sideGames.match1.ppt" type="number" class="config-input" placeholder="10" />
                 </div>
               </div>
@@ -652,7 +660,15 @@
                   </select>
                 </div>
                 <div class="config-field">
-                  <label>$ closeout</label>
+                  <label>Scoring</label>
+                  <select v-model="sideGames.match2.scoring" class="config-select">
+                    <option value="closeout">Closeout (match play)</option>
+                    <option value="nassau">Nassau (per hole up)</option>
+                    <option value="skins">Skins (per hole won)</option>
+                  </select>
+                </div>
+                <div class="config-field">
+                  <label>{{ sideGames.match2.scoring === 'closeout' ? '$ stake' : '$ per hole' }}</label>
                   <input v-model.number="sideGames.match2.ppt" type="number" class="config-input" placeholder="10" />
                 </div>
               </div>
@@ -879,8 +895,8 @@ const sideGames = ref({
   dots:   { enabled: false, ppt: 2, birdieEnabled: true, eagleEnabled: true, greenieEnabled: true, sandieEnabled: true },
   snake:  { enabled: false, ppt: 5 },
   fidget: { enabled: false, ppp: 10 },
-  match1: { enabled: false, player1: '', player2: '', ppt: 10 },
-  match2: { enabled: false, player1: '', player2: '', ppt: 10 },
+  match1: { enabled: false, player1: '', player2: '', ppt: 10, scoring: 'closeout' },
+  match2: { enabled: false, player1: '', player2: '', ppt: 10, scoring: 'closeout' },
   bbn:    { enabled: false },
 })
 
@@ -1346,10 +1362,10 @@ function buildGameConfigs() {
     games.push({ type: 'fidget', config: { ppp: sg.fidget.ppp } })
   }
   if (sg.match1.enabled && sg.match1.player1 && sg.match1.player2) {
-    games.push({ type: 'match1v1', config: { player1: sg.match1.player1, player2: sg.match1.player2, ppt: sg.match1.ppt } })
+    games.push({ type: 'match1v1', config: { player1: sg.match1.player1, player2: sg.match1.player2, ppt: sg.match1.ppt, scoring: sg.match1.scoring || 'closeout' } })
   }
   if (sg.match2.enabled && sg.match2.player1 && sg.match2.player2) {
-    games.push({ type: 'match1v1', config: { player1: sg.match2.player1, player2: sg.match2.player2, ppt: sg.match2.ppt } })
+    games.push({ type: 'match1v1', config: { player1: sg.match2.player1, player2: sg.match2.player2, ppt: sg.match2.ppt, scoring: sg.match2.scoring || 'closeout' } })
   }
   // Best Ball trackers (only if enabled)
   if (sideGames.value.bbn.enabled) {

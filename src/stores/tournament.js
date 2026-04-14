@@ -231,9 +231,45 @@ export const SCHEDULE = [
   },
 ]
 
+// ─── TEAM PLAYER OVERRIDES ──────────────────────────────────────
+// Users can override the hardcoded team players via the Teams editor.
+// Overrides are stored in localStorage so they survive reloads.
+const TEAM_OVERRIDES_KEY = 'gw_tournament_team_overrides_v1'
+
+function _loadTeamOverrides() {
+  try {
+    return JSON.parse(localStorage.getItem(TEAM_OVERRIDES_KEY) || '{}')
+  } catch { return {} }
+}
+
+export function saveTeamPlayers(teamId, players) {
+  // players: [{ id, name, nickname, email?, ghinIndex? }, ...]
+  const all = _loadTeamOverrides()
+  all[teamId] = players
+  localStorage.setItem(TEAM_OVERRIDES_KEY, JSON.stringify(all))
+}
+
+export function clearTeamOverride(teamId) {
+  const all = _loadTeamOverrides()
+  delete all[teamId]
+  localStorage.setItem(TEAM_OVERRIDES_KEY, JSON.stringify(all))
+}
+
 // ─── HELPERS ────────────────────────────────────────────────────
 export function getTeam(id) {
-  return TEAMS.find(t => t.id === id)
+  const baseTeam = TEAMS.find(t => t.id === id)
+  if (!baseTeam) return null
+  // Apply player override if present
+  const overrides = _loadTeamOverrides()
+  if (overrides[id]?.length) {
+    return { ...baseTeam, players: overrides[id] }
+  }
+  return baseTeam
+}
+
+// Return all teams with overrides applied
+export function getAllTeams() {
+  return TEAMS.map(t => getTeam(t.id))
 }
 
 // Compute points for a single match result
