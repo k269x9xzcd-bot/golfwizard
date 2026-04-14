@@ -189,7 +189,6 @@
           </button>
           <button class="sim-btn" @click="simulateFill" title="Fill random scores">🎲</button>
           <button class="sim-btn sim-btn-reset" @click="resetScores" title="Reset all scores">↺</button>
-          <button class="sim-btn sim-btn-tournament" @click="simulateTournament" title="Simulate tournament scores">🏆</button>
         </div>
 
         <!-- Horizontal Scorecard Grid -->
@@ -1377,49 +1376,6 @@ function resetScores() {
   }
 }
 
-// Simulate tournament: each player gets a distinct score profile
-// Profiles: scratch, good amateur, mid handicapper, high handicapper
-function simulateTournament() {
-  const members = roundsStore.activeMembers
-  const holes = visibleHoles.value
-  // Profiles ordered by skill: best player gets more birdies, worst gets more bogeys
-  const profiles = [
-    // Scratch: lots of pars/birdies
-    [{ offset: -2, w: 3 }, { offset: -1, w: 20 }, { offset: 0, w: 45 }, { offset: 1, w: 20 }, { offset: 2, w: 10 }, { offset: 3, w: 2 }],
-    // Good amateur
-    [{ offset: -2, w: 1 }, { offset: -1, w: 12 }, { offset: 0, w: 35 }, { offset: 1, w: 30 }, { offset: 2, w: 15 }, { offset: 3, w: 7 }],
-    // Mid handicapper
-    [{ offset: -1, w: 5 }, { offset: 0, w: 25 }, { offset: 1, w: 35 }, { offset: 2, w: 25 }, { offset: 3, w: 10 }],
-    // High handicapper
-    [{ offset: 0, w: 15 }, { offset: 1, w: 30 }, { offset: 2, w: 30 }, { offset: 3, w: 20 }, { offset: 4, w: 5 }],
-  ]
-
-  function randomOffsetFromProfile(profile) {
-    const total = profile.reduce((s, x) => s + x.w, 0)
-    let r = Math.random() * total
-    for (const { offset, w } of profile) {
-      r -= w
-      if (r <= 0) return offset
-    }
-    return 1
-  }
-
-  // Sort members by HCP ascending (best player first)
-  const sorted = [...members].sort((a, b) => {
-    const ha = memberHandicapValue(a) ?? 36
-    const hb = memberHandicapValue(b) ?? 36
-    return ha - hb
-  })
-
-  for (let i = 0; i < sorted.length; i++) {
-    const profile = profiles[Math.min(i, profiles.length - 1)]
-    for (const h of holes) {
-      const par = parForHole(h)
-      const score = Math.max(1, par + randomOffsetFromProfile(profile))
-      roundsStore.setScore(sorted[i].id, h, score)
-    }
-  }
-}
 
 // ── Snake 3-putt ────────────────────────────────────────────────
 const snakeGame = computed(() => roundsStore.activeGames.find(g => g.type?.toLowerCase() === 'snake') || null)

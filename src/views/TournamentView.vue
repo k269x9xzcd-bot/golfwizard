@@ -47,6 +47,12 @@
     <!-- ── STANDINGS TAB ─────────────────────────────────────── -->
     <div v-if="tab === 'standings'" class="t-section">
 
+      <!-- Simulate / Reset actions -->
+      <div class="t-sim-actions">
+        <button class="t-sim-btn" @click="simulateTournament" title="Fill all matches with random results">🎲 Simulate All</button>
+        <button class="t-sim-btn t-sim-btn--reset" @click="resetTournament" title="Clear all match results">↺ Reset</button>
+      </div>
+
       <!-- Points explanation -->
       <div class="points-key">
         <span class="pk-item"><strong>4 pts</strong> per match</span>
@@ -759,6 +765,43 @@ function launchRound() {
   router.push({ path: '/', query: { launchWizard: '1' } })
 }
 
+// ── Simulate & Reset ────────────────────────────────────────────
+function simulateTournament() {
+  if (!confirm('Fill all unplayed matches with random results?')) return
+  const outcomes = [
+    // [bestBall winner (t1/t2/halved), singles1 (t1/t2/halved), singles2 (t1/t2/halved)]
+    ['t1', 't1', 't1'], ['t1', 't1', 't2'], ['t1', 't2', 't1'], ['t1', 't2', 'halved'],
+    ['t2', 't2', 't2'], ['t2', 't1', 't2'], ['t2', 't2', 't1'], ['t2', 'halved', 't1'],
+    ['halved', 't1', 't2'], ['halved', 't2', 't1'], ['t1', 'halved', 'halved'], ['t2', 'halved', 'halved'],
+  ]
+  const today = new Date().toISOString().slice(0, 10)
+  for (const round of SCHEDULE) {
+    for (const match of round.matches) {
+      if (match.result) continue // don't overwrite existing results
+      const pick = outcomes[Math.floor(Math.random() * outcomes.length)]
+      match.result = {
+        bestBall: pick[0],
+        singles: [
+          { winner: pick[1] },
+          { winner: pick[2] },
+        ],
+        playedDate: today,
+      }
+    }
+  }
+  _saveResults()
+}
+
+function resetTournament() {
+  if (!confirm('Clear all match results? This cannot be undone.')) return
+  for (const round of SCHEDULE) {
+    for (const match of round.matches) {
+      match.result = null
+    }
+  }
+  _saveResults()
+}
+
 // Persist/restore match results to localStorage
 const RESULTS_KEY = 'gw_tournament_results_2025'
 
@@ -867,6 +910,24 @@ _loadResults()
 .t-section { padding: 12px 16px; }
 
 /* ── Points key ─────────────────────────────────────────── */
+/* ── Simulate / Reset actions ───────────────────────────── */
+.t-sim-actions {
+  display: flex; gap: 8px; margin-bottom: 12px;
+}
+.t-sim-btn {
+  flex: 1; padding: 9px 14px;
+  background: rgba(212,175,55,.1); border: 1px solid rgba(212,175,55,.25);
+  color: var(--gw-gold, #d4af37); border-radius: 10px;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: background .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.t-sim-btn:active { background: rgba(212,175,55,.2); }
+.t-sim-btn--reset {
+  background: rgba(248,113,113,.08); border-color: rgba(248,113,113,.2); color: #f87171;
+}
+.t-sim-btn--reset:active { background: rgba(248,113,113,.18); }
+
 .points-key {
   display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
   font-size: 11px; color: rgba(240,237,224,.5);
