@@ -148,11 +148,7 @@
         <!-- Live Games Summary -->
         <div v-if="roundsStore.activeGames.length > 0" class="live-games-box">
           <div class="live-games-label">🎲 Live Games</div>
-          <div v-for="game in roundsStore.activeGames" :key="game.id" class="live-game-row">
-            <span class="live-game-icon">{{ gameIcon(game.type) }}</span>
-            <span class="live-game-name">{{ gameLabel(game.type, game.config) }}</span>
-            <span class="live-game-status" v-html="gameLiveSummary(game)"></span>
-          </div>
+          <div v-for="game in roundsStore.activeGames" :key="game.id" class="live-game-summary" v-html="gameSummaryHtml(game)"></div>
         </div>
 
         <!-- Settle Up Panel -->
@@ -192,6 +188,7 @@
         </div>
 
         <!-- Horizontal Scorecard Grid -->
+        <div class="scorecard-outer">
         <div class="scorecard-scroll">
           <table class="scorecard-grid">
             <thead>
@@ -267,7 +264,7 @@
                 >
                   <td class="col-sticky col-player-name" :class="teamStickyClass(group.member)">
                     <span class="team-color-bar" :class="teamBarClass(group.member)"></span>
-                    <span class="player-nm" :class="teamTextClass(group.member)">{{ memberInitials(group.member) }}</span>
+                    <span class="player-nm" :class="teamTextClass(group.member)">{{ memberDisplay(group.member) }}</span>
                     <span class="player-hcp">{{ memberHandicapDisplay(group.member) }}<span v-if="lowManStrokes(group.member) !== null" class="hcp-lowman">({{ lowManStrokes(group.member) }})</span></span>
                   </td>
                   <!-- Front 9 scores -->
@@ -328,6 +325,7 @@
             </tfoot>
           </table>
         </div>
+        </div><!-- /.scorecard-outer -->
 
         <!-- In-round game config editor (tap a game chip) -->
         <div v-if="selectedGame" class="game-edit-panel">
@@ -420,11 +418,7 @@
         <!-- Game Status on Hole View -->
         <div v-if="roundsStore.activeGames.length > 0" class="hole-game-status">
           <div class="hole-gs-header">GAME STATUS · THRU {{ lastScoredHole }}</div>
-          <div v-for="game in roundsStore.activeGames" :key="'hgs-'+game.id" class="hole-gs-row">
-            <span class="hole-gs-icon">{{ gameIcon(game.type) }}</span>
-            <span class="hole-gs-name">{{ gameLabel(game.type, game.config) }}</span>
-            <span class="hole-gs-detail" v-html="gameLiveSummary(game)"></span>
-          </div>
+          <div v-for="game in roundsStore.activeGames" :key="'hgs-'+game.id" class="hole-gs-summary" v-html="gameSummaryHtml(game)"></div>
         </div>
 
         <!-- Snake 3-putt panel -->
@@ -1157,138 +1151,290 @@ const liveSettlements = computed(() => {
   }
 })
 
-function gameLiveSummary(game) {
+function gameSummaryHtml(game) {
   const ctx = buildCtx()
+  const cfg = game.config || {}
+  const icon = gameIcon(game.type)
   const t = game.type?.toLowerCase()
+
   try {
+    // ── Nassau ──
     if (t === 'nassau') {
-      const r = computeNassau(ctx, game.config)
-      function fmtNassauSeg(seg, segFrom, segTo) {
-        // Format: +9/+7/+5/+3/+1 — one score per bet (base + each press)
+      const r = computeNassau(ctx, cfg)
+      const t1n = teamInitialsStr(cfg.team1 || []) || 'T1'
+      const t2n = teamInitialsStr(cfg.team2 || []) || 'T2'
+
+      // frontSeg/backSeg return: { holeResults, t1Up, t1Wins, pressWins, presses }
+      // settlement returns: { front, back, overall, total } — positive = t1 wins
+      function fmtSeg(label, seg, segDollar) {
+        if (!seg) return `<span style="opacity:.35">${label}: —</span>`
         const up = seg.t1Up
-        const played = seg.holeResults?.filter(hr => hr.n1 != null || hr.n2 != null).length || 0
-        const segHoles = segTo - segFrom + 1
-        const remaining = segHoles - played
-        const isDormie = remaining > 0 && Math.abs(up) === remaining
-        const fmtUp = (v) => v === 0 ? 'AS' : (v > 0 ? `+${v}` : `${v}`)
-        // Base bet score from holeResults
-        const mainStr = fmtUp(up)
-        // Press scores: each press has its own score from presses array
-        const pressStrs = (seg.presses || []).map(press => {
-          const s = press.score || 0
-          return fmtUp(s)
+        const fmtUp = up === 0 ? 'AS' : (up > 0 ? `+${up}` : `${up}`)
+        // Include press scores
+        const pressStrs = (seg.presses || []).map(p => {
+          const s = p.score || 0
+          return s === 0 ? 'AS' : (s > 0 ? `+${s}` : `${s}`)
         })
-        let result = [mainStr, ...pressStrs].join('/')
-        if (isDormie) result += ' D!'
-        return result
+        const slashStatus = [fmtUp, ...pressStrs].join('/')
+        let html = `<span style="font-weight:600">${label}:</span> <span style="font-family:monospace;letter-spacing:0.5px">${slashStatus}</span>`
+        if (segDollar !== 0) {
+          const winner = segDollar > 0 ? t1n : t2n
+          html += ` · <span style="color:#4ade80;font-weight:700">${winner} $${Math.abs(segDollar)}</span>`
+        }
+        return html
       }
-      const f = fmtNassauSeg(r.frontSeg, 1, 9)
-      const b = fmtNassauSeg(r.backSeg, 10, 18)
-      // Overall dormie
-      const allPlayed = [...(r.frontSeg.holeResults || []), ...(r.backSeg.holeResults || [])].filter(hr => hr.n1 != null || hr.n2 != null).length
+
+      const s = r.settlement
+      const fHtml = fmtSeg('Front', r.frontSeg, s.front)
+      const bHtml = fmtSeg('Back', r.backSeg, s.back)
+      // Overall: compute up from overallUp
       const oUp = r.overallUp
-      const oRemaining = 18 - allPlayed
-      const oDormie = oRemaining > 0 && Math.abs(oUp) === oRemaining
-      const oStr = (oUp === 0 ? 'AS' : (oUp > 0 ? `+${oUp}` : `${oUp}`)) + (oDormie ? ' D!' : '')
-      const cfg = game.config || {}
-      const t1L = teamInitialsStr(cfg.team1 || [])
-      const t2L = teamInitialsStr(cfg.team2 || [])
-      const cls = (val) => val > 0 ? 'gw-winning' : val < 0 ? 'gw-losing' : ''
-      return `F: <span class="${cls(r.frontSeg.t1Up)}">${f}</span> · B: <span class="${cls(r.backSeg.t1Up)}">${b}</span> · O: <span class="${cls(oUp)}">${oStr}</span>`
-    }
-    if (t === 'skins') {
-      const r = computeSkins(ctx, game.config)
-      const won = r.results?.filter(s => s.winner).length || 0
-      const carry = r.results?.filter(s => !s.winner).length || 0
-      return `${won} won · ${carry} carry`
-    }
-    if (t === 'match' || t === 'match1v1') {
-      const r = computeMatch(ctx, game.config)
-      if (!r) return '—'
-      const played = r.holeResults?.filter(hr => !hr.incomplete) || []
-      const up = played.at(-1)?.p1Up ?? 0
-      const totalHoles = visibleHoles.value.length
-      const remaining = totalHoles - played.length
-      if (r.matchOver) return r.result
-      // Dormie detection: leading by exactly as many holes as remain
-      if (remaining > 0 && Math.abs(up) === remaining) {
-        const leader = up > 0 ? (r.p1?.name || 'P1') : (r.p2?.name || 'P2')
-        return `<span class="gw-winning">${leader} DORMIE!</span> (${Math.abs(up)}UP, ${remaining} left)`
+      const oFmt = oUp === 0 ? 'AS' : (oUp > 0 ? `+${oUp}` : `${oUp}`)
+      let oHtml = `<span style="font-weight:600">Overall:</span> <span style="font-family:monospace;letter-spacing:0.5px">${oFmt}</span>`
+      if (s.overall !== 0) {
+        const oWinner = s.overall > 0 ? t1n : t2n
+        oHtml += ` · <span style="color:#4ade80;font-weight:700">${oWinner} $${Math.abs(s.overall)}</span>`
       }
-      if (up === 0) return `AS (${remaining} left)`
-      const leader = up > 0 ? (r.p1?.name || 'P1') : (r.p2?.name || 'P2')
-      return `<span class="${up > 0 ? 'gw-winning' : 'gw-losing'}">${leader} ${Math.abs(up)}UP</span> (${remaining} left)`
+
+      let totLine = ''
+      const netOwed = s.total
+      if (netOwed !== 0) {
+        const payer = netOwed < 0 ? t1n : t2n
+        const payee = netOwed < 0 ? t2n : t1n
+        const grossTotal = Math.abs(s.front) + Math.abs(s.back) + Math.abs(s.overall)
+        const grossNote = grossTotal > Math.abs(netOwed) ? ` <span style="font-size:10px;opacity:.5">(gross: $${grossTotal})</span>` : ''
+        totLine = `<div style="font-size:12px;font-weight:700;margin-top:5px;padding:5px 8px;background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);border-radius:8px;color:#4ade80">💰 ${payer} owe ${payee} $${Math.abs(netOwed)}${grossNote}</div>`
+      } else if (Math.abs(s.front) + Math.abs(s.back) + Math.abs(s.overall) > 0) {
+        totLine = `<div style="font-size:11px;margin-top:4px;opacity:.5">All square · $${Math.abs(s.front) + Math.abs(s.back) + Math.abs(s.overall)} action</div>`
+      }
+
+      const fAmt = cfg.front ?? 10
+      const bAmt = cfg.back ?? 10
+      const oAmt = cfg.overall ?? 20
+      const pressInfo = cfg.pressAt ? ` · press@${cfg.pressAt}` : ''
+      return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Nassau</span><span class="muted" style="font-size:10px;margin-left:4px">${t1n} vs ${t2n} · $${fAmt}/$${bAmt}/$${oAmt}${pressInfo}</span><div style="font-size:11px;margin-top:3px;display:flex;flex-direction:column;gap:2px"><div>${fHtml}</div><div>${bHtml}</div><div>${oHtml}</div></div>${totLine}</div>`
     }
+
+    // ── Skins ──
+    // Engine returns: { holeResults, totals, settlements, potValue, ppt, payoutModel }
+    // holeResults[]: { hole, winner, winnerName, pot, net } or { hole, winner:null, pot, reason }
+    // settlements[]: { id, name, skins, net }
+    if (t === 'skins') {
+      const r = computeSkins(ctx, cfg)
+      if (!r || !r.holeResults) return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Skins</span> <span class="muted" style="font-size:11px">No scores yet</span></div>`
+
+      const won = r.holeResults.filter(s => s.winner) || []
+      const ppt = r.ppt || cfg.ppt || 5
+
+      let holeStr = ''
+      if (won.length > 0) {
+        holeStr = won.map(s => `H${s.hole}→${s.winnerName || '?'}($${s.pot || ppt})`).join(', ')
+      } else {
+        holeStr = 'No skins won yet'
+      }
+
+      // Carry: count consecutive non-won holes at end
+      let carryStr = ''
+      const allHoles = r.holeResults
+      let carry = 0
+      for (let i = allHoles.length - 1; i >= 0; i--) {
+        if (!allHoles[i].winner) carry++
+        else break
+      }
+      if (carry > 0 && allHoles.length < (visibleHoles.value.length || 18)) {
+        const nextVal = (carry + 1) * ppt
+        carryStr = ` · <span style="color:#d4af37;font-weight:700">${carry} skin${carry > 1 ? 's' : ''} in pot ($${nextVal} next)</span>`
+      } else if (carry > 0) {
+        carryStr = ` · <span style="color:rgba(212,175,55,.6)">${carry} unclaimed (carry died)</span>`
+      }
+
+      // Player standings from settlements array
+      let standStr = ''
+      if (r.settlements && r.settlements.length > 0) {
+        const sorted = [...r.settlements].sort((a, b) => b.net - a.net)
+        standStr = '<div style="margin-top:4px;font-size:11px">'
+        sorted.forEach(s => {
+          const color = s.net > 0 ? '#4ade80' : s.net < 0 ? '#f87171' : '#d4af37'
+          standStr += `<span style="color:${color};font-weight:700">${s.name}: ${s.net > 0 ? '+$' : s.net < 0 ? '-$' : '$'}${Math.abs(s.net)} (${s.skins} skin${s.skins !== 1 ? 's' : ''})</span> · `
+        })
+        standStr = standStr.replace(/ · $/, '') + '</div>'
+      }
+
+      return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Skins</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppt}/skin</span><div style="font-size:11px;margin-top:3px;line-height:1.6">${holeStr}${carryStr}</div>${standStr}</div>`
+    }
+
+    // ── Match ──
+    // Engine returns: { holeResults, finalUp, result, matchOver, p1, p2, settlement }
+    if (t === 'match' || t === 'match1v1') {
+      const r = computeMatch(ctx, cfg)
+      if (!r) return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Match</span><span class="muted" style="font-size:11px">—</span></div>`
+
+      const p1n = r.p1?.name || '?'
+      const p2n = r.p2?.name || '?'
+      const up = r.finalUp
+      let statusStr = r.result
+      if (!r.matchOver && up !== 0) {
+        const leader = up > 0 ? p1n : p2n
+        statusStr = `${leader} ${Math.abs(up)} UP`
+      } else if (!r.matchOver && up === 0) {
+        statusStr = 'All Square'
+      }
+
+      return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Match</span><span class="muted" style="font-size:10px;margin-left:4px">${p1n} vs ${p2n}</span><br><span class="muted" style="font-size:11px">${statusStr}</span></div>`
+    }
+
+    // ── Vegas ──
     if (t === 'vegas') {
-      const r = computeVegas(ctx, game.config)
+      const r = computeVegas(ctx, cfg)
+      if (!r) return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Vegas</span></div>`
+
+      const t1n = teamInitialsStr(cfg.team1 || []) || 'T1'
+      const t2n = teamInitialsStr(cfg.team2 || []) || 'T2'
       const diff = r.runningTotal || 0
-      if (diff === 0) return 'Even'
-      return diff > 0 ? `<span class="gw-winning">T1 +${diff}</span>` : `<span class="gw-losing">T2 +${Math.abs(diff)}</span>`
+      const ppt = cfg.ppt || 1
+      const amt = Math.abs(diff) * ppt
+
+      let dollarLine = ''
+      if (diff !== 0) {
+        const loser = diff > 0 ? t2n : t1n
+        const winner = diff > 0 ? t1n : t2n
+        dollarLine = ` · <span style="color:#4ade80;font-weight:700">${loser} owe $${amt}</span>`
+      }
+
+      return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Vegas</span><span class="muted" style="font-size:10px;margin-left:4px">${t1n} vs ${t2n}${dollarLine}</span></div>`
     }
+
+    // ── Snake ──
+    // Engine returns: { holder, holderName, snakeCount, perPlayer, events, settlements, ppt }
     if (t === 'snake') {
-      const r = computeSnake(ctx, game.config)
-      return r.holderName ? `${r.holderName} holds · ${r.snakeCount} 🐍` : 'No snakes yet'
+      const r = computeSnake(ctx, cfg)
+      const val = cfg.ppt || 5
+
+      if (!r || !r.holderName) {
+        return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Snake</span><span class="muted" style="font-size:10px;margin-left:4px">$${val}/snake — No 3-putts yet</span></div>`
+      }
+
+      const payout = r.snakeCount > 1 ? `$${val * r.snakeCount} total (${r.snakeCount} × $${val})` : `$${val}`
+      return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Snake</span><span class="muted" style="font-size:10px;margin-left:4px">$${val}/snake · ${r.snakeCount} 🐍</span><div style="font-size:11px;margin-top:3px"><span style="color:#f87171;font-weight:700">🐍 ${r.holderName} holds it</span> · owes ${payout} to each</div></div>`
     }
+
+    // ── Hi-Low ──
     if (t === 'hilow') {
-      const r = computeHiLow(ctx, game.config)
+      const r = computeHiLow(ctx, cfg)
+      if (!r) return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Hi-Low</span><span class="muted" style="font-size:11px">—</span></div>`
+
+      const t1n = teamInitialsStr(cfg.team1 || []) || 'T1'
+      const t2n = teamInitialsStr(cfg.team2 || []) || 'T2'
       const diff = (r.team1Pts || 0) - (r.team2Pts || 0)
-      if (diff === 0) return 'Even'
-      return diff > 0 ? `<span class="gw-winning">T1 +${diff}</span>` : `<span class="gw-losing">T2 +${Math.abs(diff)}</span>`
+      const status = diff === 0 ? 'All square' : (diff > 0 ? `${t1n} leads ${r.team1Pts}-${r.team2Pts}` : `${t2n} leads ${r.team2Pts}-${r.team1Pts}`)
+
+      let money = ''
+      if (diff !== 0) {
+        const loser = diff > 0 ? t2n : t1n
+        const ppt = cfg.ppt || 1
+        const amt = Math.abs(diff) * ppt
+        money = ` · <span style="color:#4ade80;font-weight:700">${loser} owe $${amt}</span>`
+      }
+
+      return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Hi-Low</span><span class="muted" style="font-size:10px;margin-left:4px">${t1n} vs ${t2n}</span><div style="font-size:11px;margin-top:2px">${status}${money}</div></div>`
     }
-    if (t === 'stableford') {
-      const r = computeStableford(ctx, game.config)
-      const top = r.standings?.[0]
-      return top ? `${top.name}: ${top.pts} pts` : '—'
-    }
-    if (t === 'wolf') {
-      const r = computeWolf(ctx, game.config)
-      const top = r.standings?.[0]
-      return top ? `${top.name}: ${top.balance > 0 ? '+' : ''}${top.balance}` : '—'
-    }
+
+    // ── Hammer ──
+    // Engine returns: { holeResults, team1Total, team2Total, ... }
     if (t === 'hammer') {
-      const r = computeHammer(ctx, game.config)
-      const diff = (r.team1Total || 0) - (r.team2Total || 0)
-      if (diff === 0) return 'Even'
-      return diff > 0 ? `<span class="gw-winning">T1 +$${diff}</span>` : `<span class="gw-losing">T2 +$${Math.abs(diff)}</span>`
+      const r = computeHammer(ctx, cfg)
+      if (!r) return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Hammer</span></div>`
+
+      const t1n = teamInitialsStr(cfg.team1 || []) || 'T1'
+      const t2n = teamInitialsStr(cfg.team2 || []) || 'T2'
+      const ppt = cfg.ppt || 5
+      const net = (r.team1Total || 0) - (r.team2Total || 0)
+      const netStr = net !== 0 ? `<div style="margin-top:4px;font-size:12px;font-weight:700;color:#4ade80">💰 ${net < 0 ? t1n : t2n} owe ${net > 0 ? t1n : t2n} $${Math.abs(net)}</div>` : ''
+
+      return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Hammer</span><span class="muted" style="font-size:10px;margin-left:4px">${t1n} vs ${t2n} · $${ppt}/hole</span>${netStr}</div>`
     }
-    if (t === 'sixes') {
-      const r = computeSixes(ctx, game.config)
-      const top = r.standings?.[0]
-      return top ? `${top.name}: ${top.pts} pts` : '—'
-    }
-    if (t === 'fivethreeone') {
-      const r = computeFiveThreeOne(ctx, game.config)
-      const top = r.standings?.[0]
-      return top ? `${top.name}: ${top.pts} pts` : '—'
-    }
-    if (t === 'dots') {
-      const r = computeDots(ctx, game.config)
-      const top = r.standings?.[0]
-      return top ? `${top.name}: ${top.dots} dots` : '—'
-    }
+
+    // ── Fidget ──
+    // Engine returns: { hasWon, holeLog, fidgeters, winners, settlements, ppp }
+    // hasWon: { memberId: boolean }, fidgeters/winners: member objects
     if (t === 'fidget') {
-      const r = computeFidget(ctx, game.config)
-      const safe = r.winners || []
-      const atRisk = r.fidgeters || []
-      if (safe.length === 0) return `All ${atRisk.length} players at risk`
-      if (atRisk.length === 0) return 'All safe!'
-      const atRiskNames = atRisk.map(m => memberDisplay(m)).join(', ')
-      return `⚠️ ${atRiskNames} still at risk (${safe.length} safe)`
+      const r = computeFidget(ctx, cfg)
+      if (!r) return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Fidget</span></div>`
+
+      const ppp = r.ppp || cfg.ppp || cfg.ppt || 10
+      const members = ctx.members
+      const completedHoles = r.holeLog?.filter(h => !h.incomplete).length || 0
+      const totalHoles = visibleHoles.value.length || 18
+
+      const lines = members.map(m => {
+        const won = r.hasWon[m.id]
+        const wIcon = won ? '✅' : '❌'
+        const cost = !won ? (ppp * (members.length - 1)) : 0
+        const nStr = won ? '<span style="color:#4ade80">safe</span>' : `<span style="color:#f87171;font-weight:700">owes $${cost}</span>`
+        return `${wIcon} ${memberDisplay(m)}: ${nStr}`
+      }).join('<br>')
+
+      let fStatus = ''
+      if (completedHoles >= totalHoles && r.fidgeters.length > 0) {
+        const names = r.fidgeters.map(m => memberDisplay(m)).join(', ')
+        fStatus = `<div style="font-size:11px;margin-top:4px;font-weight:600;color:#f87171">${names} fidgeted!</div>`
+      } else if (completedHoles >= totalHoles) {
+        fStatus = `<div style="font-size:11px;margin-top:4px;font-weight:600;color:#4ade80">Everyone won a hole — no fidgets!</div>`
+      }
+
+      return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Fidget</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppp}/player${completedHoles < totalHoles ? ' · thru ' + completedHoles + '/' + totalHoles : ''}</span><div style="font-size:11px;margin-top:3px">${lines}</div>${fStatus}</div>`
     }
-    if (t === 'bbn') {
-      const r = computeBestBallNet(ctx, game.config)
-      const scored = r.holeResults?.filter(hr => hr.sum != null) || []
-      if (scored.length === 0) return '—'
-      const runningTotal = scored.reduce((s, hr) => s + hr.sum, 0)
-      const runningPar = scored.reduce((s, hr) => s + (hr.par * (r.ballsToCount || 1)), 0)
-      const toPar = runningTotal - runningPar
-      const toParStr = toPar === 0 ? 'E' : toPar > 0 ? `+${toPar}` : `${toPar}`
-      return `${runningTotal} (${toParStr}) thru ${scored.length}`
+
+    // ── Stableford ──
+    if (t === 'stableford') {
+      const r = computeStableford(ctx, cfg)
+      if (!r) return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Stableford</span></div>`
+
+      const standings = r.settlements?.map(s => `${s.name}: ${s.pts || 0} pts`).join(' · ') || '—'
+      return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Stableford</span><div style="font-size:11px;margin-top:2px">${standings}</div></div>`
     }
+
+    // ── Wolf ──
+    if (t === 'wolf') {
+      const r = computeWolf(ctx, cfg)
+      if (!r) return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Wolf</span></div>`
+
+      const ppt = cfg.ppt || 1
+      const standings = r.settlements?.map(s => `${s.name}: <span style="color:${(s.net||0) > 0 ? '#4ade80' : (s.net||0) < 0 ? '#f87171' : '#d4af37'};font-weight:700">${(s.net||0) > 0 ? '+' : ''}$${Math.abs(s.net||0)}</span>`).join(' · ') || ''
+
+      return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Wolf</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppt}/pt</span>${standings ? `<div style="font-size:11px;margin-top:3px">${standings}</div>` : ''}</div>`
+    }
+
+    // ── Sixes ──
+    if (t === 'sixes') {
+      const r = computeSixes(ctx, cfg)
+      if (!r) return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Sixes</span><span class="muted" style="font-size:11px">Need 4 players</span></div>`
+
+      const ppt = cfg.ppt || 1
+      const standings = r.settlements?.map(s => `${s.name}: <span style="color:${(s.net||0) > 0 ? '#4ade80' : (s.net||0) < 0 ? '#f87171' : '#d4af37'};font-weight:700">${(s.net||0) > 0 ? '+' : ''}$${Math.abs(s.net||0)}</span>`).join(' · ') || '—'
+
+      return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Sixes</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppt}/segment</span><div style="font-size:11px;margin-top:3px">${standings}</div></div>`
+    }
+
+    // ── Dots ──
+    // Engine returns: { dots, settlements, ppt }
+    // settlements[]: { id, name, myDots, net }
+    if (t === 'dots') {
+      const r = computeDots(ctx, cfg)
+      if (!r) return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Dots</span></div>`
+
+      const ppt = r.ppt || cfg.ppt || 1
+      const counts = r.settlements?.map(s => `${s.name}: ${s.myDots || 0}`).join(' · ') || '—'
+      const dollarLine = r.settlements?.filter(s => (s.net||0) !== 0).map(s => `${s.name}${(s.net||0) > 0 ? '<span style="color:#4ade80"> +$' + s.net + '</span>' : '<span style="color:#f87171"> -$' + Math.abs(s.net) + '</span>'}`).join(' · ') || ''
+
+      return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Dots</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppt}/dot</span><div style="font-size:11px;margin-top:3px;opacity:.8">${counts}</div>${dollarLine ? '<div style="font-size:11px;margin-top:2px">' + dollarLine + '</div>' : ''}</div>`
+    }
+
+    // Default fallback
+    return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} ${gameLabel(game.type, cfg)}</span></div>`
   } catch(e) {
-    // Engine may throw if insufficient data
+    return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} ${gameLabel(game.type, cfg)}</span><span class="muted" style="font-size:10px;margin-left:4px">Error loading</span></div>`
   }
-  return '—'
 }
 
 // ── In-round config editing ─────────────────────────────────────
@@ -1748,8 +1894,17 @@ function formatDate(dateStr) {
 .live-game-icon { font-size: 14px; flex-shrink: 0; }
 .live-game-name { font-weight: 700; color: var(--gw-text, #f0ede0); min-width: 60px; }
 .live-game-status { color: rgba(240,237,224,.7); flex: 1; }
+
+/* Rich game summaries */
+.live-game-summary {
+  padding: 5px 0;
+  border-top: 1px solid rgba(255,255,255,.04);
+}
+.live-game-summary:first-of-type { border-top: none; }
+
 :deep(.gw-winning) { color: #4ade80; font-weight: 700; }
 :deep(.gw-losing) { color: #f87171; font-weight: 700; }
+.muted { color: rgba(240,237,224,.5); font-size: 0.95em; }
 
 /* ── Settle Up box ───────────────────────────────────────────── */
 .settle-box {
@@ -1794,17 +1949,33 @@ function formatDate(dateStr) {
 .settle-even-msg { font-size: 12px; color: rgba(240,237,224,.4); text-align: center; padding: 4px 0; }
 
 /* ── Scorecard Grid ──────────────────────────────────────────── */
+/* Outer wrapper holds the border/radius so the scroll div stays clean.
+   iOS Safari breaks position:sticky when overflow-x:auto and border-radius
+   are on the SAME element. Separating them fixes sticky player column. */
+.scorecard-outer {
+  margin: 8px 12px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
 .scorecard-scroll {
   overflow-x: auto;
-  margin: 8px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,.08);
   -webkit-overflow-scrolling: touch;
 }
 
+/* Sticky cells need solid backgrounds to cover scrolled content */
+.col-sticky {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  white-space: nowrap;
+  /* Ensure no transparent gap */
+  background-clip: padding-box;
+}
+
 .scorecard-grid {
-  border-collapse: separate;
-  border-spacing: 0;
+  border-collapse: collapse;
   font-size: 11px;
   min-width: 100%;
   font-family: var(--gw-font-mono, 'DM Mono', monospace);
@@ -1897,10 +2068,11 @@ function formatDate(dateStr) {
   background: rgba(7,14,7,.97);
   position: relative;
   padding-left: 14px;
+  border-right: 1px solid rgba(255,255,255,.08);
 }
-.sticky-t1 { background: rgba(7,20,30,.97); }
-.sticky-t2 { background: rgba(18,7,7,.97); }
-.sticky-default { background: rgba(7,14,7,.97); }
+.sticky-t1 { background: rgba(30,58,138,.95); border-right: 2px solid rgba(96,165,250,.3); }
+.sticky-t2 { background: rgba(120,40,40,.95); border-right: 2px solid rgba(248,113,113,.3); }
+.sticky-default { background: rgba(7,14,7,.97); border-right: 1px solid rgba(255,255,255,.08); }
 
 .player-nm { font-size: 13px; font-weight: 700; color: var(--gw-text, #f0ede0); }
 .player-hcp { font-size: 10px; color: rgba(240,237,224,.5); margin-left: 4px; }
@@ -2275,6 +2447,13 @@ function formatDate(dateStr) {
 .hole-gs-icon { font-size: 13px; }
 .hole-gs-name { font-weight: 700; white-space: nowrap; }
 .hole-gs-detail { font-size: 12px; color: rgba(240,237,224,.7); }
+
+/* Rich game summary in hole view */
+.hole-gs-summary {
+  padding: 5px 0;
+  border-top: 1px solid rgba(255,255,255,.05);
+}
+.hole-gs-summary:first-of-type { border-top: none; }
 
 /* Hole nav buttons */
 .hole-nav-buttons {

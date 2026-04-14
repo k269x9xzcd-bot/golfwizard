@@ -324,6 +324,7 @@ export const useRoundsStore = defineStore('rounds', () => {
 
     // Subscribe to real-time updates
     subscribeToRound(roundId)
+    return data
   }
 
   // ── Upsert a score ──────────────────────────────────────────

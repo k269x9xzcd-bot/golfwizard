@@ -83,7 +83,7 @@
   --gw-gold-lt: #f0d060;
   --gw-text: #f0ede0;
   --gw-text-muted: rgba(240,237,224,.45);
-  --gw-card-bg: #1e2b22;
+  --gw-card-bg: rgba(255,255,255,.04);
   --gw-card-border: rgba(212,175,55,.15);
   --gw-t1: #60a5fa;
   --gw-t2: #f87171;
@@ -138,13 +138,11 @@ body {
 
 /* ── Bottom navigation ─────────────────────────────────────── */
 /*
- * ── Bottom nav bar ──────────────────────────────────────────────
+ * Layout: [Home] [Score] [FAB-slot] [Courses] [Cup/Players]
  *
- * Layout: [Home] [Score] [+FAB] [Courses] [Players] [Cup]
- *
- * The bar sits 8px above the absolute bottom so the home indicator
- * curve doesn't clip the labels. The centre FAB pops up above the
- * bar's top edge via a negative translateY.
+ * 4 nav-items (flex:1 each) + 1 nav-fab-slot (flex:1) = 5 equal columns.
+ * The FAB button sits inside the slot and pops up via translateY.
+ * This guarantees true centering regardless of item count.
  */
 .bottom-nav {
   position: fixed;
@@ -153,27 +151,27 @@ body {
   right: 0;
   z-index: 100;
   display: flex;
-  align-items: center;          /* vertically centre all items in the bar */
+  align-items: flex-end;        /* align to bottom so FAB can pop up freely */
   justify-content: space-around;
-  /* Bar height: 56px visible strip + safe-area + 8px lift from edge */
-  height: calc(56px + env(safe-area-inset-bottom) + 8px);
-  padding-bottom: calc(env(safe-area-inset-bottom) + 8px);
+  height: calc(56px + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
   background: rgba(20, 26, 22, 0.97);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border-top: 1px solid rgba(212, 175, 55, 0.12);
   box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.45);
-  overflow: visible;            /* allow the FAB to stick out above */
+  overflow: visible;
 }
 
 .nav-item {
   flex: 1;
+  height: 56px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 3px;
-  padding: 4px 2px 0;
+  padding: 0;
   text-decoration: none;
   color: rgba(240, 237, 224, 0.45);
   font-size: 10px;
@@ -205,67 +203,44 @@ body {
   line-height: 1;
 }
 
-/* ── Centre FAB ────────────────────────────────────────────
- * Fixed width so it holds the centre slot. The circle is
- * lifted above the bar top so it visibly "pops out" while
- * the "New" label stays anchored inside the bar.
- */
-.nav-new {
-  width: 72px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0;
-  padding: 0;
-  position: relative;
-  background: none;
-  border: none;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.nav-plus {
-  width: 58px;
-  height: 58px;
+/* ── Centre FAB — floats above the nav row ── */
+.nav-fab {
+  position: absolute;
+  top: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   background: linear-gradient(145deg, #edd655 0%, var(--gw-gold) 50%, #b8961e 100%);
   color: #0c0f0d;
-  font-size: 30px;
+  font-size: 28px;
   font-weight: 300;
   line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Pop the circle above the bar's top edge */
-  transform: translateY(-14px);
-  /* Ring: nav-bg gap → gold halo → upward glow → drop shadow */
+  border: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
   box-shadow:
     0 0 0 3px rgba(20, 26, 22, 0.97),
     0 0 0 4.5px rgba(212, 175, 55, 0.55),
-    0 -8px 22px rgba(212, 175, 55, 0.3),
-    0 4px 18px rgba(0, 0, 0, 0.55);
+    0 -4px 16px rgba(212, 175, 55, 0.3),
+    0 4px 12px rgba(0, 0, 0, 0.55);
   transition: transform 0.15s, box-shadow 0.15s;
 }
 
-/* "New" label — inside the bar, directly below the popped circle */
-.nav-plus-label {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.4px;
-  color: var(--gw-gold);
-  line-height: 1;
-  margin-top: -10px;   /* pulls label up under the lifted circle */
-}
+.nav-fab-plus { pointer-events: none; }
 
-.nav-new:active .nav-plus {
-  transform: translateY(-14px) scale(0.91);
+.nav-fab:active {
+  transform: translateX(-50%) scale(0.91);
   box-shadow:
     0 0 0 3px rgba(20, 26, 22, 0.97),
     0 0 0 4.5px rgba(212, 175, 55, 0.35),
-    0 -4px 10px rgba(212, 175, 55, 0.15),
-    0 2px 8px rgba(0, 0, 0, 0.4);
+    0 -2px 8px rgba(212, 175, 55, 0.15),
+    0 2px 6px rgba(0, 0, 0, 0.4);
 }
 
 /* ── Loading splash ────────────────────────────────────────── */

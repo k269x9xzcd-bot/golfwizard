@@ -375,7 +375,7 @@ async function saveEdit() {
   overflow: hidden;
   border-radius: 14px;
   margin-bottom: 8px;
-  background: #1e2b22;
+  background: rgba(255,255,255,.04);
   transition: background 0.05s linear;
 }
 
@@ -394,7 +394,7 @@ async function saveEdit() {
 .player-card {
   display: flex; align-items: center; gap: 10px;
   padding: 10px 14px;
-  background: #1e2b22;
+  background: rgba(255,255,255,.04);
   border: 1px solid rgba(255,255,255,.07);
   border-radius: 12px;
   position: relative; z-index: 1;
@@ -403,7 +403,7 @@ async function saveEdit() {
 }
 .player-card--fav {
   border-color: rgba(212,175,55,.2);
-  background: #1e2b22;
+  background: rgba(255,255,255,.04);
 }
 
 .player-info { flex: 1; cursor: pointer; min-width: 0; }

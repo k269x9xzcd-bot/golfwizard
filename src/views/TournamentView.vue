@@ -482,7 +482,7 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive } from 'vue'
+import { ref, computed, reactive, triggerRef } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   TOURNAMENT, TEAMS, SCHEDULE,
@@ -492,6 +492,10 @@ import {
 
 const router = useRouter()
 const tab = ref('standings')
+
+// Reactive trigger — SCHEDULE is a plain object so Vue can't detect mutations.
+// Increment this after any mutation to force computed properties to re-evaluate.
+const scheduleVersion = ref(0)
 
 // ── Tournament name/format override (persisted to localStorage) ─
 const EDIT_KEY = 'gw_tournament_meta_2025'
@@ -525,23 +529,29 @@ function teamLabel(teamId) {
 }
 
 // ── Standings ───────────────────────────────────────────────────
-const standings = computed(() => computeStandings())
+const standings = computed(() => {
+  scheduleVersion.value // reactive dependency — forces re-eval after mutations
+  return computeStandings()
+})
 
 function teamStanding(teamId) {
   return standings.value.find(s => s.team.id === teamId)
 }
 
-const allDone = computed(() =>
-  SCHEDULE.every(r => r.matches.every(m => m.result))
-)
+const allDone = computed(() => {
+  scheduleVersion.value
+  return SCHEDULE.every(r => r.matches.every(m => m.result))
+})
 
-const finalistsKnown = computed(() =>
-  standings.value[0]?.matchesPlayed > 0 &&
-  SCHEDULE.filter(r => r.matches.some(m => m.result)).length >= 4
-)
+const finalistsKnown = computed(() => {
+  scheduleVersion.value
+  return standings.value[0]?.matchesPlayed > 0 &&
+    SCHEDULE.filter(r => r.matches.some(m => m.result)).length >= 4
+})
 
 // ── Next match / countdown ──────────────────────────────────────
 const upcoming = computed(() => {
+  scheduleVersion.value
   const today = new Date().toISOString().slice(0, 10)
   for (const round of SCHEDULE) {
     const unplayed = round.matches.filter(m => !m.result)
@@ -813,6 +823,7 @@ function _saveResults() {
     }
   }
   localStorage.setItem(RESULTS_KEY, JSON.stringify(saved))
+  scheduleVersion.value++ // trigger Vue reactivity for SCHEDULE-dependent computeds
 }
 
 function _loadResults() {
@@ -830,6 +841,7 @@ function _loadResults() {
 
 // Load results on mount
 _loadResults()
+scheduleVersion.value++ // ensure computeds pick up loaded results
 </script>
 
 <style scoped>

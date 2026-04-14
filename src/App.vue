@@ -22,6 +22,12 @@
 
       <!-- Bottom nav -->
       <nav class="bottom-nav">
+        <!-- Floating FAB centered above the nav row -->
+        <button class="nav-fab" @click="showWizard = true">
+          <span class="nav-fab-plus">＋</span>
+        </button>
+
+        <!-- 5 equal nav items -->
         <RouterLink to="/" class="nav-item" :class="{ active: $route.name === 'home' }">
           <span class="nav-icon">🏠</span>
           <span class="nav-label">Home</span>
@@ -30,10 +36,6 @@
           <span class="nav-icon">🏌️</span>
           <span class="nav-label">Score</span>
         </RouterLink>
-        <button class="nav-new" @click="showWizard = true">
-          <span class="nav-plus">＋</span>
-          <span class="nav-plus-label">New</span>
-        </button>
         <RouterLink to="/courses" class="nav-item" :class="{ active: $route.name === 'courses' }">
           <span class="nav-icon">⛳</span>
           <span class="nav-label">Courses</span>
@@ -47,7 +49,7 @@
           <span class="nav-label">Cup</span>
         </RouterLink>
         <RouterLink v-else to="/history" class="nav-item" :class="{ active: $route.name === 'history' }">
-          <span class="nav-icon">🕐</span>
+          <span class="nav-icon">📋</span>
           <span class="nav-label">History</span>
         </RouterLink>
       </nav>
@@ -99,8 +101,8 @@ onMounted(async () => {
   if (joinMatch) showJoin.value = true
 
   // Auto-launch wizard if navigated from tournament match
-  const urlParams = new URLSearchParams(window.location.search)
-  if (urlParams.get('launchWizard') === '1') {
+  // Use Vue Router's parsed query (works with hash history) instead of window.location.search
+  if (router.currentRoute.value.query.launchWizard === '1') {
     showWizard.value = true
     // Clean URL
     router.replace({ query: {} })

@@ -1010,7 +1010,7 @@ function showToast(msg, type = 'neutral') {
 .course-card {
   display: flex;
   align-items: center;
-  background: #1e2b22;
+  background: rgba(255,255,255,.04);
   border-radius: var(--gw-radius-lg);
   padding: 10px 14px;
   margin-bottom: 0;
@@ -1025,7 +1025,7 @@ function showToast(msg, type = 'neutral') {
 .course-card--custom { border-left: 2px solid var(--gw-gold); }
 .course-card--fav {
   border-color: rgba(212,175,55,.2);
-  background: #1e2b22;
+  background: rgba(255,255,255,.04);
 }
 .course-fav-star {
   font-size: 14px; color: #d4af37; flex-shrink: 0; margin-left: auto;
@@ -1038,7 +1038,7 @@ function showToast(msg, type = 'neutral') {
   overflow: hidden;
   border-radius: var(--gw-radius-lg);
   margin-bottom: 8px;
-  background: #1e2b22;
+  background: rgba(255,255,255,.04);
   transition: background 0.05s linear;
 }
 .swipe-container .course-card { margin-bottom: 0; }
@@ -1415,9 +1415,9 @@ function showToast(msg, type = 'neutral') {
 }
 .holes-grid {
   display: grid;
-  /* hole# | par | SI | tees... */
-  grid-template-columns: 28px 82px 44px repeat(var(--tee-cols, 1), 56px);
-  gap: 2px;
+  /* hole# | par (3/4/5 buttons) | SI | yardage per tee... */
+  grid-template-columns: 30px 88px 48px repeat(var(--tee-cols, 1), 58px);
+  gap: 3px 2px;
   min-width: max-content;
   --tee-cols: v-bind('newCourse.tees.length');
 }
@@ -1458,16 +1458,19 @@ function showToast(msg, type = 'neutral') {
   border: 1px solid rgba(255, 255, 255, 0.1);
   height: 44px;
   border-radius: 4px;
+  overflow: hidden;
+  min-width: 0;
 }
 .par-buttons {
   display: flex;
-  gap: 2px;
+  gap: 1px;
   width: 100%;
-  padding: 0 4px;
+  padding: 0 2px;
 }
 .par-btn {
   flex: 1;
-  height: 32px;
+  min-width: 0;
+  height: 34px;
   border: none;
   background: rgba(255, 255, 255, 0.08);
   border-radius: 4px;
