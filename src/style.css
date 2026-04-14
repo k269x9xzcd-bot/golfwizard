@@ -203,44 +203,6 @@ body {
   line-height: 1;
 }
 
-/* ── Centre FAB — half-circle shelf above the nav row ── */
-.nav-fab {
-  position: absolute;
-  top: -27px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 5;
-  width: 56px;
-  height: 28px;                  /* half the circle height */
-  border-radius: 28px 28px 0 0;  /* top-left top-right = half circle */
-  overflow: hidden;
-  background: linear-gradient(145deg, #edd655 0%, var(--gw-gold) 50%, #b8961e 100%);
-  color: #0c0f0d;
-  font-size: 24px;
-  font-weight: 300;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding-bottom: 2px;           /* nudge + glyph up visually */
-  border: none;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  box-shadow:
-    0 -4px 16px rgba(212, 175, 55, 0.3),
-    0 0 0 1.5px rgba(212, 175, 55, 0.45);
-  transition: transform 0.15s, box-shadow 0.15s;
-}
-
-.nav-fab-plus { pointer-events: none; }
-
-.nav-fab:active {
-  transform: translateX(-50%) scale(0.93);
-  box-shadow:
-    0 -2px 8px rgba(212, 175, 55, 0.15),
-    0 0 0 1.5px rgba(212, 175, 55, 0.3);
-}
-
 /* ── Loading splash ────────────────────────────────────────── */
 .splash {
   position: fixed;

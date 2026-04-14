@@ -231,7 +231,7 @@
                 >
                   <td class="col-sticky col-player-name" :class="teamStickyClass(group.member)">
                     <span class="team-color-bar" :class="teamBarClass(group.member)"></span>
-                    <span class="player-nm" :class="teamTextClass(group.member)">{{ memberDisplay(group.member) }}</span>
+                    <span class="player-nm" :class="teamTextClass(group.member)">{{ memberGridName(group.member) }}</span>
                     <span class="player-hcp">{{ memberHandicapDisplay(group.member) }}<span v-if="lowManStrokes(group.member) !== null" class="hcp-lowman">({{ lowManStrokes(group.member) }})</span></span>
                   </td>
                   <!-- Front 9 scores -->
@@ -296,8 +296,12 @@
 
         <!-- Live Games Summary -->
         <div v-if="roundsStore.activeGames.length > 0" class="live-games-box">
-          <div class="live-games-label">🎲 Live Games</div>
-          <div v-for="game in roundsStore.activeGames" :key="game.id" class="live-game-summary" v-html="gameSummaryHtml(game)"></div>
+          <div class="live-games-label collapsible-header" @click="gamesExpanded = !gamesExpanded">
+            {{ gamesExpanded ? '▼' : '▶' }} 🎲 Live Games
+          </div>
+          <div v-show="gamesExpanded">
+            <div v-for="game in roundsStore.activeGames" :key="game.id" class="live-game-summary" v-html="gameSummaryHtml(game)"></div>
+          </div>
         </div>
 
         <!-- Settle Up Panel -->
@@ -415,8 +419,12 @@
 
         <!-- Game Status on Hole View -->
         <div v-if="roundsStore.activeGames.length > 0" class="hole-game-status">
-          <div class="hole-gs-header">GAME STATUS · THRU {{ lastScoredHole }}</div>
-          <div v-for="game in roundsStore.activeGames" :key="'hgs-'+game.id" class="hole-gs-summary" v-html="gameSummaryHtml(game)"></div>
+          <div class="hole-gs-header collapsible-header" @click="gamesExpanded = !gamesExpanded">
+            {{ gamesExpanded ? '▼' : '▶' }} GAME STATUS · THRU {{ lastScoredHole }}
+          </div>
+          <div v-show="gamesExpanded">
+            <div v-for="game in roundsStore.activeGames" :key="'hgs-'+game.id" class="hole-gs-summary" v-html="gameSummaryHtml(game)"></div>
+          </div>
         </div>
 
         <!-- Snake 3-putt panel -->
@@ -548,6 +556,7 @@ const showGameEditor = ref(false)
 const showNotations = ref(true)
 const showFinishReview = ref(false)
 const showFullHcp = ref(false) // false = low-man dots (default), true = full course HCP dots
+const gamesExpanded = ref(true)
 
 // ── Game editor helpers ──────────────────────────────────────────
 const addableGameTypes = computed(() => {
@@ -900,6 +909,18 @@ function memberDisplay(m) {
   if (!m) return '?'
   if (m.use_nickname && m.nickname) return m.nickname
   return m.guest_name || m.name || m.short_name || '?'
+}
+
+// Helper: member name for scorecard grid (nickname or initials)
+function memberGridName(member) {
+  if (!member) return '?'
+  if (member.nickname && member.use_nickname) return member.nickname
+  if (member.guest_name) {
+    const parts = member.guest_name.trim().split(/\s+/)
+    return parts.map(p => p[0]).join('').toUpperCase().slice(0, 3)
+  }
+  // Fall back to initials
+  return rosterDisplayInitials(member) || '??'
 }
 
 // Helper: build team initials string like "JS+BC"
@@ -1380,23 +1401,34 @@ function gameSummaryHtml(game) {
       const completedHoles = r.holeLog?.filter(h => !h.incomplete).length || 0
       const totalHoles = visibleHoles.value.length || 18
 
-      const lines = members.map(m => {
-        const won = r.hasWon[m.id]
-        const wIcon = won ? '✅' : '❌'
-        const cost = !won ? (ppp * (members.length - 1)) : 0
-        const nStr = won ? '<span style="color:#4ade80">safe</span>' : `<span style="color:#f87171;font-weight:700">owes $${cost}</span>`
-        return `${wIcon} ${memberDisplay(m)}: ${nStr}`
-      }).join('<br>')
+      // Filter: safe (won at least one hole) vs at-risk (no wins yet)
+      const safe = members.filter(m => r.hasWon[m.id])
+      const atRisk = members.filter(m => !r.hasWon[m.id])
 
+      let lines = ''
       let fStatus = ''
-      if (completedHoles >= totalHoles && r.fidgeters.length > 0) {
-        const names = r.fidgeters.map(m => memberDisplay(m)).join(', ')
-        fStatus = `<div style="font-size:11px;margin-top:4px;font-weight:600;color:#f87171">${names} fidgeted!</div>`
-      } else if (completedHoles >= totalHoles) {
-        fStatus = `<div style="font-size:11px;margin-top:4px;font-weight:600;color:#4ade80">Everyone won a hole — no fidgets!</div>`
+
+      if (completedHoles >= totalHoles) {
+        // Game over
+        if (atRisk.length > 0) {
+          // Show fidgeters only
+          lines = atRisk.map(m => `❌ ${memberDisplay(m)}: owes $${ppp * (members.length - 1)}`).join('<br>')
+          fStatus = `<div style="font-size:11px;margin-top:4px;font-weight:600;color:#f87171">${safe.length} safe · ${atRisk.length} fidgeted</div>`
+        } else {
+          lines = ''
+          fStatus = `<div style="font-size:11px;margin-top:4px;font-weight:600;color:#4ade80">Everyone won a hole — no fidgets!</div>`
+        }
+      } else {
+        // In progress — only show at-risk players
+        if (atRisk.length > 0) {
+          lines = atRisk.map(m => `⚠️ ${memberDisplay(m)}: no win yet`).join('<br>')
+        } else {
+          lines = ''
+        }
+        fStatus = `<div style="font-size:11px;margin-top:4px;font-weight:600;color:#4ade80">${safe.length}/${members.length} safe</div>`
       }
 
-      return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Fidget</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppp}/player${completedHoles < totalHoles ? ' · thru ' + completedHoles + '/' + totalHoles : ''}</span><div style="font-size:11px;margin-top:3px">${lines}</div>${fStatus}</div>`
+      return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Fidget</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppp}/player${completedHoles < totalHoles ? ' · thru ' + completedHoles + '/' + totalHoles : ''}</span>${lines ? '<div style="font-size:11px;margin-top:3px">' + lines + '</div>' : ''}${fStatus}</div>`
     }
 
     // ── Stableford ──
@@ -1697,7 +1729,9 @@ function formatDate(dateStr) {
   display: flex;
   flex-direction: column;
   flex: 1;
-  overflow: hidden;
+  height: calc(100vh - 56px - env(safe-area-inset-bottom));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* ── Empty state ──────────────────────────────────────────────── */
@@ -1725,6 +1759,7 @@ function formatDate(dateStr) {
   top: 0;
   z-index: 10;
   background: var(--gw-bg, #0c150e);
+  min-height: 56px;
 }
 .course-name {
   font-family: var(--gw-font-display, Georgia);
@@ -2016,6 +2051,7 @@ function formatDate(dateStr) {
 
 .scorecard-grid {
   border-collapse: collapse;
+  border-spacing: 0;
   font-size: 11px;
   min-width: 100%;
   font-family: var(--gw-font-mono, 'DM Mono', monospace);
@@ -2096,10 +2132,10 @@ function formatDate(dateStr) {
 
 /* Player rows */
 .row-player {
-  border-top: 1px solid rgba(255,255,255,.05);
+  border-top: none;
 }
-.team1-row { background: rgba(96,165,250,.05); }
-.team2-row { background: rgba(248,113,113,.05); }
+.team1-row { }
+.team2-row { }
 
 .col-player-name {
   padding: 5px 10px;
@@ -2110,8 +2146,8 @@ function formatDate(dateStr) {
   padding-left: 14px;
   border-right: 1px solid rgba(255,255,255,.08);
 }
-.sticky-t1 { background: #1e3a8a; border-right: 2px solid rgba(96,165,250,.3); }
-.sticky-t2 { background: #782828; border-right: 2px solid rgba(248,113,113,.3); }
+.sticky-t1 { background: #0c150e; border-right: 2px solid rgba(96,165,250,.3); }
+.sticky-t2 { background: #0c150e; border-right: 2px solid rgba(248,113,113,.3); }
 .sticky-default { background: #0c150e; border-right: 1px solid rgba(255,255,255,.08); }
 
 .player-nm { font-size: 13px; font-weight: 700; color: var(--gw-text, #f0ede0); }
@@ -2128,6 +2164,7 @@ function formatDate(dateStr) {
   font-weight: 700;
   position: relative;
   min-width: 26px;
+  background: var(--gw-bg, #0c150e);
 }
 .col-score-cell:active { background: rgba(255,255,255,.06); }
 .cell-winner { background: rgba(74,222,128,.1); }
@@ -2461,6 +2498,17 @@ function formatDate(dateStr) {
   font-size: 11px; font-weight: 800; color: var(--gw-gold, #d4af37);
   letter-spacing: .8px; text-transform: uppercase; margin-bottom: 10px;
 }
+
+/* Collapsible headers */
+.collapsible-header {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.collapsible-header:active {
+  opacity: 0.7;
+}
+
 .hole-gs-row {
   display: flex; align-items: baseline; gap: 6px;
   padding: 5px 0;

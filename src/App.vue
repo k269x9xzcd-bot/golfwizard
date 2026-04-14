@@ -22,11 +22,6 @@
 
       <!-- Bottom nav -->
       <nav class="bottom-nav">
-        <!-- Floating FAB centered above the nav row -->
-        <button class="nav-fab" @click="showWizard = true">
-          <span class="nav-fab-plus">＋</span>
-        </button>
-
         <!-- 5 equal nav items -->
         <RouterLink to="/" class="nav-item" :class="{ active: $route.name === 'home' }">
           <span class="nav-icon">🏠</span>
@@ -58,7 +53,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, provide } from 'vue'
 import { RouterView, RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 import { useRosterStore } from './stores/roster'
@@ -76,6 +71,8 @@ const showTournament = computed(() => hasTournamentAccess(authStore.user?.email)
 
 const showWizard = ref(false)
 const showJoin = ref(false)
+
+provide('openWizard', () => { showWizard.value = true })
 
 onMounted(async () => {
   try { await authStore.init() } catch (e) { console.warn('Auth init failed:', e) }

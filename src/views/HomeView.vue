@@ -23,6 +23,8 @@
       <div class="card-cta">Continue →</div>
     </div>
 
+    <button class="new-round-pill" @click="openWizard()">+ New Round</button>
+
 
     <!-- Recent rounds -->
     <section v-if="roundsStore.rounds.length" class="section">
@@ -45,7 +47,8 @@
     <div v-else class="empty-state">
       <div class="empty-icon">⛳</div>
       <div class="empty-title">No rounds yet</div>
-      <div class="empty-sub">Tap <strong>New Round</strong> to get started</div>
+      <div class="empty-sub">Start tracking your round</div>
+      <button class="new-round-pill" @click="openWizard()">+ New Round</button>
     </div>
 
     <!-- Auth modal -->
@@ -54,7 +57,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, inject } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useRoundsStore } from '../stores/rounds'
@@ -66,6 +69,7 @@ const authStore = useAuthStore()
 const roundsStore = useRoundsStore()
 const router = useRouter()
 const showAuth = ref(false)
+const openWizard = inject('openWizard', () => {})
 
 onMounted(async () => {
   if (authStore.isAuthenticated) await roundsStore.fetchRounds()
@@ -84,3 +88,27 @@ async function openRound(id) {
   router.push('/scoring')
 }
 </script>
+
+<style scoped>
+.new-round-pill {
+  display: block;
+  margin: 16px auto 0;
+  padding: 14px 32px;
+  background: linear-gradient(145deg, #edd655 0%, #d4af37 50%, #b8961e 100%);
+  color: #0c0f0d;
+  font-family: var(--gw-font-body);
+  font-size: 16px;
+  font-weight: 700;
+  border: none;
+  border-radius: 28px;
+  cursor: pointer;
+  letter-spacing: 0.3px;
+  box-shadow: 0 2px 12px rgba(212,175,55,.3);
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .12s, box-shadow .12s;
+}
+.new-round-pill:active {
+  transform: scale(0.95);
+  box-shadow: 0 1px 6px rgba(212,175,55,.2);
+}
+</style>
