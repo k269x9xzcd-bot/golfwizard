@@ -38,26 +38,44 @@ const ENGINE_MAP = {
 function extractPlayerNets(type, result, config, members) {
   const t = type.toLowerCase()
 
+  // Fidget: settlements are { from, fromName, to, toName, amount } — convert to per-player net
+  if (t === 'fidget' && result.settlements && Array.isArray(result.settlements)) {
+    const netMap = {}
+    for (const m of members) netMap[m.id] = 0
+    for (const s of result.settlements) {
+      if (netMap[s.from] !== undefined) netMap[s.from] -= s.amount
+      if (netMap[s.to]   !== undefined) netMap[s.to]   += s.amount
+    }
+    return members.map(m => ({ id: m.id, name: m.short_name, net: netMap[m.id] || 0 }))
+  }
+
   // Games that return a settlements array: [{ id, name, net }]
   if (result.settlements && Array.isArray(result.settlements)) {
     return result.settlements
   }
 
-  // Nassau: team-based, settlement.total > 0 means t1 wins from t2
+  // Nassau: team bet — s.total is what T1 wins from T2 (or loses if negative).
+  // Each winning-team player wins s.total; each losing-team player pays s.total.
+  // (It's not split — in a 2v2 Nassau each loser pays the full stake to each winner)
   if (t === 'nassau' && result.settlement) {
     const s = result.settlement
     if (s.total === 0) return []
     const t1Ids = config.team1 || []
     const t2Ids = config.team2 || []
-    const perPlayer = s.total / Math.max(t1Ids.length, 1)
     const nets = []
+    // Each T1 player wins s.total from each T2 player, so net per T1 = s.total * t2Size
+    // Each T2 player loses s.total to each T1 player, so net per T2 = -s.total * t1Size
+    // But conventionally for 2v2, the amount is per-pair: each loser pays each winner.
+    // s.total already = frontWins + pressWins + backWins + pressWins + overallWins
+    // and those are scaled by the stake values already.
+    // So each T1 player nets: +s.total and each T2 player nets: -s.total
     for (const id of t1Ids) {
       const m = members.find(m => m.id === id)
-      nets.push({ id, name: m?.short_name || '?', net: perPlayer })
+      nets.push({ id, name: m?.short_name || '?', net: s.total })
     }
     for (const id of t2Ids) {
       const m = members.find(m => m.id === id)
-      nets.push({ id, name: m?.short_name || '?', net: -perPlayer })
+      nets.push({ id, name: m?.short_name || '?', net: -s.total })
     }
     return nets
   }
