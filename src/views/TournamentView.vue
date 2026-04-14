@@ -484,6 +484,7 @@
 <script setup>
 import { ref, computed, reactive, triggerRef } from 'vue'
 import { useRouter } from 'vue-router'
+import { useRoundsStore } from '../stores/rounds'
 import {
   TOURNAMENT, TEAMS, SCHEDULE,
   getTeam, matchPoints, computeStandings, teamMatches,
@@ -491,6 +492,7 @@ import {
 } from '../stores/tournament.js'
 
 const router = useRouter()
+const roundsStore = useRoundsStore()
 const tab = ref('standings')
 
 // Reactive trigger — SCHEDULE is a plain object so Vue can't detect mutations.
@@ -744,35 +746,60 @@ function saveResult() {
   _saveResults()
 }
 
-// Launch round wizard pre-configured for this match
-function launchRound() {
+// Launch a scoring round directly for this tournament match
+async function launchRound() {
   if (!activeMatch.value) return
   const match = activeMatch.value.match
   const t1 = getTeam(match.team1)
   const t2 = getTeam(match.team2)
-  // Build player list: team1 players first, then team2
-  const allPlayers = [...t1.players, ...t2.players]
-  const playerIds = allPlayers.map(p => p.id)
-  // Encode match config into query params for the wizard to pick up
-  const params = new URLSearchParams({
-    tournament: '1',
-    matchId: match.id,
-    t1players: t1.players.map(p => p.email || p.id).join(','),
-    t2players: t2.players.map(p => p.email || p.id).join(','),
-  })
-  activeMatch.value = null
-  // Navigate home and trigger wizard (store config in sessionStorage for wizard to read)
-  sessionStorage.setItem('gw_wizard_tournament_prefill', JSON.stringify({
-    matchId: match.id,
-    team1Id: match.team1,
-    team2Id: match.team2,
-    team1Name: t1.name,
-    team2Name: t2.name,
-    team1Players: t1.players.map(p => ({ id: p.id, name: p.name, nickname: p.nickname, email: p.email })),
-    team2Players: t2.players.map(p => ({ id: p.id, name: p.name, nickname: p.nickname, email: p.email })),
-    games: ['best_ball', 'singles', 'singles'],
-  }))
-  router.push({ path: '/', query: { launchWizard: '1' } })
+
+  // Build player list with team assignments
+  const players = [
+    ...t1.players.map(p => ({
+      name: p.name,
+      shortName: p.nickname || p.name.split(' ')[0],
+      nickname: p.nickname,
+      use_nickname: !!p.nickname,
+      ghinIndex: p.ghinIndex || null,
+      team: 1,
+      groupIndex: 0,
+    })),
+    ...t2.players.map(p => ({
+      name: p.name,
+      shortName: p.nickname || p.name.split(' ')[0],
+      nickname: p.nickname,
+      use_nickname: !!p.nickname,
+      ghinIndex: p.ghinIndex || null,
+      team: 2,
+      groupIndex: 0,
+    })),
+  ]
+
+  // Pre-configure games: Best Ball (2v2) + 2 Singles matches
+  const t1Ids = t1.players.map((_, i) => `gm_${i}_`)
+  const t2Ids = t2.players.map((_, i) => `gm_${t1.players.length + i}_`)
+  const games = [
+    { type: 'best_ball', config: { team1: t1Ids, team2: t2Ids, ppt: 1 } },
+  ]
+
+  try {
+    const round = await roundsStore.createRound({
+      name: `${t1.name} vs ${t2.name}`,
+      courseName: TOURNAMENT.defaultCourse || 'Bonnie Briar Country Club',
+      tee: TOURNAMENT.defaultTee || 'Blue',
+      holesMode: '18',
+      format: 'tournament',
+      players,
+      games,
+    })
+
+    activeMatch.value = null
+    // Navigate to the scoring tab
+    router.push('/scoring')
+  } catch (e) {
+    console.error('Failed to create tournament round:', e)
+    alert('Failed to create round. Please try again.')
+  }
 }
 
 // ── Simulate & Reset ────────────────────────────────────────────

@@ -218,7 +218,7 @@
 
               <!-- Holes grid -->
               <div class="holes-grid-wrap">
-                <div class="holes-grid">
+                <div class="holes-grid" :style="{ gridTemplateColumns: `30px 88px 48px repeat(${newCourse.tees.length}, 58px)` }">
                   <!-- Header -->
                   <div class="hole-header hole-col-hole">Hole</div>
                   <div class="hole-header hole-col-par">Par</div>
@@ -1415,11 +1415,9 @@ function showToast(msg, type = 'neutral') {
 }
 .holes-grid {
   display: grid;
-  /* hole# | par (3/4/5 buttons) | SI | yardage per tee... */
-  grid-template-columns: 30px 88px 48px repeat(var(--tee-cols, 1), 58px);
+  /* grid-template-columns set via inline :style for reliable tee count */
   gap: 3px 2px;
   min-width: max-content;
-  --tee-cols: v-bind('newCourse.tees.length');
 }
 
 .hole-header {

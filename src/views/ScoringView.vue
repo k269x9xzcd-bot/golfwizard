@@ -145,39 +145,6 @@
           </div>
         </div>
 
-        <!-- Live Games Summary -->
-        <div v-if="roundsStore.activeGames.length > 0" class="live-games-box">
-          <div class="live-games-label">🎲 Live Games</div>
-          <div v-for="game in roundsStore.activeGames" :key="game.id" class="live-game-summary" v-html="gameSummaryHtml(game)"></div>
-        </div>
-
-        <!-- Settle Up Panel -->
-        <div v-if="liveSettlements && roundsStore.activeGames.length > 0" class="settle-box">
-          <div class="settle-box-label">💵 Settle Up</div>
-          <!-- Player totals row -->
-          <div class="settle-totals">
-            <div
-              v-for="(pt, id) in liveSettlements.playerTotals"
-              :key="'pt-'+id"
-              class="settle-player"
-              :class="pt.total > 0 ? 'settle-up' : pt.total < 0 ? 'settle-down' : 'settle-even'"
-            >
-              <span class="settle-name">{{ pt.name }}</span>
-              <span class="settle-amount">{{ pt.total > 0 ? '+' : '' }}${{ pt.total.toFixed(0) }}</span>
-            </div>
-          </div>
-          <!-- Ledger -->
-          <div v-if="liveSettlements.ledger.length > 0" class="settle-ledger">
-            <div v-for="(entry, i) in liveSettlements.ledger" :key="'le-'+i" class="settle-entry">
-              <span class="settle-from">{{ entry.from_name }}</span>
-              <span class="settle-arrow">→</span>
-              <span class="settle-to">{{ entry.to_name }}</span>
-              <span class="settle-pay">${{ entry.amount.toFixed(0) }}</span>
-            </div>
-          </div>
-          <div v-else class="settle-even-msg">All square 🤝</div>
-        </div>
-
         <!-- Scorecard controls -->
         <div class="scorecard-controls">
           <button v-if="gameNotationRows.length > 0" class="notation-toggle-btn" @click="showNotations = !showNotations">
@@ -275,7 +242,7 @@
                     :class="{ 'cell-winner': isNetWinner(group.member.id, h), 'cell-defidget': isFidgetWinner(group.member.id, h) }"
                     @click="activeHole = h"
                   >
-                    <span v-if="getScore(group.member.id, h)" :class="scoreNotation(getScore(group.member.id, h), parForHole(h))">{{ getScore(group.member.id, h) }}</span>
+                    <span v-if="getScore(group.member.id, h)" :class="showNotations ? scoreNotation(getScore(group.member.id, h), parForHole(h)) : ''">{{ getScore(group.member.id, h) }}</span>
                     <span v-else class="score-empty-dot">·</span>
                     <span v-if="strokeDotsOnHole(group.member, h)" class="stroke-dots">{{ '•'.repeat(strokeDotsOnHole(group.member, h)) }}</span>
                   </td>
@@ -289,7 +256,7 @@
                     :class="{ 'cell-winner': isNetWinner(group.member.id, h), 'cell-defidget': isFidgetWinner(group.member.id, h) }"
                     @click="activeHole = h"
                   >
-                    <span v-if="getScore(group.member.id, h)" :class="scoreNotation(getScore(group.member.id, h), parForHole(h))">{{ getScore(group.member.id, h) }}</span>
+                    <span v-if="getScore(group.member.id, h)" :class="showNotations ? scoreNotation(getScore(group.member.id, h), parForHole(h)) : ''">{{ getScore(group.member.id, h) }}</span>
                     <span v-else class="score-empty-dot">·</span>
                     <span v-if="strokeDotsOnHole(group.member, h)" class="stroke-dots">{{ '•'.repeat(strokeDotsOnHole(group.member, h)) }}</span>
                   </td>
@@ -326,6 +293,39 @@
           </table>
         </div>
         </div><!-- /.scorecard-outer -->
+
+        <!-- Live Games Summary -->
+        <div v-if="roundsStore.activeGames.length > 0" class="live-games-box">
+          <div class="live-games-label">🎲 Live Games</div>
+          <div v-for="game in roundsStore.activeGames" :key="game.id" class="live-game-summary" v-html="gameSummaryHtml(game)"></div>
+        </div>
+
+        <!-- Settle Up Panel -->
+        <div v-if="liveSettlements && roundsStore.activeGames.length > 0 && roundsStore.activeRound?.is_complete" class="settle-box">
+          <div class="settle-box-label">💵 Settle Up</div>
+          <!-- Player totals row -->
+          <div class="settle-totals">
+            <div
+              v-for="(pt, id) in liveSettlements.playerTotals"
+              :key="'pt-'+id"
+              class="settle-player"
+              :class="pt.total > 0 ? 'settle-up' : pt.total < 0 ? 'settle-down' : 'settle-even'"
+            >
+              <span class="settle-name">{{ pt.name }}</span>
+              <span class="settle-amount">{{ pt.total > 0 ? '+' : '' }}${{ pt.total.toFixed(0) }}</span>
+            </div>
+          </div>
+          <!-- Ledger -->
+          <div v-if="liveSettlements.ledger.length > 0" class="settle-ledger">
+            <div v-for="(entry, i) in liveSettlements.ledger" :key="'le-'+i" class="settle-entry">
+              <span class="settle-from">{{ entry.from_name }}</span>
+              <span class="settle-arrow">→</span>
+              <span class="settle-to">{{ entry.to_name }}</span>
+              <span class="settle-pay">${{ entry.amount.toFixed(0) }}</span>
+            </div>
+          </div>
+          <div v-else class="settle-even-msg">All square 🤝</div>
+        </div>
 
         <!-- In-round game config editor (tap a game chip) -->
         <div v-if="selectedGame" class="game-edit-panel">
@@ -371,8 +371,6 @@
           </div>
         </div>
 
-        <!-- Hole watermark -->
-        <div class="hole-watermark">{{ activeHole }}</div>
 
         <!-- Player Score Cards — inline +/- entry -->
         <div class="hole-players-list">
@@ -399,7 +397,7 @@
                 :class="[getScore(member.id, activeHole) ? 'has-score' : '', showNotations ? 'nota-mode' : '']"
                 @click="inlineSetPar(member)"
               >
-                <span :class="getScore(member.id, activeHole) ? scoreNotation(getScore(member.id, activeHole), parForHole(activeHole)) : 'muted'">
+                <span :class="getScore(member.id, activeHole) ? (showNotations ? scoreNotation(getScore(member.id, activeHole), parForHole(activeHole)) : '') : 'muted'">
                   {{ getScore(member.id, activeHole) || '—' }}
                 </span>
               </div>
@@ -524,6 +522,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRoundsStore } from '../stores/rounds'
+import { useCoursesStore } from '../stores/courses'
 import { displayName as rosterDisplayName, displayInitials as rosterDisplayInitials } from '../stores/roster'
 import { COURSES } from '../modules/courses'
 import {
@@ -537,6 +536,7 @@ import {
 import { computeAllSettlements } from '../modules/settlements'
 
 const roundsStore = useRoundsStore()
+const coursesStore = useCoursesStore()
 const router = useRouter()
 
 // ── View state ──────────────────────────────────────────────────
@@ -640,7 +640,12 @@ function onTouchEnd(e) {
 // ── Course data ─────────────────────────────────────────────────
 const courseData = computed(() => {
   if (!roundsStore.activeRound) return null
-  return COURSES[roundsStore.activeRound.course_name] || null
+  const name = roundsStore.activeRound.course_name
+  // Check courses store first (includes custom courses with user-edited SI/tee data)
+  const fromStore = coursesStore.allCourses?.find(c => c.name === name)
+  if (fromStore) return fromStore
+  // Fallback to static built-in courses
+  return COURSES[name] || null
 })
 
 const holesLabel = computed(() => {
@@ -1272,15 +1277,24 @@ function gameSummaryHtml(game) {
       const p1n = r.p1?.name || '?'
       const p2n = r.p2?.name || '?'
       const up = r.finalUp
+      const ppt = r.settlement?.ppt || cfg.ppt || 5
       let statusStr = r.result
+      let dollarLine = ''
+
       if (!r.matchOver && up !== 0) {
         const leader = up > 0 ? p1n : p2n
         statusStr = `${leader} ${Math.abs(up)} UP`
+        const stakes = Math.abs(up) * ppt
+        dollarLine = ` · <span style="color:#4ade80;font-weight:700">${leader} wins $${stakes}</span>`
       } else if (!r.matchOver && up === 0) {
         statusStr = 'All Square'
+      } else if (r.matchOver) {
+        const stakes = Math.abs(up) * ppt
+        const winner = up > 0 ? p1n : p2n
+        dollarLine = ` · <span style="color:#4ade80;font-weight:700">${winner} wins $${stakes}</span>`
       }
 
-      return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Match</span><span class="muted" style="font-size:10px;margin-left:4px">${p1n} vs ${p2n}</span><br><span class="muted" style="font-size:11px">${statusStr}</span></div>`
+      return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Match</span><span class="muted" style="font-size:10px;margin-left:4px">${p1n} vs ${p2n}${dollarLine}</span><br><span class="muted" style="font-size:11px">${statusStr}</span></div>`
     }
 
     // ── Vegas ──
@@ -1428,6 +1442,27 @@ function gameSummaryHtml(game) {
       const dollarLine = r.settlements?.filter(s => (s.net||0) !== 0).map(s => `${s.name}${(s.net||0) > 0 ? '<span style="color:#4ade80"> +$' + s.net + '</span>' : '<span style="color:#f87171"> -$' + Math.abs(s.net) + '</span>'}`).join(' · ') || ''
 
       return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Dots</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppt}/dot</span><div style="font-size:11px;margin-top:3px;opacity:.8">${counts}</div>${dollarLine ? '<div style="font-size:11px;margin-top:2px">' + dollarLine + '</div>' : ''}</div>`
+    }
+
+    // ── Best Ball (1BB Net) ──
+    if (t === 'best_ball' || t === 'bestball' || t === 'bbn') {
+      const r = computeBestBallNet(ctx, cfg)
+      if (!r) return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Best Ball</span><span class="muted" style="font-size:11px">—</span></div>`
+
+      const t1n = r.t1Name || 'Team 1'
+      const t2n = r.t2Name || 'Team 2'
+      const finalUp = r.finalUp || 0
+      const ppt = r.settlement?.ppt || cfg.ppt || 5
+
+      let statusStr = finalUp === 0 ? 'All square' : (finalUp > 0 ? `${t1n} leads ${Math.abs(finalUp)}` : `${t2n} leads ${Math.abs(finalUp)}`)
+      let dollarLine = ''
+      if (finalUp !== 0) {
+        const loser = finalUp > 0 ? t2n : t1n
+        const stakes = Math.abs(finalUp) * ppt
+        dollarLine = ` · <span style="color:#4ade80;font-weight:700">${loser} owe $${stakes}</span>`
+      }
+
+      return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Best Ball</span><span class="muted" style="font-size:10px;margin-left:4px">${t1n} vs ${t2n}${dollarLine}</span><br><span class="muted" style="font-size:11px">${statusStr}</span></div>`
     }
 
     // Default fallback
@@ -1686,7 +1721,10 @@ function formatDate(dateStr) {
   justify-content: space-between;
   padding: 14px 16px 8px;
   flex-shrink: 0;
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--gw-bg, #0c150e);
 }
 .course-name {
   font-family: var(--gw-font-display, Georgia);
@@ -1766,6 +1804,10 @@ function formatDate(dateStr) {
 .tab-strip {
   padding: 8px 12px;
   flex-shrink: 0;
+  position: sticky;
+  top: 56px;
+  z-index: 9;
+  background: var(--gw-bg, #0c150e);
 }
 .tab-strip-inner {
   display: flex;
@@ -1970,8 +2012,6 @@ function formatDate(dateStr) {
   left: 0;
   z-index: 3;
   white-space: nowrap;
-  /* Ensure no transparent gap */
-  background-clip: padding-box;
 }
 
 .scorecard-grid {
@@ -1981,23 +2021,18 @@ function formatDate(dateStr) {
   font-family: var(--gw-font-mono, 'DM Mono', monospace);
 }
 
-/* Sticky player column */
-.col-sticky {
-  position: sticky;
-  left: 0;
-  z-index: 2;
-  white-space: nowrap;
-}
-
 .col-player-header {
   padding: 6px 10px;
   text-align: left;
-  background: rgba(7,15,7,.97);
+  background: #0c150e;
   color: rgba(240,237,224,.45);
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .5px;
+  position: sticky;
+  left: 0;
+  z-index: 3;
 }
 
 .col-hole-num {
@@ -2042,7 +2077,10 @@ function formatDate(dateStr) {
   padding: 4px 10px;
   font-size: 10px;
   color: rgba(240,237,224,.35);
-  background: rgba(7,15,7,.97);
+  background: #0c150e;
+  position: sticky;
+  left: 0;
+  z-index: 3;
 }
 .col-par-val {
   padding: 3px 4px;
@@ -2065,14 +2103,16 @@ function formatDate(dateStr) {
 
 .col-player-name {
   padding: 5px 10px;
-  background: rgba(7,14,7,.97);
-  position: relative;
+  background: #0c150e;
+  position: sticky;
+  left: 0;
+  z-index: 3;
   padding-left: 14px;
   border-right: 1px solid rgba(255,255,255,.08);
 }
-.sticky-t1 { background: rgba(30,58,138,.95); border-right: 2px solid rgba(96,165,250,.3); }
-.sticky-t2 { background: rgba(120,40,40,.95); border-right: 2px solid rgba(248,113,113,.3); }
-.sticky-default { background: rgba(7,14,7,.97); border-right: 1px solid rgba(255,255,255,.08); }
+.sticky-t1 { background: #1e3a8a; border-right: 2px solid rgba(96,165,250,.3); }
+.sticky-t2 { background: #782828; border-right: 2px solid rgba(248,113,113,.3); }
+.sticky-default { background: #0c150e; border-right: 1px solid rgba(255,255,255,.08); }
 
 .player-nm { font-size: 13px; font-weight: 700; color: var(--gw-text, #f0ede0); }
 .player-hcp { font-size: 10px; color: rgba(240,237,224,.5); margin-left: 4px; }
@@ -2116,9 +2156,9 @@ function formatDate(dateStr) {
 }
 .col-notation-label {
   padding: 3px 6px;
-  background: rgba(7,14,7,.97);
+  background: #0c150e;
   white-space: nowrap;
-  position: sticky; left: 0; z-index: 2;
+  position: sticky; left: 0; z-index: 3;
 }
 .notation-icon { font-size: 11px; margin-right: 3px; }
 .notation-name { font-size: 11px; font-weight: 700; color: rgba(240,237,224,.65); text-transform: uppercase; letter-spacing: .3px; }
@@ -2391,21 +2431,6 @@ function formatDate(dateStr) {
   font-size: 10px; color: rgba(212,175,55,.9); margin-left: 3px; vertical-align: middle;
 }
 
-/* Hole watermark */
-.hole-watermark {
-  position: absolute;
-  top: 60px; /* sit just below the banner, behind the player cards */
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 260px;
-  font-weight: 900;
-  color: rgba(255,255,255,.03);
-  pointer-events: none;
-  z-index: 0;
-  line-height: 1;
-  font-family: var(--gw-font-display, Georgia, serif);
-  user-select: none;
-}
 
 /* Redesigned player card layout */
 .phc-identity {
