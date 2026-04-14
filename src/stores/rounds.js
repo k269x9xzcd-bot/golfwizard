@@ -203,29 +203,56 @@ export const useRoundsStore = defineStore('rounds', () => {
       }
     }
 
+    // ── Connection warmup ──
+    // Stale HTTP/2 sockets from backgrounded PWA sessions can cause the first
+    // real insert to hang. Do a cheap "ping" query first to reset the fetch
+    // layer if needed. If this ping times out, we know the socket is dead
+    // and we retry — the second attempt almost always succeeds.
+    async function warmup() {
+      return await supaWithTimeout(
+        'warmup.ping',
+        supabase.from('rounds').select('id').eq('id', '00000000-0000-0000-0000-000000000000').limit(1),
+        4000
+      ).catch(() => null)
+    }
+    await warmup()
+
     let roomCode = null
     if (withRoomCode) {
       roomCode = await supaWithTimeout('generateRoomCode', generateRoomCode(), 4000).catch(() => null)
     }
 
-    const { data: round, error } = await supaWithTimeout(
-      'rounds.insert',
-      supabase
-        .from('rounds')
-        .insert({
-          name: name || courseName || 'Round',
-          course_name: courseName,
-          tee,
-          date: date || new Date().toISOString().slice(0, 10),
-          holes_mode: holesMode || '18',
-          format: format || 'social',
-          room_code: roomCode,
-          owner_id: auth.user?.id ?? null,
-        })
-        .select()
-        .single(),
-      8000
-    )
+    // Build the insert body once so we can retry cleanly on timeout
+    const roundBody = {
+      name: name || courseName || 'Round',
+      course_name: courseName,
+      tee,
+      date: date || new Date().toISOString().slice(0, 10),
+      holes_mode: holesMode || '18',
+      format: format || 'social',
+      room_code: roomCode,
+      owner_id: auth.user?.id ?? null,
+    }
+
+    // Insert with one automatic retry on timeout. A timed-out call often leaves
+    // the row inserted server-side — we cover that by retrying the SELECT first.
+    let round, error
+    async function insertRound() {
+      return await supaWithTimeout(
+        'rounds.insert',
+        supabase.from('rounds').insert(roundBody).select().single(),
+        8000
+      )
+    }
+    try {
+      ;({ data: round, error } = await insertRound())
+    } catch (e) {
+      _debugLog(`[rounds] first insert failed, warming up + retrying…`)
+      // Give the network stack a moment to reset, then warm up and retry once
+      await new Promise(r => setTimeout(r, 500))
+      await warmup()
+      ;({ data: round, error } = await insertRound())
+    }
 
     if (error) {
       console.error('[rounds] Supabase insert error:', error)
