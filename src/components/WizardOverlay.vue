@@ -606,34 +606,67 @@
               <span class="side-toggle">{{ sideGames.match1.enabled ? '▲' : '▼' }}</span>
             </div>
             <div v-if="sideGames.match1.enabled" class="side-game-config">
-              <div class="config-row">
-                <div class="config-field">
+              <!-- Players row: 2 cols side-by-side with vs separator -->
+              <div class="sm-players-row">
+                <div class="sm-player-field">
                   <label>Player A</label>
                   <select v-model="sideGames.match1.player1" class="config-select">
                     <option value="">— select —</option>
                     <option v-for="p in form.players" :key="p.id" :value="p.id">{{ wizDisplayName(p) }}</option>
                   </select>
                 </div>
-                <div class="config-field">
-                  <label>vs Player B</label>
+                <div class="sm-vs">vs</div>
+                <div class="sm-player-field">
+                  <label>Player B</label>
                   <select v-model="sideGames.match1.player2" class="config-select">
                     <option value="">— select —</option>
                     <option v-for="p in form.players" :key="p.id" :value="p.id">{{ wizDisplayName(p) }}</option>
                   </select>
                 </div>
-                <div class="config-field">
-                  <label>Scoring</label>
-                  <select v-model="sideGames.match1.scoring" class="config-select">
-                    <option value="closeout">Closeout (match play)</option>
-                    <option value="nassau">Nassau (per hole up)</option>
-                    <option value="skins">Skins (per hole won)</option>
+              </div>
+
+              <!-- Scoring mode: full width -->
+              <div class="config-field sm-full">
+                <label>Scoring mode</label>
+                <select v-model="sideGames.match1.scoring" class="config-select">
+                  <option value="closeout">Closeout — fixed stake on match result</option>
+                  <option value="nassau">Nassau — front / back / overall + presses</option>
+                  <option value="skins">Skins — $ per hole won</option>
+                </select>
+              </div>
+
+              <!-- Closeout / Skins: single stake field -->
+              <div v-if="sideGames.match1.scoring !== 'nassau'" class="config-field sm-full">
+                <label>{{ sideGames.match1.scoring === 'closeout' ? '$ stake (paid on win)' : '$ per hole won' }}</label>
+                <input v-model.number="sideGames.match1.ppt" type="number" class="config-input" placeholder="10" />
+              </div>
+
+              <!-- Nassau: front/back/overall + press -->
+              <template v-else>
+                <div class="sm-nassau-row">
+                  <div class="config-field">
+                    <label>Front 9 $</label>
+                    <input v-model.number="sideGames.match1.front" type="number" min="1" class="config-input" placeholder="10" />
+                  </div>
+                  <div class="config-field">
+                    <label>Back 9 $</label>
+                    <input v-model.number="sideGames.match1.back" type="number" min="1" class="config-input" placeholder="10" />
+                  </div>
+                  <div class="config-field">
+                    <label>Overall $</label>
+                    <input v-model.number="sideGames.match1.overall" type="number" min="1" class="config-input" placeholder="20" />
+                  </div>
+                </div>
+                <div class="config-field sm-full">
+                  <label>Auto-press at</label>
+                  <select v-model.number="sideGames.match1.pressAt" class="config-select">
+                    <option :value="0">No press</option>
+                    <option :value="1">1 down</option>
+                    <option :value="2">2 down</option>
+                    <option :value="3">3 down</option>
                   </select>
                 </div>
-                <div class="config-field">
-                  <label>{{ sideGames.match1.scoring === 'closeout' ? '$ stake' : '$ per hole' }}</label>
-                  <input v-model.number="sideGames.match1.ppt" type="number" class="config-input" placeholder="10" />
-                </div>
-              </div>
+              </template>
             </div>
           </div>
 
@@ -644,34 +677,63 @@
               <span class="side-toggle">{{ sideGames.match2.enabled ? '▲' : '▼' }}</span>
             </div>
             <div v-if="sideGames.match2.enabled" class="side-game-config">
-              <div class="config-row">
-                <div class="config-field">
+              <div class="sm-players-row">
+                <div class="sm-player-field">
                   <label>Player A</label>
                   <select v-model="sideGames.match2.player1" class="config-select">
                     <option value="">— select —</option>
                     <option v-for="p in form.players" :key="p.id" :value="p.id">{{ wizDisplayName(p) }}</option>
                   </select>
                 </div>
-                <div class="config-field">
-                  <label>vs Player B</label>
+                <div class="sm-vs">vs</div>
+                <div class="sm-player-field">
+                  <label>Player B</label>
                   <select v-model="sideGames.match2.player2" class="config-select">
                     <option value="">— select —</option>
                     <option v-for="p in form.players" :key="p.id" :value="p.id">{{ wizDisplayName(p) }}</option>
                   </select>
                 </div>
-                <div class="config-field">
-                  <label>Scoring</label>
-                  <select v-model="sideGames.match2.scoring" class="config-select">
-                    <option value="closeout">Closeout (match play)</option>
-                    <option value="nassau">Nassau (per hole up)</option>
-                    <option value="skins">Skins (per hole won)</option>
+              </div>
+
+              <div class="config-field sm-full">
+                <label>Scoring mode</label>
+                <select v-model="sideGames.match2.scoring" class="config-select">
+                  <option value="closeout">Closeout — fixed stake on match result</option>
+                  <option value="nassau">Nassau — front / back / overall + presses</option>
+                  <option value="skins">Skins — $ per hole won</option>
+                </select>
+              </div>
+
+              <div v-if="sideGames.match2.scoring !== 'nassau'" class="config-field sm-full">
+                <label>{{ sideGames.match2.scoring === 'closeout' ? '$ stake (paid on win)' : '$ per hole won' }}</label>
+                <input v-model.number="sideGames.match2.ppt" type="number" class="config-input" placeholder="10" />
+              </div>
+
+              <template v-else>
+                <div class="sm-nassau-row">
+                  <div class="config-field">
+                    <label>Front 9 $</label>
+                    <input v-model.number="sideGames.match2.front" type="number" min="1" class="config-input" placeholder="10" />
+                  </div>
+                  <div class="config-field">
+                    <label>Back 9 $</label>
+                    <input v-model.number="sideGames.match2.back" type="number" min="1" class="config-input" placeholder="10" />
+                  </div>
+                  <div class="config-field">
+                    <label>Overall $</label>
+                    <input v-model.number="sideGames.match2.overall" type="number" min="1" class="config-input" placeholder="20" />
+                  </div>
+                </div>
+                <div class="config-field sm-full">
+                  <label>Auto-press at</label>
+                  <select v-model.number="sideGames.match2.pressAt" class="config-select">
+                    <option :value="0">No press</option>
+                    <option :value="1">1 down</option>
+                    <option :value="2">2 down</option>
+                    <option :value="3">3 down</option>
                   </select>
                 </div>
-                <div class="config-field">
-                  <label>{{ sideGames.match2.scoring === 'closeout' ? '$ stake' : '$ per hole' }}</label>
-                  <input v-model.number="sideGames.match2.ppt" type="number" class="config-input" placeholder="10" />
-                </div>
-              </div>
+              </template>
             </div>
           </div>
 
@@ -895,8 +957,8 @@ const sideGames = ref({
   dots:   { enabled: false, ppt: 2, birdieEnabled: true, eagleEnabled: true, greenieEnabled: true, sandieEnabled: true },
   snake:  { enabled: false, ppt: 5 },
   fidget: { enabled: false, ppp: 10 },
-  match1: { enabled: false, player1: '', player2: '', ppt: 10, scoring: 'closeout' },
-  match2: { enabled: false, player1: '', player2: '', ppt: 10, scoring: 'closeout' },
+  match1: { enabled: false, player1: '', player2: '', ppt: 10, scoring: 'closeout', front: 10, back: 10, overall: 20, pressAt: 2 },
+  match2: { enabled: false, player1: '', player2: '', ppt: 10, scoring: 'closeout', front: 10, back: 10, overall: 20, pressAt: 2 },
   bbn:    { enabled: false },
 })
 
@@ -1361,12 +1423,27 @@ function buildGameConfigs() {
   if (sg.fidget.enabled) {
     games.push({ type: 'fidget', config: { ppp: sg.fidget.ppp } })
   }
-  if (sg.match1.enabled && sg.match1.player1 && sg.match1.player2) {
-    games.push({ type: 'match1v1', config: { player1: sg.match1.player1, player2: sg.match1.player2, ppt: sg.match1.ppt, scoring: sg.match1.scoring || 'closeout' } })
+  // 1v1 Side Matches — route based on scoring mode
+  // closeout/skins → type:match1v1 (uses computeMatch with scoring field)
+  // nassau → type:nassau with single-player teams (reuses full Nassau engine)
+  function buildSideMatch(m) {
+    if (!m.enabled || !m.player1 || !m.player2) return null
+    if (m.scoring === 'nassau') {
+      return { type: 'nassau', config: {
+        team1: [m.player1], team2: [m.player2],
+        front: m.front ?? 10, back: m.back ?? 10, overall: m.overall ?? 20,
+        pressAt: m.pressAt ?? 2,
+        _sideMatch: true,  // flag so the summary can label it "1v1 Nassau"
+      }}
+    }
+    return { type: 'match1v1', config: {
+      player1: m.player1, player2: m.player2,
+      ppt: m.ppt,
+      scoring: m.scoring || 'closeout',
+    }}
   }
-  if (sg.match2.enabled && sg.match2.player1 && sg.match2.player2) {
-    games.push({ type: 'match1v1', config: { player1: sg.match2.player1, player2: sg.match2.player2, ppt: sg.match2.ppt, scoring: sg.match2.scoring || 'closeout' } })
-  }
+  const sm1 = buildSideMatch(sg.match1); if (sm1) games.push(sm1)
+  const sm2 = buildSideMatch(sg.match2); if (sm2) games.push(sm2)
   // Best Ball trackers (only if enabled)
   if (sideGames.value.bbn.enabled) {
     for (const tracker of bbnTrackers.value) {

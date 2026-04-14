@@ -1375,6 +1375,54 @@ body {
   animation: card-in 0.15s ease-out;
 }
 
+/* ── 1v1 side-match layout ──────────────────────────────── */
+.sm-players-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: end;
+  gap: 8px;
+}
+.sm-player-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.sm-player-field label {
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(212,175,55,.8);
+  letter-spacing: .4px;
+  text-transform: uppercase;
+}
+.sm-player-field .config-select {
+  width: 100%;
+  min-width: 0;
+}
+.sm-vs {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(240,237,224,.4);
+  padding-bottom: 10px;
+  align-self: end;
+}
+.sm-full {
+  width: 100%;
+}
+.sm-full .config-select,
+.sm-full .config-input {
+  width: 100%;
+}
+.sm-nassau-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+.sm-nassau-row .config-input {
+  width: 100%;
+  min-width: 0;
+}
+
 /* Dots checkboxes */
 .dots-options {
   display: flex;

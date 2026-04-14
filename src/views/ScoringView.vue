@@ -1237,7 +1237,8 @@ function gameSummaryHtml(game) {
       const bAmt = cfg.back ?? 10
       const oAmt = cfg.overall ?? 20
       const pressInfo = cfg.pressAt ? ` · press@${cfg.pressAt}` : ''
-      return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Nassau</span><span class="muted" style="font-size:10px;margin-left:4px">${t1n} vs ${t2n} · $${fAmt}/$${bAmt}/$${oAmt}${pressInfo}</span><div style="font-size:11px;margin-top:3px;display:flex;flex-direction:column;gap:2px"><div>${fHtml}</div><div>${bHtml}</div><div>${oHtml}</div></div>${totLine}</div>`
+      const nassauLabel = cfg._sideMatch ? '1v1 Nassau' : 'Nassau'
+      return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} ${nassauLabel}</span><span class="muted" style="font-size:10px;margin-left:4px">${t1n} vs ${t2n} · $${fAmt}/$${bAmt}/$${oAmt}${pressInfo}</span><div style="font-size:11px;margin-top:3px;display:flex;flex-direction:column;gap:2px"><div>${fHtml}</div><div>${bHtml}</div><div>${oHtml}</div></div>${totLine}</div>`
     }
 
     // ── Skins ──
