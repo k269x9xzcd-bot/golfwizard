@@ -1371,9 +1371,9 @@ async function create() {
 
     console.log('[Wizard] Creating round:', { course: form.value.courseName, tee: form.value.tee, players: players.length, games: games.length })
 
-    // Timeout protection: 15s is plenty for both guest and Supabase paths
+    // Timeout protection
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Round creation timed out after 15s. Check your connection and try again.')), 15000)
+      setTimeout(() => reject(new Error('Round creation timed out. Check your connection and try again.')), 20000)
     )
 
     const roundName = form.value.courseName + ' – ' + (form.value.date || new Date().toISOString().slice(0, 10))

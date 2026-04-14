@@ -253,6 +253,7 @@ export const useRoundsStore = defineStore('rounds', () => {
     }
 
     // Add games — remap team1/team2/player IDs from wizard IDs to real member IDs
+    let insertedGames = []
     if (games.length) {
       const gameRows = games.map((g, i) => {
         const config = { ...g.config }
@@ -272,27 +273,21 @@ export const useRoundsStore = defineStore('rounds', () => {
           created_by: auth.user?.id ?? null,
         }
       })
-      const { error: gErr } = await supabase.from('game_configs').insert(gameRows)
+      const { data: gData, error: gErr } = await supabase.from('game_configs').insert(gameRows).select()
       if (gErr) throw gErr
+      insertedGames = gData ?? []
     }
 
-    // Load the full round — if this fails, the round was still created in Supabase
-    try {
-      await loadRound(round.id)
-    } catch (e) {
-      console.warn('loadRound failed after creation, setting basic state:', e)
-      // Set basic active state so the user can still score
-      activeRound.value = round
-      activeMembers.value = insertedMembers
-      activeGames.value = games.map((g, i) => ({
-        id: `fallback_${i}`,
-        round_id: round.id,
-        type: g.type,
-        config: g.config,
-        sort_order: i,
-      }))
-      activeScores.value = {}
-    }
+    // Set active state directly from insert results — no extra round-trip.
+    activeRound.value = round
+    activeMembers.value = insertedMembers
+    activeGames.value = insertedGames
+    activeScores.value = {}
+
+    // Set up real-time subscriptions (non-blocking, fire & forget)
+    subscribeToRound(round.id)
+
+    console.log('[rounds] Round active, members:', insertedMembers.length, 'games:', insertedGames.length)
     return round
   }
 
