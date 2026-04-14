@@ -537,7 +537,7 @@ import {
   netScore as calcNetScore, memberNetOnHoleLowMan, getScore as _getScore,
   computeNassau, computeSkins, computeMatch, computeVegas, computeSnake,
   computeHiLow, computeStableford, computeWolf, computeHammer, computeSixes,
-  computeFiveThreeOne, computeDots, computeFidget, computeBestBallNet,
+  computeFiveThreeOne, computeDots, computeFidget, computeBestBallNet, computeBestBall,
   holeRange
 } from '../modules/gameEngine'
 import { computeAllSettlements } from '../modules/settlements'
@@ -1475,25 +1475,51 @@ function gameSummaryHtml(game) {
       return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Dots</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppt}/dot</span><div style="font-size:11px;margin-top:3px;opacity:.8">${counts}</div>${dollarLine ? '<div style="font-size:11px;margin-top:2px">' + dollarLine + '</div>' : ''}</div>`
     }
 
-    // ── Best Ball (1BB Net) ──
-    if (t === 'best_ball' || t === 'bestball' || t === 'bbn') {
-      const r = computeBestBallNet(ctx, cfg)
+    // ── Best Ball — Match Play (2v2, holes won) ──
+    if (t === 'best_ball' || t === 'bestball') {
+      const r = computeBestBall(ctx, cfg)
       if (!r) return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Best Ball</span><span class="muted" style="font-size:11px">—</span></div>`
 
       const t1n = r.t1Name || 'Team 1'
       const t2n = r.t2Name || 'Team 2'
       const finalUp = r.finalUp || 0
+      const played = (r.holeResults || []).filter(h => !h.incomplete).length
+      const remaining = (r.holeResults || []).filter(h => h.incomplete).length
+      const matchOver = Math.abs(finalUp) > remaining && played > 0
       const ppt = r.settlement?.ppt || cfg.ppt || 5
+      const points = cfg.points || 2 // tournament: BB worth 2 pts
 
-      let statusStr = finalUp === 0 ? 'All square' : (finalUp > 0 ? `${t1n} leads ${Math.abs(finalUp)}` : `${t2n} leads ${Math.abs(finalUp)}`)
+      // Match play status
+      let statusStr
+      if (played === 0) {
+        statusStr = 'No scores yet'
+      } else if (matchOver) {
+        statusStr = `${finalUp > 0 ? t1n : t2n} wins ${Math.abs(finalUp)}&${remaining}`
+      } else if (finalUp === 0) {
+        statusStr = `AS · thru ${played}`
+      } else {
+        statusStr = `${finalUp > 0 ? t1n : t2n} ${Math.abs(finalUp)} UP · thru ${played}`
+      }
+
       let dollarLine = ''
-      if (finalUp !== 0) {
-        const loser = finalUp > 0 ? t2n : t1n
-        const stakes = Math.abs(finalUp) * ppt
-        dollarLine = ` · <span style="color:#4ade80;font-weight:700">${loser} owe $${stakes}</span>`
+      if (matchOver || (played > 0 && finalUp !== 0)) {
+        const winnerName = finalUp > 0 ? t1n : t2n
+        // Closeout: full ppt if a winner exists, otherwise split
+        const payout = cfg.closeoutMode === 'halved-splits' ? ppt : ppt
+        dollarLine = ` · <span style="color:#4ade80;font-weight:700">${winnerName} ${cfg.tournament ? `+${points}pts` : `+$${payout}`}</span>`
+      } else if (played > 0 && finalUp === 0 && cfg.tournament) {
+        dollarLine = ` · <span style="color:#9ca3af">halved = ${points/2}pts each</span>`
       }
 
       return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Best Ball</span><span class="muted" style="font-size:10px;margin-left:4px">${t1n} vs ${t2n}${dollarLine}</span><br><span class="muted" style="font-size:11px">${statusStr}</span></div>`
+    }
+
+    // ── BBN — Best Ball stroke-play tracker ──
+    if (t === 'bbn') {
+      const r = computeBestBallNet(ctx, cfg)
+      if (!r) return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} ${cfg.label || 'BB Net'}</span><span class="muted" style="font-size:11px">—</span></div>`
+      const totalStr = r.totalScore ? `${r.totalScore} (${r.overallToPar === 0 ? 'E' : (r.overallToPar > 0 ? '+' + r.overallToPar : r.overallToPar)})` : '—'
+      return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} ${cfg.label || 'BB Net'}</span><span class="muted" style="font-size:10px;margin-left:4px">${r.ballsToCount || 1}BB ${r.scoring === 'gross' ? 'Gross' : 'Net'}</span><br><span class="muted" style="font-size:11px">Total: ${totalStr}</span></div>`
     }
 
     // Default fallback

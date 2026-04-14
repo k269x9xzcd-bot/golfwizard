@@ -3,12 +3,12 @@
     <div class="modal wizard-modal">
       <div class="wizard-header">
         <div class="wizard-step-indicator">Step {{ step }} of {{ totalSteps }}</div>
+        <div v-if="stepTitle" class="wizard-header-title">{{ stepTitle }}</div>
         <button class="wizard-close-btn" @click="$emit('close')">✕</button>
       </div>
 
       <!-- ── Step 1: Course & Date ───────────────────────────── -->
       <div v-if="step === 1" class="wizard-step">
-        <h3>Where are you playing?</h3>
         <input
           v-model="courseSearch"
           class="wiz-input"
@@ -97,7 +97,12 @@
 
       <!-- ── Step 2: Players ────────────────────────────────── -->
       <div v-if="step === 2" class="wizard-step">
-        <h3>Who's playing?</h3>
+        <input
+          v-model="playerSearch"
+          class="wiz-input"
+          placeholder="Search roster…"
+          @focus="scrollInputIntoView"
+        />
 
         <!-- Added players with drag-to-reorder -->
         <div v-if="form.players.length" class="player-cards">
@@ -130,13 +135,6 @@
             <button class="player-card-remove" @click="form.players.splice(i, 1)" title="Remove">×</button>
           </div>
         </div>
-
-        <input
-          v-model="playerSearch"
-          class="wiz-input"
-          placeholder="Search roster…"
-          @focus="scrollInputIntoView"
-        />
         <div class="roster-list">
           <!-- Favorites section -->
           <template v-if="!playerSearch">
@@ -201,7 +199,6 @@
 
       <!-- ── Step 3: Games ──────────────────────────────────── -->
       <div v-if="step === 3" class="wizard-step">
-        <h3>Set up games</h3>
 
         <!-- Main game selector -->
         <div class="game-section-label">Main Game</div>
@@ -824,6 +821,9 @@ const roundsStore = useRoundsStore()
 
 const step = ref(1)
 const totalSteps = 3
+const stepTitle = computed(() => {
+  return { 1: 'Where are you playing?', 2: "Who's playing?", 3: 'Set up games' }[step.value] || ''
+})
 const creating = ref(false)
 
 // ── Main game ────────────────────────────────────────────────────
@@ -1003,8 +1003,24 @@ const teesForCourse = computed(() => {
 })
 
 // ── Roster ───────────────────────────────────────────────────────
-const rosterFavorites = computed(() => rosterStore.players.filter(p => p.is_favorite))
-const rosterOthers = computed(() => rosterStore.players.filter(p => !p.is_favorite))
+// Sort by last name (last word in name), then first name as tiebreaker
+function lastNameKey(p) {
+  const parts = (p.name || '').trim().split(/\s+/).filter(Boolean)
+  if (!parts.length) return '~~~' // push empties to end
+  const last = parts[parts.length - 1].toLowerCase()
+  const first = (parts[0] || '').toLowerCase()
+  return last + '|' + first
+}
+function byLastName(a, b) {
+  return lastNameKey(a).localeCompare(lastNameKey(b))
+}
+
+const rosterFavorites = computed(() =>
+  rosterStore.players.filter(p => p.is_favorite).slice().sort(byLastName)
+)
+const rosterOthers = computed(() =>
+  rosterStore.players.filter(p => !p.is_favorite).slice().sort(byLastName)
+)
 
 const filteredRoster = computed(() => {
   const q = playerSearch.value.toLowerCase()
@@ -1012,7 +1028,7 @@ const filteredRoster = computed(() => {
   if (!q) {
     return [...rosterFavorites.value, ...rosterOthers.value]
   }
-  return all.filter(p => p.name.toLowerCase().includes(q))
+  return all.filter(p => p.name.toLowerCase().includes(q)).slice().sort(byLastName)
 })
 
 // ── Drag-to-reorder selected players ────────────────────────────

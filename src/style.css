@@ -639,11 +639,23 @@ body {
 .wizard-header {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 8px 16px;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 16px;
   border-bottom: 1px solid rgba(212, 175, 55, 0.1);
   flex-shrink: 0;
+}
+.wizard-header-title {
+  flex: 1;
+  font-family: var(--gw-font-display);
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--gw-text);
+  text-align: left;
+  margin-left: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .wizard-title {
@@ -869,7 +881,7 @@ body {
 .roster-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -879,7 +891,7 @@ body {
 .roster-option {
   display: flex;
   align-items: center;
-  padding: 8px 12px;
+  padding: 6px 12px;
   border-radius: var(--gw-radius-md);
   background: var(--gw-neutral-700);
   border: 1.5px solid transparent;

@@ -25,6 +25,16 @@
 
     <button v-if="roundsStore.activeRound || roundsStore.rounds.length" class="new-round-pill" @click="openWizard()">+ New Round</button>
 
+    <!-- Tournament / Cup entry card (only for authorized users) -->
+    <RouterLink v-if="showTournament" to="/tournament" class="cup-home-card">
+      <div class="cup-home-icon">🏆</div>
+      <div class="cup-home-body">
+        <div class="cup-home-title">The Cup</div>
+        <div class="cup-home-sub">Tournament standings & matches</div>
+      </div>
+      <div class="cup-home-arrow">›</div>
+    </RouterLink>
+
 
     <!-- Recent rounds -->
     <section v-if="roundsStore.rounds.length" class="section">
@@ -57,10 +67,11 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, inject } from 'vue'
+import { ref, computed, onMounted, watch, inject } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useRoundsStore } from '../stores/rounds'
+import { hasTournamentAccess } from '../stores/tournament.js'
 import AuthModal from '../components/AuthModal.vue'
 
 const appVersion = __APP_VERSION__
@@ -70,6 +81,7 @@ const roundsStore = useRoundsStore()
 const router = useRouter()
 const showAuth = ref(false)
 const openWizard = inject('openWizard', () => {})
+const showTournament = computed(() => hasTournamentAccess(authStore.user?.email))
 
 onMounted(async () => {
   if (authStore.isAuthenticated) await roundsStore.fetchRounds()
@@ -110,5 +122,51 @@ async function openRound(id) {
 .new-round-pill:active {
   transform: scale(0.95);
   box-shadow: 0 1px 6px rgba(212,175,55,.2);
+}
+
+.cup-home-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 20px var(--gw-space-4) 0;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(212,175,55,.12) 0%, rgba(212,175,55,.04) 100%);
+  border: 1px solid rgba(212,175,55,.3);
+  text-decoration: none;
+  color: var(--gw-text);
+  cursor: pointer;
+  transition: transform .12s, border-color .12s;
+  -webkit-tap-highlight-color: transparent;
+}
+.cup-home-card:active {
+  transform: scale(0.98);
+  border-color: rgba(212,175,55,.6);
+}
+.cup-home-icon {
+  font-size: 28px;
+  flex-shrink: 0;
+}
+.cup-home-body {
+  flex: 1;
+  min-width: 0;
+}
+.cup-home-title {
+  font-family: var(--gw-font-display);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--gw-gold, #d4af37);
+  line-height: 1.2;
+}
+.cup-home-sub {
+  font-size: 12px;
+  color: rgba(240,237,224,.55);
+  margin-top: 2px;
+}
+.cup-home-arrow {
+  font-size: 28px;
+  color: rgba(212,175,55,.6);
+  font-weight: 300;
+  flex-shrink: 0;
 }
 </style>

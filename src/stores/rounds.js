@@ -177,23 +177,55 @@ export const useRoundsStore = defineStore('rounds', () => {
     // ── AUTHENTICATED PATH ──────────────────────────────────
     console.log('[rounds] Authenticated path, user:', auth.user?.id)
 
-    let roomCode = null
-    if (withRoomCode) roomCode = await generateRoomCode()
+    // Helper: race a Supabase call against a short timeout so a stuck
+    // HTTP/2 stream on iOS PWA doesn't hang the whole creation forever.
+    function _debugLog(msg) {
+      try {
+        const log = JSON.parse(localStorage.getItem('gw_create_log') || '[]')
+        log.push({ t: new Date().toISOString(), msg })
+        localStorage.setItem('gw_create_log', JSON.stringify(log.slice(-100)))
+      } catch {}
+      console.log('[rounds]', msg)
+    }
+    async function supaWithTimeout(label, promise, ms = 6000) {
+      _debugLog(`→ ${label}`)
+      const t0 = Date.now()
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+      )
+      try {
+        const result = await Promise.race([promise, timeoutPromise])
+        _debugLog(`✓ ${label} (${Date.now() - t0}ms)`)
+        return result
+      } catch (e) {
+        _debugLog(`✗ ${label} (${Date.now() - t0}ms): ${e.message}`)
+        throw e
+      }
+    }
 
-    const { data: round, error } = await supabase
-      .from('rounds')
-      .insert({
-        name: name || courseName || 'Round',
-        course_name: courseName,
-        tee,
-        date: date || new Date().toISOString().slice(0, 10),
-        holes_mode: holesMode || '18',
-        format: format || 'social',
-        room_code: roomCode,
-        owner_id: auth.user?.id ?? null,
-      })
-      .select()
-      .single()
+    let roomCode = null
+    if (withRoomCode) {
+      roomCode = await supaWithTimeout('generateRoomCode', generateRoomCode(), 4000).catch(() => null)
+    }
+
+    const { data: round, error } = await supaWithTimeout(
+      'rounds.insert',
+      supabase
+        .from('rounds')
+        .insert({
+          name: name || courseName || 'Round',
+          course_name: courseName,
+          tee,
+          date: date || new Date().toISOString().slice(0, 10),
+          holes_mode: holesMode || '18',
+          format: format || 'social',
+          room_code: roomCode,
+          owner_id: auth.user?.id ?? null,
+        })
+        .select()
+        .single(),
+      8000
+    )
 
     if (error) {
       console.error('[rounds] Supabase insert error:', error)
@@ -221,9 +253,34 @@ export const useRoundsStore = defineStore('rounds', () => {
         nickname: p.nickname ?? null,
         use_nickname: p.use_nickname ?? false,
       }))
-      const { data: mData, error: mErr } = await supabase.from('round_members').insert(memberRows).select()
-      if (mErr) throw mErr
-      insertedMembers = mData ?? []
+      try {
+        const { data: mData, error: mErr } = await supaWithTimeout(
+          'round_members.insert',
+          supabase.from('round_members').insert(memberRows).select(),
+          8000
+        )
+        if (mErr) throw mErr
+        insertedMembers = mData ?? []
+      } catch (e) {
+        // If the insert succeeded server-side but the response stream stalled,
+        // re-fetch the members so we don't lose them.
+        console.warn('[rounds] members insert stream failed, re-fetching:', e.message)
+        try {
+          const { data: mData2 } = await supaWithTimeout(
+            'round_members.refetch',
+            supabase.from('round_members').select('*').eq('round_id', round.id),
+            6000
+          )
+          insertedMembers = mData2 ?? []
+        } catch (e2) {
+          // Last resort: build fallback members client-side with synthetic IDs
+          console.warn('[rounds] members refetch also failed, using local fallback:', e2.message)
+          insertedMembers = memberRows.map((row, i) => ({
+            ...row,
+            id: `local_${round.id}_${i}`,
+          }))
+        }
+      }
     }
 
     // Build a mapping from wizard player IDs → new Supabase member IDs
@@ -256,9 +313,28 @@ export const useRoundsStore = defineStore('rounds', () => {
           created_by: auth.user?.id ?? null,
         }
       })
-      const { data: gData, error: gErr } = await supabase.from('game_configs').insert(gameRows).select()
-      if (gErr) throw gErr
-      insertedGames = gData ?? []
+      try {
+        const { data: gData, error: gErr } = await supaWithTimeout(
+          'game_configs.insert',
+          supabase.from('game_configs').insert(gameRows).select(),
+          8000
+        )
+        if (gErr) throw gErr
+        insertedGames = gData ?? []
+      } catch (e) {
+        console.warn('[rounds] games insert stream failed, re-fetching:', e.message)
+        try {
+          const { data: gData2 } = await supaWithTimeout(
+            'game_configs.refetch',
+            supabase.from('game_configs').select('*').eq('round_id', round.id).order('sort_order'),
+            6000
+          )
+          insertedGames = gData2 ?? []
+        } catch (e2) {
+          console.warn('[rounds] games refetch failed, using local fallback:', e2.message)
+          insertedGames = gameRows.map((row, i) => ({ ...row, id: `local_g_${round.id}_${i}` }))
+        }
+      }
     }
 
     // Set active state directly from insert results — no extra round-trip.
@@ -267,10 +343,16 @@ export const useRoundsStore = defineStore('rounds', () => {
     activeGames.value = insertedGames
     activeScores.value = {}
 
-    // Set up real-time subscriptions (non-blocking, fire & forget)
-    subscribeToRound(round.id)
-
     console.log('[rounds] Round active, members:', insertedMembers.length, 'games:', insertedGames.length)
+
+    // Set up real-time subscriptions AFTER returning.
+    // iOS PWA (WKWebView) has stricter WebSocket timing than regular Safari —
+    // calling .subscribe() synchronously here can block the microtask queue.
+    // Push it to the next macrotask so the promise resolves immediately.
+    setTimeout(() => {
+      try { subscribeToRound(round.id) } catch (e) { console.warn('[rounds] Subscribe failed (non-critical):', e) }
+    }, 0)
+
     return round
   }
 

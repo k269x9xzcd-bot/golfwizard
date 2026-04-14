@@ -39,11 +39,7 @@
           <span class="nav-icon">👥</span>
           <span class="nav-label">Players</span>
         </RouterLink>
-        <RouterLink v-if="showTournament" to="/tournament" class="nav-item nav-item--cup" :class="{ active: $route.name === 'tournament' }">
-          <span class="nav-icon">🏆</span>
-          <span class="nav-label">Cup</span>
-        </RouterLink>
-        <RouterLink v-else to="/history" class="nav-item" :class="{ active: $route.name === 'history' }">
+        <RouterLink to="/history" class="nav-item" :class="{ active: $route.name === 'history' }">
           <span class="nav-icon">📋</span>
           <span class="nav-label">History</span>
         </RouterLink>
