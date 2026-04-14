@@ -379,40 +379,39 @@
         <!-- Player Score Cards — inline +/- entry -->
         <div class="hole-players-list">
           <div
-            v-for="member in roundsStore.activeMembers"
-            :key="member.id"
+            v-for="group in sortedPlayerGroups"
+            :key="group.member.id"
             class="player-hole-card"
-            :class="[teamCardClass(member), { 'card-winner': isNetWinner(member.id, activeHole) }]"
+            :class="[teamCardClass(group.member), { 'card-winner': isNetWinner(group.member.id, activeHole) }]"
           >
             <div class="phc-identity">
-              <div class="phc-initials" :class="teamBadgeClass(member)">{{ playerInitials(member) }}</div>
+              <div class="phc-initials" :class="teamBadgeClass(group.member)">{{ playerInitials(group.member) }}</div>
               <div class="phc-name-col">
                 <div class="phc-hcp-row">
-                  <span class="phc-hcp-course" :class="teamTextClass(member)">{{ memberHandicapDisplay(member) }}</span>
-                  <span v-if="lowManStrokes(member) !== null" class="phc-hcp-lowman">({{ lowManStrokes(member) }})</span>
-                  <span v-if="strokeDotsOnHole(member, activeHole)" class="phc-stroke-dots">{{ '•'.repeat(strokeDotsOnHole(member, activeHole)) }}</span>
+                  <span class="phc-hcp-course" :class="teamTextClass(group.member)">{{ memberHandicapDisplay(group.member) }}</span>
+                  <span v-if="lowManStrokes(group.member) !== null" class="phc-hcp-lowman">({{ lowManStrokes(group.member) }})</span>
+                  <span v-if="strokeDotsOnHole(group.member, activeHole)" class="phc-stroke-dots">{{ '•'.repeat(strokeDotsOnHole(group.member, activeHole)) }}</span>
                 </div>
               </div>
             </div>
             <div class="phc-score-entry">
-              <button class="score-tap score-tap-minus" @click="inlineDec(member)">−</button>
+              <button class="score-tap score-tap-minus" @click="inlineDec(group.member)">−</button>
               <div
                 class="score-display"
-                :class="[getScore(member.id, activeHole) ? 'has-score' : '', showNotations ? 'nota-mode' : '']"
-                @click="inlineSetPar(member)"
+                :class="[getScore(group.member.id, activeHole) ? 'has-score' : '', showNotations ? 'nota-mode' : '']"
+                @click="inlineSetPar(group.member)"
               >
-                <span :class="getScore(member.id, activeHole) ? (showNotations ? scoreNotation(getScore(member.id, activeHole), parForHole(activeHole)) : '') : 'muted'">
-                  {{ getScore(member.id, activeHole) || '—' }}
+                <span :class="getScore(group.member.id, activeHole) ? (showNotations ? scoreNotation(getScore(group.member.id, activeHole), parForHole(activeHole)) : '') : 'muted'">
+                  {{ getScore(group.member.id, activeHole) || '—' }}
                 </span>
               </div>
-              <button class="score-tap score-tap-plus" @click="inlineInc(member)">+</button>
+              <button class="score-tap score-tap-plus" @click="inlineInc(group.member)">+</button>
             </div>
             <div class="phc-net-col">
               <div class="phc-net-label">NET</div>
-              <div class="phc-net-value" :class="getScore(member.id, activeHole) ? (showNotations ? scoreNotation(netScore(getScore(member.id, activeHole), memberEffectiveHcp(member), siForHole(activeHole)), parForHole(activeHole)) : '') : 'muted'">
-                {{ getScore(member.id, activeHole) ? netScore(getScore(member.id, activeHole), memberEffectiveHcp(member), siForHole(activeHole)) : '—' }}
+              <div class="phc-net-value" :class="getScore(group.member.id, activeHole) ? (showNotations ? scoreNotation(netScore(getScore(group.member.id, activeHole), memberEffectiveHcp(group.member), siForHole(activeHole)), parForHole(activeHole)) : '') : 'muted'">
+                {{ getScore(group.member.id, activeHole) ? netScore(getScore(group.member.id, activeHole), memberEffectiveHcp(group.member), siForHole(activeHole)) : '—' }}
               </div>
-              <div class="phc-net-sublabel">net</div>
             </div>
           </div>
         </div>
@@ -2350,12 +2349,12 @@ function formatDate(dateStr) {
   gap: 8px;
 }
 
-/* Player hole card */
+/* Player hole card — grid keeps +/- aligned across all players */
 .player-hole-card {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 56px;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
+  gap: 8px;
   padding: 10px 12px;
   border-radius: 14px;
   border: 1px solid rgba(255,255,255,.08);
@@ -2447,14 +2446,15 @@ function formatDate(dateStr) {
 .score-tap-minus { background: rgba(248,113,113,.18); color: #f87171; }
 .score-tap-plus { background: rgba(74,222,128,.18); color: #4ade80; }
 .score-display {
-  min-width: 50px; height: 44px; border-radius: 10px;
+  min-width: 64px; height: 48px; border-radius: 10px;
+  padding: 0 10px;
   display: flex; align-items: center; justify-content: center;
-  font-size: 26px; font-weight: 900;
-  background: rgba(255,255,255,.09); border: 2px solid rgba(255,255,255,.12);
+  font-size: 28px; font-weight: 900;
+  background: transparent; border: none;
   color: #f0ede0; cursor: pointer; font-family: var(--gw-font-mono, monospace);
   -webkit-tap-highlight-color: transparent;
 }
-.score-display.has-score { border-color: rgba(255,255,255,.15); background: rgba(255,255,255,.04); }
+.score-display.has-score { background: transparent; border: none; }
 .phc-net-line {
   font-size: 10px; color: rgba(240,237,224,.45);
   text-align: right; padding-right: 4px; margin-top: -4px;
@@ -2465,26 +2465,25 @@ function formatDate(dateStr) {
   margin-left: 5px; vertical-align: middle;
 }
 .phc-stroke-dots {
-  font-size: 10px; color: rgba(212,175,55,.9); margin-left: 3px; vertical-align: middle;
+  font-size: 14px; color: rgba(212,175,55,1); margin-left: 4px;
+  vertical-align: middle; letter-spacing: 1px; font-weight: 900;
 }
 
 
-/* Redesigned player card layout */
+/* Redesigned player card layout — grid columns keep +/- aligned */
 .phc-identity {
-  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+  display: flex; align-items: center; gap: 10px; min-width: 0; overflow: hidden;
 }
-.phc-name-col { display: flex; flex-direction: column; }
-.phc-hcp-row { display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+.phc-name-col { display: flex; flex-direction: column; min-width: 0; }
+.phc-hcp-row { display: flex; align-items: center; gap: 4px; margin-top: 2px; flex-wrap: wrap; }
 .phc-score-entry {
-  display: flex; align-items: center; gap: 8px; flex: 1; justify-content: center;
+  display: flex; align-items: center; gap: 10px; justify-content: center;
 }
 .phc-net-col {
-  display: flex; flex-direction: column; align-items: center;
-  min-width: 44px; flex-shrink: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
 }
 .phc-net-label { font-size: 9px; font-weight: 700; color: rgba(240,237,224,.35); text-transform: uppercase; letter-spacing: .5px; }
 .phc-net-value { font-size: 22px; font-weight: 900; color: var(--gw-text, #f0ede0); font-family: var(--gw-font-mono, monospace); line-height: 1.1; }
-.phc-net-sublabel { font-size: 8px; color: rgba(240,237,224,.3); }
 
 /* Hole game status section */
 .hole-game-status {

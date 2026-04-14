@@ -23,7 +23,7 @@
       <div class="card-cta">Continue →</div>
     </div>
 
-    <button class="new-round-pill" @click="openWizard()">+ New Round</button>
+    <button v-if="roundsStore.activeRound || roundsStore.rounds.length" class="new-round-pill" @click="openWizard()">+ New Round</button>
 
 
     <!-- Recent rounds -->
