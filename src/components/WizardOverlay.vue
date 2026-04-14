@@ -2,7 +2,6 @@
   <div class="modal-overlay wizard-overlay">
     <div class="modal wizard-modal">
       <div class="wizard-header">
-        <div class="wizard-title">New Round</div>
         <div class="wizard-step-indicator">Step {{ step }} of {{ totalSteps }}</div>
         <button class="wizard-close-btn" @click="$emit('close')">✕</button>
       </div>
@@ -1359,44 +1358,51 @@ async function create() {
   creating.value = true
   try {
     const games = buildGameConfigs()
+    const players = form.value.players.map(p => {
+      const team1 = mainGame.value.config?.team1 || []
+      const team2 = mainGame.value.config?.team2 || []
+      const team = team1.includes(p.id) ? 1 : team2.includes(p.id) ? 2 : null
+      return {
+        ...p,
+        team,
+        roundHcp: p.ghinIndex != null ? Math.round(p.ghinIndex) : null,
+      }
+    })
 
-    // Timeout protection: if createRound takes > 30s, stop waiting
+    console.log('[Wizard] Creating round:', { course: form.value.courseName, tee: form.value.tee, players: players.length, games: games.length })
+
+    // Timeout protection: 15s is plenty for both guest and Supabase paths
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Round creation timed out. Check your connection and try again.')), 30000)
+      setTimeout(() => reject(new Error('Round creation timed out after 15s. Check your connection and try again.')), 15000)
     )
+
+    const roundName = form.value.courseName + ' – ' + (form.value.date || new Date().toISOString().slice(0, 10))
 
     const round = await Promise.race([
       roundsStore.createRound({
+        name: roundName,
         courseName: form.value.courseName,
         tee: form.value.tee,
         date: form.value.date,
         holesMode: form.value.holesMode,
         withRoomCode: form.value.withRoomCode,
-        players: form.value.players.map(p => {
-          // Derive team from game config team1/team2 arrays
-          const team1 = mainGame.value.config?.team1 || []
-          const team2 = mainGame.value.config?.team2 || []
-          const team = team1.includes(p.id) ? 1 : team2.includes(p.id) ? 2 : null
-          return {
-            ...p,
-            team,
-            roundHcp: p.ghinIndex != null ? Math.round(p.ghinIndex) : null,
-          }
-        }),
+        players,
         games,
       }),
       timeoutPromise,
     ])
 
+    console.log('[Wizard] Round created:', round?.id)
+
     if (round) {
       emit('created', round)
     } else {
-      console.error('createRound returned null')
-      alert('Failed to create round. Please try again.')
+      console.error('[Wizard] createRound returned null/undefined')
+      alert('Failed to create round — no data returned. Please try again.')
     }
   } catch (e) {
-    console.error('Failed to create round:', e)
-    alert('Error creating round: ' + (e.message || 'Unknown error'))
+    console.error('[Wizard] Round creation error:', e)
+    alert('Error: ' + (e.message || 'Unknown error creating round'))
   } finally {
     creating.value = false
   }

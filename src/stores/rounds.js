@@ -122,13 +122,14 @@ export const useRoundsStore = defineStore('rounds', () => {
   // ── Create a new round ──────────────────────────────────────
   async function createRound({ name, courseName, tee, date, holesMode, format, withRoomCode = false, players = [], games = [] }) {
     const auth = useAuthStore()
+    console.log('[rounds] createRound called, isAuthenticated:', auth.isAuthenticated, 'course:', courseName, 'players:', players.length)
 
     // ── GUEST PATH ──────────────────────────────────────────
     if (!auth.isAuthenticated) {
       const roundId = `guest_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
       const round = {
         id: roundId,
-        name,
+        name: name || courseName || 'Round',
         course_name: courseName,
         tee,
         date: date || new Date().toISOString().slice(0, 10),
@@ -174,13 +175,55 @@ export const useRoundsStore = defineStore('rounds', () => {
     }
 
     // ── AUTHENTICATED PATH ──────────────────────────────────
+    console.log('[rounds] Authenticated path, user:', auth.user?.id)
+
+    // Verify Supabase session is still valid before inserting
+    let sessionOk = false
+    try {
+      const { data: sess } = await supabase.auth.getSession()
+      sessionOk = !!sess?.session?.access_token
+      console.log('[rounds] Session check:', sessionOk ? 'valid' : 'expired/missing')
+    } catch (e) {
+      console.warn('[rounds] Session check failed:', e)
+    }
+
+    if (!sessionOk) {
+      console.warn('[rounds] Session invalid, falling back to guest mode')
+      // Fall through to guest creation
+      const roundId = `guest_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+      const round = {
+        id: roundId, name, course_name: courseName, tee,
+        date: date || new Date().toISOString().slice(0, 10),
+        holes_mode: holesMode || '18', format: format || 'social',
+        room_code: null, owner_id: null, is_complete: false,
+        created_at: new Date().toISOString(),
+      }
+      const members = players.map((p, i) => ({
+        id: `gm_${i}_${Date.now()}`, round_id: roundId, profile_id: null,
+        guest_name: p.name, short_name: p.shortName ?? p.name?.slice(0, 6),
+        ghin_index: p.ghinIndex ?? null, round_hcp: p.roundHcp ?? null,
+        team: p.team ?? null, group_index: p.groupIndex ?? 0,
+        role: i === 0 ? 'admin' : 'player',
+        nickname: p.nickname ?? null, use_nickname: p.use_nickname ?? false,
+      }))
+      const gameConfigs = games.map((g, i) => ({
+        id: `gg_${i}_${Date.now()}`, round_id: roundId, type: g.type, config: g.config, sort_order: i, created_by: null,
+      }))
+      activeRound.value = round
+      activeMembers.value = members
+      activeGames.value = gameConfigs
+      activeScores.value = {}
+      _persistGuest()
+      return round
+    }
+
     let roomCode = null
     if (withRoomCode) roomCode = await generateRoomCode()
 
     const { data: round, error } = await supabase
       .from('rounds')
       .insert({
-        name,
+        name: name || courseName || 'Round',
         course_name: courseName,
         tee,
         date: date || new Date().toISOString().slice(0, 10),
@@ -192,7 +235,11 @@ export const useRoundsStore = defineStore('rounds', () => {
       .select()
       .single()
 
-    if (error) throw error
+    if (error) {
+      console.error('[rounds] Supabase insert error:', error)
+      throw error
+    }
+    console.log('[rounds] Round inserted:', round.id)
 
     // Add members — use .select() to get back the new UUIDs
     let insertedMembers = []

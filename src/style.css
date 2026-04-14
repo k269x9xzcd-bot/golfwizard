@@ -639,8 +639,9 @@ body {
 .wizard-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: var(--gw-space-3) var(--gw-space-5);
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px 16px;
   border-bottom: 1px solid rgba(212, 175, 55, 0.1);
   flex-shrink: 0;
 }
@@ -682,18 +683,18 @@ body {
 .wizard-step {
   flex: 1;
   overflow-y: auto;
-  padding: var(--gw-space-3) var(--gw-space-5);
+  padding: var(--gw-space-2) var(--gw-space-5);
   display: flex;
   flex-direction: column;
-  gap: var(--gw-space-3);
+  gap: var(--gw-space-2);
   -webkit-overflow-scrolling: touch;
   min-height: 0;
 }
 
 .wizard-step h3 {
-  margin: 0 0 var(--gw-space-2) 0;
+  margin: 0;
   font-family: var(--gw-font-display);
-  font-size: 20px;
+  font-size: 18px;
   color: var(--gw-text);
 }
 
@@ -868,8 +869,9 @@ body {
 .roster-list {
   display: flex;
   flex-direction: column;
-  gap: var(--gw-space-2);
-  max-height: 200px;
+  gap: 4px;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -877,7 +879,7 @@ body {
 .roster-option {
   display: flex;
   align-items: center;
-  padding: 12px var(--gw-space-4);
+  padding: 8px 12px;
   border-radius: var(--gw-radius-md);
   background: var(--gw-neutral-700);
   border: 1.5px solid transparent;
@@ -906,21 +908,21 @@ body {
 .player-cards {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 10px;
+  gap: 4px;
+  margin-bottom: 6px;
 }
 .player-card {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   background: var(--gw-green-800, #0d3325);
   border: 1px solid var(--gw-green-700, #114a35);
   border-radius: var(--gw-radius-md, 12px);
-  padding: 8px 10px 8px 12px;
+  padding: 6px 8px 6px 10px;
 }
 .player-card-name {
   flex: 1;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--gw-text, #f0ede0);
   white-space: nowrap;
