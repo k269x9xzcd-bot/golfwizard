@@ -429,11 +429,11 @@
 
             <!-- Launch round wizard button -->
             <div class="mm-launch-wrap">
-              <button class="mm-btn-launch" @click="launchRound">
+              <button class="mm-btn-launch" @click="launchRound" :disabled="launchingRound">
                 <span class="mm-launch-icon">⛳</span>
-                Start Round in Wizard
+                {{ launchingRound ? 'Creating Round…' : 'Start Round' }}
               </button>
-              <div class="mm-launch-hint">Pre-fills Best Ball + 2 Singles with tournament players</div>
+              <div class="mm-launch-hint">Creates Best Ball with tournament players & opens scoring</div>
             </div>
 
             <div class="mm-footer">
@@ -688,6 +688,7 @@ function singlesMatchups(match) {
 
 // ── Match modal ─────────────────────────────────────────────────
 const activeMatch = ref(null)
+const launchingRound = ref(false)
 const editResult = reactive({ bestBall: null, singles: [], playedDate: '' })
 
 function openMatch(round, match) {
@@ -753,9 +754,11 @@ async function launchRound() {
   const t1 = getTeam(match.team1)
   const t2 = getTeam(match.team2)
 
-  // Build player list with team assignments
+  // Build player list with team assignments and stable temp IDs
+  const ts = Date.now()
   const players = [
-    ...t1.players.map(p => ({
+    ...t1.players.map((p, i) => ({
+      id: `wiz_t1_${i}_${ts}`,
       name: p.name,
       shortName: p.nickname || p.name.split(' ')[0],
       nickname: p.nickname,
@@ -764,7 +767,8 @@ async function launchRound() {
       team: 1,
       groupIndex: 0,
     })),
-    ...t2.players.map(p => ({
+    ...t2.players.map((p, i) => ({
+      id: `wiz_t2_${i}_${ts}`,
       name: p.name,
       shortName: p.nickname || p.name.split(' ')[0],
       nickname: p.nickname,
@@ -775,13 +779,15 @@ async function launchRound() {
     })),
   ]
 
-  // Pre-configure games: Best Ball (2v2) + 2 Singles matches
-  const t1Ids = t1.players.map((_, i) => `gm_${i}_`)
-  const t2Ids = t2.players.map((_, i) => `gm_${t1.players.length + i}_`)
+  // Pre-configure games: Best Ball (2v2) — IDs match player.id above
+  // so createRound's idMap can remap them to real Supabase member IDs
+  const t1Ids = players.filter(p => p.team === 1).map(p => p.id)
+  const t2Ids = players.filter(p => p.team === 2).map(p => p.id)
   const games = [
     { type: 'best_ball', config: { team1: t1Ids, team2: t2Ids, ppt: 1 } },
   ]
 
+  launchingRound.value = true
   try {
     const round = await roundsStore.createRound({
       name: `${t1.name} vs ${t2.name}`,
@@ -793,12 +799,18 @@ async function launchRound() {
       games,
     })
 
+    if (!round) {
+      alert('Round creation returned no data. Please try again.')
+      return
+    }
+
     activeMatch.value = null
-    // Navigate to the scoring tab
     router.push('/scoring')
   } catch (e) {
     console.error('Failed to create tournament round:', e)
-    alert('Failed to create round. Please try again.')
+    alert('Error: ' + (e.message || 'Failed to create round. Please try again.'))
+  } finally {
+    launchingRound.value = false
   }
 }
 
