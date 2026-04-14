@@ -5,18 +5,9 @@
 const CACHE_NAME = 'golfwizard-v__BUILD_VERSION__'
 const BASE = '/golfwizard'
 
-// Assets to pre-cache on install (the main shell)
-const PRECACHE = [
-  BASE + '/',
-  BASE + '/index.html',
-]
-
 self.addEventListener('install', (event) => {
   // Skip waiting so the new SW activates immediately
   self.skipWaiting()
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(PRECACHE).catch(() => {}))
-  )
 })
 
 self.addEventListener('activate', (event) => {
@@ -38,7 +29,15 @@ self.addEventListener('fetch', (event) => {
   // Don't intercept Supabase API calls
   if (url.hostname.includes('supabase')) return
 
-  // Network-first: try network, cache on success, fall back to cache if offline
+  // Navigation requests (HTML) — always go to network, never serve stale cache
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match(BASE + '/index.html'))
+    )
+    return
+  }
+
+  // All other assets: network-first with cache fallback
   event.respondWith(
     fetch(event.request)
       .then(response => {

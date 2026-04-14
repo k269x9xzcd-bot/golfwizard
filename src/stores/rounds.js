@@ -177,27 +177,6 @@ export const useRoundsStore = defineStore('rounds', () => {
     // ── AUTHENTICATED PATH ──────────────────────────────────
     console.log('[rounds] Authenticated path, user:', auth.user?.id)
 
-    // Verify Supabase session is still valid; attempt refresh if expired
-    let sessionOk = false
-    try {
-      const { data: sess } = await supabase.auth.getSession()
-      sessionOk = !!sess?.session?.access_token
-      if (!sessionOk) {
-        console.log('[rounds] Session expired, attempting refresh…')
-        const { data: refreshed } = await supabase.auth.refreshSession()
-        sessionOk = !!refreshed?.session?.access_token
-        console.log('[rounds] Refresh result:', sessionOk ? 'success' : 'failed')
-      }
-    } catch (e) {
-      console.warn('[rounds] Session check failed:', e)
-    }
-
-    if (!sessionOk) {
-      // Don't silently fall to guest mode — that would orphan data.
-      // Throw so the UI can prompt re-login.
-      throw new Error('Your session has expired. Please sign in again and retry.')
-    }
-
     let roomCode = null
     if (withRoomCode) roomCode = await generateRoomCode()
 
@@ -218,7 +197,11 @@ export const useRoundsStore = defineStore('rounds', () => {
 
     if (error) {
       console.error('[rounds] Supabase insert error:', error)
-      throw error
+      // RLS / auth errors surface as 403 or specific codes
+      if (error.code === '42501' || error.message?.includes('policy') || error.code === 'PGRST301') {
+        throw new Error('Session expired — please sign in again and retry.')
+      }
+      throw new Error(error.message || 'Failed to create round in database.')
     }
     console.log('[rounds] Round inserted:', round.id)
 
