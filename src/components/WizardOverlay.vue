@@ -1677,26 +1677,59 @@ async function create() {
 
     console.log('[Wizard] Creating round:', { course: form.value.courseName, tee: form.value.tee, players: players.length, games: games.length })
 
-    // Timeout protection
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Round creation timed out. Check your connection and try again.')), 20000)
-    )
-
     const roundName = form.value.courseName + ' – ' + (form.value.date || new Date().toISOString().slice(0, 10))
 
-    const round = await Promise.race([
-      roundsStore.createRound({
-        name: roundName,
-        courseName: form.value.courseName,
-        tee: form.value.tee,
-        date: form.value.date,
-        holesMode: form.value.holesMode,
-        withRoomCode: form.value.withRoomCode,
-        players,
-        games,
-      }),
-      timeoutPromise,
-    ])
+    // Outer timeout must be longer than SJS(5s) + raw-fetch(12s) + buffer = 25s.
+    // If it fires anyway, check if the round landed in Supabase — the raw-fetch
+    // often succeeds server-side but the response stream stalls on iOS.
+    let round = null
+    const outerTimeoutMs = 25000
+    try {
+      round = await Promise.race([
+        roundsStore.createRound({
+          name: roundName,
+          courseName: form.value.courseName,
+          tee: form.value.tee,
+          date: form.value.date,
+          holesMode: form.value.holesMode,
+          withRoomCode: form.value.withRoomCode,
+          players,
+          games,
+        }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('TIMEOUT')), outerTimeoutMs)
+        ),
+      ])
+    } catch (outerErr) {
+      if (outerErr.message === 'TIMEOUT') {
+        // The outer timeout fired — but the round may have been created successfully.
+        // Check if activeRound was set by createRound (the store sets it before returning).
+        if (roundsStore.activeRound?.course_name === form.value.courseName) {
+          _wizLog('outer timeout but activeRound is set — treating as success')
+          round = roundsStore.activeRound
+        } else {
+          // Try a quick lookup for a round created in the last 30s with our course name
+          try {
+            const { supaRawRequest } = await import('../modules/supaRaw')
+            const rows = await supaRawRequest(
+              'GET',
+              `rounds?select=*&course_name=eq.${encodeURIComponent(form.value.courseName)}&order=created_at.desc&limit=1`,
+              null, 5000
+            )
+            const candidate = Array.isArray(rows) ? rows[0] : rows
+            const age = candidate?.created_at ? Date.now() - new Date(candidate.created_at).getTime() : Infinity
+            if (candidate && age < 60_000) {
+              _wizLog(`outer timeout recovery: found round ${candidate.id.slice(0,8)} created ${age}ms ago`)
+              roundsStore.activeRound = candidate
+              round = candidate
+            }
+          } catch { /* ignore recovery failures */ }
+        }
+        if (!round) throw new Error('Round creation timed out. Check your connection and try again.')
+      } else {
+        throw outerErr
+      }
+    }
 
     console.log('[Wizard] Round created:', round?.id)
 

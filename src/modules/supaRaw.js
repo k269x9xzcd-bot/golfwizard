@@ -107,10 +107,12 @@ export async function supaRawRequest(method, pathAndQuery, body, timeoutMs = 100
     if (!res.ok) {
       let errBody = null
       try { errBody = await res.json() } catch {}
-      _debugLog(`✗ raw ${method} ${pathAndQuery.split('?')[0]} HTTP ${res.status} (${Date.now() - t0}ms)`)
+      const detail = errBody ? JSON.stringify(errBody) : '(no body)'
+      _debugLog(`✗ raw ${method} ${pathAndQuery.split('?')[0]} HTTP ${res.status} body=${detail} (${Date.now() - t0}ms)`)
       const err = new Error(errBody?.message || `Request failed (${res.status})`)
       err.code = errBody?.code
       err.status = res.status
+      err.detail = errBody
       throw err
     }
 

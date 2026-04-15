@@ -293,7 +293,7 @@ export const useRoundsStore = defineStore('rounds', () => {
     } catch (e) {
       _debugLog(`[rounds] SJS insert timed out, trying raw fetch fallback…`)
       try {
-        const rows = await supaRawInsert('rounds', roundBody, 12000)
+        const rows = await supaRawInsert('rounds', roundBody, 15000)
         round = Array.isArray(rows) ? rows[0] : rows
         error = null
         _debugLog(`[rounds] raw insert SUCCEEDED — round id ${round?.id?.slice(0, 8) || '?'}`)
