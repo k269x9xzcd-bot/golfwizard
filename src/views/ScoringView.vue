@@ -1077,7 +1077,9 @@ function pInit(memberId) {
 
 // Rendered HTML for a "halved" hole — proper fraction with offset 1 / 2.
 // Used by Nassau, Match, 1v1 notation rows. Styled in .nota-frac rule below.
-const HALVED_HTML = '<span class="nota-frac"><span class="nf-num">1</span><span class="nf-slash">⁄</span><span class="nf-den">2</span></span>'
+// Diagonal slash is drawn with a CSS pseudo-element rather than the ⁄ glyph
+// (which renders as a hyphen in Safari's default fallback font).
+const HALVED_HTML = '<span class="nota-frac" aria-label="halved"><span class="nf-num">1</span><span class="nf-den">2</span></span>'
 
 const gameNotationRows = computed(() => {
   const rows = []
@@ -2569,31 +2571,43 @@ function formatDate(dateStr) {
 /* Diagonal "1⁄2" fraction for halved holes — bigger and more legible
    than the default Unicode ½ glyph, with the numerator and denominator
    properly offset by a thin slash. */
+/* "1/2" fraction — diagonal slash drawn with CSS so we don't rely on the
+   ⁄ glyph (which renders as a hyphen in Safari's default paper font).
+   Layout: relative container, numerator positioned top-left, a 1px line
+   rotated -60deg as the slash, denominator bottom-right. */
 .nota-frac {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  position: relative;
+  display: inline-block;
+  width: 18px;
+  height: 20px;
   font-family: var(--gw-font-mono, 'DM Mono', monospace);
   font-weight: 800;
   color: #6b7368;
   line-height: 1;
-  letter-spacing: 0;
+  vertical-align: middle;
 }
 .nota-frac .nf-num {
-  font-size: 12px;
-  transform: translateY(-5px);
-  margin-right: -1px;
-}
-.nota-frac .nf-slash {
-  font-size: 16px;
-  font-weight: 400;
-  opacity: .85;
-  margin: 0 -1px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-size: 11px;
 }
 .nota-frac .nf-den {
-  font-size: 12px;
-  transform: translateY(5px);
-  margin-left: -1px;
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  font-size: 11px;
+}
+.nota-frac::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 22px;
+  height: 1.5px;
+  background: currentColor;
+  transform: translate(-50%, -50%) rotate(-60deg);
+  opacity: .7;
 }
 .nota-dormie { color: #b45309; font-weight: 900; }
 .nota-skin-won { color: #6d28d9; }

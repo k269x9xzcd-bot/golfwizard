@@ -1064,9 +1064,10 @@ function showToast(msg, type = 'neutral') {
 .course-card {
   display: flex;
   align-items: center;
+  gap: 8px;
   background: rgba(255,255,255,.04);
-  border-radius: var(--gw-radius-lg);
-  padding: 10px 14px;
+  border-radius: 12px;
+  padding: 9px 14px;
   margin-bottom: 0;
   cursor: pointer;
   border: 1px solid rgba(255,255,255,.07);
@@ -1090,8 +1091,8 @@ function showToast(msg, type = 'neutral') {
 .swipe-container {
   position: relative;
   overflow: hidden;
-  border-radius: var(--gw-radius-lg);
-  margin-bottom: 8px;
+  border-radius: 12px;
+  margin-bottom: 4px;
   background: rgba(255,255,255,.04);
   transition: background 0.05s linear;
 }
@@ -1132,21 +1133,32 @@ function showToast(msg, type = 'neutral') {
 .toast-enter-active, .toast-leave-active { transition: all .3s ease; }
 .toast-enter-from, .toast-leave-to { opacity: 0; transform: translateX(-50%) translateY(10px); }
 
-.course-card-main { flex: 1; min-width: 0; }
+/* Course card: single-row layout — [name …] [Custom badge] [3 tees] [★] */
+.course-card-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .course-name {
   font-family: var(--gw-font-body);
-  font-size: 16px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
   color: var(--gw-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 .course-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 3px;
+  gap: 6px;
+  margin-top: 0;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 .custom-badge {
   font-size: 10px;
@@ -1160,8 +1172,11 @@ function showToast(msg, type = 'neutral') {
 }
 .tee-count {
   font-family: var(--gw-font-body);
-  font-size: 13px;
-  color: var(--gw-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(240,237,224,.55);
+  white-space: nowrap;
+  letter-spacing: .01em;
 }
 
 .tap-edit-hint {

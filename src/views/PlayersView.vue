@@ -362,8 +362,10 @@ async function saveEdit() {
   display: flex; align-items: center; justify-content: space-between;
   font-size: 11px; font-weight: 700; letter-spacing: .08em;
   text-transform: uppercase; color: rgba(240,237,224,.6);
-  padding: 8px 4px 6px; margin-top: 8px;
+  padding: 10px 4px 4px; margin-top: 6px;
 }
+/* First section-label should hug the header */
+.players-view .section-label:first-of-type { margin-top: 2px; }
 .swipe-hint {
   font-size: 10px; font-weight: 500; letter-spacing: 0;
   color: rgba(240,237,224,.25); text-transform: none;
@@ -373,8 +375,8 @@ async function saveEdit() {
 .swipe-container {
   position: relative;
   overflow: hidden;
-  border-radius: 14px;
-  margin-bottom: 8px;
+  border-radius: 12px;
+  margin-bottom: 4px;
   background: rgba(255,255,255,.04);
   transition: background 0.05s linear;
 }
@@ -390,10 +392,12 @@ async function saveEdit() {
 .swipe-reveal-left { left: 0; padding-left: 20px; }
 .swipe-reveal-right { right: 0; padding-right: 20px; }
 
-/* ── Player Card (slides on top of the action reveal) ─ */
+/* ── Player Card (slides on top of the action reveal) ─
+   Single-row layout: [name …] [nickname] [GHIN N] [★]
+   All on one line. No vertical stacking of the meta row. */
 .player-card {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 14px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 14px;
   background: rgba(255,255,255,.04);
   border: 1px solid rgba(255,255,255,.07);
   border-radius: 12px;
@@ -406,20 +410,35 @@ async function saveEdit() {
   background: rgba(255,255,255,.04);
 }
 
-.player-info { flex: 1; cursor: pointer; min-width: 0; }
+.player-info {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* Name + meta now inline on one row — no more stacking */
+}
 .player-name {
   font-weight: 600; font-size: 15px; color: #f0ede0;
-  letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  letter-spacing: -.01em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 .player-meta {
-  display: flex; align-items: center; gap: 7px; margin-top: 2px;
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 0;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 .player-ghin {
-  font-size: 12px; color: rgba(240,237,224,.5); font-weight: 500;
+  font-size: 11px; color: rgba(240,237,224,.55); font-weight: 600;
+  letter-spacing: .01em;
 }
-/* Fav star — right side, no text */
+/* Fav star — right side */
 .player-fav-star {
-  font-size: 14px; color: #d4af37; flex-shrink: 0; margin-left: auto;
+  font-size: 14px; color: #d4af37; flex-shrink: 0;
   line-height: 1;
 }
 
