@@ -15,6 +15,9 @@ const routes = [
   { path: '/metrics',  name: 'metrics',  component: () => import('../views/MetricsView.vue') },
   { path: '/join/:code?',    name: 'join',       component: () => import('../views/JoinView.vue') },
   { path: '/tournament',     name: 'tournament', component: () => import('../views/TournamentView.vue') },
+  { path: '/cross-match/new', name: 'cross-match-new', component: () => import('../views/LinkedMatchSetup.vue') },
+  { path: '/accept/:code',    name: 'cross-match-accept', component: () => import('../views/LinkedMatchAccept.vue') },
+  { path: '/cross-match/:id', name: 'cross-match-detail', component: () => import('../views/LinkedMatchDetail.vue') },
 ]
 
 export const router = createRouter({

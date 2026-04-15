@@ -29,6 +29,16 @@
 
     <button v-if="roundsStore.activeRound || roundsStore.rounds.length" class="new-round-pill" @click="openWizard()">+ New Round</button>
 
+    <!-- Cross-Foursome Match entry card -->
+    <RouterLink v-if="authStore.isAuthenticated" to="/cross-match/new" class="cm-home-card">
+      <div class="cm-home-icon">🤝</div>
+      <div class="cm-home-body">
+        <div class="cm-home-title">Cross-Foursome Match</div>
+        <div class="cm-home-sub">1BB or 2BB Net between two foursomes · sharable invite</div>
+      </div>
+      <div class="cm-home-arrow">›</div>
+    </RouterLink>
+
     <!-- Tournament / Cup entry card (only for authorized users) -->
     <template v-if="showTournament">
       <!-- Cup with in-progress tournament round nested -->
@@ -321,5 +331,45 @@ async function openRound(id) {
   background: rgba(212,175,55,.14);
   color: #d4af37;
   border: 1px solid rgba(212,175,55,.35);
+}
+
+/* Cross-foursome match entry */
+.cm-home-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 12px var(--gw-space-4) 0;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(96,165,250,.1) 0%, rgba(96,165,250,.03) 100%);
+  border: 1px solid rgba(96,165,250,.3);
+  text-decoration: none;
+  color: var(--gw-text);
+  transition: transform .12s, border-color .12s;
+  -webkit-tap-highlight-color: transparent;
+}
+.cm-home-card:active {
+  transform: scale(.98);
+  border-color: rgba(96,165,250,.6);
+}
+.cm-home-icon { font-size: 28px; flex-shrink: 0; }
+.cm-home-body { flex: 1; min-width: 0; }
+.cm-home-title {
+  font-family: var(--gw-font-display);
+  font-size: 17px;
+  font-weight: 700;
+  color: #93c5fd;
+  line-height: 1.2;
+}
+.cm-home-sub {
+  font-size: 12px;
+  color: rgba(240,237,224,.55);
+  margin-top: 2px;
+}
+.cm-home-arrow {
+  font-size: 28px;
+  color: rgba(147,197,253,.6);
+  font-weight: 300;
+  flex-shrink: 0;
 }
 </style>
