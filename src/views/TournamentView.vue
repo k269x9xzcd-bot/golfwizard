@@ -1042,6 +1042,25 @@ async function _doLaunchRound({ match, t1, t2, isFinal, pairings }) {
 
   launchingRound.value = true
   try {
+    // Pre-flight ping — if iOS is stuck on a dead connection, creation will
+    // fail. Warn immediately so the user can force-quit before losing work.
+    const { supaPreflightOk } = await import('../modules/supaRaw')
+    const ok = await supaPreflightOk(3500)
+    if (!ok) {
+      const doReload = confirm(
+        "Can't reach the server — iOS is stuck on a dead connection.\n\n" +
+        "Tap OK to reload the app (fixes it instantly).\n" +
+        "Tap Cancel to force-quit manually and try again."
+      )
+      if (doReload) {
+        try { localStorage.removeItem('gw_create_log') } catch {}
+        const u = new URL(window.location.href)
+        u.searchParams.set('_reload', Date.now().toString())
+        window.location.replace(u.toString())
+      }
+      return
+    }
+
     const round = await roundsStore.createRound({
       name: isFinal ? `FINAL: ${t1.name} vs ${t2.name}` : `${t1.name} vs ${t2.name}`,
       courseName: TOURNAMENT.defaultCourse || 'Bonnie Briar Country Club',

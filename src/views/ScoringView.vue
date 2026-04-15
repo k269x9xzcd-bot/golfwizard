@@ -260,11 +260,17 @@
               <tr class="row-header">
                 <th class="col-sticky col-player-header">Player</th>
                 <!-- Front 9 -->
-                <th v-for="h in frontHoles" :key="h" class="col-hole-num" @click="activeHole = h">{{ h }}</th>
+                <th v-for="h in frontHoles" :key="h" class="col-hole-num" @click="activeHole = h">
+                  {{ h }}
+                  <span v-if="pressHoles.has(h)" class="press-badge" title="Nassau press opened on this hole">P</span>
+                </th>
                 <!-- OUT subtotal -->
                 <th v-if="hasBack9" class="col-subtotal">OUT</th>
                 <!-- Back 9 -->
-                <th v-for="h in backHoles" :key="h" class="col-hole-num" @click="activeHole = h">{{ h }}</th>
+                <th v-for="h in backHoles" :key="h" class="col-hole-num" @click="activeHole = h">
+                  {{ h }}
+                  <span v-if="pressHoles.has(h)" class="press-badge" title="Nassau press opened on this hole">P</span>
+                </th>
                 <!-- IN subtotal -->
                 <th v-if="hasBack9" class="col-subtotal">IN</th>
                 <!-- Totals -->
@@ -471,6 +477,14 @@
             <div class="hole-big-number">Par {{ parForHole(activeHole) }}</div>
             <div class="hole-course-meta">SI {{ siForHole(activeHole) }}<template v-if="yardsForHole(activeHole)"> · {{ yardsForHole(activeHole) }}y</template></div>
           </div>
+        </div>
+
+        <!-- Press banner — a Nassau press opened on this hole -->
+        <div v-if="pressHoles.has(activeHole)" class="press-banner">
+          <span class="press-banner-icon">💥</span>
+          <span class="press-banner-text">
+            <strong>Press opened!</strong> A new bet is on — stakes doubled from this hole.
+          </span>
         </div>
 
 
@@ -1250,6 +1264,28 @@ function pInit(memberId) {
 // (which renders as a hyphen in Safari's default fallback font).
 const HALVED_HTML = '<span class="nota-frac" aria-label="halved"><span class="nf-num">1</span><span class="nf-den">2</span></span>'
 
+// Hole numbers where a Nassau press was auto-opened. Shown as a small P
+// badge on the scorecard grid's hole-number header.
+const pressHoles = computed(() => {
+  const set = new Set()
+  const ctx = buildCtx()
+  if (!ctx) return set
+  for (const game of (roundsStore.activeGames || [])) {
+    if (game.type?.toLowerCase() !== 'nassau') continue
+    try {
+      const r = computeNassau(ctx, game.config || {})
+      const allPresses = [
+        ...(r.frontSeg?.presses || []),
+        ...(r.backSeg?.presses || []),
+      ]
+      for (const p of allPresses) {
+        if (p?.start) set.add(p.start)
+      }
+    } catch { /* skip */ }
+  }
+  return set
+})
+
 const gameNotationRows = computed(() => {
   const rows = []
   const ctx = buildCtx()
@@ -1258,7 +1294,7 @@ const gameNotationRows = computed(() => {
   for (const game of games) {
     const t = game.type?.toLowerCase()
 
-    // ── NASSAU — team initials, ½/W/L, +N format ──
+    // ── NASSAU — running Ux/Dx/AS per hole (team1 perspective) ──
     if (t === 'nassau') {
       try {
         const r = computeNassau(ctx, game.config)
@@ -1268,13 +1304,15 @@ const gameNotationRows = computed(() => {
         const cells = {}
         const allHR = [...(r.frontSeg?.holeResults || []), ...(r.backSeg?.holeResults || [])]
 
-        // Running t1Up per hole so we can show cumulative status
+        // Each hole shows the match-play standing FROM TEAM 1's perspective
+        // AFTER that hole. t1Up > 0 → team 1 is up. t1Up < 0 → team 1 is down.
+        // 0 → All Square. Cell stays empty on holes not yet played.
         for (const hr of allHR) {
-          let sym = '', cls = ''
-          if (hr.winner === 't1') { sym = 'W'; cls = 'nota-t1' }
-          else if (hr.winner === 't2') { sym = 'L'; cls = 'nota-t2' }
-          else if (hr.n1 != null && hr.n2 != null) { sym = HALVED_HTML; cls = 'nota-halved' }
-          cells[hr.hole] = { text: sym, cls }
+          if (hr.n1 == null || hr.n2 == null) { cells[hr.hole] = { text: '', cls: '' }; continue }
+          const up = hr.t1Up ?? 0
+          if (up > 0) cells[hr.hole] = { text: `U${up}`, cls: 'nota-t1' }
+          else if (up < 0) cells[hr.hole] = { text: `D${Math.abs(up)}`, cls: 'nota-t2' }
+          else cells[hr.hole] = { text: 'AS', cls: 'nota-halved' }
         }
 
         // Dormie checks per segment
@@ -1335,7 +1373,7 @@ const gameNotationRows = computed(() => {
       } catch(e) { /* skip */ }
     }
 
-    // ── MATCH / 1v1 — ½/W/L with dormie ──
+    // ── MATCH / 1v1 — running Ux/Dx/AS per hole (player1 perspective) ──
     if (t === 'match' || t === 'match1v1') {
       try {
         const r = computeMatch(ctx, game.config)
@@ -1344,12 +1382,11 @@ const gameNotationRows = computed(() => {
         const played = r.holeResults?.filter(hr => !hr.incomplete) || []
         const totalHoles = visibleHoles.value.length
         for (const hr of (r.holeResults || [])) {
-          if (hr.incomplete) continue
-          let sym = '', cls = ''
-          if (hr.winner === 'p1') { sym = 'W'; cls = 'nota-t1' }
-          else if (hr.winner === 'p2') { sym = 'L'; cls = 'nota-t2' }
-          else { sym = HALVED_HTML; cls = 'nota-halved' }
-          cells[hr.hole] = { text: sym, cls }
+          if (hr.incomplete) { cells[hr.hole] = { text: '', cls: '' }; continue }
+          const up = hr.p1Up ?? 0
+          if (up > 0) cells[hr.hole] = { text: `U${up}`, cls: 'nota-t1' }
+          else if (up < 0) cells[hr.hole] = { text: `D${Math.abs(up)}`, cls: 'nota-t2' }
+          else cells[hr.hole] = { text: 'AS', cls: 'nota-halved' }
         }
         const up = r.finalUp
         const remaining = totalHoles - played.length
@@ -1665,7 +1702,42 @@ function gameSummaryHtml(game) {
       }
 
       const scoringBadge = scoring === 'nassau' ? ' Nassau' : scoring === 'skins' ? ' Skins' : ''
-      return _gameLine({ gameName: `Match${scoringBadge}`, winner, value, detail })
+
+      // Strokes-on-holes sub-line: which holes does each player receive strokes on?
+      // Only meaningful for 1v1 matches where one player has a higher course handicap.
+      let strokesLine = null
+      try {
+        const m1 = ctx.members.find(m => m.id === cfg.player1)
+        const m2 = ctx.members.find(m => m.id === cfg.player2)
+        if (m1 && m2) {
+          const h1 = m1.round_hcp ?? 0
+          const h2 = m2.round_hcp ?? 0
+          if (h1 !== h2) {
+            const giver = h1 < h2 ? m1 : m2
+            const receiver = h1 < h2 ? m2 : m1
+            const strokeDiff = Math.abs(h1 - h2)
+            // Get the course SI array so we can list which holes get strokes
+            const course = ctx.course || {}
+            const teeSiByHole = course?.teesData?.[ctx.tee]?.siByHole
+            const siArr = teeSiByHole || course.si || []
+            const holesWithStrokes = []
+            for (let h = 1; h <= 18; h++) {
+              const si = siArr[h - 1] ?? 18
+              if (si <= strokeDiff) holesWithStrokes.push(h)
+            }
+            if (holesWithStrokes.length) {
+              const giverName = giver.short_name || giver.guest_name?.split(/\s+/)[0] || '?'
+              const recvName = receiver.short_name || receiver.guest_name?.split(/\s+/)[0] || '?'
+              strokesLine = `↳ ${giverName} gives ${recvName} ${strokeDiff} stroke${strokeDiff === 1 ? '' : 's'} on hole${holesWithStrokes.length === 1 ? '' : 's'} ${holesWithStrokes.join(', ')}`
+            }
+          }
+        }
+      } catch { /* skip */ }
+
+      const base = _gameLine({ gameName: `Match${scoringBadge}`, winner, value, detail })
+      return strokesLine
+        ? base.replace('</div></div>', `</div><div class="gs-strokes-line">${strokesLine}</div></div>`)
+        : base
     }
 
     // ── Vegas ──
@@ -2597,6 +2669,15 @@ function formatDate(dateStr) {
   margin-top: 3px;
   padding-left: 2px;
 }
+.gs-strokes-line {
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgba(212,175,55,.75);
+  margin-top: 2px;
+  padding-left: 14px;
+  font-weight: 600;
+  letter-spacing: .01em;
+}
 .live-game-row {
   display: flex;
   align-items: center;
@@ -2886,6 +2967,44 @@ function formatDate(dateStr) {
 .nota-t1 { color: #1d4ed8; }
 .nota-t2 { color: #b91c1c; }
 .nota-halved { color: #6b7368; }
+
+/* Small red 'P' badge on hole-number cells where a Nassau press opened */
+.press-badge {
+  display: inline-block;
+  min-width: 12px;
+  padding: 0 3px;
+  margin-left: 2px;
+  border-radius: 4px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 12px;
+  vertical-align: top;
+  letter-spacing: 0;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.15);
+}
+
+/* Press-opened banner on the hole-by-hole view */
+.press-banner {
+  display: flex; align-items: center; gap: 10px;
+  margin: 8px 12px 4px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(220,38,38,.16), rgba(220,38,38,.04));
+  border: 1px solid rgba(220,38,38,.4);
+  animation: press-pulse 2.4s ease-in-out infinite;
+}
+@keyframes press-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220,38,38,.25); }
+  50%      { box-shadow: 0 0 0 4px rgba(220,38,38,.06); }
+}
+.press-banner-icon { font-size: 22px; flex-shrink: 0; }
+.press-banner-text {
+  font-size: 13px; line-height: 1.35;
+  color: var(--gw-text, #f0ede0);
+}
+.press-banner-text strong { color: #fca5a5; font-weight: 800; }
 
 /* Diagonal "1⁄2" fraction for halved holes — bigger and more legible
    than the default Unicode ½ glyph, with the numerator and denominator

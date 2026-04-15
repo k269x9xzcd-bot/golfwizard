@@ -7,6 +7,19 @@
         <button class="wizard-close-btn" @click="$emit('close')">✕</button>
       </div>
 
+      <!-- Pre-flight connectivity warning — shown ONLY when we've confirmed
+           the connection pool is stuck. Prevents the user from filling out
+           the wizard and losing work when creation will fail. -->
+      <div v-if="preflightOk === false" class="wiz-preflight-warn">
+        <div class="wpw-title">⚠️ iOS connection is stuck</div>
+        <div class="wpw-body">
+          Your phone is holding onto a dead network connection and creation will fail.
+          <strong>Force-quit GolfWizard</strong> (swipe up from the app switcher and flick it away),
+          then reopen — or tap below to reload now.
+        </div>
+        <button class="wpw-btn" @click="reloadNow">🔁 Reload GolfWizard</button>
+      </div>
+
       <!-- ── Step 1: Course & Date ───────────────────────────── -->
       <div v-if="step === 1" class="wizard-step">
 
@@ -960,6 +973,32 @@ const stepTitle = computed(() => {
 const creating = ref(false)
 const creationError = ref(null) // { message, log, copied }
 
+// Pre-flight connectivity state — null = checking, true = good, false = stuck
+const preflightOk = ref(null)
+let _preflightDone = false
+async function runPreflight() {
+  if (_preflightDone) return
+  _preflightDone = true
+  try {
+    const { supaPreflightOk } = await import('../modules/supaRaw')
+    preflightOk.value = await supaPreflightOk(3500)
+  } catch {
+    preflightOk.value = false
+  }
+}
+runPreflight()
+
+function reloadNow() {
+  try { localStorage.removeItem('gw_create_log') } catch {}
+  try {
+    const u = new URL(window.location.href)
+    u.searchParams.set('_reload', Date.now().toString())
+    window.location.replace(u.toString())
+  } catch {
+    window.location.reload()
+  }
+}
+
 function buildDiagnosticPayload(errorMessage) {
   const log = []
   try {
@@ -1810,6 +1849,29 @@ function reloadApp() {
   border-radius: 12px;
   background: rgba(59,130,246,.1);
   border: 1px solid rgba(59,130,246,.4);
+}
+
+/* Wizard pre-flight warning (stuck connection detected on open) */
+.wiz-preflight-warn {
+  margin: 10px 14px 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(239,68,68,.1);
+  border: 1px solid rgba(239,68,68,.45);
+}
+.wpw-title {
+  font-size: 13px; font-weight: 800; color: #fca5a5; margin-bottom: 6px;
+}
+.wpw-body {
+  font-size: 12px; line-height: 1.45; color: rgba(240,237,224,.8); margin-bottom: 10px;
+}
+.wpw-body strong { color: #fecaca; }
+.wpw-btn {
+  width: 100%; padding: 10px 14px; border-radius: 10px;
+  background: linear-gradient(135deg, #60a5fa, #3b82f6);
+  color: #0c1836; font-weight: 800; border: none; cursor: pointer;
+  font-family: inherit; font-size: 13px;
+  -webkit-tap-highlight-color: transparent;
 }
 .gw-error-reload-title {
   font-size: 13px;

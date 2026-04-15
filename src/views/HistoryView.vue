@@ -153,11 +153,14 @@
 
               <!-- Round actions -->
               <div class="round-actions">
+                <button class="round-action-btn round-action-view" @click.stop="viewScorecard(round)">
+                  👁 View Scorecard
+                </button>
                 <button class="round-action-btn round-action-edit" @click.stop="reopenRound(round)">
                   ✏️ Edit Scores
                 </button>
                 <button class="round-action-btn round-action-delete" @click.stop="confirmDelete(round)">
-                  🗑️ Delete Round
+                  🗑️ Delete
                 </button>
               </div>
 
@@ -278,6 +281,14 @@ async function doDelete() {
 
 function reopenRound(round) {
   // Set this round as active and navigate to scoring
+  roundsStore.setActiveRound(round)
+  router.push('/scoring')
+}
+
+function viewScorecard(round) {
+  // Same as reopening — the scoring view is already read-only for non-captains.
+  // The round's is_complete flag controls the "Finish Round" button visibility,
+  // so completed rounds will open in view mode.
   roundsStore.setActiveRound(round)
   router.push('/scoring')
 }
@@ -977,6 +988,7 @@ function _computeSettlementFromRound(round) {
 }
 .round-action-btn:active { background: rgba(255,255,255,.08); }
 .round-action-edit { border-color: rgba(96,165,250,.3); color: #60a5fa; }
+.round-action-view { border-color: rgba(147,197,253,.25); color: #93c5fd; }
 .round-action-delete { border-color: rgba(248,113,113,.3); color: #f87171; }
 
 /* Delete confirmation overlay */

@@ -149,6 +149,24 @@ export function supaRawSelect(table, query = 'select=*', timeoutMs = 8000) {
 }
 
 /**
+ * Pre-flight connectivity ping — fast check that Supabase is reachable
+ * AND the WKWebView HTTP/2 connection pool isn't stuck. Returns true/false
+ * so a caller can warn the user BEFORE they fill out a wizard they'd lose.
+ *
+ * Uses the same raw-fetch path as real writes, so if this returns true,
+ * writes will succeed; if false, writes are effectively guaranteed to fail.
+ */
+export async function supaPreflightOk(timeoutMs = 3500) {
+  try {
+    await supaRawSelect('rounds', 'select=id&limit=1', timeoutMs)
+    return true
+  } catch (e) {
+    _debugLog(`[preflight] FAILED: ${e.message}`)
+    return false
+  }
+}
+
+/**
  * How many times in the last minute has any Supabase call timed out completely?
  * Used to decide when to surface a "reload the app" prompt.
  */
