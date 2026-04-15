@@ -5,6 +5,7 @@ import { useAuthStore } from './auth'
 import { useCoursesStore } from './courses'
 import { computeAllSettlements } from '../modules/settlements'
 import { getCourse, COURSES as BUILTIN_COURSES } from '../modules/courses'
+import { supaRawInsert, supaRawSelect } from '../modules/supaRaw'
 
 /**
  * Build a deterministic, self-contained snapshot of a course at the moment
@@ -258,26 +259,12 @@ export const useRoundsStore = defineStore('rounds', () => {
       }
     }
 
-    // ── Connection warmup ──
-    // Stale HTTP/2 sockets from backgrounded PWA sessions can cause the first
-    // real insert to hang. Do a cheap "ping" query first to reset the fetch
-    // layer if needed. If this ping times out, we know the socket is dead
-    // and we retry — the second attempt almost always succeeds.
-    async function warmup() {
-      return await supaWithTimeout(
-        'warmup.ping',
-        supabase.from('rounds').select('id').eq('id', '00000000-0000-0000-0000-000000000000').limit(1),
-        4000
-      ).catch(() => null)
-    }
-    await warmup()
-
     let roomCode = null
     if (withRoomCode) {
       roomCode = await supaWithTimeout('generateRoomCode', generateRoomCode(), 4000).catch(() => null)
     }
 
-    // Build the insert body once so we can retry cleanly on timeout
+    // Build the insert body once so raw-fetch fallback can reuse it
     const roundBody = {
       name: name || courseName || 'Round',
       course_name: courseName,
@@ -290,29 +277,35 @@ export const useRoundsStore = defineStore('rounds', () => {
       owner_id: auth.user?.id ?? null,
     }
 
-    // Insert with one automatic retry on timeout. A timed-out call often leaves
-    // the row inserted server-side — we cover that by retrying the SELECT first.
+    // Try Supabase JS first, fall back to raw fetch() on timeout.
+    // The Supabase JS client's internal fetch reuses connections, so when
+    // WKWebView's HTTP/2 pool has a stuck socket EVERY SJS call times out.
+    // Raw fetch with cache:'no-store' + keepalive:false forces a fresh connection.
     let round, error
-    async function insertRound() {
-      return await supaWithTimeout(
+    try {
+      const res = await supaWithTimeout(
         'rounds.insert',
         supabase.from('rounds').insert(roundBody).select().single(),
         8000
       )
-    }
-    try {
-      ;({ data: round, error } = await insertRound())
+      round = res.data
+      error = res.error
     } catch (e) {
-      _debugLog(`[rounds] first insert failed, warming up + retrying…`)
-      // Give the network stack a moment to reset, then warm up and retry once
-      await new Promise(r => setTimeout(r, 500))
-      await warmup()
-      ;({ data: round, error } = await insertRound())
+      _debugLog(`[rounds] SJS insert timed out, trying raw fetch fallback…`)
+      try {
+        const rows = await supaRawInsert('rounds', roundBody, 12000)
+        round = Array.isArray(rows) ? rows[0] : rows
+        error = null
+      } catch (rawErr) {
+        _debugLog(`[rounds] raw insert also failed: ${rawErr.message}`)
+        throw new Error(
+          'Could not reach the server. iOS sometimes gets stuck on old connections — try force-quitting GolfWizard (swipe up from the app switcher) and reopening.'
+        )
+      }
     }
 
     if (error) {
       console.error('[rounds] Supabase insert error:', error)
-      // RLS / auth errors surface as 403 or specific codes
       if (error.code === '42501' || error.message?.includes('policy') || error.code === 'PGRST301') {
         throw new Error('Session expired — please sign in again and retry.')
       }
@@ -345,23 +338,23 @@ export const useRoundsStore = defineStore('rounds', () => {
         if (mErr) throw mErr
         insertedMembers = mData ?? []
       } catch (e) {
-        // If the insert succeeded server-side but the response stream stalled,
-        // re-fetch the members so we don't lose them.
-        console.warn('[rounds] members insert stream failed, re-fetching:', e.message)
+        _debugLog('[rounds] members SJS insert failed, trying raw fetch…')
         try {
-          const { data: mData2 } = await supaWithTimeout(
-            'round_members.refetch',
-            supabase.from('round_members').select('*').eq('round_id', round.id),
-            6000
-          )
-          insertedMembers = mData2 ?? []
-        } catch (e2) {
-          // Last resort: build fallback members client-side with synthetic IDs
-          console.warn('[rounds] members refetch also failed, using local fallback:', e2.message)
-          insertedMembers = memberRows.map((row, i) => ({
-            ...row,
-            id: `local_${round.id}_${i}`,
-          }))
+          const rows = await supaRawInsert('round_members', memberRows, 10000)
+          insertedMembers = Array.isArray(rows) ? rows : []
+        } catch (rawErr) {
+          // If insert truly can't land, try a raw SELECT in case the previous
+          // attempts actually wrote something before the stream stalled
+          try {
+            const rows = await supaRawSelect('round_members', `select=*&round_id=eq.${round.id}`, 8000)
+            insertedMembers = Array.isArray(rows) ? rows : []
+          } catch {
+            console.warn('[rounds] raw members fallback failed, using local fallback')
+            insertedMembers = memberRows.map((row, i) => ({
+              ...row,
+              id: `local_${round.id}_${i}`,
+            }))
+          }
         }
       }
     }
@@ -405,17 +398,18 @@ export const useRoundsStore = defineStore('rounds', () => {
         if (gErr) throw gErr
         insertedGames = gData ?? []
       } catch (e) {
-        console.warn('[rounds] games insert stream failed, re-fetching:', e.message)
+        _debugLog('[rounds] games SJS insert failed, trying raw fetch…')
         try {
-          const { data: gData2 } = await supaWithTimeout(
-            'game_configs.refetch',
-            supabase.from('game_configs').select('*').eq('round_id', round.id).order('sort_order'),
-            6000
-          )
-          insertedGames = gData2 ?? []
-        } catch (e2) {
-          console.warn('[rounds] games refetch failed, using local fallback:', e2.message)
-          insertedGames = gameRows.map((row, i) => ({ ...row, id: `local_g_${round.id}_${i}` }))
+          const rows = await supaRawInsert('game_configs', gameRows, 10000)
+          insertedGames = Array.isArray(rows) ? rows : []
+        } catch (rawErr) {
+          try {
+            const rows = await supaRawSelect('game_configs', `select=*&round_id=eq.${round.id}&order=sort_order`, 8000)
+            insertedGames = Array.isArray(rows) ? rows : []
+          } catch {
+            console.warn('[rounds] raw games fallback failed, using local fallback')
+            insertedGames = gameRows.map((row, i) => ({ ...row, id: `local_g_${round.id}_${i}` }))
+          }
         }
       }
     }

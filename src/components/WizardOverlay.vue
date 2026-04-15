@@ -801,6 +801,18 @@
           <pre id="gw-diag-text" class="gw-error-pre">{{ formatDiagnostic(creationError.info) }}</pre>
         </details>
 
+        <!-- If we've timed out multiple times recently, the iOS connection pool
+             is likely stuck. A full reload is the reliable way to recover. -->
+        <div v-if="creationError.recentTimeouts >= 2" class="gw-error-reload-card">
+          <div class="gw-error-reload-title">🔄 Stuck connection detected</div>
+          <div class="gw-error-reload-body">
+            iOS has gotten stuck on a dead network connection. Tap below to fully reload the app — this almost always fixes it.
+          </div>
+          <button class="gw-error-btn gw-error-btn--reload" @click="reloadApp">
+            Reload GolfWizard
+          </button>
+        </div>
+
         <div class="gw-error-actions">
           <button class="gw-error-btn gw-error-btn--copy" @click="copyDiagnostic">
             {{ creationError.copied ? '✓ Copied' : '📋 Copy diagnostic info' }}
@@ -1597,14 +1609,50 @@ async function create() {
     } else {
       console.error('[Wizard] createRound returned null/undefined')
       const msg = 'Round creation returned no data.'
-      creationError.value = { message: msg, info: buildDiagnosticPayload(msg), copied: false }
+      creationError.value = {
+        message: msg,
+        info: buildDiagnosticPayload(msg),
+        copied: false,
+        recentTimeouts: _countRecentTimeouts(),
+      }
     }
   } catch (e) {
     console.error('[Wizard] Round creation error:', e)
     const msg = e.message || 'Unknown error creating round'
-    creationError.value = { message: msg, info: buildDiagnosticPayload(msg), copied: false }
+    creationError.value = {
+      message: msg,
+      info: buildDiagnosticPayload(msg),
+      copied: false,
+      recentTimeouts: _countRecentTimeouts(),
+    }
   } finally {
     creating.value = false
+  }
+}
+
+// How many Supabase calls timed out in the last 60s?
+// When >=2, we show the "Reload GolfWizard" button — iOS is stuck.
+function _countRecentTimeouts() {
+  try {
+    const log = JSON.parse(localStorage.getItem('gw_create_log') || '[]')
+    const now = Date.now()
+    return log.filter(e => {
+      const age = now - new Date(e.t).getTime()
+      return age < 60_000 && /timed out after \d+ms/.test(e.msg || '')
+    }).length
+  } catch { return 0 }
+}
+
+function reloadApp() {
+  // Clear the create log so the new attempt starts fresh, then hard-reload
+  try { localStorage.removeItem('gw_create_log') } catch {}
+  // location.reload(true) is deprecated; replace() with cache-buster is reliable
+  try {
+    const u = new URL(window.location.href)
+    u.searchParams.set('_reload', Date.now().toString())
+    window.location.replace(u.toString())
+  } catch {
+    window.location.reload()
   }
 }
 </script>
@@ -1735,6 +1783,32 @@ async function create() {
   background: linear-gradient(135deg, #d4af37 0%, #b8961e 100%);
   color: #0c0f0d;
   border: none;
+}
+.gw-error-reload-card {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(59,130,246,.1);
+  border: 1px solid rgba(59,130,246,.4);
+}
+.gw-error-reload-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #93c5fd;
+  margin-bottom: 6px;
+}
+.gw-error-reload-body {
+  font-size: 12px;
+  color: rgba(240,237,224,.75);
+  line-height: 1.45;
+  margin-bottom: 10px;
+}
+.gw-error-btn--reload {
+  width: 100%;
+  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+  color: #0c1836;
+  border: none;
+  font-weight: 800;
 }
 .gw-error-hint {
   font-size: 11px;

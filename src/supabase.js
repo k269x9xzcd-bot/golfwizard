@@ -34,31 +34,13 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   }
 })()
 
-// ── Connection warmup on app resume ─────────────────────────────
-// iOS PWA (WKWebView) can hold dead HTTP/2 sockets across backgrounding.
-// Whenever the page becomes visible again, fire a cheap query to detect
-// and clear a stale connection before the user tries to do something real.
-if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-  const pingConnection = () => {
-    // Only ping if authenticated — no point otherwise
-    if (!supabase.auth.getSession) return
-    // Use a super-cheap query with a timeout so a stale socket fails fast
-    const ping = supabase.from('rounds').select('id').eq('id', '00000000-0000-0000-0000-000000000000').limit(1)
-    Promise.race([
-      ping,
-      new Promise((_, reject) => setTimeout(() => reject(new Error('ping timeout')), 3000)),
-    ]).catch(() => {
-      // Ignore — just the act of making the call will reset the fetch layer
-      console.log('[supabase] warmup ping reset stale connection')
-    })
-  }
-
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') pingConnection()
-  })
-  // Also ping on initial load after a short delay (lets auth init first)
-  setTimeout(pingConnection, 2000)
-}
+// Note: previous versions of this file fired a "warmup ping" on initial
+// load + on visibilitychange to try to clear stale WKWebView sockets.
+// That approach BACKFIRED on iOS 18.7 — the ping itself got stuck on the
+// same zombie connection pool, leaving the app worse off (see
+// gw_create_log traces: multiple consecutive timeouts on every call).
+// We now fight stale sockets by using a raw fetch() with cache:'no-store'
+// + keepalive:false for critical writes — see src/modules/supaRaw.js.
 
 /**
  * Generate a 6-char room code via Supabase function
