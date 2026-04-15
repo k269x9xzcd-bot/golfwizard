@@ -33,12 +33,18 @@ const ENGINE_MAP = {
 
 /**
  * Extract per-player net amounts from a game result.
- * Returns array of { id, name, net } where net>0 means player won that much.
+ * Returns array of { id, name, net } where net > 0 means player won that much.
+ *
+ * IMPORTANT: type-specific handlers run BEFORE any generic `result.settlements`
+ * fallback, so a game whose engine happens to expose a settlement-shaped field
+ * but needs special fan-out (e.g. Match's p1Net only covers p1 and needs to be
+ * mirrored to p2) can't be short-circuited.
  */
 function extractPlayerNets(type, result, config, members) {
   const t = type.toLowerCase()
+  if (!result) return []
 
-  // Fidget: settlements are { from, fromName, to, toName, amount } — convert to per-player net
+  // ── Fidget: per-from/to amount list, converted to per-player net ──
   if (t === 'fidget' && result.settlements && Array.isArray(result.settlements)) {
     const netMap = {}
     for (const m of members) netMap[m.id] = 0
@@ -49,26 +55,48 @@ function extractPlayerNets(type, result, config, members) {
     return members.map(m => ({ id: m.id, name: m.short_name, net: netMap[m.id] || 0 }))
   }
 
-  // Games that return a settlements array: [{ id, name, net }]
-  if (result.settlements && Array.isArray(result.settlements)) {
-    return result.settlements
+  // ── Match / 1v1 — engine returns settlement.p1Net (signed) ──
+  // p1Net > 0  → player1 wins that much from player2
+  // p1Net < 0  → player1 loses that much to player2
+  // p1Net === 0 → halved / no money moves
+  if (t === 'match' || t === 'match1v1') {
+    const m1 = members.find(m => m.id === config.player1)
+    const m2 = members.find(m => m.id === config.player2)
+    if (!m1 || !m2) return []
+    const p1Net = result?.settlement?.p1Net ?? result?.payout ?? 0
+    if (!p1Net) return []
+    return [
+      { id: m1.id, name: m1.short_name, net: p1Net },
+      { id: m2.id, name: m2.short_name, net: -p1Net },
+    ]
   }
 
-  // Nassau: team bet — s.total is what T1 wins from T2 (or loses if negative).
-  // Each winning-team player wins s.total; each losing-team player pays s.total.
-  // (It's not split — in a 2v2 Nassau each loser pays the full stake to each winner)
+  // ── Best Ball match play — settlement.t1Net is signed team-1 total ──
+  // ppt is the closeout stake; each opposing player owes (loses) that amount.
+  if (t === 'bestball' || t === 'best_ball') {
+    const t1Ids = config.team1 || []
+    const t2Ids = config.team2 || []
+    const t1Net = result?.settlement?.t1Net ?? 0
+    if (!t1Net || (!t1Ids.length && !t2Ids.length)) return []
+    const nets = []
+    for (const id of t1Ids) {
+      const m = members.find(m => m.id === id)
+      nets.push({ id, name: m?.short_name || '?', net: t1Net })
+    }
+    for (const id of t2Ids) {
+      const m = members.find(m => m.id === id)
+      nets.push({ id, name: m?.short_name || '?', net: -t1Net })
+    }
+    return nets
+  }
+
+  // ── Nassau — s.total is the team1 signed total across front/back/overall/presses ──
   if (t === 'nassau' && result.settlement) {
     const s = result.settlement
     if (s.total === 0) return []
     const t1Ids = config.team1 || []
     const t2Ids = config.team2 || []
     const nets = []
-    // Each T1 player wins s.total from each T2 player, so net per T1 = s.total * t2Size
-    // Each T2 player loses s.total to each T1 player, so net per T2 = -s.total * t1Size
-    // But conventionally for 2v2, the amount is per-pair: each loser pays each winner.
-    // s.total already = frontWins + pressWins + backWins + pressWins + overallWins
-    // and those are scaled by the stake values already.
-    // So each T1 player nets: +s.total and each T2 player nets: -s.total
     for (const id of t1Ids) {
       const m = members.find(m => m.id === id)
       nets.push({ id, name: m?.short_name || '?', net: s.total })
@@ -80,18 +108,7 @@ function extractPlayerNets(type, result, config, members) {
     return nets
   }
 
-  // Match: status-based, player1 vs player2
-  if ((t === 'match' || t === 'match1v1') && result.payout != null) {
-    const m1 = members.find(m => m.id === config.player1)
-    const m2 = members.find(m => m.id === config.player2)
-    if (!m1 || !m2) return []
-    return [
-      { id: m1.id, name: m1.short_name, net: result.payout },
-      { id: m2.id, name: m2.short_name, net: -result.payout },
-    ]
-  }
-
-  // Vegas: team-based, runningTotal > 0 means t1 wins
+  // ── Vegas — team-based, runningTotal > 0 means t1 wins ──
   if (t === 'vegas' && result.runningTotal != null) {
     const total = result.runningTotal
     if (total === 0) return []
@@ -110,7 +127,7 @@ function extractPlayerNets(type, result, config, members) {
     return nets
   }
 
-  // Hi-Low: team-based
+  // ── Hi-Low — team-based points * ppt ──
   if (t === 'hilow') {
     const t1Pts = result.team1Pts || 0
     const t2Pts = result.team2Pts || 0
@@ -132,7 +149,7 @@ function extractPlayerNets(type, result, config, members) {
     return nets
   }
 
-  // Hammer: team-based
+  // ── Hammer — team-based ──
   if (t === 'hammer') {
     const total = (result.team1Total || 0) - (result.team2Total || 0)
     if (total === 0) return []
@@ -151,17 +168,7 @@ function extractPlayerNets(type, result, config, members) {
     return nets
   }
 
-  // Standings-based games: wolf, stableford, sixes, fiveThreeOne, dots
-  if (result.standings && Array.isArray(result.standings)) {
-    // These typically have { id, name, balance/pts/dots }
-    return result.standings.map(s => ({
-      id: s.id,
-      name: s.name,
-      net: s.balance ?? s.net ?? s.winnings ?? 0,
-    }))
-  }
-
-  // Snake: holder pays everyone
+  // ── Snake — holder pays everyone else ──
   if (t === 'snake' && result.holder) {
     const ppt = config.ppt || 5
     const count = result.snakeCount || 0
@@ -174,6 +181,24 @@ function extractPlayerNets(type, result, config, members) {
       nets.push({ id: m.id, name: m.short_name, net: perOther })
     }
     return nets
+  }
+
+  // ── Standings-based games: wolf, stableford, sixes, fiveThreeOne ──
+  if (result.standings && Array.isArray(result.standings)) {
+    return result.standings.map(s => ({
+      id: s.id,
+      name: s.name,
+      net: s.balance ?? s.net ?? s.winnings ?? 0,
+    }))
+  }
+
+  // ── Fallback: any game that already emits settlements in {id, name, net} shape ──
+  // (Skins, Dots — see their engine return shapes.) Runs LAST so type-specific
+  // handlers above always win.
+  if (result.settlements && Array.isArray(result.settlements)) {
+    return result.settlements
+      .filter(s => s && s.id)
+      .map(s => ({ id: s.id, name: s.name, net: s.net ?? 0 }))
   }
 
   return []
