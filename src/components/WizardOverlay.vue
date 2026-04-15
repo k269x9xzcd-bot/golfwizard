@@ -8,16 +8,26 @@
       </div>
 
       <!-- Pre-flight connectivity warning — shown ONLY when we've confirmed
-           the connection pool is stuck. Prevents the user from filling out
-           the wizard and losing work when creation will fail. -->
+           the connection pool is stuck. The ONLY real fix is force-quitting
+           the app. JS-based reload cannot restart the WKWebView connection pool.
+           Show clear step-by-step instructions instead. -->
       <div v-if="preflightOk === false" class="wiz-preflight-warn">
         <div class="wpw-title">⚠️ iOS connection is stuck</div>
         <div class="wpw-body">
-          Your phone is holding onto a dead network connection and creation will fail.
-          <strong>Force-quit GolfWizard</strong> (swipe up from the app switcher and flick it away),
-          then reopen — or tap below to reload now.
+          Round creation <strong>will fail</strong> until you fix this. Takes 5 seconds:
         </div>
-        <button class="wpw-btn" @click="reloadNow">🔁 Reload GolfWizard</button>
+        <ol class="wpw-steps">
+          <li><strong>Swipe up</strong> from the bottom of your screen to open the app switcher</li>
+          <li><strong>Find GolfWizard</strong> and swipe it UP off the screen to force-quit it</li>
+          <li><strong>Reopen GolfWizard</strong> — the connection resets on launch</li>
+        </ol>
+        <div v-if="preflightRetrying" class="wpw-checking">⟳ Checking connection…</div>
+        <button v-else class="wpw-btn wpw-btn--recheck" @click="recheckPreflight">
+          ✓ I did it — check again
+        </button>
+        <div class="wpw-note">
+          (The "Reload" approach doesn't work on iOS — only a full force-quit clears the stuck socket.)
+        </div>
       </div>
 
       <!-- ── Step 1: Course & Date ───────────────────────────── -->
@@ -975,7 +985,9 @@ const creationError = ref(null) // { message, log, copied }
 
 // Pre-flight connectivity state — null = checking, true = good, false = stuck
 const preflightOk = ref(null)
+const preflightRetrying = ref(false)
 let _preflightDone = false
+
 async function runPreflight() {
   if (_preflightDone) return
   _preflightDone = true
@@ -988,7 +1000,26 @@ async function runPreflight() {
 }
 runPreflight()
 
+// Re-run preflight after the user says they've force-quit.
+// If it passes now → dismiss the warning. If still stuck → keep showing it.
+async function recheckPreflight() {
+  _preflightDone = false
+  preflightRetrying.value = true
+  preflightOk.value = null
+  try {
+    const { supaPreflightOk } = await import('../modules/supaRaw')
+    preflightOk.value = await supaPreflightOk(4000)
+  } catch {
+    preflightOk.value = false
+  }
+  preflightRetrying.value = false
+  // If still failed, give a short bounce so the user knows the button worked
+}
+
 function reloadNow() {
+  // Note: on iOS PWA, window.location.reload() / replace() does NOT restart
+  // WKWebView's connection pool — only a force-quit does. Kept here as last
+  // resort but the UI now emphasizes force-quit instead.
   try { localStorage.removeItem('gw_create_log') } catch {}
   try {
     const u = new URL(window.location.href)
@@ -1854,24 +1885,65 @@ function reloadApp() {
 /* Wizard pre-flight warning (stuck connection detected on open) */
 .wiz-preflight-warn {
   margin: 10px 14px 0;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: rgba(239,68,68,.1);
-  border: 1px solid rgba(239,68,68,.45);
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(239,68,68,.12);
+  border: 2px solid rgba(239,68,68,.5);
 }
 .wpw-title {
-  font-size: 13px; font-weight: 800; color: #fca5a5; margin-bottom: 6px;
+  font-size: 15px; font-weight: 900; color: #f87171; margin-bottom: 8px;
+  display: flex; align-items: center; gap: 6px;
 }
 .wpw-body {
-  font-size: 12px; line-height: 1.45; color: rgba(240,237,224,.8); margin-bottom: 10px;
+  font-size: 13px; line-height: 1.5; color: rgba(240,237,224,.85); margin-bottom: 10px;
 }
 .wpw-body strong { color: #fecaca; }
+
+.wpw-steps {
+  margin: 0 0 14px 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.wpw-steps li {
+  font-size: 14px;
+  line-height: 1.45;
+  color: rgba(240,237,224,.9);
+}
+.wpw-steps li strong { color: #fff; font-weight: 800; }
+
 .wpw-btn {
-  width: 100%; padding: 10px 14px; border-radius: 10px;
-  background: linear-gradient(135deg, #60a5fa, #3b82f6);
-  color: #0c1836; font-weight: 800; border: none; cursor: pointer;
-  font-family: inherit; font-size: 13px;
+  width: 100%; padding: 13px 14px; border-radius: 12px;
+  font-weight: 800; border: none; cursor: pointer;
+  font-family: inherit; font-size: 14px;
   -webkit-tap-highlight-color: transparent;
+  letter-spacing: .2px;
+}
+.wpw-btn--recheck {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: #052e16;
+}
+.wpw-btn--recheck:active { transform: scale(.98); }
+
+.wpw-checking {
+  text-align: center;
+  padding: 12px;
+  font-size: 14px;
+  color: rgba(240,237,224,.7);
+  font-weight: 600;
+  animation: wpw-spin 1s linear infinite;
+}
+@keyframes wpw-spin {
+  0% { opacity: .4; } 50% { opacity: 1; } 100% { opacity: .4; }
+}
+
+.wpw-note {
+  margin-top: 10px;
+  font-size: 10px;
+  color: rgba(240,237,224,.35);
+  line-height: 1.4;
+  text-align: center;
 }
 .gw-error-reload-title {
   font-size: 13px;
