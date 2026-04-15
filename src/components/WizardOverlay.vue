@@ -789,6 +789,29 @@
         </button>
       </div>
     </div>
+
+    <!-- Creation error overlay with copy-to-diagnose -->
+    <div v-if="creationError" class="gw-error-backdrop" @click.self="creationError = null">
+      <div class="gw-error-card">
+        <div class="gw-error-title">⚠️ Couldn't create round</div>
+        <div class="gw-error-msg">{{ creationError.message }}</div>
+
+        <details class="gw-error-details">
+          <summary>Diagnostic info</summary>
+          <pre id="gw-diag-text" class="gw-error-pre">{{ formatDiagnostic(creationError.info) }}</pre>
+        </details>
+
+        <div class="gw-error-actions">
+          <button class="gw-error-btn gw-error-btn--copy" @click="copyDiagnostic">
+            {{ creationError.copied ? '✓ Copied' : '📋 Copy diagnostic info' }}
+          </button>
+          <button class="gw-error-btn" @click="creationError = null">Close</button>
+        </div>
+        <div class="gw-error-hint">
+          Paste the diagnostic into chat and I can pinpoint the exact failure.
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -903,6 +926,60 @@ const stepTitle = computed(() => {
   return { 1: 'Where are you playing?', 2: "Who's playing?", 3: 'Set up games' }[step.value] || ''
 })
 const creating = ref(false)
+const creationError = ref(null) // { message, log, copied }
+
+function buildDiagnosticPayload(errorMessage) {
+  const log = []
+  try {
+    const raw = localStorage.getItem('gw_create_log') || '[]'
+    log.push(...JSON.parse(raw))
+  } catch {}
+  const ua = navigator.userAgent
+  const isStandalone = window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone
+  const info = {
+    when: new Date().toISOString(),
+    error: errorMessage,
+    app: __APP_VERSION__,
+    online: navigator.onLine,
+    pwa: !!isStandalone,
+    ua,
+    log: log.slice(-40),
+  }
+  return info
+}
+
+function formatDiagnostic(info) {
+  return [
+    `GolfWizard creation failure — ${info.when}`,
+    `Error: ${info.error}`,
+    `App version: ${info.app}`,
+    `Online: ${info.online}  PWA: ${info.pwa}`,
+    `UA: ${info.ua}`,
+    '',
+    'Recent trace:',
+    ...info.log.map(l => `  ${l.t}  ${l.msg}`),
+  ].join('\n')
+}
+
+async function copyDiagnostic() {
+  if (!creationError.value) return
+  const text = formatDiagnostic(creationError.value.info)
+  try {
+    await navigator.clipboard.writeText(text)
+    creationError.value.copied = true
+    setTimeout(() => { if (creationError.value) creationError.value.copied = false }, 2000)
+  } catch {
+    // Fallback: select the <pre> so user can long-press to copy manually
+    const el = document.getElementById('gw-diag-text')
+    if (el) {
+      const range = document.createRange()
+      range.selectNodeContents(el)
+      const sel = window.getSelection()
+      sel.removeAllRanges()
+      sel.addRange(range)
+    }
+  }
+}
 
 // ── Main game ────────────────────────────────────────────────────
 const MAIN_GAMES = [
@@ -1462,11 +1539,23 @@ function buildGameConfigs() {
 }
 
 // ── Create round ─────────────────────────────────────────────────
+function _wizLog(msg) {
+  try {
+    const log = JSON.parse(localStorage.getItem('gw_create_log') || '[]')
+    log.push({ t: new Date().toISOString(), msg: `[wiz] ${msg}` })
+    localStorage.setItem('gw_create_log', JSON.stringify(log.slice(-100)))
+  } catch {}
+}
+
 async function create() {
   if (creating.value) return
   creating.value = true
+  // Reset log at the start of each attempt so the trace is self-contained
+  try { localStorage.setItem('gw_create_log', '[]') } catch {}
+  _wizLog(`create() start — app v${__APP_VERSION__}`)
   try {
     const games = buildGameConfigs()
+    _wizLog(`built ${games.length} game configs`)
     const players = form.value.players.map(p => {
       const team1 = mainGame.value.config?.team1 || []
       const team2 = mainGame.value.config?.team2 || []
@@ -1507,11 +1596,13 @@ async function create() {
       emit('created', round)
     } else {
       console.error('[Wizard] createRound returned null/undefined')
-      alert('Failed to create round — no data returned. Please try again.')
+      const msg = 'Round creation returned no data.'
+      creationError.value = { message: msg, info: buildDiagnosticPayload(msg), copied: false }
     }
   } catch (e) {
     console.error('[Wizard] Round creation error:', e)
-    alert('Error: ' + (e.message || 'Unknown error creating round'))
+    const msg = e.message || 'Unknown error creating round'
+    creationError.value = { message: msg, info: buildDiagnosticPayload(msg), copied: false }
   } finally {
     creating.value = false
   }
@@ -1565,4 +1656,90 @@ async function create() {
 }
 .wolf-toggle.on { background: rgba(212,175,55,.5); }
 .wolf-toggle.on::after { left: 14px; }
+
+/* ── Creation error overlay with diagnostic copy ─────────── */
+.gw-error-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.7);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+  z-index: 10000;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.gw-error-card {
+  width: 100%; max-width: 440px;
+  background: var(--gw-neutral-800, #1e2720);
+  border: 1px solid rgba(239,68,68,.3);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.4);
+  animation: card-in 200ms ease-out;
+}
+.gw-error-title {
+  font-family: var(--gw-font-display, serif);
+  font-size: 20px; font-weight: 700;
+  color: #f87171;
+  margin-bottom: 8px;
+}
+.gw-error-msg {
+  color: var(--gw-text, #f0ede0);
+  font-size: 14px; line-height: 1.4;
+  margin-bottom: 14px;
+}
+.gw-error-details {
+  margin-bottom: 14px;
+}
+.gw-error-details summary {
+  cursor: pointer;
+  font-size: 12px; font-weight: 600;
+  color: var(--gw-text-muted, #a3b8aa);
+  padding: 6px 0;
+  user-select: none;
+}
+.gw-error-pre {
+  margin: 8px 0 0;
+  max-height: 200px;
+  overflow: auto;
+  background: rgba(0,0,0,.4);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: var(--gw-font-mono, monospace);
+  font-size: 10px;
+  color: rgba(240,237,224,.8);
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-all;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.gw-error-actions {
+  display: flex; gap: 8px;
+  margin-bottom: 10px;
+}
+.gw-error-btn {
+  flex: 1;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 14px; font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.06);
+  color: var(--gw-text, #f0ede0);
+  -webkit-tap-highlight-color: transparent;
+}
+.gw-error-btn:active { transform: scale(.97); }
+.gw-error-btn--copy {
+  background: linear-gradient(135deg, #d4af37 0%, #b8961e 100%);
+  color: #0c0f0d;
+  border: none;
+}
+.gw-error-hint {
+  font-size: 11px;
+  color: rgba(240,237,224,.4);
+  text-align: center;
+  line-height: 1.4;
+}
 </style>

@@ -21,17 +21,12 @@
         </div>
         <div class="header-right-actions">
           <router-link to="/library" class="btn-rules-sm">📖</router-link>
-          <button class="btn-round-menu" @click="showRoundMenu = !showRoundMenu">⚙️</button>
+          <button class="btn-round-menu" @click.stop="showRoundMenu = !showRoundMenu">⚙️</button>
         </div>
-        <div v-if="showRoundMenu" class="round-menu-dropdown">
+        <div v-if="showRoundMenu" class="round-menu-backdrop" @click="showRoundMenu = false"></div>
+        <div v-if="showRoundMenu" class="round-menu-dropdown" @click.stop>
           <button class="round-menu-item" @click="showRoundMenu = false; showGameEditor = true">
             🎲 Edit Games & Stakes
-          </button>
-          <button class="round-menu-item" @click="showNotations = !showNotations">
-            {{ showNotations ? '◉ Notations On' : '◎ Notations Off' }}
-          </button>
-          <button class="round-menu-item" @click="showFullHcp = !showFullHcp">
-            {{ showFullHcp ? '● Full HCP' : '○ Low-Man HCP' }}
           </button>
           <button class="round-menu-item" @click="showRoundMenu = false; finishRound()" v-if="!roundsStore.activeRound?.is_complete">
             ✅ Finish Round
@@ -117,6 +112,28 @@
             >{{ h }}</button>
           </div>
         </div>
+      </div>
+
+      <!-- ── Display toggles (notation + hcp mode) ─────────── -->
+      <div class="display-toggles">
+        <button
+          class="dt-chip"
+          :class="{ 'dt-chip--on': showNotations }"
+          @click="showNotations = !showNotations"
+          :title="showNotations ? 'Hide score notations' : 'Show score notations'"
+        >
+          <span class="dt-dot" :class="{ 'dt-dot--on': showNotations }"></span>
+          Notations
+        </button>
+        <button
+          class="dt-chip"
+          :class="{ 'dt-chip--on': !showFullHcp }"
+          @click="showFullHcp = !showFullHcp"
+          :title="showFullHcp ? 'Full handicap' : 'Low-man handicap (strokes relative to lowest index)'"
+        >
+          <span class="dt-dot" :class="{ 'dt-dot--on': !showFullHcp }"></span>
+          {{ showFullHcp ? 'Full HCP' : 'Low-Man HCP' }}
+        </button>
       </div>
 
       <!-- ═══════════════════════════════════════════════════════════
@@ -1182,6 +1199,27 @@ function gameSummaryHtml(game) {
   const icon = gameIcon(game.type)
   const t = game.type?.toLowerCase()
 
+  // Shared compact game-line renderer.
+  // Title row: <icon> <GameType> — ⭐ <winner> +<value>
+  // Detail row: <detail text>
+  // value: { pts: number|null, dollars: number|null }   — both can be present
+  function _gameLine({ gameName, winner, value, detail }) {
+    const valStr = (() => {
+      if (!value) return ''
+      const parts = []
+      if (value.pts != null) parts.push(`+${value.pts} pt${value.pts === 1 ? '' : 's'}`)
+      if (value.dollars != null) parts.push(`+$${value.dollars}`)
+      return parts.join(' · ')
+    })()
+    const titleRight = winner
+      ? `<span class="gs-winner"><span class="gs-star">⭐️</span> <span class="gs-winner-name">${winner}</span><span class="gs-value">${valStr ? '&nbsp;' + valStr : ''}</span></span>`
+      : (valStr ? `<span class="gs-value gs-value-muted">${valStr}</span>` : '')
+    const titleLeft = `<span class="gs-game-title">${icon} ${gameName}</span>`
+    const titleRow = `<div class="gs-title-row">${titleLeft}${titleRight ? '<span class="gs-dash">·</span>' + titleRight : ''}</div>`
+    const detailRow = detail ? `<div class="gs-detail-row">${detail}</div>` : ''
+    return `<div class="gs-line">${titleRow}${detailRow}</div>`
+  }
+
   try {
     // ── Nassau ──
     if (t === 'nassau') {
@@ -1293,52 +1331,44 @@ function gameSummaryHtml(game) {
     // Engine returns: { holeResults, finalUp, result, matchOver, p1, p2, settlement }
     if (t === 'match' || t === 'match1v1') {
       const r = computeMatch(ctx, cfg)
-      if (!r) return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Match</span><span class="muted" style="font-size:11px">—</span></div>`
+      if (!r) return _gameLine({ gameName: 'Match', winner: null, value: null, detail: 'Waiting for scores' })
 
       const p1n = r.p1?.name || '?'
       const p2n = r.p2?.name || '?'
       const up = r.finalUp
-      const ppt = r.settlement?.ppt || cfg.ppt || 5
+      const ppt = r.settlement?.ppt || cfg.ppt || 0
       const scoring = r.settlement?.scoring || cfg.scoring || 'closeout'
       const p1Net = r.settlement?.p1Net || 0
       const isTournament = !!cfg.tournament
-      const points = cfg.points || 1 // tournament: 1v1 worth 1 pt
-
-      let statusStr = r.result
-      let dollarLine = ''
+      const points = cfg.points || 1
       const played = (r.holeResults || []).filter(h => !h.incomplete).length
 
-      // Build status
-      if (r.matchOver) {
-        const winner = up > 0 ? p1n : p2n
-        statusStr = `${winner} wins ${r.result}`
-      } else if (played === 0) {
-        statusStr = 'No scores yet'
+      let winner = null, value = null, detail
+      if (played === 0) {
+        detail = `${p1n} vs ${p2n} — waiting for scores`
+      } else if (r.matchOver) {
+        winner = up > 0 ? p1n : p2n
+        const loser = up > 0 ? p2n : p1n
+        detail = `${winner} (${r.result}) vs ${loser}`
+        value = {
+          pts: isTournament ? points : null,
+          dollars: p1Net !== 0 ? Math.abs(p1Net) : (ppt > 0 ? ppt : null),
+        }
       } else if (up === 0) {
-        statusStr = `AS · thru ${played}`
+        detail = `${p1n} vs ${p2n} — AS thru ${played}`
+        if (isTournament) value = { pts: points / 2, dollars: null }
       } else {
-        const leader = up > 0 ? p1n : p2n
-        statusStr = `${leader} ${Math.abs(up)} UP · thru ${played}`
-      }
-
-      // Build payout line
-      if (isTournament) {
-        if (r.matchOver || (played > 0 && up !== 0)) {
-          const winner = up > 0 ? p1n : p2n
-          dollarLine = ` · <span style="color:#4ade80;font-weight:700">${winner} +${points}pt</span>`
-        } else if (played > 0 && up === 0) {
-          dollarLine = ` · <span style="color:#9ca3af">halved → ${points/2}pt each</span>`
-        }
-      } else {
-        // Regular game: show $ per scoring mode
-        if (p1Net !== 0) {
-          const winner = p1Net > 0 ? p1n : p2n
-          dollarLine = ` · <span style="color:#4ade80;font-weight:700">${winner} wins $${Math.abs(p1Net)}</span>`
+        winner = up > 0 ? p1n : p2n
+        const loser = up > 0 ? p2n : p1n
+        detail = `${winner} (${Math.abs(up)} UP thru ${played}) vs ${loser}`
+        value = {
+          pts: isTournament ? points : null,
+          dollars: p1Net !== 0 ? Math.abs(p1Net) : (ppt > 0 ? ppt : null),
         }
       }
 
-      const scoringBadge = scoring === 'nassau' ? ' · Nassau' : scoring === 'skins' ? ' · Skins' : ''
-      return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Match</span><span class="muted" style="font-size:10px;margin-left:4px">${p1n} vs ${p2n}${scoringBadge}${dollarLine}</span><br><span class="muted" style="font-size:11px">${statusStr}</span></div>`
+      const scoringBadge = scoring === 'nassau' ? ' Nassau' : scoring === 'skins' ? ' Skins' : ''
+      return _gameLine({ gameName: `Match${scoringBadge}`, winner, value, detail })
     }
 
     // ── Vegas ──
@@ -1502,7 +1532,7 @@ function gameSummaryHtml(game) {
     // ── Best Ball — Match Play (2v2, holes won) ──
     if (t === 'best_ball' || t === 'bestball') {
       const r = computeBestBall(ctx, cfg)
-      if (!r) return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Best Ball</span><span class="muted" style="font-size:11px">—</span></div>`
+      if (!r) return _gameLine({ gameName: 'Best Ball', winner: null, value: null, detail: 'Waiting for scores' })
 
       const t1n = r.t1Name || 'Team 1'
       const t2n = r.t2Name || 'Team 2'
@@ -1510,32 +1540,40 @@ function gameSummaryHtml(game) {
       const played = (r.holeResults || []).filter(h => !h.incomplete).length
       const remaining = (r.holeResults || []).filter(h => h.incomplete).length
       const matchOver = Math.abs(finalUp) > remaining && played > 0
-      const ppt = r.settlement?.ppt || cfg.ppt || 5
-      const points = cfg.points || 2 // tournament: BB worth 2 pts
+      const ppt = r.settlement?.ppt || cfg.ppt || 0
+      const isTournament = !!cfg.tournament
+      const points = cfg.points || 2
 
-      // Match play status
-      let statusStr
+      // Value on title line
+      let winner = null, value = null
+      let detail = `${t1n} vs ${t2n}`
       if (played === 0) {
-        statusStr = 'No scores yet'
+        detail = `${t1n} vs ${t2n} — waiting for scores`
       } else if (matchOver) {
-        statusStr = `${finalUp > 0 ? t1n : t2n} wins ${Math.abs(finalUp)}&${remaining}`
+        winner = finalUp > 0 ? t1n : t2n
+        const loser = finalUp > 0 ? t2n : t1n
+        const resultStr = `${Math.abs(finalUp)}&${remaining}`
+        detail = `${winner} (${resultStr}) vs ${loser}`
+        value = {
+          pts: isTournament ? points : null,
+          dollars: ppt > 0 ? ppt : null,
+        }
       } else if (finalUp === 0) {
-        statusStr = `AS · thru ${played}`
+        detail = `${t1n} vs ${t2n} — AS thru ${played}`
+        // Halved value preview
+        if (isTournament) value = { pts: points / 2, dollars: null }
       } else {
-        statusStr = `${finalUp > 0 ? t1n : t2n} ${Math.abs(finalUp)} UP · thru ${played}`
+        winner = finalUp > 0 ? t1n : t2n
+        const loser = finalUp > 0 ? t2n : t1n
+        const upStr = Math.abs(finalUp)
+        detail = `${winner} (${upStr} UP thru ${played}) vs ${loser}`
+        value = {
+          pts: isTournament ? points : null,
+          dollars: ppt > 0 ? ppt : null,
+        }
       }
 
-      let dollarLine = ''
-      if (matchOver || (played > 0 && finalUp !== 0)) {
-        const winnerName = finalUp > 0 ? t1n : t2n
-        // Closeout: full ppt if a winner exists, otherwise split
-        const payout = cfg.closeoutMode === 'halved-splits' ? ppt : ppt
-        dollarLine = ` · <span style="color:#4ade80;font-weight:700">${winnerName} ${cfg.tournament ? `+${points}pts` : `+$${payout}`}</span>`
-      } else if (played > 0 && finalUp === 0 && cfg.tournament) {
-        dollarLine = ` · <span style="color:#9ca3af">halved = ${points/2}pts each</span>`
-      }
-
-      return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Best Ball</span><span class="muted" style="font-size:10px;margin-left:4px">${t1n} vs ${t2n}${dollarLine}</span><br><span class="muted" style="font-size:11px">${statusStr}</span></div>`
+      return _gameLine({ gameName: 'Best Ball', winner, value, detail })
     }
 
     // ── BBN — Best Ball stroke-play tracker ──
@@ -1914,6 +1952,54 @@ function formatDate(dateStr) {
 }
 .hole-strip::-webkit-scrollbar { display: none; }
 
+/* Display toggles (notations / hcp mode) */
+.display-toggles {
+  display: flex;
+  gap: 8px;
+  padding: 4px 12px 6px;
+  flex-shrink: 0;
+}
+.dt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.08);
+  color: rgba(240,237,224,.6);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: all .15s;
+}
+.dt-chip:active { transform: scale(.96); }
+.dt-chip--on {
+  background: rgba(212,175,55,.15);
+  border-color: rgba(212,175,55,.45);
+  color: var(--gw-gold, #d4af37);
+}
+.dt-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: rgba(255,255,255,.2);
+  transition: background .15s, box-shadow .15s;
+}
+.dt-dot--on {
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34,197,94,.2);
+}
+
+/* Round-menu backdrop for click-outside */
+.round-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: transparent;
+}
+.round-menu-dropdown { z-index: 41; }
+
 .hole-btn {
   flex-shrink: 0;
   min-width: 38px;
@@ -2001,12 +2087,68 @@ function formatDate(dateStr) {
   margin: 8px 12px;
 }
 .live-games-label {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 800;
   text-transform: uppercase;
   letter-spacing: .8px;
-  color: rgba(240,237,224,.45);
-  margin-bottom: 8px;
+  color: rgba(240,237,224,.55);
+  margin-bottom: 10px;
+}
+
+/* ── New compact game-summary line (matches user spec) ──
+   Title row: icon + game — ⭐ winner +pts +$
+   Detail row: winner (result) vs loser
+*/
+.gs-line {
+  padding: 10px 0;
+  border-top: 1px solid rgba(255,255,255,.06);
+}
+.gs-line:first-of-type { border-top: none; padding-top: 2px; }
+.gs-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  line-height: 1.3;
+}
+.gs-game-title {
+  font-weight: 800;
+  color: var(--gw-text, #f0ede0);
+}
+.gs-dash {
+  color: rgba(240,237,224,.35);
+  font-weight: 400;
+}
+.gs-winner {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 700;
+  color: #22c55e;
+}
+.gs-star {
+  font-size: 13px;
+  line-height: 1;
+}
+.gs-winner-name {
+  color: #22c55e;
+}
+.gs-value {
+  color: #22c55e;
+  font-weight: 800;
+  font-family: var(--gw-font-mono, monospace);
+  font-size: 13px;
+}
+.gs-value-muted {
+  color: rgba(240,237,224,.55);
+}
+.gs-detail-row {
+  font-size: 13px;
+  line-height: 1.4;
+  color: rgba(240,237,224,.72);
+  margin-top: 3px;
+  padding-left: 2px;
 }
 .live-game-row {
   display: flex;
@@ -2080,9 +2222,11 @@ function formatDate(dateStr) {
    are on the SAME element. Separating them fixes sticky player column. */
 .scorecard-outer {
   margin: 8px 12px;
-  border: 1px solid rgba(255,255,255,.08);
+  border: 1px solid rgba(0,0,0,.12);
   border-radius: 12px;
   overflow: hidden;
+  background: #faf7f0;
+  box-shadow: 0 4px 14px rgba(0,0,0,.35), 0 1px 3px rgba(0,0,0,.2);
 }
 
 .scorecard-scroll {
@@ -2098,126 +2242,155 @@ function formatDate(dateStr) {
   white-space: nowrap;
 }
 
+/* ═══════════════════════════════════════════════════════════
+   LIGHT-THEMED SCORECARD GRID
+   White paper-like surface, dark text, high contrast for sun.
+   ═══════════════════════════════════════════════════════════ */
 .scorecard-grid {
   border-collapse: collapse;
   border-spacing: 0;
-  font-size: 11px;
+  font-size: 12px;
   min-width: 100%;
   font-family: var(--gw-font-mono, 'DM Mono', monospace);
+  background: #faf7f0; /* warm paper white */
+  color: #1a1f1b;
 }
 
 .col-player-header {
-  padding: 6px 10px;
+  padding: 7px 10px;
   text-align: left;
-  background: #0c150e;
-  color: rgba(240,237,224,.45);
+  background: #f0ebdd;
+  color: #4a5249;
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: .5px;
+  letter-spacing: .6px;
   position: sticky;
   left: 0;
   z-index: 3;
+  border-right: 1px solid rgba(0,0,0,.1);
 }
 
 .col-hole-num {
-  padding: 5px 4px;
+  padding: 6px 4px;
   text-align: center;
   cursor: pointer;
-  min-width: 24px;
-  color: var(--gw-gold, #d4af37);
-  font-size: 10px;
-  font-weight: 700;
+  min-width: 26px;
+  color: #1a1f1b;
+  font-size: 12px;
+  font-weight: 800;
+  background: #f0ebdd;
+  border-bottom: 1px solid rgba(0,0,0,.08);
 }
-.col-hole-num:active { background: rgba(212,175,55,.1); }
+.col-hole-num:active { background: rgba(212,175,55,.15); }
 
 .col-subtotal {
   padding: 5px 6px;
   text-align: center;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
-  background: rgba(212,175,55,.06);
-  border-left: 1px solid rgba(212,175,55,.15);
-  color: var(--gw-text, #f0ede0);
+  background: rgba(212,175,55,.14);
+  border-left: 1px solid rgba(212,175,55,.35);
+  color: #1a1f1b;
 }
 .col-total {
   padding: 5px 8px;
   text-align: center;
-  font-size: 12px;
-  font-weight: 800;
-  color: var(--gw-text, #f0ede0);
+  font-size: 13px;
+  font-weight: 900;
+  color: #1a1f1b;
+  background: #f5efde;
 }
 .col-gross { }
-.col-net { color: rgba(240,237,224,.6); }
+.col-net { color: #4a5249; }
 
-.par-sub { color: rgba(240,237,224,.4); font-weight: 600; }
+.par-sub { color: #6b7368; font-weight: 700; }
 
 /* Header rows */
-.row-header { background: rgba(0,0,0,.3); }
+.row-header { background: #f0ebdd; }
 .row-par {
-  background: rgba(0,0,0,.2);
-  border-bottom: 1px solid rgba(255,255,255,.07);
+  background: #faf7f0;
+  border-bottom: 1px solid rgba(0,0,0,.08);
 }
 .col-par-label {
-  padding: 4px 10px;
-  font-size: 10px;
-  color: rgba(240,237,224,.35);
-  background: #0c150e;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #4a5249;
+  background: #f0ebdd;
   position: sticky;
   left: 0;
   z-index: 3;
+  border-right: 1px solid rgba(0,0,0,.1);
 }
 .col-par-val {
-  padding: 3px 4px;
+  padding: 4px 4px;
   text-align: center;
-  font-size: 10px;
-  color: rgba(240,237,224,.4);
+  font-size: 12px;
+  font-weight: 700;
+  color: #1a1f1b;
 }
 
-.row-si { background: rgba(0,0,0,.15); border-bottom: 1px solid rgba(255,255,255,.05); }
-.col-si-val { padding: 2px 4px; text-align: center; font-size: 9px; color: rgba(212,175,55,.4); }
-.row-yards { background: rgba(0,0,0,.1); border-bottom: 1px solid rgba(255,255,255,.05); }
-.col-yards-val { padding: 2px 4px; text-align: center; font-size: 9px; color: rgba(240,237,224,.25); }
+.row-si { background: #f5efde; border-bottom: 1px solid rgba(0,0,0,.06); }
+.col-si-val {
+  padding: 4px 4px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #9a7a1e;  /* warm gold — readable on paper */
+}
+.row-yards { background: #fbf6e8; border-bottom: 1px solid rgba(0,0,0,.05); }
+.col-yards-val {
+  padding: 3px 4px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7368;
+}
 
 /* Player rows */
 .row-player {
-  border-top: none;
+  border-top: 1px solid rgba(0,0,0,.08);
 }
-.team1-row { }
-.team2-row { }
 
 .col-player-name {
-  padding: 5px 10px;
-  background: #0c150e;
+  padding: 6px 10px;
+  background: #f0ebdd;
   position: sticky;
   left: 0;
   z-index: 3;
   padding-left: 14px;
-  border-right: 1px solid rgba(255,255,255,.08);
+  border-right: 1px solid rgba(0,0,0,.1);
 }
-.sticky-t1 { background: #0c150e; border-right: 2px solid rgba(96,165,250,.3); }
-.sticky-t2 { background: #0c150e; border-right: 2px solid rgba(248,113,113,.3); }
-.sticky-default { background: #0c150e; border-right: 1px solid rgba(255,255,255,.08); }
+.sticky-t1 { background: #e8f0fa; border-right: 3px solid #3b82f6; }
+.sticky-t2 { background: #faebeb; border-right: 3px solid #ef4444; }
+.sticky-default { background: #f0ebdd; border-right: 1px solid rgba(0,0,0,.1); }
 
-.player-nm { font-size: 13px; font-weight: 700; color: var(--gw-text, #f0ede0); }
-.player-hcp { font-size: 10px; color: rgba(240,237,224,.5); margin-left: 4px; }
-.hcp-lowman { color: rgba(96,165,250,.8); margin-left: 2px; font-weight: 700; }
-.t1 { color: #60a5fa; }
-.t2 { color: #f87171; }
+.player-nm { font-size: 13px; font-weight: 800; color: #1a1f1b; }
+.player-hcp { font-size: 10px; color: #4a5249; margin-left: 4px; font-weight: 600; }
+.hcp-lowman { color: #1d4ed8; margin-left: 2px; font-weight: 800; }
+.t1 { color: #1d4ed8; }
+.t2 { color: #b91c1c; }
 
 .col-score-cell {
-  padding: 3px 3px;
+  padding: 4px 3px;
   text-align: center;
   cursor: pointer;
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 800;
   position: relative;
-  min-width: 26px;
-  background: var(--gw-bg, #0c150e);
+  min-width: 28px;
+  color: #1a1f1b;
+  background: transparent;
+  border-right: 1px solid rgba(0,0,0,.04);
 }
-.col-score-cell:active { background: rgba(255,255,255,.06); }
-.cell-winner { background: rgba(74,222,128,.1); }
-.cell-defidget { background: rgba(251,191,36,.12); box-shadow: inset 0 0 0 1px rgba(251,191,36,.25); }
+.col-score-cell:active { background: rgba(0,0,0,.05); }
+.cell-winner { background: rgba(34,197,94,.18); }
+.cell-defidget { background: rgba(251,191,36,.28); box-shadow: inset 0 0 0 1px rgba(217,119,6,.5); }
+
+/* Team-colored player row backgrounds (subtle) */
+.team1-row .col-score-cell { background: rgba(59,130,246,.04); }
+.team2-row .col-score-cell { background: rgba(239,68,68,.04); }
 
 .score-empty-dot { color: rgba(240,237,224,.2); }
 
@@ -2231,43 +2404,49 @@ function formatDate(dateStr) {
 /* Team divider row */
 .row-team-divider { height: 2px; }
 .team-divider-cell {
-  background: rgba(255,255,255,.08);
+  background: rgba(0,0,0,.15);
   height: 2px; padding: 0; border: none;
 }
 
-/* ── Game notation rows (tfoot) ─────────────────────────────── */
+/* ── Game notation rows (tfoot) — light theme ─────────────── */
 .row-game-notation {
-  border-top: 1px solid rgba(255,255,255,.06);
-  background: rgba(0,0,0,.15);
+  border-top: 1px solid rgba(0,0,0,.1);
+  background: #fbf6e8;
 }
 .col-notation-label {
-  padding: 3px 6px;
-  background: #0c150e;
+  padding: 4px 8px;
+  background: #f0ebdd;
   white-space: nowrap;
   position: sticky; left: 0; z-index: 3;
+  border-right: 1px solid rgba(0,0,0,.08);
 }
 .notation-icon { font-size: 11px; margin-right: 3px; }
-.notation-name { font-size: 11px; font-weight: 700; color: rgba(240,237,224,.65); text-transform: uppercase; letter-spacing: .3px; }
+.notation-name {
+  font-size: 11px; font-weight: 800;
+  color: #4a5249;
+  text-transform: uppercase; letter-spacing: .4px;
+}
 
 .col-notation-cell {
-  padding: 3px 3px; text-align: center;
-  font-size: 12px; font-weight: 700; min-width: 24px;
+  padding: 4px 3px; text-align: center;
+  font-size: 12px; font-weight: 800; min-width: 26px;
+  color: #1a1f1b;
 }
-.col-notation-sub { font-size: 10px; font-weight: 700; color: rgba(240,237,224,.5); }
-.col-notation-total { font-size: 10px; font-weight: 700; color: rgba(240,237,224,.6); }
+.col-notation-sub { font-size: 10px; font-weight: 700; color: #4a5249; }
+.col-notation-total { font-size: 11px; font-weight: 800; color: #1a1f1b; }
 
-/* Notation cell classes */
-.nota-t1 { color: #60a5fa; }
-.nota-t2 { color: #f87171; }
-.nota-halved { color: rgba(240,237,224,.3); }
-.nota-dormie { color: #fbbf24; font-weight: 900; }
-.nota-skin-won { color: #a78bfa; }
-.nota-carry { color: rgba(240,237,224,.25); font-style: italic; }
-.nota-dots { color: #4ade80; }
-.nota-dot-who { color: rgba(240,237,224,.5); font-size: 8px; margin-right: 1px; }
-.nota-safe { color: #4ade80; }
-.nota-under { color: #60a5fa; }
-.nota-over { color: #f87171; }
+/* Notation cell classes — darker saturated hues for paper bg */
+.nota-t1 { color: #1d4ed8; }
+.nota-t2 { color: #b91c1c; }
+.nota-halved { color: #6b7368; }
+.nota-dormie { color: #b45309; font-weight: 900; }
+.nota-skin-won { color: #6d28d9; }
+.nota-carry { color: #78716c; font-style: italic; }
+.nota-dots { color: #15803d; }
+.nota-dot-who { color: #4a5249; font-size: 9px; margin-right: 1px; font-weight: 700; }
+.nota-safe { color: #15803d; }
+.nota-under { color: #1d4ed8; }
+.nota-over { color: #b91c1c; }
 .nota-snake { }
 
 .stroke-dots {
@@ -2327,6 +2506,38 @@ function formatDate(dateStr) {
   color: #dc2626; font-weight: 900;
 }
 .sn-empty { color: rgba(240,237,224,.2); }
+
+/* ── Light-theme notation overrides for the scorecard grid ── */
+.scorecard-grid .sn-alb {
+  border-color: #b45309; color: #b45309;
+  box-shadow:
+    0 0 0 2px #faf7f0,
+    0 0 0 4px #b45309,
+    0 0 0 6px #faf7f0,
+    0 0 0 8px #b45309;
+}
+.scorecard-grid .sn-eagle {
+  border-color: #15803d; color: #15803d;
+  box-shadow:
+    0 0 0 2px #faf7f0,
+    0 0 0 4px #15803d;
+}
+.scorecard-grid .sn-birdie {
+  border-color: #1d4ed8; color: #1d4ed8;
+}
+.scorecard-grid .sn-par { color: #1a1f1b; }
+.scorecard-grid .sn-bogey {
+  border-color: #64748b; color: #b91c1c;
+}
+.scorecard-grid .sn-dbl {
+  border-color: #b91c1c; color: #b91c1c;
+  box-shadow:
+    0 0 0 2px #faf7f0,
+    0 0 0 4px #b91c1c;
+}
+.scorecard-grid .sn-trip { color: #991b1b; }
+.scorecard-grid .sn-empty, .scorecard-grid .score-empty-dot { color: rgba(0,0,0,.2); }
+.scorecard-grid .stroke-dots { color: #b45309 !important; }
 
 /* Hole view: when nota-mode is on, show only color (no box/circle) */
 .score-display.nota-mode .sn-alb,

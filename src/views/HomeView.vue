@@ -15,8 +15,12 @@
       </div>
     </header>
 
-    <!-- Active round card -->
-    <div v-if="roundsStore.activeRound" class="active-round-card card" @click="$router.push('/scoring')">
+    <!-- Active round card — ONLY for non-tournament rounds -->
+    <div
+      v-if="roundsStore.activeRound && !isTournamentRound"
+      class="active-round-card card"
+      @click="$router.push('/scoring')"
+    >
       <div class="card-label">In Progress</div>
       <div class="card-title">{{ roundsStore.activeRound.course_name }}</div>
       <div class="card-sub">{{ roundsStore.activeRound.date }} · {{ roundsStore.activeMembers.length }} players</div>
@@ -26,14 +30,36 @@
     <button v-if="roundsStore.activeRound || roundsStore.rounds.length" class="new-round-pill" @click="openWizard()">+ New Round</button>
 
     <!-- Tournament / Cup entry card (only for authorized users) -->
-    <RouterLink v-if="showTournament" to="/tournament" class="cup-home-card">
-      <div class="cup-home-icon">🏆</div>
-      <div class="cup-home-body">
-        <div class="cup-home-title">The Cup</div>
-        <div class="cup-home-sub">Tournament standings & matches</div>
+    <template v-if="showTournament">
+      <!-- Cup with in-progress tournament round nested -->
+      <div v-if="isTournamentRound" class="cup-home-card cup-home-card--active">
+        <RouterLink to="/tournament" class="cup-home-header">
+          <div class="cup-home-icon">🏆</div>
+          <div class="cup-home-body">
+            <div class="cup-home-title">The Cup</div>
+            <div class="cup-home-sub">Tournament in progress</div>
+          </div>
+          <div class="cup-home-arrow">›</div>
+        </RouterLink>
+        <div class="cup-active-round" @click="$router.push('/scoring')">
+          <div class="car-badge">LIVE</div>
+          <div class="car-body">
+            <div class="car-title">{{ roundsStore.activeRound.name || roundsStore.activeRound.course_name }}</div>
+            <div class="car-sub">{{ roundsStore.activeRound.course_name }} · {{ roundsStore.activeMembers.length }} players</div>
+          </div>
+          <div class="car-cta">Continue →</div>
+        </div>
       </div>
-      <div class="cup-home-arrow">›</div>
-    </RouterLink>
+      <!-- Cup without active tournament round -->
+      <RouterLink v-else to="/tournament" class="cup-home-card">
+        <div class="cup-home-icon">🏆</div>
+        <div class="cup-home-body">
+          <div class="cup-home-title">The Cup</div>
+          <div class="cup-home-sub">Tournament standings & matches</div>
+        </div>
+        <div class="cup-home-arrow">›</div>
+      </RouterLink>
+    </template>
 
 
     <!-- Recent rounds -->
@@ -82,6 +108,10 @@ const router = useRouter()
 const showAuth = ref(false)
 const openWizard = inject('openWizard', () => {})
 const showTournament = computed(() => hasTournamentAccess(authStore.user?.email))
+const isTournamentRound = computed(() => {
+  const r = roundsStore.activeRound
+  return !!(r && r.format === 'tournament')
+})
 
 onMounted(async () => {
   if (authStore.isAuthenticated) await roundsStore.fetchRounds()
@@ -167,6 +197,76 @@ async function openRound(id) {
   font-size: 28px;
   color: rgba(212,175,55,.6);
   font-weight: 300;
+  flex-shrink: 0;
+}
+
+/* Cup card with active tournament round nested */
+.cup-home-card--active {
+  display: block;
+  padding: 0;
+  background: linear-gradient(135deg, rgba(212,175,55,.14) 0%, rgba(212,175,55,.06) 100%);
+  border-color: rgba(212,175,55,.5);
+}
+.cup-home-card--active .cup-home-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  text-decoration: none;
+  color: var(--gw-text);
+  border-bottom: 1px solid rgba(212,175,55,.2);
+}
+.cup-active-round {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .12s;
+}
+.cup-active-round:active {
+  background: rgba(212,175,55,.08);
+}
+.car-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .6px;
+  background: #22c55e;
+  color: #052e16;
+  flex-shrink: 0;
+  animation: pulse-live 2s infinite;
+}
+@keyframes pulse-live {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .65; }
+}
+.car-body { flex: 1; min-width: 0; }
+.car-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--gw-text, #f0ede0);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.car-sub {
+  font-size: 11px;
+  color: rgba(240,237,224,.5);
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.car-cta {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gw-gold, #d4af37);
   flex-shrink: 0;
 }
 </style>
