@@ -338,11 +338,27 @@
                 <div v-for="h in 9" :key="'s'+h" class="preview-cell">{{ newCourse.holes[h+8].siByTee[0] }}</div>
               </div>
 
+              <!-- Inline save error with copy-diagnostic button -->
+              <div v-if="saveError" class="save-error-card">
+                <div class="save-error-title">⚠️ Couldn't save course</div>
+                <div class="save-error-msg">{{ saveError.message }}</div>
+                <details class="save-error-details">
+                  <summary>Diagnostic info</summary>
+                  <pre class="save-error-pre">{{ saveError.trace }}</pre>
+                </details>
+                <div class="save-error-actions">
+                  <button class="btn-ghost" @click="copySaveDiagnostic">
+                    {{ saveError.copied ? '✓ Copied' : '📋 Copy diagnostic' }}
+                  </button>
+                  <button class="btn-ghost" @click="saveError = null">Dismiss</button>
+                </div>
+              </div>
+
               <div class="overlay-footer">
                 <button class="btn-ghost" @click="addStep = 2">← Back</button>
                 <button class="btn-primary btn-save" :disabled="saving" @click="saveCourse">
                   <span v-if="saving" class="saving-spinner">⟳</span>
-                  <span v-else>Save Course</span>
+                  <span v-else>{{ saveError ? 'Retry Save' : 'Save Course' }}</span>
                 </button>
               </div>
             </div>
@@ -490,6 +506,7 @@ const addStep = ref(1)
 const saving = ref(false)
 const step1Error = ref('')
 const step2Error = ref('')
+const saveError = ref(null) // { message, trace, copied }
 const selectedTeeIdx = ref(0)
 const apiLoading = ref(false)
 
@@ -754,6 +771,9 @@ function totalYards(teeIdx) {
 
 async function saveCourse() {
   saving.value = true
+  saveError.value = null
+  // Reset log at the start of each attempt so the trace is clean
+  try { localStorage.setItem('gw_create_log', '[]') } catch {}
   try {
     const teesData = {}
     newCourse.value.tees.forEach((tee, ti) => {
@@ -777,10 +797,8 @@ async function saveCourse() {
     }
 
     if (editingCourse.value?.isCustom) {
-      // Update existing custom course
       await coursesStore.updateCourse(editingCourse.value.id, coursePayload)
     } else if (editingCourse.value && !editingCourse.value.isCustom) {
-      // Built-in course: save as custom copy (with " (Custom)" suffix optional)
       await coursesStore.addCourse(coursePayload)
     } else {
       await coursesStore.addCourse(coursePayload)
@@ -791,10 +809,46 @@ async function saveCourse() {
     search.value = newCourse.value.name
     setTimeout(() => { search.value = '' }, 2000)
   } catch (err) {
-    step2Error.value = err.message || 'Failed to save course.'
-    addStep.value = 2
+    // Surface the error inline — don't bounce back to step 2 (the review
+    // screen is step 3). Include a copyable diagnostic trace.
+    const msg = err?.message || 'Failed to save course.'
+    let trace = ''
+    try {
+      const log = JSON.parse(localStorage.getItem('gw_create_log') || '[]')
+      const ua = navigator.userAgent
+      const isStandalone = window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone
+      trace = [
+        `GolfWizard course save failure — ${new Date().toISOString()}`,
+        `Error: ${msg}`,
+        `App version: ${typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'unknown'}`,
+        `Online: ${navigator.onLine}  PWA: ${!!isStandalone}`,
+        `UA: ${ua}`,
+        '',
+        'Recent trace:',
+        ...log.slice(-30).map(l => `  ${l.t}  ${l.msg}`),
+      ].join('\n')
+    } catch {}
+    saveError.value = { message: msg, trace, copied: false }
   } finally {
     saving.value = false
+  }
+}
+
+async function copySaveDiagnostic() {
+  if (!saveError.value) return
+  try {
+    await navigator.clipboard.writeText(saveError.value.trace)
+    saveError.value.copied = true
+    setTimeout(() => { if (saveError.value) saveError.value.copied = false }, 2000)
+  } catch {
+    const el = document.querySelector('.save-error-pre')
+    if (el) {
+      const range = document.createRange()
+      range.selectNodeContents(el)
+      const sel = window.getSelection()
+      sel.removeAllRanges()
+      sel.addRange(range)
+    }
   }
 }
 
@@ -1742,4 +1796,58 @@ function showToast(msg, type = 'neutral') {
 .sheet-leave-to   { opacity: 0; transform: translateY(100%); }
 .fade-enter-active, .fade-leave-active { transition: opacity .2s; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+
+/* ── Inline save-error card (step 3 review) ───────────────────── */
+.save-error-card {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(239,68,68,.08);
+  border: 1px solid rgba(239,68,68,.35);
+}
+.save-error-title {
+  font-family: var(--gw-font-display, serif);
+  font-size: 15px;
+  font-weight: 700;
+  color: #f87171;
+  margin-bottom: 4px;
+}
+.save-error-msg {
+  font-size: 13px;
+  color: var(--gw-text, #f0ede0);
+  line-height: 1.4;
+  margin-bottom: 10px;
+}
+.save-error-details summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: rgba(240,237,224,.55);
+  padding: 4px 0;
+  user-select: none;
+}
+.save-error-pre {
+  margin: 6px 0 0;
+  max-height: 140px;
+  overflow: auto;
+  background: rgba(0,0,0,.35);
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-family: var(--gw-font-mono, monospace);
+  font-size: 10px;
+  color: rgba(240,237,224,.8);
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-all;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.save-error-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.save-error-actions .btn-ghost {
+  flex: 1;
+}
 </style>

@@ -119,28 +119,6 @@
         </div>
       </div>
 
-      <!-- ── Display toggles (notation + hcp mode) ─────────── -->
-      <div class="display-toggles">
-        <button
-          class="dt-chip"
-          :class="{ 'dt-chip--on': showNotations }"
-          @click="showNotations = !showNotations"
-          :title="showNotations ? 'Hide score notations' : 'Show score notations'"
-        >
-          <span class="dt-dot" :class="{ 'dt-dot--on': showNotations }"></span>
-          Notations
-        </button>
-        <button
-          class="dt-chip"
-          :class="{ 'dt-chip--on': !showFullHcp }"
-          @click="showFullHcp = !showFullHcp"
-          :title="showFullHcp ? 'Full handicap' : 'Low-man handicap (strokes relative to lowest index)'"
-        >
-          <span class="dt-dot" :class="{ 'dt-dot--on': !showFullHcp }"></span>
-          {{ showFullHcp ? 'Full HCP' : 'Low-Man HCP' }}
-        </button>
-      </div>
-
       <!-- ═══════════════════════════════════════════════════════════
            CARD VIEW (activeHole === 0) — Scorecard grid + live games
            ═══════════════════════════════════════════════════════════ -->
@@ -174,6 +152,28 @@
           </button>
           <button class="sim-btn" @click="simulateFill" title="Fill random scores">🎲</button>
           <button class="sim-btn sim-btn-reset" @click="resetScores" title="Reset all scores">↺</button>
+        </div>
+
+        <!-- ── Display toggles (notation + hcp mode) — above the grid ─── -->
+        <div class="display-toggles display-toggles--above-grid">
+          <button
+            class="dt-chip"
+            :class="{ 'dt-chip--on': showNotations }"
+            @click="showNotations = !showNotations"
+            :title="showNotations ? 'Hide score notations' : 'Show score notations'"
+          >
+            <span class="dt-dot" :class="{ 'dt-dot--on': showNotations }"></span>
+            Notations
+          </button>
+          <button
+            class="dt-chip"
+            :class="{ 'dt-chip--on': !showFullHcp }"
+            @click="showFullHcp = !showFullHcp"
+            :title="showFullHcp ? 'Full handicap' : 'Low-man handicap (strokes relative to lowest index)'"
+          >
+            <span class="dt-dot" :class="{ 'dt-dot--on': !showFullHcp }"></span>
+            {{ showFullHcp ? 'Full HCP' : 'Low-Man HCP' }}
+          </button>
         </div>
 
         <!-- Horizontal Scorecard Grid -->
@@ -2010,6 +2010,11 @@ function formatDate(dateStr) {
   padding: 4px 12px 6px;
   flex-shrink: 0;
 }
+/* Variant when placed above the scorecard grid — tighter top gap */
+.display-toggles--above-grid {
+  padding: 2px 12px 8px;
+  margin-top: -2px;
+}
 .dt-chip {
   display: inline-flex;
   align-items: center;
@@ -2542,17 +2547,25 @@ function formatDate(dateStr) {
   border: 1.5px solid #60a5fa; color: #60a5fa; font-weight: 900;
 }
 .sn-par { color: var(--gw-text, #f0ede0); font-weight: 700; }
-/* Bogey: single rounded square (gray border, red text) */
+/* Bogey: single rounded square (gray border, red text).
+   Matches size of the birdie circle (24px) so visual scale is consistent. */
 .sn-bogey {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 22px; height: 22px; border-radius: 3px;
+  box-sizing: border-box;
+  width: 24px; height: 24px; border-radius: 4px;
   border: 1.5px solid #94a3b8; color: #f87171; font-weight: 900;
+  line-height: 1;
+  aspect-ratio: 1 / 1;
 }
-/* Double bogey: double rounded square rings (red) */
+/* Double bogey: double rounded square rings (red).
+   Slightly smaller inner so the outer ring fits the same visual footprint. */
 .sn-dbl {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 22px; height: 22px; border-radius: 3px;
+  box-sizing: border-box;
+  width: 22px; height: 22px; border-radius: 4px;
   border: 1.5px solid #f87171; color: #f87171; font-weight: 900;
+  line-height: 1;
+  aspect-ratio: 1 / 1;
   box-shadow:
     0 0 0 2px rgba(12, 15, 13, 0.97),
     0 0 0 4px #f87171;
@@ -2595,16 +2608,17 @@ function formatDate(dateStr) {
 .scorecard-grid .sn-empty, .scorecard-grid .score-empty-dot { color: rgba(0,0,0,.2); }
 .scorecard-grid .stroke-dots { color: #b45309 !important; }
 
-/* Hole view: when nota-mode is on, show only color (no box/circle) */
+/* Hole view: keep the notation shapes (circles/squares) so the gross score
+   carries the same visual signal as the scorecard grid. Size them up to
+   match the bigger hole-view font. */
 .score-display.nota-mode .sn-alb,
 .score-display.nota-mode .sn-eagle,
-.score-display.nota-mode .sn-birdie,
+.score-display.nota-mode .sn-birdie {
+  width: 44px; height: 44px;
+}
 .score-display.nota-mode .sn-bogey,
 .score-display.nota-mode .sn-dbl {
-  display: inline;
-  width: auto; height: auto;
-  border: none;
-  border-radius: 0;
+  width: 40px; height: 40px;
 }
 /* Net score notation color classes (reuse sn- for coloring) */
 .phc-net-value.sn-eagle, .phc-net-value.sn-alb { color: #4ade80; }

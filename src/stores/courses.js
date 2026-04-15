@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { supabase } from '../supabase'
 import { useAuthStore } from './auth'
 import { COURSES as BUILTIN_COURSES } from '../modules/courses'
+import { supaCallWithRetry } from '../modules/supabaseOps'
 
 export const useCoursesStore = defineStore('courses', () => {
   const customCourses = ref([])  // user's private courses from Supabase
@@ -141,16 +142,22 @@ export const useCoursesStore = defineStore('courses', () => {
     // Upsert: if a course with this name already exists for this user, update it
     const existing = customCourses.value.find(c => c.name === course.name)
     if (existing) {
-      const { data, error } = await supabase
-        .from('courses').update({ tees: teesData, holes }).eq('id', existing.id).select().single()
+      const { data, error } = await supaCallWithRetry(
+        'courses.addCourse.update',
+        () => supabase.from('courses').update({ tees: teesData, holes }).eq('id', existing.id).select().single(),
+        8000,
+      )
       if (error) throw error
       const idx = customCourses.value.findIndex(c => c.id === existing.id)
       if (idx >= 0) customCourses.value[idx] = { ...customCourses.value[idx], ...data }
       return data
     }
 
-    const { data, error } = await supabase
-      .from('courses').insert(row).select().single()
+    const { data, error } = await supaCallWithRetry(
+      'courses.addCourse.insert',
+      () => supabase.from('courses').insert(row).select().single(),
+      8000,
+    )
     if (error) throw error
     customCourses.value.push(data)
     return data
@@ -177,8 +184,11 @@ export const useCoursesStore = defineStore('courses', () => {
     if (teesData) supaUpdates.tees = teesData
     if (par || si) supaUpdates.holes = (par ?? Array(18).fill(4)).map((p, i) => ({ par: p, si: (si ?? [])[i] ?? (i + 1) }))
     if (updates.name) supaUpdates.name = updates.name
-    const { data, error } = await supabase
-      .from('courses').update(supaUpdates).eq('id', id).select().single()
+    const { data, error } = await supaCallWithRetry(
+      'courses.updateCourse',
+      () => supabase.from('courses').update(supaUpdates).eq('id', id).select().single(),
+      8000,
+    )
     if (error) throw error
     const idx = customCourses.value.findIndex(c => c.id === id)
     if (idx >= 0) customCourses.value[idx] = { ...customCourses.value[idx], ...data }
