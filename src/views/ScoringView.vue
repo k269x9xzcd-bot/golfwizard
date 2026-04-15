@@ -1,5 +1,10 @@
 <template>
-  <div class="view scoring-view">
+  <div class="view scoring-view" :class="{ 'is-landscape': isLandscape }">
+    <!-- Landscape corner hint -->
+    <div v-if="isLandscape && roundsStore.activeRound" class="landscape-hint">
+      <span class="lh-arrow">↻</span> rotate to exit
+    </div>
+
     <!-- Empty State -->
     <div v-if="!roundsStore.activeRound" class="empty-state">
       <div class="empty-icon">🏌️</div>
@@ -572,6 +577,52 @@ const showGameEditor = ref(false)
 const showNotations = ref(true)
 const showFinishReview = ref(false)
 const showFullHcp = ref(false) // false = low-man dots (default), true = full course HCP dots
+
+// ── Landscape mode (glance-only scorecard) ──────────────────────
+// When the phone rotates to landscape we switch to a stripped-down
+// scorecard-only view so the grid fills the full viewport.
+const isLandscape = ref(false)
+let _landscapeMql = null
+let _landscapeHandler = null
+// Remember what the user was on in portrait so rotating back restores it
+let _preLandscapeHole = 0
+
+function _applyLandscape(match) {
+  isLandscape.value = match
+  if (typeof document !== 'undefined') {
+    document.body.classList.toggle('gw-landscape', match)
+  }
+  if (match) {
+    // Snap to card view — landscape is glance-only
+    _preLandscapeHole = activeHole.value
+    activeHole.value = 0
+  } else {
+    // Rotate back → restore previous hole (if they were on one)
+    if (_preLandscapeHole > 0) activeHole.value = _preLandscapeHole
+  }
+}
+
+onMounted(() => {
+  if (typeof window === 'undefined' || !window.matchMedia) return
+  // Narrow enough to be a phone/tablet in landscape; avoids desktop browsers triggering
+  _landscapeMql = window.matchMedia('(orientation: landscape) and (max-height: 600px)')
+  _landscapeHandler = (e) => _applyLandscape(e.matches)
+  // Initial value
+  _applyLandscape(_landscapeMql.matches)
+  // Listener (newer API falls back to older one on Safari <14)
+  if (_landscapeMql.addEventListener) _landscapeMql.addEventListener('change', _landscapeHandler)
+  else if (_landscapeMql.addListener) _landscapeMql.addListener(_landscapeHandler)
+})
+
+onUnmounted(() => {
+  // Leaving the view: make sure the body class is cleared
+  if (typeof document !== 'undefined') document.body.classList.remove('gw-landscape')
+  if (!_landscapeMql) return
+  if (_landscapeMql.removeEventListener) _landscapeMql.removeEventListener('change', _landscapeHandler)
+  else if (_landscapeMql.removeListener) _landscapeMql.removeListener(_landscapeHandler)
+  _landscapeMql = null
+  _landscapeHandler = null
+})
 const gamesExpanded = ref(true)
 
 // ── Game editor helpers ──────────────────────────────────────────
@@ -2449,13 +2500,18 @@ function formatDate(dateStr) {
 .nota-over { color: #b91c1c; }
 .nota-snake { }
 
+/* Stroke dots — bold, visible indicator of handicap strokes on a hole */
 .stroke-dots {
   position: absolute;
-  top: 1px;
-  right: 1px;
-  font-size: 6px;
-  color: rgba(212,175,55,.9);
-  line-height: 1;
+  top: 2px;
+  right: 3px;
+  font-size: 14px;
+  font-weight: 900;
+  color: #b45309; /* warm amber on paper */
+  line-height: .7;
+  letter-spacing: -1px;
+  text-shadow: 0 0 2px #faf7f0, 0 0 2px #faf7f0;
+  pointer-events: none;
 }
 
 /* ── Score notation classes ───────────────────────────────────── */
@@ -3002,4 +3058,168 @@ function formatDate(dateStr) {
   color: #f87171; font-size: 13px; font-weight: 600; cursor: pointer;
 }
 .wolf-blind-btn.active { background: rgba(220,38,38,.2); border-color: #f87171; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   LANDSCAPE GLANCE MODE — scorecard + live games fill the viewport
+   Everything else is hidden. Portrait-only features like hole entry,
+   tab strip, toggles, bottom nav, FABs are removed so the grid can be
+   seen clearly at arm's length.
+   ═══════════════════════════════════════════════════════════════════ */
+.scoring-view.is-landscape {
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* Hide all chrome in landscape */
+.scoring-view.is-landscape .scoring-header,
+.scoring-view.is-landscape .tab-strip,
+.scoring-view.is-landscape .display-toggles,
+.scoring-view.is-landscape .finish-banner,
+.scoring-view.is-landscape .hole-view,
+.scoring-view.is-landscape .round-menu-dropdown,
+.scoring-view.is-landscape .round-menu-backdrop,
+.scoring-view.is-landscape .delete-overlay,
+.scoring-view.is-landscape .game-editor-panel {
+  display: none !important;
+}
+
+/* Container uses the full screen */
+.scoring-view.is-landscape .round-container {
+  height: 100vh;
+  min-height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  margin: 0;
+  background: #0c150e;
+}
+
+/* Card view fills viewport */
+.scoring-view.is-landscape .card-view {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Scorecard fills the width, no outer margin */
+.scoring-view.is-landscape .scorecard-outer {
+  margin: 0;
+  border-radius: 8px;
+  flex-shrink: 0;
+  max-height: calc(100vh - 110px); /* leave room for the compact live games */
+  display: flex;
+  flex-direction: column;
+}
+.scoring-view.is-landscape .scorecard-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+/* Scorecard grid tuned for landscape — bigger numbers, paper-tight columns */
+.scoring-view.is-landscape .scorecard-grid {
+  font-size: 13px;
+  width: 100%;
+}
+.scoring-view.is-landscape .col-hole-num {
+  font-size: 13px;
+  padding: 6px 3px;
+  min-width: 30px;
+}
+.scoring-view.is-landscape .col-par-val,
+.scoring-view.is-landscape .col-si-val,
+.scoring-view.is-landscape .col-yards-val {
+  font-size: 12px;
+  padding: 4px 3px;
+}
+.scoring-view.is-landscape .col-score-cell {
+  font-size: 15px;
+  padding: 5px 3px;
+  min-width: 30px;
+}
+.scoring-view.is-landscape .player-nm {
+  font-size: 14px;
+}
+.scoring-view.is-landscape .player-hcp { font-size: 11px; }
+.scoring-view.is-landscape .col-player-header,
+.scoring-view.is-landscape .col-player-name,
+.scoring-view.is-landscape .col-par-label {
+  padding-left: 10px;
+  padding-right: 8px;
+}
+.scoring-view.is-landscape .col-subtotal,
+.scoring-view.is-landscape .col-total {
+  font-size: 14px;
+  padding: 5px 6px;
+}
+.scoring-view.is-landscape .col-notation-cell {
+  font-size: 13px;
+  min-width: 30px;
+}
+
+/* Live games: compact row at the bottom of the viewport */
+.scoring-view.is-landscape .live-games-box {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  max-height: 30vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.scoring-view.is-landscape .live-games-label { display: none; }
+.scoring-view.is-landscape .gs-line {
+  padding: 4px 0;
+  border-top-color: rgba(255,255,255,.04);
+}
+.scoring-view.is-landscape .gs-title-row { font-size: 13px; gap: 4px; }
+.scoring-view.is-landscape .gs-detail-row { font-size: 12px; margin-top: 1px; }
+
+/* Hide the collapsible "▼ LIVE GAMES" header toggle in landscape */
+.scoring-view.is-landscape .collapsible-header { display: none; }
+
+/* Settle-up and finish banner: suppressed in landscape — portrait-only */
+.scoring-view.is-landscape .settle-up-section,
+.scoring-view.is-landscape .scorecard-controls {
+  display: none !important;
+}
+
+/* Hide bottom nav globally while in landscape (body class) */
+body.gw-landscape .bottom-nav {
+  display: none !important;
+}
+
+/* Rotate-to-exit hint — tiny, unobtrusive, top-right corner */
+.landscape-hint {
+  position: fixed;
+  top: calc(4px + env(safe-area-inset-top));
+  right: calc(8px + env(safe-area-inset-right));
+  z-index: 50;
+  padding: 4px 9px;
+  border-radius: 10px;
+  background: rgba(0,0,0,.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  color: rgba(240,237,224,.65);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .3px;
+  pointer-events: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  animation: card-in 250ms ease-out;
+}
+.lh-arrow {
+  font-size: 12px;
+  color: var(--gw-gold, #d4af37);
+  font-weight: 900;
+}
 </style>
