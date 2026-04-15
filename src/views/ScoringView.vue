@@ -717,10 +717,26 @@ function onTouchEnd(e) {
 const courseData = computed(() => {
   if (!roundsStore.activeRound) return null
   const name = roundsStore.activeRound.course_name
-  // Check courses store first (includes custom courses with user-edited SI/tee data)
+
+  // 1) Prefer the round's frozen course_snapshot so later course edits
+  //    never retroactively change this round's net scores / notations.
+  const snap = roundsStore.activeRound.course_snapshot
+  if (snap && Array.isArray(snap.par) && snap.par.length) {
+    return {
+      name: snap.name || name,
+      par: snap.par,
+      si: snap.si,
+      teesData: snap.teesData,
+      tees: snap.teesData,
+      defaultTee: snap.defaultTee,
+      _fromSnapshot: true,
+    }
+  }
+
+  // 2) Fallback for pre-snapshot rounds: use live store (may drift after edits,
+  //    but at least renders something).
   const fromStore = coursesStore.allCourses?.find(c => c.name === name)
   if (fromStore) return fromStore
-  // Fallback to static built-in courses
   return COURSES[name] || null
 })
 

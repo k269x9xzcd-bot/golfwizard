@@ -70,9 +70,16 @@
           v-for="round in roundsStore.rounds.slice(0, 5)"
           :key="round.id"
           class="round-card card"
+          role="button"
+          tabindex="0"
           @click="openRound(round.id)"
+          @keydown.enter="openRound(round.id)"
         >
-          <div class="round-course">{{ round.course_name }}</div>
+          <div class="round-course">
+            {{ round.course_name }}
+            <span v-if="round.is_complete" class="round-badge round-badge--done">Final</span>
+            <span v-else class="round-badge round-badge--live">In Progress</span>
+          </div>
           <div class="round-meta">{{ round.date }} · {{ round.round_members?.length ?? 0 }} players</div>
           <div v-if="round.room_code" class="round-code">🔗 {{ round.room_code }}</div>
         </div>
@@ -126,8 +133,21 @@ watch(() => authStore.isAuthenticated, async (authed) => {
 })
 
 async function openRound(id) {
-  await roundsStore.loadRound(id)
-  router.push('/scoring')
+  // Find round in the list to know if it's complete
+  const r = roundsStore.rounds.find(x => x.id === id)
+  if (r?.is_complete) {
+    // Completed → History with this round pre-expanded
+    router.push({ path: '/history', query: { expand: id } })
+    return
+  }
+  // In progress (or unknown) → scoring view
+  try {
+    await roundsStore.loadRound(id)
+    router.push('/scoring')
+  } catch (e) {
+    console.error('[Home] openRound failed:', e)
+    alert('Could not open round: ' + (e?.message || 'unknown error'))
+  }
 }
 </script>
 
@@ -268,5 +288,38 @@ async function openRound(id) {
   font-weight: 700;
   color: var(--gw-gold, #d4af37);
   flex-shrink: 0;
+}
+
+/* Recent-round card tap affordance */
+.round-card {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .12s, border-color .12s, background .12s;
+}
+.round-card:active {
+  transform: scale(.985);
+  background: rgba(255,255,255,.03);
+}
+.round-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .5px;
+  vertical-align: middle;
+  font-family: var(--gw-font-body);
+  text-transform: uppercase;
+}
+.round-badge--done {
+  background: rgba(74,222,128,.14);
+  color: #4ade80;
+  border: 1px solid rgba(74,222,128,.3);
+}
+.round-badge--live {
+  background: rgba(212,175,55,.14);
+  color: #d4af37;
+  border: 1px solid rgba(212,175,55,.35);
 }
 </style>

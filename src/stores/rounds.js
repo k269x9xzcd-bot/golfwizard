@@ -2,8 +2,50 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { supabase, generateRoomCode } from '../supabase'
 import { useAuthStore } from './auth'
+import { useCoursesStore } from './courses'
 import { computeAllSettlements } from '../modules/settlements'
-import { getCourse } from '../modules/courses'
+import { getCourse, COURSES as BUILTIN_COURSES } from '../modules/courses'
+
+/**
+ * Build a deterministic, self-contained snapshot of a course at the moment
+ * a round is created. Once written to rounds.course_snapshot it is never
+ * updated — future edits to the course never retroactively change history.
+ *
+ * Shape: { name, par: number[18], si: number[18], teesData: {...}, defaultTee: string, capturedAt: ISO }
+ * Returns null if the course can't be resolved (e.g. API course with no SI).
+ */
+function _buildCourseSnapshot(courseName) {
+  if (!courseName) return null
+  // Prefer a user-edited custom copy if one exists (merged via courses store);
+  // fall back to the hard-coded built-in library.
+  let course = null
+  try {
+    const cs = useCoursesStore()
+    course = cs.allCourses?.find?.(c => c.name === courseName) || null
+  } catch {}
+  if (!course) course = BUILTIN_COURSES[courseName] || null
+  if (!course) return null
+
+  // Extract par/si: built-in courses use top-level par/si arrays.
+  // Custom courses from Supabase have tees/teesData and per-tee SI.
+  const par = Array.isArray(course.par)
+    ? course.par.slice(0, 18)
+    : Array(18).fill(4)
+  const si = Array.isArray(course.si)
+    ? course.si.slice(0, 18)
+    : Array.from({ length: 18 }, (_, i) => i + 1)
+  const teesData = course.teesData || course.tees || {}
+  const defaultTee = course.defaultTee || Object.keys(teesData)[0] || null
+
+  return {
+    name: courseName,
+    par,
+    si,
+    teesData,
+    defaultTee,
+    capturedAt: new Date().toISOString(),
+  }
+}
 
 export const useRoundsStore = defineStore('rounds', () => {
   const authStore = useAuthStore()
@@ -104,7 +146,9 @@ export const useRoundsStore = defineStore('rounds', () => {
     }
     loading.value = true
     try {
-      const { data, error } = await supabase
+      // Race against a timeout so a stalled HTTP/2 stream (iOS PWA issue)
+      // doesn't leave the History tab spinning forever.
+      const query = supabase
         .from('rounds')
         .select(`
           *,
@@ -113,8 +157,15 @@ export const useRoundsStore = defineStore('rounds', () => {
           scores (*)
         `)
         .order('date', { ascending: false })
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('fetchRounds timed out after 10s')), 10000)
+      )
+      const { data, error } = await Promise.race([query, timeout])
       if (!error) rounds.value = data ?? []
+    } catch (e) {
+      console.warn('[rounds] fetchRounds failed, keeping previous list:', e?.message || e)
     } finally {
+      // ALWAYS clear loading — even on timeout or error — so UI doesn't hang.
       loading.value = false
     }
   }
@@ -124,6 +175,9 @@ export const useRoundsStore = defineStore('rounds', () => {
     const auth = useAuthStore()
     console.log('[rounds] createRound called, isAuthenticated:', auth.isAuthenticated, 'course:', courseName, 'players:', players.length)
 
+    // Freeze course data NOW so later edits don't retro-change this round
+    const courseSnapshot = _buildCourseSnapshot(courseName)
+
     // ── GUEST PATH ──────────────────────────────────────────
     if (!auth.isAuthenticated) {
       const roundId = `guest_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
@@ -131,6 +185,7 @@ export const useRoundsStore = defineStore('rounds', () => {
         id: roundId,
         name: name || courseName || 'Round',
         course_name: courseName,
+        course_snapshot: courseSnapshot,
         tee,
         date: date || new Date().toISOString().slice(0, 10),
         holes_mode: holesMode || '18',
@@ -226,6 +281,7 @@ export const useRoundsStore = defineStore('rounds', () => {
     const roundBody = {
       name: name || courseName || 'Round',
       course_name: courseName,
+      course_snapshot: courseSnapshot,
       tee,
       date: date || new Date().toISOString().slice(0, 10),
       holes_mode: holesMode || '18',

@@ -8,8 +8,8 @@
       </div>
     </header>
 
-    <!-- Loading -->
-    <div v-if="roundsStore.loading" class="loading-state">
+    <!-- Loading — only when we truly have nothing to show -->
+    <div v-if="roundsStore.loading && !roundsStore.rounds.length" class="loading-state">
       <div class="loading-spinner" />
       <div class="loading-text">Loading rounds…</div>
     </div>
@@ -31,6 +31,7 @@
         <div
           v-for="round in group.rounds"
           :key="round.id"
+          :data-round-id="round.id"
           class="round-card"
           @click="toggleRound(round.id)"
         >
@@ -179,11 +180,27 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoundsStore } from '../stores/rounds'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 
 const roundsStore = useRoundsStore()
 const router = useRouter()
-onMounted(() => roundsStore.fetchRounds())
+const route = useRoute()
+
+onMounted(async () => {
+  await roundsStore.fetchRounds()
+  // Support ?expand=<roundId> coming from Home "Recent Rounds" tap
+  const id = route.query?.expand
+  if (id && !expandedIds.value.has(id)) {
+    await toggleRound(String(id))
+    // Clean the URL so a refresh doesn't re-expand
+    router.replace({ path: '/history', query: {} })
+    // Scroll the expanded card into view on next tick
+    setTimeout(() => {
+      const el = document.querySelector(`[data-round-id="${id}"]`)
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 120)
+  }
+})
 
 const expandedIds = ref(new Set())
 const settlementsCache = reactive({})
