@@ -783,12 +783,31 @@ export const useRoundsStore = defineStore('rounds', () => {
     }
 
     // ── AUTHENTICATED PATH ──
-    // Delete scores, members, games, settlements, then round
-    await supabase.from('scores').delete().eq('round_id', roundId)
-    await supabase.from('round_games').delete().eq('round_id', roundId)
-    await supabase.from('round_settlements').delete().eq('round_id', roundId)
-    await supabase.from('round_members').delete().eq('round_id', roundId)
-    const { error } = await supabase.from('rounds').delete().eq('id', roundId)
+    // Helper: race each delete against a 6s timeout so a stalled HTTP/2
+    // socket on iOS PWA doesn't leave the UI waiting forever.
+    function _raceDelete(label, promise, ms = 6000) {
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+      )
+      return Promise.race([promise, timeout])
+    }
+
+    // Child rows first (foreign keys block deleting the parent round until gone).
+    // Child DELETEs are idempotent so we can run them in parallel safely.
+    await Promise.all([
+      _raceDelete('scores.delete', supabase.from('scores').delete().eq('round_id', roundId)),
+      _raceDelete('game_configs.delete', supabase.from('game_configs').delete().eq('round_id', roundId)),
+      _raceDelete('round_settlements.delete', supabase.from('round_settlements').delete().eq('round_id', roundId)),
+      _raceDelete('ledger_entries.delete', supabase.from('ledger_entries').delete().eq('round_id', roundId)),
+      _raceDelete('round_members.delete', supabase.from('round_members').delete().eq('round_id', roundId)),
+    ])
+
+    // Now delete the parent round itself
+    const { error } = await _raceDelete(
+      'rounds.delete',
+      supabase.from('rounds').delete().eq('id', roundId),
+      8000,
+    )
     if (error) throw error
 
     // Clear active if this was the active round

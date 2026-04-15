@@ -48,15 +48,10 @@
               </div>
             </div>
             <div class="round-card-right">
-              <div class="round-scores-strip">
-                <div
-                  v-for="m in topPlayers(round)"
-                  :key="m.id"
-                  class="mini-score"
-                >
-                  <div class="mini-name">{{ m.short_name || m.guest_name?.slice(0,4) }}</div>
-                  <div class="mini-total">{{ m.total || '—' }}</div>
-                </div>
+              <!-- Compact summary: leader + how many strokes ahead -->
+              <div v-if="roundLeaderSummary(round)" class="round-leader-chip">
+                <span class="rls-name">🏆 {{ roundLeaderSummary(round).name }}</span>
+                <span class="rls-total">{{ roundLeaderSummary(round).total }}</span>
               </div>
               <div class="expand-arrow" :class="{ expanded: expandedIds.has(round.id) }">›</div>
             </div>
@@ -88,16 +83,25 @@
                 </div>
               </div>
 
-              <!-- Games played -->
+              <!-- Game Recap — per-game outcome -->
               <template v-if="round.game_configs?.length">
-                <div class="detail-section-label">Games</div>
-                <div class="games-tags">
-                  <span
-                    v-for="g in round.game_configs"
+                <div class="detail-section-label">Game Recap</div>
+                <div class="game-recap-list">
+                  <div
+                    v-for="g in gameRecapRows(round)"
                     :key="g.id"
-                    class="game-tag"
-                    :class="`game-tag--${gameStyle(g.type)}`"
-                  >{{ gameIcon(g.type) }} {{ gameLabel(g.type) }}</span>
+                    class="game-recap-row"
+                  >
+                    <div class="grr-head">
+                      <span class="grr-icon">{{ g.icon }}</span>
+                      <span class="grr-name">{{ g.label }}</span>
+                      <span v-if="g.winnerLine" class="grr-winner">
+                        <span class="grr-star">⭐️</span>
+                        {{ g.winnerLine }}
+                      </span>
+                    </div>
+                    <div v-if="g.detail" class="grr-detail">{{ g.detail }}</div>
+                  </div>
                 </div>
               </template>
 
@@ -105,10 +109,10 @@
               <template v-if="round.game_configs?.length">
                 <div class="detail-section-label">Settlement</div>
                 <div class="settlement-block">
-                  <!-- Loading settlements -->
+                  <!-- Loading: only for the first fraction of a second -->
                   <div v-if="settlementLoading[round.id]" class="settlement-placeholder">
                     <div class="settlement-ph-icon">💰</div>
-                    <div class="settlement-ph-text">Loading settlements…</div>
+                    <div class="settlement-ph-text">Computing…</div>
                   </div>
                   <!-- Has settlement data -->
                   <template v-else-if="settlementsCache[round.id]">
@@ -139,10 +143,10 @@
                     </div>
                     <div v-else class="settlement-even">All square — no payments needed</div>
                   </template>
-                  <!-- No settlement saved -->
+                  <!-- No settlement yet -->
                   <div v-else class="settlement-placeholder">
                     <div class="settlement-ph-icon">💰</div>
-                    <div class="settlement-ph-text">No settlement data saved for this round.</div>
+                    <div class="settlement-ph-text">Not enough scores yet to compute settlement.</div>
                   </div>
                 </div>
               </template>
@@ -164,13 +168,16 @@
     </div>
 
     <!-- Delete confirmation -->
-    <div v-if="deleteTarget" class="delete-overlay" @click="deleteTarget = null">
+    <div v-if="deleteTarget" class="delete-overlay" @click="deleting ? null : (deleteTarget = null)">
       <div class="delete-dialog" @click.stop>
         <div class="delete-title">Delete Round?</div>
         <div class="delete-msg">This will permanently delete the round at <strong>{{ deleteTarget.course_name }}</strong> on {{ formatDate(deleteTarget.date) }} and all its scores/games.</div>
+        <div v-if="deleteError" class="delete-error">{{ deleteError }}</div>
         <div class="delete-actions">
-          <button class="btn-cancel" @click="deleteTarget = null">Cancel</button>
-          <button class="btn-delete-confirm" @click="doDelete">Delete</button>
+          <button class="btn-cancel" :disabled="deleting" @click="deleteTarget = null">Cancel</button>
+          <button class="btn-delete-confirm" :disabled="deleting" @click="doDelete">
+            {{ deleting ? 'Deleting…' : 'Delete' }}
+          </button>
         </div>
       </div>
     </div>
@@ -180,9 +187,18 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoundsStore } from '../stores/rounds'
+import { useCoursesStore } from '../stores/courses'
 import { useRouter, useRoute } from 'vue-router'
+import { computeAllSettlements } from '../modules/settlements'
+import {
+  computeNassau, computeSkins, computeMatch, computeBestBall, computeBestBallNet,
+  computeVegas, computeDots, computeFidget, computeSnake, computeWolf,
+  computeHiLow, computeStableford, computeSixes, computeFiveThreeOne, computeHammer,
+} from '../modules/gameEngine'
+import { COURSES as BUILTIN_COURSES } from '../modules/courses'
 
 const roundsStore = useRoundsStore()
+const coursesStore = useCoursesStore()
 const router = useRouter()
 const route = useRoute()
 
@@ -210,13 +226,24 @@ async function toggleRound(id) {
   if (expandedIds.value.has(id)) expandedIds.value.delete(id)
   else {
     expandedIds.value.add(id)
-    // Fetch settlements if not cached
+    // Populate settlement cache if we don't have it yet.
     if (!settlementsCache[id] && !settlementLoading[id]) {
       settlementLoading[id] = true
+      const round = roundsStore.rounds.find(r => r.id === id)
+      let data = null
+      // 1) Try saved snapshot first (fast, no engine run)
       try {
-        const data = await roundsStore.fetchSettlements(id)
-        if (data) settlementsCache[id] = data
-      } catch (e) { /* silent */ }
+        const saved = await Promise.race([
+          roundsStore.fetchSettlements(id),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('settlement fetch timeout')), 4000)),
+        ])
+        if (saved) data = saved
+      } catch { /* fall through to compute */ }
+      // 2) Otherwise compute from stored scores on demand
+      if (!data && round) {
+        try { data = _computeSettlementFromRound(round) } catch (e) { console.warn('compute settlement failed:', e) }
+      }
+      if (data) settlementsCache[id] = data
       settlementLoading[id] = false
     }
   }
@@ -224,18 +251,28 @@ async function toggleRound(id) {
 }
 
 const deleteTarget = ref(null)
+const deleteError = ref('')
+const deleting = ref(false)
 
 function confirmDelete(round) {
   deleteTarget.value = round
+  deleteError.value = ''
 }
 
 async function doDelete() {
-  if (!deleteTarget.value) return
+  if (!deleteTarget.value || deleting.value) return
+  deleting.value = true
+  deleteError.value = ''
   try {
     await roundsStore.deleteRound(deleteTarget.value.id)
     deleteTarget.value = null
+    // Refresh the list so the deleted card disappears
+    await roundsStore.fetchRounds()
   } catch (e) {
     console.error('Delete failed:', e)
+    deleteError.value = e?.message || 'Delete failed. Please try again.'
+  } finally {
+    deleting.value = false
   }
 }
 
@@ -312,20 +349,245 @@ function getMembersWithScores(round) {
 
 // ── Game helpers ─────────────────────────────────────────────
 const GAME_ICONS = {
-  nassau: '🏆', skins: '💰', wolf: '🐺', vegas: '🎲', matchPlay: '⚔️',
-  bestBall: '🤝', stableford: '📊', sixes: '🎯', snake: '🐍',
+  nassau: '💰', skins: '💎', match: '⚔️', matchplay: '⚔️', match1v1: '⚔️',
+  bestball: '🎮', best_ball: '🎮', bbn: '🏌️',
+  wolf: '🐺', vegas: '🎰', hilow: '📊', stableford: '⭐',
+  snake: '🐍', dots: '🎯', fidget: '😬', hammer: '🔨', sixes: '🎲', fivethreeone: '5️⃣',
 }
 const GAME_LABELS = {
-  nassau: 'Nassau', skins: 'Skins', wolf: 'Wolf', vegas: 'Vegas', matchPlay: 'Match Play',
-  bestBall: 'Best Ball', stableford: 'Stableford', sixes: 'Sixes', snake: 'Snake',
-}
-const GAME_STYLES = {
-  nassau: 'gold', skins: 'green', wolf: 'purple', vegas: 'blue', matchPlay: 'red', bestBall: 'teal',
+  nassau: 'Nassau', skins: 'Skins', match: 'Match', matchplay: 'Match Play', match1v1: '1v1 Match',
+  bestball: 'Best Ball', best_ball: 'Best Ball', bbn: 'Best Ball Net',
+  wolf: 'Wolf', vegas: 'Vegas', hilow: 'Hi-Low', stableford: 'Stableford',
+  snake: 'Snake', dots: 'Dots', fidget: 'Fidget', hammer: 'Hammer', sixes: 'Sixes', fivethreeone: '5-3-1',
 }
 
-function gameIcon(type) { return GAME_ICONS[type] || '🏌️' }
-function gameLabel(type) { return GAME_LABELS[type] || type }
-function gameStyle(type) { return GAME_STYLES[type] || 'default' }
+function gameIcon(type) { return GAME_ICONS[(type || '').toLowerCase()] || '🏌️' }
+function gameLabel(type) { return GAME_LABELS[(type || '').toLowerCase()] || type }
+
+// ── Card-header: round leader chip ─────────────────────────
+function roundLeaderSummary(round) {
+  const rows = getMembersWithScores(round).filter(m => m.total)
+  if (!rows.length) return null
+  // Lowest total = leader
+  rows.sort((a, b) => a.total - b.total)
+  const leader = rows[0]
+  return {
+    name: leader.short_name || leader.guest_name?.split(/\s+/)[0] || '?',
+    total: leader.total,
+  }
+}
+
+// ── Game Recap: per-game outcome lines ─────────────────────
+// Uses the same engine the live scorecard uses so the recap reads identically.
+function resolveCourseForRound(round) {
+  // Prefer frozen snapshot (immutable history), fall back to live.
+  const snap = round.course_snapshot
+  if (snap && Array.isArray(snap.par) && snap.par.length) {
+    return {
+      name: snap.name || round.course_name,
+      par: snap.par,
+      si: snap.si,
+      teesData: snap.teesData,
+      tees: snap.teesData,
+    }
+  }
+  const live = coursesStore.allCourses?.find(c => c.name === round.course_name)
+  if (live) return live
+  return BUILTIN_COURSES[round.course_name] || null
+}
+
+function _buildCtxForRound(round) {
+  const course = resolveCourseForRound(round)
+  if (!course) return null
+  const members = round.round_members || []
+  // Build {memberId: {hole: score}} map from the flat scores table
+  const scoreMap = {}
+  for (const s of (round.scores || [])) {
+    const score = s.score ?? s.strokes
+    if (!scoreMap[s.member_id]) scoreMap[s.member_id] = {}
+    scoreMap[s.member_id][s.hole] = score
+  }
+  return {
+    course,
+    tee: round.tee,
+    members,
+    scores: scoreMap,
+    holesMode: round.holes_mode || '18',
+  }
+}
+
+function gameRecapRows(round) {
+  const ctx = _buildCtxForRound(round)
+  if (!ctx) return []
+  const games = round.game_configs || []
+  return games.map(g => _recapOne(ctx, g)).filter(Boolean)
+}
+
+function _recapOne(ctx, game) {
+  const t = (game.type || '').toLowerCase()
+  const cfg = game.config || {}
+  const icon = gameIcon(game.type)
+  const label = gameLabel(game.type)
+  const base = { id: game.id, icon, label, winnerLine: null, detail: null }
+
+  try {
+    if (t === 'best_ball' || t === 'bestball') {
+      const r = computeBestBall(ctx, cfg)
+      if (!r) return base
+      const t1n = r.t1Name || 'T1'
+      const t2n = r.t2Name || 'T2'
+      const up = r.finalUp || 0
+      const played = (r.holeResults || []).filter(h => !h.incomplete).length
+      const remaining = (r.holeResults || []).filter(h => h.incomplete).length
+      const matchOver = Math.abs(up) > remaining && played > 0
+      const isTournament = !!cfg.tournament
+      const pts = cfg.points || 2
+      const ppt = r.settlement?.ppt || cfg.ppt || 0
+
+      if (played === 0) { base.detail = `${t1n} vs ${t2n} — not started`; return base }
+      if (matchOver) {
+        const win = up > 0 ? t1n : t2n
+        const lose = up > 0 ? t2n : t1n
+        base.winnerLine = _fmtWinnerValue(win, { pts: isTournament ? pts : null, dollars: ppt || null })
+        base.detail = `${win} (${Math.abs(up)}&${remaining}) vs ${lose}`
+      } else if (up === 0) {
+        base.detail = `${t1n} vs ${t2n} — AS thru ${played}`
+        if (isTournament) base.winnerLine = `halved · ${pts / 2}pt each`
+      } else {
+        const leader = up > 0 ? t1n : t2n
+        const trail = up > 0 ? t2n : t1n
+        base.winnerLine = _fmtWinnerValue(leader, { pts: isTournament ? pts : null, dollars: ppt || null })
+        base.detail = `${leader} (${Math.abs(up)} UP thru ${played}) vs ${trail}`
+      }
+      return base
+    }
+
+    if (t === 'match' || t === 'match1v1') {
+      const r = computeMatch(ctx, cfg)
+      if (!r) return base
+      const p1n = r.p1?.name || '?'
+      const p2n = r.p2?.name || '?'
+      const up = r.finalUp
+      const played = (r.holeResults || []).filter(h => !h.incomplete).length
+      const p1Net = r.settlement?.p1Net || 0
+      const isTournament = !!cfg.tournament
+      const pts = cfg.points || 1
+      const ppt = r.settlement?.ppt || cfg.ppt || 0
+
+      if (played === 0) { base.detail = `${p1n} vs ${p2n} — not started`; return base }
+      if (r.matchOver) {
+        const win = up > 0 ? p1n : p2n
+        const lose = up > 0 ? p2n : p1n
+        base.winnerLine = _fmtWinnerValue(win, { pts: isTournament ? pts : null, dollars: Math.abs(p1Net) || ppt || null })
+        base.detail = `${win} (${r.result}) vs ${lose}`
+      } else if (up === 0) {
+        base.detail = `${p1n} vs ${p2n} — AS thru ${played}`
+        if (isTournament) base.winnerLine = `halved · ${pts / 2}pt each`
+      } else {
+        const leader = up > 0 ? p1n : p2n
+        const trail = up > 0 ? p2n : p1n
+        base.winnerLine = _fmtWinnerValue(leader, { pts: isTournament ? pts : null, dollars: Math.abs(p1Net) || ppt || null })
+        base.detail = `${leader} (${Math.abs(up)} UP thru ${played}) vs ${trail}`
+      }
+      return base
+    }
+
+    if (t === 'nassau') {
+      const r = computeNassau(ctx, cfg)
+      if (!r) return base
+      const s = r.settlement
+      const t1n = s.t1Name || 'T1'
+      const t2n = s.t2Name || 'T2'
+      const total = s.total || 0
+      if (total === 0) {
+        base.detail = `${t1n} vs ${t2n} — all square`
+      } else {
+        const winner = total > 0 ? t1n : t2n
+        base.winnerLine = `${winner} +$${Math.abs(total)}`
+        const parts = []
+        if (s.front) parts.push(`F ${s.front > 0 ? '+' : ''}$${Math.abs(s.front)}`)
+        if (s.back) parts.push(`B ${s.back > 0 ? '+' : ''}$${Math.abs(s.back)}`)
+        if (s.overall) parts.push(`O ${s.overall > 0 ? '+' : ''}$${Math.abs(s.overall)}`)
+        base.detail = parts.length ? parts.join(' · ') : `${t1n} vs ${t2n}`
+      }
+      return base
+    }
+
+    if (t === 'skins') {
+      const r = computeSkins(ctx, cfg)
+      if (!r) return base
+      const won = (r.holeResults || []).filter(h => h.winner).length
+      const topWinners = (r.settlements || [])
+        .filter(s => (s.net || 0) > 0)
+        .sort((a, b) => (b.net || 0) - (a.net || 0))
+        .slice(0, 2)
+      if (topWinners.length) {
+        base.winnerLine = topWinners.map(w => `${w.name} +$${w.net}`).join(', ')
+      }
+      base.detail = won ? `${won} skin${won === 1 ? '' : 's'} paid` : 'No skins won yet'
+      return base
+    }
+
+    if (t === 'dots') {
+      const r = computeDots(ctx, cfg)
+      if (!r) return base
+      const top = (r.settlements || [])
+        .filter(s => (s.net || 0) > 0)
+        .sort((a, b) => (b.net || 0) - (a.net || 0))[0]
+      if (top) base.winnerLine = `${top.name} +$${top.net}`
+      base.detail = (r.settlements || []).map(s => `${s.name}: ${s.myDots || 0}`).join(' · ')
+      return base
+    }
+
+    if (t === 'fidget') {
+      const r = computeFidget(ctx, cfg)
+      if (!r) return base
+      base.detail = (r.atRisk || []).length
+        ? `At risk: ${(r.atRisk || []).map(m => m.name).join(', ')}`
+        : 'Everyone has won at least one hole'
+      return base
+    }
+
+    if (t === 'snake') {
+      const r = computeSnake(ctx, cfg)
+      if (!r) return base
+      if (r.holderName) base.detail = `${r.holderName} holds the snake (${r.snakeCount || 0} events)`
+      else base.detail = 'No 3-putts recorded'
+      return base
+    }
+
+    if (t === 'bbn') {
+      const r = computeBestBallNet(ctx, cfg)
+      if (!r) return base
+      const tp = r.overallToPar
+      const toPar = tp === 0 ? 'E' : (tp > 0 ? `+${tp}` : `${tp}`)
+      base.detail = `Total: ${r.totalScore} (${toPar})`
+      return base
+    }
+
+    // Fallback: just show the game label
+    return base
+  } catch (e) {
+    console.warn('recap error for', t, e)
+    return base
+  }
+}
+
+function _fmtWinnerValue(name, { pts, dollars }) {
+  const parts = []
+  if (pts != null) parts.push(`+${pts} pt${pts === 1 ? '' : 's'}`)
+  if (dollars != null && dollars > 0) parts.push(`+$${dollars}`)
+  return parts.length ? `${name} ${parts.join(' · ')}` : name
+}
+
+// ── Settlement: compute on demand when no snapshot is saved ───────
+function _computeSettlementFromRound(round) {
+  const ctx = _buildCtxForRound(round)
+  if (!ctx) return null
+  const games = round.game_configs || []
+  if (!games.length) return null
+  return computeAllSettlements(ctx, games)
+}
 </script>
 
 <style scoped>
@@ -748,4 +1010,87 @@ function gameStyle(type) { return GAME_STYLES[type] || 'default' }
   color: #f87171; font-size: 14px; font-weight: 700; cursor: pointer;
 }
 .btn-delete-confirm:active { background: rgba(248,113,113,.35); }
+.btn-cancel:disabled,
+.btn-delete-confirm:disabled {
+  opacity: .5;
+  cursor: wait;
+}
+.delete-error {
+  margin: -6px 0 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(239,68,68,.1);
+  border: 1px solid rgba(239,68,68,.3);
+  color: #f87171;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* ── Leader chip on the round card header ──────────────── */
+.round-leader-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 10px;
+  background: rgba(212,175,55,.12);
+  border: 1px solid rgba(212,175,55,.3);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.rls-name {
+  font-weight: 700;
+  color: var(--gw-gold, #d4af37);
+}
+.rls-total {
+  font-family: var(--gw-font-mono, monospace);
+  font-weight: 800;
+  color: var(--gw-text, #f0ede0);
+  font-size: 13px;
+}
+
+/* ── Game Recap rows ─────────────────────────────────── */
+.game-recap-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.game-recap-row {
+  padding: 10px 12px;
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 10px;
+}
+.grr-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.3;
+}
+.grr-icon { font-size: 14px; flex-shrink: 0; }
+.grr-name {
+  font-weight: 800;
+  color: var(--gw-text, #f0ede0);
+}
+.grr-winner {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #22c55e;
+  font-weight: 700;
+  font-size: 12px;
+  margin-left: auto;
+}
+.grr-star {
+  font-size: 12px;
+}
+.grr-detail {
+  margin-top: 3px;
+  font-size: 12px;
+  color: rgba(240,237,224,.7);
+  line-height: 1.4;
+}
 </style>
