@@ -983,37 +983,32 @@ const stepTitle = computed(() => {
 const creating = ref(false)
 const creationError = ref(null) // { message, log, copied }
 
-// Pre-flight connectivity state — null = checking, true = good, false = stuck
-const preflightOk = ref(null)
+// Pre-flight connectivity warning state.
+// We do NOT run a proactive ping on open — that caused false positives on
+// slow-but-working connections. Instead we show the stuck-connection warning
+// ONLY after a creation attempt has actually timed out in this session
+// (detected by counting timeout entries in the create log).
+// The user can also manually trigger a re-check after force-quitting.
+const preflightOk = ref(true)   // default true — don't block the wizard
 const preflightRetrying = ref(false)
-let _preflightDone = false
-
-async function runPreflight() {
-  if (_preflightDone) return
-  _preflightDone = true
-  try {
-    const { supaPreflightOk } = await import('../modules/supaRaw')
-    preflightOk.value = await supaPreflightOk(3500)
-  } catch {
-    preflightOk.value = false
-  }
-}
-runPreflight()
 
 // Re-run preflight after the user says they've force-quit.
 // If it passes now → dismiss the warning. If still stuck → keep showing it.
 async function recheckPreflight() {
-  _preflightDone = false
   preflightRetrying.value = true
   preflightOk.value = null
   try {
     const { supaPreflightOk } = await import('../modules/supaRaw')
-    preflightOk.value = await supaPreflightOk(4000)
+    const ok = await supaPreflightOk(5000)
+    preflightOk.value = ok
+    if (ok) {
+      // Connection is back — clear the create log so the next attempt starts fresh
+      try { localStorage.removeItem('gw_create_log') } catch {}
+    }
   } catch {
     preflightOk.value = false
   }
   preflightRetrying.value = false
-  // If still failed, give a short bounce so the user knows the button worked
 }
 
 function reloadNow() {
@@ -1748,11 +1743,17 @@ async function create() {
   } catch (e) {
     console.error('[Wizard] Round creation error:', e)
     const msg = e.message || 'Unknown error creating round'
+    const timeouts = _countRecentTimeouts()
+    // Only set preflightOk=false (show stuck-connection warning) if we've
+    // seen actual timeout failures — not for other error types like 400/401.
+    if (timeouts >= 2 || msg.includes('timed out') || msg.includes('timeout')) {
+      preflightOk.value = false
+    }
     creationError.value = {
       message: msg,
       info: buildDiagnosticPayload(msg),
       copied: false,
-      recentTimeouts: _countRecentTimeouts(),
+      recentTimeouts: timeouts,
     }
   } finally {
     creating.value = false

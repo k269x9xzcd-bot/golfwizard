@@ -20,8 +20,11 @@
         <RouterView />
       </div>
 
-      <!-- Bottom nav -->
-      <nav class="bottom-nav">
+      <!-- Bottom nav — hidden when wizard is open or on full-screen wizard routes -->
+      <nav
+        v-if="!showWizard && !isWizardRoute"
+        class="bottom-nav"
+      >
         <!-- 5 equal nav items -->
         <RouterLink to="/" class="nav-item" :class="{ active: $route.name === 'home' }">
           <span class="nav-icon">🏠</span>
@@ -50,7 +53,7 @@
 
 <script setup>
 import { ref, computed, onMounted, provide } from 'vue'
-import { RouterView, RouterLink, useRouter } from 'vue-router'
+import { RouterView, RouterLink, useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 import { useRosterStore } from './stores/roster'
 import { useCoursesStore } from './stores/courses'
@@ -62,8 +65,13 @@ const authStore = useAuthStore()
 const rosterStore = useRosterStore()
 const coursesStore = useCoursesStore()
 const router = useRouter()
+const route = useRoute()
 
 const showTournament = computed(() => hasTournamentAccess(authStore.user?.email))
+
+// Routes that are full-screen wizard-like flows — hide the bottom nav
+const WIZARD_ROUTES = new Set(['cross-match-new', 'cross-match-accept', 'cross-match-detail'])
+const isWizardRoute = computed(() => WIZARD_ROUTES.has(route.name))
 
 const showWizard = ref(false)
 const showJoin = ref(false)
