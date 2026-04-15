@@ -145,17 +145,18 @@
           </div>
         </div>
 
-        <!-- Scorecard controls -->
-        <div class="scorecard-controls">
-          <button v-if="gameNotationRows.length > 0" class="notation-toggle-btn" @click="showNotations = !showNotations">
-            {{ showNotations ? '▼ Games' : '▶ Games' }}
+        <!-- ── Unified scorecard toolbar — chips + action icons ─── -->
+        <div class="scorecard-toolbar">
+          <button
+            v-if="gameNotationRows.length > 0"
+            class="dt-chip"
+            :class="{ 'dt-chip--on': showGameRows }"
+            @click="showGameRows = !showGameRows"
+            :title="showGameRows ? 'Hide game rows below grid' : 'Show game rows below grid'"
+          >
+            <span class="dt-dot" :class="{ 'dt-dot--on': showGameRows }"></span>
+            Games
           </button>
-          <button class="sim-btn" @click="simulateFill" title="Fill random scores">🎲</button>
-          <button class="sim-btn sim-btn-reset" @click="resetScores" title="Reset all scores">↺</button>
-        </div>
-
-        <!-- ── Display toggles (notation + hcp mode) — above the grid ─── -->
-        <div class="display-toggles display-toggles--above-grid">
           <button
             class="dt-chip"
             :class="{ 'dt-chip--on': showNotations }"
@@ -174,6 +175,9 @@
             <span class="dt-dot" :class="{ 'dt-dot--on': !showFullHcp }"></span>
             {{ showFullHcp ? 'Full HCP' : 'Low-Man HCP' }}
           </button>
+          <span class="sct-spacer"></span>
+          <button class="sim-btn" @click="simulateFill" title="Fill random scores">🎲</button>
+          <button class="sim-btn sim-btn-reset" @click="resetScores" title="Reset all scores">↺</button>
         </div>
 
         <!-- Horizontal Scorecard Grid -->
@@ -293,7 +297,7 @@
             </tbody>
 
             <!-- Game notation rows -->
-            <tfoot v-if="gameNotationRows.length > 0 && showNotations">
+            <tfoot v-if="gameNotationRows.length > 0 && showGameRows">
               <tr v-for="(row, ri) in gameNotationRows" :key="'gn-'+ri" class="row-game-notation" :class="row.cls || ''">
                 <td class="col-sticky col-notation-label">
                   <span class="notation-icon">{{ row.icon }}</span>
@@ -574,7 +578,8 @@ const selectedGame = ref(null)
 const showRoundMenu = ref(false)
 const confirmDeleteActive = ref(false)
 const showGameEditor = ref(false)
-const showNotations = ref(true)
+const showNotations = ref(true)   // per-score-cell shapes (birdie circle, bogey box, etc.)
+const showGameRows = ref(true)    // game-outcome tfoot rows (Nassau status, match L/W/½, etc.)
 const showFinishReview = ref(false)
 const showFullHcp = ref(false) // false = low-man dots (default), true = full course HCP dots
 
@@ -1070,6 +1075,10 @@ function pInit(memberId) {
   return memberInitials(m)
 }
 
+// Rendered HTML for a "halved" hole — proper fraction with offset 1 / 2.
+// Used by Nassau, Match, 1v1 notation rows. Styled in .nota-frac rule below.
+const HALVED_HTML = '<span class="nota-frac"><span class="nf-num">1</span><span class="nf-slash">⁄</span><span class="nf-den">2</span></span>'
+
 const gameNotationRows = computed(() => {
   const rows = []
   const ctx = buildCtx()
@@ -1093,7 +1102,7 @@ const gameNotationRows = computed(() => {
           let sym = '', cls = ''
           if (hr.winner === 't1') { sym = 'W'; cls = 'nota-t1' }
           else if (hr.winner === 't2') { sym = 'L'; cls = 'nota-t2' }
-          else if (hr.n1 != null && hr.n2 != null) { sym = '½'; cls = 'nota-halved' }
+          else if (hr.n1 != null && hr.n2 != null) { sym = HALVED_HTML; cls = 'nota-halved' }
           cells[hr.hole] = { text: sym, cls }
         }
 
@@ -1168,7 +1177,7 @@ const gameNotationRows = computed(() => {
           let sym = '', cls = ''
           if (hr.winner === 'p1') { sym = 'W'; cls = 'nota-t1' }
           else if (hr.winner === 'p2') { sym = 'L'; cls = 'nota-t2' }
-          else { sym = '½'; cls = 'nota-halved' }
+          else { sym = HALVED_HTML; cls = 'nota-halved' }
           cells[hr.hole] = { text: sym, cls }
         }
         const up = r.finalUp
@@ -2069,17 +2078,12 @@ function formatDate(dateStr) {
 }
 .hole-strip::-webkit-scrollbar { display: none; }
 
-/* Display toggles (notations / hcp mode) */
+/* Display toggles row (notations / hcp — also reused by .scorecard-toolbar) */
 .display-toggles {
   display: flex;
   gap: 8px;
   padding: 4px 12px 6px;
   flex-shrink: 0;
-}
-/* Variant when placed above the scorecard grid — tighter top gap */
-.display-toggles--above-grid {
-  padding: 2px 12px 8px;
-  margin-top: -2px;
 }
 .dt-chip {
   display: inline-flex;
@@ -2561,6 +2565,36 @@ function formatDate(dateStr) {
 .nota-t1 { color: #1d4ed8; }
 .nota-t2 { color: #b91c1c; }
 .nota-halved { color: #6b7368; }
+
+/* Diagonal "1⁄2" fraction for halved holes — bigger and more legible
+   than the default Unicode ½ glyph, with the numerator and denominator
+   properly offset by a thin slash. */
+.nota-frac {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--gw-font-mono, 'DM Mono', monospace);
+  font-weight: 800;
+  color: #6b7368;
+  line-height: 1;
+  letter-spacing: 0;
+}
+.nota-frac .nf-num {
+  font-size: 12px;
+  transform: translateY(-5px);
+  margin-right: -1px;
+}
+.nota-frac .nf-slash {
+  font-size: 16px;
+  font-weight: 400;
+  opacity: .85;
+  margin: 0 -1px;
+}
+.nota-frac .nf-den {
+  font-size: 12px;
+  transform: translateY(5px);
+  margin-left: -1px;
+}
 .nota-dormie { color: #b45309; font-weight: 900; }
 .nota-skin-won { color: #6d28d9; }
 .nota-carry { color: #78716c; font-style: italic; }
@@ -3024,11 +3058,36 @@ function formatDate(dateStr) {
 }
 .ge-add-btn:active { background: var(--gw-green-700); border-color: var(--gw-gold); }
 
-/* ── Notation Toggle ────────────────────────────────────────── */
-.scorecard-controls {
-  display: flex; align-items: center; justify-content: flex-end; gap: 4px;
-  padding: 6px 12px 2px;
+/* ── Unified scorecard toolbar: chips + action icons on one row ── */
+.scorecard-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px 8px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
 }
+.scorecard-toolbar .sct-spacer {
+  flex: 1;
+}
+.scorecard-toolbar .dt-chip {
+  padding: 5px 10px;
+  font-size: 11px;
+}
+.scorecard-toolbar .dt-chip .dt-dot {
+  width: 7px;
+  height: 7px;
+}
+.sim-btn {
+  font-size: 14px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1);
+  cursor: pointer; padding: 4px 9px; border-radius: 12px;
+  -webkit-tap-highlight-color: transparent; transition: background .15s;
+  color: rgba(240,237,224,.7);
+  flex-shrink: 0;
+}
+.sim-btn:active { background: rgba(212,175,55,.15); }
+.sim-btn-reset { opacity: .7; font-size: 16px; }
+/* Legacy classes kept for anything still referencing them */
 .notation-toggle-btn, .hcp-toggle-btn, .legend-toggle-btn {
   font-size: 11px; color: rgba(240,237,224,.5); background: rgba(255,255,255,.04);
   border: 1px solid rgba(255,255,255,.1); cursor: pointer; padding: 4px 9px;
@@ -3037,13 +3096,6 @@ function formatDate(dateStr) {
 }
 .notation-toggle-btn:active, .hcp-toggle-btn:active, .legend-toggle-btn:active { color: var(--gw-gold); }
 .hcp-toggle-btn.active { color: #60a5fa; border-color: rgba(96,165,250,.4); background: rgba(96,165,250,.08); }
-.sim-btn {
-  font-size: 14px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1);
-  cursor: pointer; padding: 3px 8px; border-radius: 12px;
-  -webkit-tap-highlight-color: transparent; transition: background .15s;
-}
-.sim-btn:active { background: rgba(212,175,55,.15); }
-.sim-btn-reset { opacity: .7; font-size: 16px; }
 
 /* Scorecard legend */
 .scorecard-legend {
@@ -3267,7 +3319,8 @@ function formatDate(dateStr) {
 
 /* Settle-up and finish banner: suppressed in landscape — portrait-only */
 .scoring-view.is-landscape .settle-up-section,
-.scoring-view.is-landscape .scorecard-controls {
+.scoring-view.is-landscape .scorecard-controls,
+.scoring-view.is-landscape .scorecard-toolbar {
   display: none !important;
 }
 
