@@ -1935,3 +1935,65 @@ body {
     transform: scale(1) translateY(-40px);
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   LANDSCAPE-MODE GLOBAL OVERRIDES
+   These must live in the global stylesheet (not scoped to a view)
+   because they cross component boundaries (bottom nav is rendered
+   from App.vue, not ScoringView).
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Hide the bottom nav entirely while scoring-view is in landscape mode */
+body.gw-landscape .bottom-nav {
+  display: none !important;
+}
+
+/* position: sticky in <thead> cells requires border-collapse: separate.
+   We keep visual seams tight with border-spacing: 0. */
+body.gw-landscape .scorecard-grid {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+/* Sticky grid header when in landscape: keep player column + the par/si/yds
+   rows locked as the user scrolls the scorecard horizontally/vertically.
+   These are declared globally (not scoped) so cell backgrounds are drawn
+   on top of scrolled score cells below. */
+body.gw-landscape .scorecard-grid thead .row-header th {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+}
+body.gw-landscape .scorecard-grid thead .row-par th,
+body.gw-landscape .scorecard-grid thead .row-par td {
+  position: sticky;
+  top: 30px;
+  z-index: 5;
+  background: #faf7f0;
+}
+body.gw-landscape .scorecard-grid thead .row-si th,
+body.gw-landscape .scorecard-grid thead .row-si td {
+  position: sticky;
+  top: 58px;
+  z-index: 5;
+  background: #f5efde;
+}
+body.gw-landscape .scorecard-grid thead .row-yards th,
+body.gw-landscape .scorecard-grid thead .row-yards td {
+  position: sticky;
+  top: 82px;
+  z-index: 5;
+  background: #fbf6e8;
+}
+/* Header-row left-col intersection: above all */
+body.gw-landscape .scorecard-grid thead .row-header .col-player-header,
+body.gw-landscape .scorecard-grid thead .row-par .col-par-label,
+body.gw-landscape .scorecard-grid thead .row-si .col-par-label,
+body.gw-landscape .scorecard-grid thead .row-yards .col-par-label {
+  z-index: 8;
+}
+/* First player-column cells already have sticky-left; bump z-index so they
+   stay above the body rows when scrolling vertically */
+body.gw-landscape .scorecard-grid tbody .col-player-name {
+  z-index: 4;
+}

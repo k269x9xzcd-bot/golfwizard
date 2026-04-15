@@ -977,33 +977,83 @@ function nameToInitials(name) {
   return (parts[0]?.[0] ?? '?').toUpperCase() + '?'
 }
 
-// Helper: get member initials with nickname support
-// round_members rows use guest_name for the full name, not .name
-function memberInitials(m) {
-  if (!m) return '??'
-  // Use nickname if enabled
-  if (m.use_nickname && m.nickname) return m.nickname.slice(0, 6)
-  // Otherwise first+last initial from full name
-  return nameToInitials(m.guest_name || m.name || m.short_name || '?')
-}
-
-// Helper: get member display name with nickname support
+// Helper: get member display name with nickname support (full name — used in
+// dialogs, buttons, hole-view identity badge labels — where space is plentiful)
 function memberDisplay(m) {
   if (!m) return '?'
   if (m.use_nickname && m.nickname) return m.nickname
   return m.guest_name || m.name || m.short_name || '?'
 }
 
-// Helper: member name for scorecard grid (nickname or initials)
+// ── Compact initials for the scorecard grid / notation rows ──────────────
+// Rule: ALWAYS initials in the grid — never nicknames (they eat horizontal
+// space). Collision-aware: if two members in this round produce the same
+// initials, extend each collider with the 2nd letter of their last name
+// until unique (e.g. "J. Smith" + "J. Smithers" → "JSm" + "JSmi").
+function _baseInitials(m) {
+  if (!m) return '??'
+  const src = m.guest_name || m.name || m.short_name || ''
+  return nameToInitials(src)
+}
+
+// Build a de-duped initials map across current round members. Cached by
+// member-id list identity so we don't recompute every render.
+let _initialsCache = { key: null, map: null }
+function _buildInitialsMap() {
+  const members = roundsStore.activeMembers || []
+  const key = members.map(m => m.id).join('|')
+  if (_initialsCache.key === key && _initialsCache.map) return _initialsCache.map
+  const map = new Map()
+  // First pass: base 2-char initials
+  const base = new Map()
+  for (const m of members) base.set(m.id, _baseInitials(m))
+  // Detect collisions and extend
+  const counts = new Map()
+  for (const v of base.values()) counts.set(v, (counts.get(v) || 0) + 1)
+  for (const m of members) {
+    const b = base.get(m.id)
+    if ((counts.get(b) || 0) <= 1) {
+      map.set(m.id, b)
+      continue
+    }
+    // Collision: extend with extra letter of last name (or first name if single word)
+    const full = (m.guest_name || m.name || m.short_name || '').trim()
+    const parts = full.replace(/\./g, '').split(/\s+/).filter(Boolean)
+    let ext = b
+    // Try adding letters from last-name (or only-word), starting at index 1
+    const word = parts.length >= 2 ? parts[parts.length - 1] : (parts[0] || '')
+    for (let extra = 1; extra <= 3 && ext.length < 5; extra++) {
+      const candidate = b + (word[extra] || '').toLowerCase()
+      // Make sure we stopped colliding
+      const stillCollides = members.some(o => o.id !== m.id && _baseInitials(o) === b && (() => {
+        const oFull = (o.guest_name || o.name || o.short_name || '').trim()
+        const oParts = oFull.replace(/\./g, '').split(/\s+/).filter(Boolean)
+        const oWord = oParts.length >= 2 ? oParts[oParts.length - 1] : (oParts[0] || '')
+        const oCandidate = b + (oWord[extra] || '').toLowerCase()
+        return oCandidate === candidate
+      })())
+      ext = candidate
+      if (!stillCollides) break
+    }
+    map.set(m.id, ext)
+  }
+  _initialsCache = { key, map }
+  return map
+}
+
+// Compact grid label: always initials (never nickname). Safe against collisions.
 function memberGridName(member) {
   if (!member) return '?'
-  if (member.nickname && member.use_nickname) return member.nickname
-  if (member.guest_name) {
-    const parts = member.guest_name.trim().split(/\s+/)
-    return parts.map(p => p[0]).join('').toUpperCase().slice(0, 3)
-  }
-  // Fall back to initials
-  return rosterDisplayInitials(member) || '??'
+  const map = _buildInitialsMap()
+  return map.get(member.id) || _baseInitials(member)
+}
+
+// Initials used for notation rows / team labels. Same rule: compact initials,
+// collision-aware, never the nickname.
+function memberInitials(m) {
+  if (!m) return '??'
+  const map = _buildInitialsMap()
+  return map.get(m.id) || _baseInitials(m)
 }
 
 // Helper: build team initials string like "JS+BC"
@@ -3221,10 +3271,8 @@ function formatDate(dateStr) {
   display: none !important;
 }
 
-/* Hide bottom nav globally while in landscape (body class) */
-body.gw-landscape .bottom-nav {
-  display: none !important;
-}
+/* Bottom-nav hiding is declared in global src/style.css so the scoped
+   CSS rewrite doesn't defeat the body-level selector. */
 
 /* Rotate-to-exit hint — tiny, unobtrusive, top-right corner */
 .landscape-hint {
