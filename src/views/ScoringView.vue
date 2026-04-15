@@ -14,6 +14,10 @@
 
     <!-- Active Round -->
     <div v-else class="round-container">
+      <!-- Viewer-mode toast (shown when a non-captain taps a score cell) -->
+      <transition name="fade">
+        <div v-if="viewerToast" class="viewer-toast">{{ viewerToast }}</div>
+      </transition>
       <!-- Header -->
       <header class="scoring-header">
         <div class="header-left">
@@ -22,6 +26,7 @@
             <span class="meta-tag">{{ roundsStore.activeRound.tee }}</span>
             <span class="meta-tag">{{ holesLabel }}</span>
             <span v-if="roundsStore.activeRound.room_code" class="meta-tag meta-live">🔗 {{ roundsStore.activeRound.room_code }}</span>
+            <span v-if="!isCaptain" class="meta-tag meta-viewer" title="View-only — you're not the scorer for this round">👀 Viewer</span>
           </div>
         </div>
         <div class="header-right-actions">
@@ -30,15 +35,21 @@
         </div>
         <div v-if="showRoundMenu" class="round-menu-backdrop" @click="showRoundMenu = false"></div>
         <div v-if="showRoundMenu" class="round-menu-dropdown" @click.stop>
-          <button class="round-menu-item" @click="showRoundMenu = false; showGameEditor = true">
+          <button v-if="isCaptain" class="round-menu-item" @click="showRoundMenu = false; showGameEditor = true">
             🎲 Edit Games & Stakes
           </button>
-          <button class="round-menu-item" @click="showRoundMenu = false; finishRound()" v-if="!roundsStore.activeRound?.is_complete">
+          <button v-if="isCaptain" class="round-menu-item" @click="showRoundMenu = false; openRetroScore()">
+            📝 Enter Scores from Card
+          </button>
+          <button class="round-menu-item" v-if="isCaptain && !roundsStore.activeRound?.is_complete" @click="showRoundMenu = false; finishRound()">
             ✅ Finish Round
           </button>
-          <button class="round-menu-item round-menu-danger" @click="showRoundMenu = false; confirmDeleteActive = true">
+          <button v-if="isCaptain" class="round-menu-item round-menu-danger" @click="showRoundMenu = false; confirmDeleteActive = true">
             🗑️ Delete Round
           </button>
+          <div v-if="!isCaptain" class="round-menu-item round-menu-note">
+            👀 You're viewing this round in read-only mode. Ask the scorer to transfer the role if needed.
+          </div>
         </div>
       </header>
 
@@ -99,6 +110,64 @@
               </button>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- ── Retro score overlay (bulk-enter scores from paper card) ── -->
+      <div v-if="showRetroScore" class="delete-overlay" @click="showRetroScore = false">
+        <div class="retro-panel" @click.stop>
+          <div class="retro-header">
+            <div>
+              <h3 class="retro-title">📝 Enter Scores from Card</h3>
+              <div class="retro-sub">Empty cells in red — tap any cell to type a score. Missing holes won't be saved.</div>
+            </div>
+            <button class="close-btn-sm" @click="showRetroScore = false">✕</button>
+          </div>
+
+          <div class="retro-scroll">
+            <table class="retro-grid">
+              <thead>
+                <tr>
+                  <th class="retro-th retro-th--player">Player</th>
+                  <th v-for="h in visibleHoles" :key="h" class="retro-th">{{ h }}</th>
+                </tr>
+                <tr class="retro-par-row">
+                  <th class="retro-th retro-th--player">Par</th>
+                  <th v-for="h in visibleHoles" :key="'par-'+h" class="retro-th retro-par">{{ parForHole(h) }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="m in roundsStore.activeMembers" :key="m.id">
+                  <td class="retro-td retro-td--player">{{ memberGridName(m) }}</td>
+                  <td
+                    v-for="h in visibleHoles"
+                    :key="'rc-'+m.id+'-'+h"
+                    class="retro-td"
+                    :class="{ 'retro-empty': retroScores[m.id]?.[h] == null || retroScores[m.id]?.[h] === '' }"
+                  >
+                    <input
+                      type="number"
+                      inputmode="numeric"
+                      min="1"
+                      max="20"
+                      :value="retroScores[m.id]?.[h] ?? ''"
+                      @input="onRetroInput(m.id, h, $event.target.value)"
+                      class="retro-input"
+                    />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="retro-footer">
+            <div class="retro-count">{{ retroFilledCount }} / {{ roundsStore.activeMembers.length * visibleHoles.length }} cells filled</div>
+            <button class="btn-ghost" @click="showRetroScore = false">Cancel</button>
+            <button class="btn-primary" :disabled="retroSaving" @click="saveRetroScores">
+              {{ retroSaving ? 'Saving…' : `Save ${retroFilledCount} scores` }}
+            </button>
+          </div>
+          <div v-if="retroError" class="retro-error">{{ retroError }}</div>
         </div>
       </div>
 
@@ -557,6 +626,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
 import { useRoundsStore } from '../stores/rounds'
 import { useCoursesStore } from '../stores/courses'
 import { displayName as rosterDisplayName, displayInitials as rosterDisplayInitials } from '../stores/roster'
@@ -572,6 +642,7 @@ import {
 import { computeAllSettlements } from '../modules/settlements'
 import CrossMatchBanner from '../components/CrossMatchBanner.vue'
 
+const authStore = useAuthStore()
 const roundsStore = useRoundsStore()
 const coursesStore = useCoursesStore()
 const router = useRouter()
@@ -719,6 +790,100 @@ function onTouchEnd(e) {
     } else if (dx > 0 && idx > 0) {
       activeHole.value = visibleHoles.value[idx - 1]
     }
+  }
+}
+
+// ── Captain / viewer role ──────────────────────────────────────
+// Captain = the signed-in user who OWNS this round. For local/guest rounds
+// everyone is effectively the captain. Non-captain viewers can read the
+// scorecard but can't tap to enter scores (RLS would block the write anyway
+// at the DB level, but we preempt it client-side with a clear toast).
+const isCaptain = computed(() => {
+  const r = roundsStore.activeRound
+  if (!r) return true
+  // Guest round (no owner) — whoever is looking at it is effectively the captain
+  if (!r.owner_id) return true
+  // Unauthenticated user viewing a real round — not the captain
+  if (!authStore.isAuthenticated) return false
+  return r.owner_id === authStore.user?.id
+})
+
+const viewerToast = ref('')
+function flashViewerToast() {
+  viewerToast.value = 'View-only — ask the scorer to enter this score, or request scorer role in the ⚙️ menu.'
+  setTimeout(() => { viewerToast.value = '' }, 3500)
+}
+
+// ── Retro scoring (bulk-enter 18 holes from paper card) ───────
+const showRetroScore = ref(false)
+const retroScores = ref({})   // { memberId: { hole: number|string|'' } }
+const retroSaving = ref(false)
+const retroError = ref('')
+
+function openRetroScore() {
+  // Seed the editor with existing scores
+  const seeded = {}
+  for (const m of roundsStore.activeMembers) {
+    seeded[m.id] = {}
+    const live = roundsStore.activeScores[m.id] || {}
+    for (const h of (visibleHoles.value || [])) {
+      if (live[h] != null) seeded[m.id][h] = live[h]
+    }
+  }
+  retroScores.value = seeded
+  retroError.value = ''
+  showRetroScore.value = true
+}
+
+function onRetroInput(memberId, hole, value) {
+  const v = value === '' || value == null ? null : Number(value)
+  if (!retroScores.value[memberId]) retroScores.value[memberId] = {}
+  if (v == null || Number.isNaN(v)) {
+    delete retroScores.value[memberId][hole]
+  } else if (v >= 1 && v <= 20) {
+    retroScores.value[memberId][hole] = v
+  }
+}
+
+const retroFilledCount = computed(() => {
+  let n = 0
+  for (const mid in retroScores.value) {
+    for (const h in retroScores.value[mid]) {
+      if (retroScores.value[mid][h] != null && retroScores.value[mid][h] !== '') n++
+    }
+  }
+  return n
+})
+
+async function saveRetroScores() {
+  if (retroSaving.value) return
+  retroSaving.value = true
+  retroError.value = ''
+  let saved = 0
+  let failed = 0
+  try {
+    for (const m of roundsStore.activeMembers) {
+      const byHole = retroScores.value[m.id] || {}
+      for (const h of (visibleHoles.value || [])) {
+        const v = byHole[h]
+        if (v == null || v === '') continue
+        const existing = roundsStore.activeScores[m.id]?.[h]
+        if (existing === v) continue // no-op
+        try {
+          await roundsStore.setScore(m.id, h, v)
+          saved++
+        } catch (e) {
+          failed++
+        }
+      }
+    }
+    if (failed > 0) {
+      retroError.value = `Saved ${saved}. ${failed} score(s) failed — check your connection and try again.`
+    } else {
+      showRetroScore.value = false
+    }
+  } finally {
+    retroSaving.value = false
   }
 }
 
@@ -1732,20 +1897,20 @@ async function updateSelectedConfig(field, value) {
 
 // ── Inline score entry (replaces modal) ─────────────────────────
 function inlineSetPar(member) {
-  // Tap the score box: if no score, set par; if already has score, reset to par
+  if (!isCaptain.value) return flashViewerToast()
   const hole = activeHole.value
   const existing = getScore(member.id, hole)
   const par = parForHole(hole)
-  const newScore = existing === null ? par : existing  // first tap = par
+  const newScore = existing === null ? par : existing
   roundsStore.setScore(member.id, hole, newScore)
 }
 
 function inlineInc(member) {
+  if (!isCaptain.value) return flashViewerToast()
   const hole = activeHole.value
   const existing = getScore(member.id, hole)
   const par = parForHole(hole)
   if (existing === null) {
-    // No score yet — set to par+1 (bogey)
     roundsStore.setScore(member.id, hole, par + 1)
   } else if (existing < 13) {
     roundsStore.setScore(member.id, hole, existing + 1)
@@ -1753,11 +1918,11 @@ function inlineInc(member) {
 }
 
 function inlineDec(member) {
+  if (!isCaptain.value) return flashViewerToast()
   const hole = activeHole.value
   const existing = getScore(member.id, hole)
   const par = parForHole(hole)
   if (existing === null) {
-    // No score yet — set to par-1 (birdie)
     roundsStore.setScore(member.id, hole, Math.max(1, par - 1))
   } else if (existing > 1) {
     roundsStore.setScore(member.id, hole, existing - 1)
@@ -2002,6 +2167,35 @@ function formatDate(dateStr) {
   font-weight: 600;
 }
 .meta-live { color: var(--gw-gold, #d4af37); background: rgba(212,175,55,.1); }
+.meta-viewer {
+  color: #93c5fd;
+  background: rgba(96,165,250,.12);
+  border: 1px solid rgba(96,165,250,.3);
+}
+
+/* Viewer-mode toast (non-captain taps a score cell) */
+.viewer-toast {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  max-width: calc(100vw - 32px);
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: rgba(12,15,13,.96);
+  border: 1px solid rgba(96,165,250,.4);
+  color: #f0ede0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.fade-enter-active, .fade-leave-active { transition: opacity .2s, transform .2s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; transform: translateX(-50%) translateY(-6px); }
 .btn-rules-sm {
   font-size: 18px;
   text-decoration: none;
@@ -2028,6 +2222,127 @@ function formatDate(dateStr) {
 }
 .round-menu-item:active { background: rgba(255,255,255,.06); }
 .round-menu-danger { color: #f87171; }
+.round-menu-note {
+  font-size: 11px;
+  color: rgba(147,197,253,.75);
+  padding: 8px 12px;
+  line-height: 1.4;
+  font-weight: 500;
+  cursor: default;
+  background: rgba(96,165,250,.08);
+  border-radius: 8px;
+  margin: 4px 0;
+}
+
+/* ── Retro-score bulk-entry panel ─────────────────────────── */
+.retro-panel {
+  background: var(--gw-neutral-900);
+  border: 1px solid var(--gw-gold);
+  border-radius: 16px;
+  max-width: min(96vw, 720px);
+  width: 100%;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,.6);
+}
+.retro-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+.retro-title { font-family: var(--gw-font-display); font-size: 18px; color: var(--gw-text); margin: 0; }
+.retro-sub { font-size: 11px; color: var(--gw-text-muted); margin-top: 3px; line-height: 1.4; }
+.retro-scroll {
+  flex: 1;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 8px;
+  background: #faf7f0;
+}
+.retro-grid {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-family: var(--gw-font-mono, monospace);
+  color: #1a1f1b;
+  width: 100%;
+}
+.retro-th {
+  position: sticky; top: 0;
+  background: #f0ebdd;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 6px 4px;
+  border-bottom: 1px solid rgba(0,0,0,.12);
+  text-align: center;
+  white-space: nowrap;
+}
+.retro-th--player {
+  position: sticky; left: 0;
+  z-index: 3;
+  background: #f0ebdd;
+  text-align: left;
+  padding-left: 10px;
+  min-width: 70px;
+}
+.retro-par { color: #9a7a1e; font-weight: 700; background: #fbf6e8; }
+.retro-par-row .retro-th--player { background: #fbf6e8; }
+.retro-td {
+  padding: 2px; text-align: center;
+  border-bottom: 1px solid rgba(0,0,0,.05);
+}
+.retro-td--player {
+  position: sticky; left: 0; z-index: 2;
+  background: #f0ebdd;
+  text-align: left;
+  padding: 6px 10px;
+  font-weight: 800;
+  font-size: 13px;
+  color: #1a1f1b;
+  border-right: 1px solid rgba(0,0,0,.1);
+}
+.retro-td.retro-empty { background: rgba(239,68,68,.1); }
+.retro-input {
+  width: 36px;
+  padding: 6px 2px;
+  text-align: center;
+  background: transparent;
+  border: 1px solid rgba(0,0,0,.1);
+  border-radius: 4px;
+  font-family: var(--gw-font-mono, monospace);
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a1f1b;
+  outline: none;
+}
+.retro-input:focus {
+  border-color: var(--gw-gold);
+  background: white;
+}
+.retro-empty .retro-input { border-color: rgba(239,68,68,.3); }
+.retro-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid rgba(255,255,255,.06);
+  background: var(--gw-neutral-900);
+}
+.retro-count {
+  flex: 1;
+  font-size: 12px;
+  color: var(--gw-text-muted);
+  font-weight: 600;
+}
+.retro-error {
+  padding: 10px 16px 14px;
+  color: #f87171;
+  font-size: 12px;
+  background: rgba(239,68,68,.08);
+}
 
 /* Delete overlay (reused pattern) */
 .scoring-view .delete-overlay {

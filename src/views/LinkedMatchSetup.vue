@@ -107,6 +107,67 @@
         </div>
       </div>
 
+      <!-- Roster invite picker -->
+      <div class="lms-roster-card">
+        <div class="lms-roster-header">
+          <span class="lms-roster-title">📧 Send by email</span>
+          <span class="lms-roster-sub">Tap a roster player to email the invite</span>
+        </div>
+
+        <div v-if="sortedRoster.length === 0" class="lms-roster-empty">
+          Your roster is empty. Add players on the Players tab first.
+        </div>
+
+        <div class="lms-roster-list">
+          <div
+            v-for="p in sortedRoster"
+            :key="p.id"
+            class="lms-roster-row"
+            :class="{ 'lms-roster-row--no-email': !p.email }"
+          >
+            <div class="lms-roster-info">
+              <div class="lms-roster-name">{{ p.name }}</div>
+              <div class="lms-roster-meta">
+                <span v-if="p.email" class="lms-roster-email">{{ p.email }}</span>
+                <span v-else class="lms-roster-no-email">No email on file</span>
+              </div>
+            </div>
+            <button
+              v-if="p.email"
+              class="lms-roster-send"
+              :class="{ 'lms-roster-send--sent': sentTo.has(p.id) }"
+              @click="sendEmailTo(p)"
+            >
+              {{ sentTo.has(p.id) ? '✓ Sent' : 'Send' }}
+            </button>
+            <button
+              v-else
+              class="lms-roster-add-email"
+              @click="promptAddEmail(p)"
+            >
+              + Add email
+            </button>
+          </div>
+        </div>
+
+        <!-- Inline email-add form for the player being prompted -->
+        <div v-if="emailPrompt" class="lms-email-prompt">
+          <div class="lms-email-prompt-title">Add email for {{ emailPrompt.name }}</div>
+          <div class="lms-email-prompt-row">
+            <input
+              v-model="emailPromptValue"
+              type="email"
+              class="lms-email-input"
+              :placeholder="`${emailPrompt.name.toLowerCase().replace(/\\s+/g,'.')}@example.com`"
+              autocomplete="email"
+              @keyup.enter="saveEmailPrompt"
+            />
+            <button class="lms-btn-ghost lms-btn--compact" @click="emailPrompt = null">Cancel</button>
+            <button class="lms-btn-primary lms-btn--compact" :disabled="!isValidEmail(emailPromptValue)" @click="saveEmailPrompt">Save</button>
+          </div>
+        </div>
+      </div>
+
       <div class="lms-footer">
         <button class="lms-btn-primary" @click="goToScoring">
           Start scoring →
@@ -120,13 +181,88 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useLinkedMatchesStore, buildInviteUrl } from '../stores/linkedMatches'
+import { useRosterStore } from '../stores/roster'
 import WizardOverlay from '../components/WizardOverlay.vue'
 
 const router = useRouter()
 const linkedStore = useLinkedMatchesStore()
+const rosterStore = useRosterStore()
+
+onMounted(() => {
+  // Make sure we have the user's roster loaded for the picker
+  if (!rosterStore.players?.length) rosterStore.fetchPlayers?.()
+})
+
+// Roster sorted: players with emails first, alphabetical by last name
+const sortedRoster = computed(() => {
+  const ps = [...(rosterStore.players || [])]
+  return ps.sort((a, b) => {
+    // Players with email float to the top
+    const aHas = !!a.email
+    const bHas = !!b.email
+    if (aHas && !bHas) return -1
+    if (!aHas && bHas) return 1
+    // Then by last-name initial
+    const aLast = (a.name || '').split(/\s+/).pop()?.toLowerCase() || ''
+    const bLast = (b.name || '').split(/\s+/).pop()?.toLowerCase() || ''
+    return aLast.localeCompare(bLast)
+  })
+})
+
+const sentTo = ref(new Set())
+const emailPrompt = ref(null) // the roster player being prompted for an email
+const emailPromptValue = ref('')
+
+function isValidEmail(v) {
+  return typeof v === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim())
+}
+
+function sendEmailTo(player) {
+  if (!created.value || !player.email) return
+  const url = created.value.inviteUrl
+  const subject = `Join my 4v4 best-ball match — ${matchName.value || created.value.match.name}`
+  const body = [
+    `Hey ${player.name.split(' ')[0]},`,
+    '',
+    `I've set up a 4v4 best-ball match in GolfWizard. Format: ${ballsToCount.value === 1 ? '1 BB Net' : '2 BB Net'}, $${stake.value}/player.`,
+    '',
+    `Open this link on your iPhone and run the wizard for your foursome — the match will auto-link:`,
+    url,
+    '',
+    `Invite code: ${created.value.match.invite_code}`,
+    '',
+    `See you on the course.`,
+  ].join('\n')
+  const mailto = `mailto:${encodeURIComponent(player.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+  window.location.href = mailto
+  sentTo.value = new Set([...sentTo.value, player.id])
+}
+
+function promptAddEmail(player) {
+  emailPrompt.value = player
+  emailPromptValue.value = ''
+}
+
+async function saveEmailPrompt() {
+  if (!emailPrompt.value || !isValidEmail(emailPromptValue.value)) return
+  const pid = emailPrompt.value.id
+  const email = emailPromptValue.value.trim()
+  try {
+    await rosterStore.updatePlayer(pid, { email })
+  } catch (e) {
+    console.warn('[lms] updatePlayer failed:', e)
+    // Even if the persist failed, let them send the invite locally
+    const p = rosterStore.players?.find(x => x.id === pid)
+    if (p) p.email = email
+  }
+  // Immediately follow through and send the invite
+  const p = rosterStore.players?.find(x => x.id === pid) || { ...emailPrompt.value, email }
+  emailPrompt.value = null
+  sendEmailTo(p)
+}
 
 const step = ref('format') // 'format' | 'wizard' | 'invite'
 const ballsToCount = ref(1)
@@ -449,5 +585,146 @@ function goToScoring() {
   border-radius: 10px;
   font-size: 13px;
   line-height: 1.4;
+}
+
+/* ── Roster invite picker ─────────────────────────── */
+.lms-roster-card {
+  background: var(--gw-card-bg);
+  border: 1px solid var(--gw-card-border);
+  border-radius: 16px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.lms-roster-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.lms-roster-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--gw-text, #f0ede0);
+}
+.lms-roster-sub {
+  font-size: 11px;
+  color: var(--gw-text-muted, #7d9283);
+}
+.lms-roster-empty {
+  font-size: 12px;
+  color: var(--gw-text-muted);
+  padding: 8px 0;
+  text-align: center;
+}
+.lms-roster-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.lms-roster-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 10px;
+}
+.lms-roster-row--no-email { opacity: .7; }
+.lms-roster-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.lms-roster-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--gw-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lms-roster-meta {
+  font-size: 11px;
+  color: var(--gw-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lms-roster-email { color: rgba(240,237,224,.55); }
+.lms-roster-no-email { color: rgba(239,68,68,.7); font-weight: 600; }
+.lms-roster-send {
+  padding: 7px 14px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #d4af37, #b8961e);
+  color: #0c0f0d;
+  font-weight: 800;
+  font-size: 12px;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.lms-roster-send:active { transform: scale(.96); }
+.lms-roster-send--sent {
+  background: rgba(34,197,94,.25);
+  color: #86efac;
+}
+.lms-roster-add-email {
+  padding: 6px 12px;
+  border-radius: 9px;
+  background: rgba(96,165,250,.12);
+  border: 1px solid rgba(96,165,250,.35);
+  color: #93c5fd;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.lms-roster-add-email:active { transform: scale(.96); }
+
+.lms-email-prompt {
+  margin-top: 4px;
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(96,165,250,.08);
+  border: 1px solid rgba(96,165,250,.3);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lms-email-prompt-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #93c5fd;
+}
+.lms-email-prompt-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.lms-email-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(0,0,0,.3);
+  border: 1px solid rgba(255,255,255,.1);
+  color: var(--gw-text);
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+}
+.lms-email-input:focus { border-color: var(--gw-gold); }
+.lms-btn--compact {
+  padding: 8px 12px !important;
+  font-size: 12px !important;
+  flex-shrink: 0;
 }
 </style>
