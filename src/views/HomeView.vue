@@ -15,6 +15,9 @@
       </div>
     </header>
 
+    <!-- Cross-match banner (shown when a linked match exists) -->
+    <CrossMatchBanner />
+
     <!-- Active round card — ONLY for non-tournament rounds -->
     <div
       v-if="roundsStore.activeRound && !isTournamentRound"
@@ -116,6 +119,7 @@ import { useAuthStore } from '../stores/auth'
 import { useRoundsStore } from '../stores/rounds'
 import { hasTournamentAccess } from '../stores/tournament.js'
 import AuthModal from '../components/AuthModal.vue'
+import CrossMatchBanner from '../components/CrossMatchBanner.vue'
 
 const appVersion = __APP_VERSION__
 

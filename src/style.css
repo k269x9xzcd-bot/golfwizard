@@ -347,6 +347,42 @@ body {
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
+/* Wizard locked-by-linked-match card (shown on invitee flow) */
+.wiz-locked-card {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(96,165,250,.14) 0%, rgba(96,165,250,.04) 100%);
+  border: 1px solid rgba(96,165,250,.4);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.wiz-locked-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  color: #93c5fd;
+  text-transform: uppercase;
+}
+.wiz-locked-course {
+  font-family: var(--gw-font-display);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--gw-text);
+  line-height: 1.2;
+}
+.wiz-locked-tee {
+  font-size: 13px;
+  color: var(--gw-text-muted);
+  font-weight: 600;
+}
+.wiz-locked-hint {
+  font-size: 11px;
+  color: rgba(240,237,224,.55);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
 .wiz-input:focus {
   border-color: var(--gw-gold);
   box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.15);

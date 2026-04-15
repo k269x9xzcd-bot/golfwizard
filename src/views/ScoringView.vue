@@ -124,6 +124,9 @@
            ═══════════════════════════════════════════════════════════ -->
       <div v-if="activeHole === 0" class="card-view" @touchstart="onTouchStart" @touchend="onTouchEnd">
 
+        <!-- Cross-match banner (shown only when a linked match touches this round) -->
+        <CrossMatchBanner />
+
         <!-- Finish Round Banner -->
         <div v-if="roundCompletionInfo.allScored && !roundsStore.activeRound?.is_complete" class="finish-banner finish-ready">
           <div class="finish-banner-text">
@@ -567,6 +570,7 @@ import {
   holeRange
 } from '../modules/gameEngine'
 import { computeAllSettlements } from '../modules/settlements'
+import CrossMatchBanner from '../components/CrossMatchBanner.vue'
 
 const roundsStore = useRoundsStore()
 const coursesStore = useCoursesStore()

@@ -9,13 +9,25 @@
 
       <!-- ── Step 1: Course & Date ───────────────────────────── -->
       <div v-if="step === 1" class="wizard-step">
+
+        <!-- Locked course notice (shown for linked-match invitees) -->
+        <div v-if="props.lockedCourse" class="wiz-locked-card">
+          <div class="wiz-locked-label">🔒 Course locked by linked match</div>
+          <div class="wiz-locked-course">{{ props.lockedCourse }}</div>
+          <div v-if="props.lockedTee" class="wiz-locked-tee">Tee: {{ props.lockedTee }}</div>
+          <div class="wiz-locked-hint">
+            {{ props.lockedHint || 'Both foursomes must play the same course for the 4v4 to settle.' }}
+          </div>
+        </div>
+
         <input
+          v-if="!props.lockedCourse"
           v-model="courseSearch"
           class="wiz-input"
           placeholder="Search courses…"
           @focus="scrollInputIntoView"
         />
-        <div class="course-list">
+        <div v-if="!props.lockedCourse" class="course-list">
           <div v-if="apiSearching" class="course-searching">Searching…</div>
 
           <!-- Favorites label when no search -->
@@ -49,8 +61,8 @@
           <span class="api-loading-spinner">⟳</span> Fetching course data from API…
         </div>
 
-        <!-- Tee selector -->
-        <div v-if="!apiLoadingWizard && form.courseName && teesForCourse.length" class="tee-section">
+        <!-- Tee selector (hidden when locked by a linked match) -->
+        <div v-if="!apiLoadingWizard && form.courseName && teesForCourse.length && !props.lockedTee" class="tee-section">
           <label class="wiz-label">Select Tee:</label>
           <div class="tee-options">
             <button
@@ -928,6 +940,14 @@ const TeamPicker = {
 }
 
 const emit = defineEmits(['close', 'created', 'setup-course'])
+const props = defineProps({
+  // When a linked-match invitee opens the wizard we lock course/tee to the
+  // host's selection so the 4v4 math is apples-to-apples. Empty string or
+  // null means "no lock, full picker available".
+  lockedCourse: { type: String, default: null },
+  lockedTee: { type: String, default: null },
+  lockedHint: { type: String, default: null },
+})
 const coursesStore = useCoursesStore()
 const rosterStore = useRosterStore()
 const roundsStore = useRoundsStore()
@@ -1087,8 +1107,8 @@ function toggleSideGame(key) {
 
 // ── Form state ───────────────────────────────────────────────────
 const form = ref({
-  courseName: '',
-  tee: '',
+  courseName: props.lockedCourse || '',
+  tee: props.lockedTee || '',
   date: new Date().toISOString().slice(0, 10),
   holesMode: '18',
   players: [],
