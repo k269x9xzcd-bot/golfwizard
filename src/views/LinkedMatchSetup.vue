@@ -80,6 +80,27 @@
       @created="onRoundACreated"
     />
 
+    <!-- ── Step 2b: Attach failed recovery ─────────────── -->
+    <div v-if="step === 'attach-failed'" class="lms-step">
+      <div class="lms-step-label">Your round was saved — match link failed</div>
+      <div class="lms-invite-card">
+        <div class="lms-invite-emoji">⚠️</div>
+        <div class="lms-invite-title">Almost there</div>
+        <div class="lms-invite-sub">
+          Your foursome's round was created, but attaching the 4v4 cross-match didn't go through.
+        </div>
+        <div class="lms-invite-hint" style="padding-top:8px">
+          {{ error || 'Network glitch — tap retry.' }}
+        </div>
+        <button class="lms-btn-primary" @click="retryAttachMatch">
+          🔁 Retry attach match
+        </button>
+        <button class="lms-btn-ghost" @click="$router.push('/scoring')">
+          Skip — just score my round
+        </button>
+      </div>
+    </div>
+
     <!-- ── Step 3: Share invite ─────────────────────── -->
     <div v-if="step === 'invite'" class="lms-step">
       <div class="lms-step-label">Match created · share with the other foursome</div>
@@ -272,8 +293,11 @@ const error = ref('')
 const copied = ref(false)
 const created = ref(null) // { match, inviteUrl }
 
+const pendingRound = ref(null) // round created but not yet attached to linked match
+
 async function onRoundACreated(round) {
   error.value = ''
+  pendingRound.value = round
   try {
     created.value = await linkedStore.createLinkedMatch({
       name: matchName.value || `4v4 · ${round.course_name}`,
@@ -281,12 +305,22 @@ async function onRoundACreated(round) {
       ballsToCount: ballsToCount.value,
       stake: stake.value,
     })
+    pendingRound.value = null
     step.value = 'invite'
   } catch (e) {
     console.error('[lms] createLinkedMatch failed:', e)
-    error.value = e?.message || 'Could not create the linked match. Your foursome\'s round is still saved, but the cross-match wasn\'t attached.'
-    step.value = 'format'
+    error.value = e?.message || 'Your round is saved, but attaching the cross-match failed. Tap retry — the round is already created so this is just saving the invite config.'
+    step.value = 'attach-failed'
   }
+}
+
+async function retryAttachMatch() {
+  if (!pendingRound.value) {
+    error.value = 'Lost track of your round. Start over from the format screen.'
+    step.value = 'format'
+    return
+  }
+  await onRoundACreated(pendingRound.value)
 }
 
 async function shareInvite() {

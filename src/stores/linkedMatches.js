@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { supabase } from '../supabase'
 import { useAuthStore } from './auth'
 import { supaCallWithRetry, supaCall } from '../modules/supabaseOps'
+import { supaRawInsert, supaRawRequest } from '../modules/supaRaw'
 
 export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
   // All linked matches visible to this user (ones they created OR ones where
@@ -65,14 +66,22 @@ export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
     const auth = useAuthStore()
     if (!auth.isAuthenticated) throw new Error('Sign in required to create a linked match.')
 
-    // Generate invite code via the Postgres function we defined in the migration.
-    const { data: codeData, error: codeErr } = await supaCall(
-      'rpc.generate_linked_match_code',
-      supabase.rpc('generate_linked_match_code'),
-      6000,
-    )
-    if (codeErr) throw codeErr
-    const inviteCode = codeData
+    // Generate invite code via the Postgres function. On iOS PWA with a
+    // stuck HTTP/2 pool, SJS RPC calls hang — fall back to client-side
+    // random code generation as last resort.
+    let inviteCode = null
+    try {
+      const { data: codeData } = await supaCall(
+        'rpc.generate_linked_match_code',
+        supabase.rpc('generate_linked_match_code'),
+        4000,
+      )
+      inviteCode = codeData
+    } catch {
+      // Client-side fallback — 6 chars from unambiguous alphabet.
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+      inviteCode = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+    }
     if (!inviteCode) throw new Error('Could not generate invite code.')
 
     const payload = {
@@ -88,12 +97,28 @@ export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
       status: 'pending',
     }
 
-    const { data, error } = await supaCallWithRetry(
-      'linked_matches.insert',
-      () => supabase.from('linked_matches').insert(payload).select().single(),
-      8000,
-    )
-    if (error) throw error
+    // Try SJS with tight 5s budget, then pivot to raw fetch if stuck.
+    let data = null
+    try {
+      const res = await supaCallWithRetry(
+        'linked_matches.insert',
+        () => supabase.from('linked_matches').insert(payload).select().single(),
+        5000,
+      )
+      if (res.error) throw res.error
+      data = res.data
+    } catch (e) {
+      console.warn('[linkedMatches] SJS insert failed, trying raw fetch:', e?.message)
+      try {
+        const rows = await supaRawInsert('linked_matches', payload, 10000)
+        data = Array.isArray(rows) ? rows[0] : rows
+      } catch (rawErr) {
+        console.error('[linkedMatches] raw insert also failed:', rawErr)
+        throw new Error('Could not create the linked match. Check your connection and try again, or force-quit the app and reopen.')
+      }
+    }
+
+    if (!data) throw new Error('Linked match creation returned no data.')
 
     linkedMatches.value = [data, ...linkedMatches.value]
     return {

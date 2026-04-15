@@ -148,11 +148,36 @@ export const useRosterStore = defineStore('roster', () => {
       _saveLocal()
       return
     }
-    const { data, error } = await supabase
-      .from('roster_players').update(updates).eq('id', id).select().single()
-    if (error) throw error
+
+    // Optimistic local update — UI reflects the change immediately regardless
+    // of whether Supabase round-trip succeeds.
     const idx = players.value.findIndex(p => p.id === id)
-    if (idx >= 0) players.value[idx] = data
+    const before = idx >= 0 ? { ...players.value[idx] } : null
+    if (idx >= 0) players.value[idx] = { ...players.value[idx], ...updates }
+
+    // Try SJS with tight budget, then raw-fetch fallback (iOS PWA HTTP/2 pool recovery).
+    try {
+      const { supaCall } = await import('../modules/supabaseOps')
+      const res = await supaCall(
+        'roster.update',
+        supabase.from('roster_players').update(updates).eq('id', id).select().single(),
+        5000,
+      )
+      if (!res.error && res.data && idx >= 0) players.value[idx] = res.data
+      else if (res.error) throw res.error
+    } catch (e) {
+      console.warn('[roster] SJS update failed, trying raw fetch:', e?.message)
+      try {
+        const { supaRawRequest } = await import('../modules/supaRaw')
+        const rows = await supaRawRequest('PATCH', `roster_players?id=eq.${id}&select=*`, updates, 10000)
+        const row = Array.isArray(rows) ? rows[0] : rows
+        if (row && idx >= 0) players.value[idx] = row
+      } catch (rawErr) {
+        console.error('[roster] raw update also failed, reverting optimistic update:', rawErr)
+        if (before && idx >= 0) players.value[idx] = before
+        throw new Error('Could not save changes. Check your connection and try again.')
+      }
+    }
   }
 
   async function deletePlayer(id) {

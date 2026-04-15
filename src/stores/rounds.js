@@ -286,7 +286,7 @@ export const useRoundsStore = defineStore('rounds', () => {
       const res = await supaWithTimeout(
         'rounds.insert',
         supabase.from('rounds').insert(roundBody).select().single(),
-        8000
+        5000  // 5s SJS budget — pivot to raw quickly so user isn't stuck waiting
       )
       round = res.data
       error = res.error
@@ -296,6 +296,7 @@ export const useRoundsStore = defineStore('rounds', () => {
         const rows = await supaRawInsert('rounds', roundBody, 12000)
         round = Array.isArray(rows) ? rows[0] : rows
         error = null
+        _debugLog(`[rounds] raw insert SUCCEEDED — round id ${round?.id?.slice(0, 8) || '?'}`)
       } catch (rawErr) {
         _debugLog(`[rounds] raw insert also failed: ${rawErr.message}`)
         throw new Error(
@@ -333,7 +334,7 @@ export const useRoundsStore = defineStore('rounds', () => {
         const { data: mData, error: mErr } = await supaWithTimeout(
           'round_members.insert',
           supabase.from('round_members').insert(memberRows).select(),
-          8000
+          5000
         )
         if (mErr) throw mErr
         insertedMembers = mData ?? []
@@ -393,7 +394,7 @@ export const useRoundsStore = defineStore('rounds', () => {
         const { data: gData, error: gErr } = await supaWithTimeout(
           'game_configs.insert',
           supabase.from('game_configs').insert(gameRows).select(),
-          8000
+          5000
         )
         if (gErr) throw gErr
         insertedGames = gData ?? []

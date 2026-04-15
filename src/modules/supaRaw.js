@@ -19,20 +19,43 @@
  * when the Supabase JS call has timed out.
  */
 
-import { supabase } from '../supabase'
-
 const SUPABASE_URL = 'https://mhzhdmsiliyfnijzddhu.supabase.co'
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1oemhkbXNpbGl5Zm5panpkZGh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4NDQyODcsImV4cCI6MjA5MTQyMDI4N30.dKdXusJw_YqNtd5WEKm_qDyXbdfnKUGkxfDHBhXur3M'
 
 /**
- * Get the current user's access token for RLS. Falls back to anon key
- * if no session (though in that case RLS-protected writes will fail anyway).
+ * Get the current user's access token for RLS.
+ *
+ * CRITICAL: we must NOT go through the Supabase JS client here
+ * (supabase.auth.getSession) because on iOS 18.7 PWA when the HTTP/2
+ * connection pool is stuck, even local auth calls queue behind the
+ * zombie socket and hang. Instead we read the session directly out
+ * of localStorage where supabase-js persists it. This path is pure
+ * synchronous and cannot hang.
+ *
+ * Falls back to the anon key if no session is stored — RLS-protected
+ * writes will then fail fast with a clear error rather than hanging.
  */
-async function _getBearer() {
+function _getBearerSync() {
   try {
-    const { data } = await supabase.auth.getSession()
-    const tok = data?.session?.access_token
-    if (tok) return tok
+    // supabase-js v2 stores the session at either of two key patterns:
+    //   sb-<project-ref>-auth-token   (new)
+    //   supabase.auth.token            (old)
+    // We scan for anything matching and pick the freshest.
+    let best = null
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (!key) continue
+      if (!key.startsWith('sb-') || !key.endsWith('-auth-token')) continue
+      try {
+        const parsed = JSON.parse(localStorage.getItem(key) || 'null')
+        const tok = parsed?.access_token || parsed?.currentSession?.access_token
+        if (tok) {
+          const expiresAt = parsed?.expires_at || parsed?.currentSession?.expires_at || 0
+          if (!best || expiresAt > best.expiresAt) best = { tok, expiresAt }
+        }
+      } catch {}
+    }
+    if (best?.tok) return best.tok
   } catch {}
   return SUPABASE_ANON_KEY
 }
@@ -54,9 +77,11 @@ function _debugLog(msg) {
  * @param {object} extraHeaders   optional header overrides (e.g. { Prefer: 'return=representation' })
  */
 export async function supaRawRequest(method, pathAndQuery, body, timeoutMs = 10000, extraHeaders = {}) {
-  const bearer = await _getBearer()
+  // Synchronous read from localStorage — cannot hang even if the SJS
+  // connection pool is stuck.
+  const bearer = _getBearerSync()
   const url = `${SUPABASE_URL}/rest/v1/${pathAndQuery}${pathAndQuery.includes('?') ? '&' : '?'}_t=${Date.now()}`
-  _debugLog(`→ raw ${method} ${pathAndQuery.split('?')[0]}`)
+  _debugLog(`→ raw ${method} ${pathAndQuery.split('?')[0]} (auth=${bearer === SUPABASE_ANON_KEY ? 'anon' : 'user'})`)
   const t0 = Date.now()
 
   const controller = new AbortController()

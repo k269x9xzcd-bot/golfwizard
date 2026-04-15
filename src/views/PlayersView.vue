@@ -44,6 +44,7 @@
           <div class="player-meta">
             <span class="player-ghin">GHIN {{ p.ghin_index != null ? p.ghin_index : '—' }}</span>
             <span v-if="p.nickname" class="player-nick-badge" :class="{ active: p.use_nickname }">{{ p.nickname }}</span>
+            <span v-if="p.email" class="player-email-check" :title="p.email">✓ email</span>
           </div>
         </div>
         <span class="player-fav-star">★</span>
@@ -74,6 +75,7 @@
           <div class="player-meta">
             <span class="player-ghin">GHIN {{ p.ghin_index != null ? p.ghin_index : '—' }}</span>
             <span v-if="p.nickname" class="player-nick-badge" :class="{ active: p.use_nickname }">{{ p.nickname }}</span>
+            <span v-if="p.email" class="player-email-check" :title="p.email">✓ email</span>
           </div>
         </div>
       </div>
@@ -128,9 +130,12 @@
             </label>
           </div>
           <input v-model="editEmail" class="wiz-input" placeholder="Email address" type="email" autocomplete="email" />
+          <div v-if="editError" class="edit-error">{{ editError }}</div>
           <div class="edit-footer">
-            <button class="btn-ghost" @click="editTarget = null">Cancel</button>
-            <button class="btn-primary" @click="saveEdit">Save</button>
+            <button class="btn-ghost" :disabled="editSaving" @click="editTarget = null">Cancel</button>
+            <button class="btn-primary" :disabled="editSaving" @click="saveEdit">
+              {{ editSaving ? 'Saving…' : 'Save' }}
+            </button>
           </div>
         </div>
       </div>
@@ -311,6 +316,8 @@ const editGhin = ref('')
 const editNickname = ref('')
 const editUseNickname = ref(false)
 const editEmail = ref('')
+const editError = ref('')
+const editSaving = ref(false)
 
 function startEdit(p) {
   editTarget.value = p
@@ -321,22 +328,42 @@ function startEdit(p) {
   editNickname.value = p.nickname || ''
   editUseNickname.value = p.use_nickname || false
   editEmail.value = p.email || ''
+  editError.value = ''
+  editSaving.value = false
 }
 
 async function saveEdit() {
-  if (!editFirst.value.trim()) return
+  editError.value = ''
+  if (!editFirst.value.trim()) {
+    editError.value = 'First name is required.'
+    return
+  }
+  const emailTrimmed = editEmail.value.trim()
+  if (emailTrimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
+    editError.value = 'Email looks invalid — double-check it.'
+    return
+  }
   const fullName = editLast.value.trim()
     ? `${editFirst.value.trim()} ${editLast.value.trim()}`
     : editFirst.value.trim()
-  await rosterStore.updatePlayer(editTarget.value.id, {
-    name: fullName,
-    short_name: editLast.value.trim() || editFirst.value.trim().slice(0, 8),
-    ghin_index: editGhin.value !== '' ? parseFloat(editGhin.value) : null,
-    nickname: editNickname.value.trim() || null,
-    use_nickname: editUseNickname.value,
-    email: editEmail.value.trim() || null,
-  })
-  editTarget.value = null
+
+  editSaving.value = true
+  try {
+    await rosterStore.updatePlayer(editTarget.value.id, {
+      name: fullName,
+      short_name: editLast.value.trim() || editFirst.value.trim().slice(0, 8),
+      ghin_index: editGhin.value !== '' ? parseFloat(editGhin.value) : null,
+      nickname: editNickname.value.trim() || null,
+      use_nickname: editUseNickname.value,
+      email: emailTrimmed || null,
+    })
+    editTarget.value = null
+  } catch (e) {
+    console.error('[players] saveEdit failed:', e)
+    editError.value = e?.message || 'Could not save. Check your connection and try again.'
+  } finally {
+    editSaving.value = false
+  }
 }
 </script>
 
@@ -502,6 +529,17 @@ async function saveEdit() {
 .close-btn { background: none; border: none; font-size: 18px; cursor: pointer; color: rgba(240,237,224,.5); }
 .edit-footer { display: flex; gap: 10px; margin-top: 4px; }
 .edit-footer .btn-ghost, .edit-footer .btn-primary { flex: 1; }
+.edit-footer button[disabled] { opacity: .55; cursor: wait; }
+.edit-error {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(239,68,68,.1);
+  border: 1px solid rgba(239,68,68,.3);
+  color: #fca5a5;
+  font-size: 12px;
+  line-height: 1.4;
+}
 
 .player-nick-badge {
   font-size: 10px; font-weight: 700;
@@ -514,6 +552,19 @@ async function saveEdit() {
   color: #22a06b;
   background: rgba(34,160,107,.12);
   border-color: rgba(34,160,107,.3);
+}
+.player-email-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #22c55e;
+  background: rgba(34,197,94,.1);
+  border: 1px solid rgba(34,197,94,.3);
+  padding: 1px 7px;
+  border-radius: 10px;
+  white-space: nowrap;
 }
 .edit-nickname-row {
   display: flex; align-items: center; gap: 10px;
