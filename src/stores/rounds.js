@@ -298,7 +298,15 @@ export const useRoundsStore = defineStore('rounds', () => {
         error = null
         _debugLog(`[rounds] raw insert SUCCEEDED — round id ${round?.id?.slice(0, 8) || '?'}`)
       } catch (rawErr) {
-        _debugLog(`[rounds] raw insert also failed: ${rawErr.message}`)
+        _debugLog(`[rounds] raw insert also failed: ${rawErr.message} (HTTP ${rawErr.status || '?'})`)
+        // 400 = invalid/missing required field (e.g. course_name is empty)
+        if (rawErr.status === 400 || rawErr.message?.includes('400')) {
+          throw new Error(`Round data is incomplete — make sure you selected a course and tee before tapping Start Round. (${rawErr.message})`)
+        }
+        // 409 = unique constraint (room_code collision — very rare)
+        if (rawErr.status === 409) {
+          throw new Error('Room code conflict — please try again.')
+        }
         throw new Error(
           'Could not reach the server. iOS sometimes gets stuck on old connections — try force-quitting GolfWizard (swipe up from the app switcher) and reopening.'
         )

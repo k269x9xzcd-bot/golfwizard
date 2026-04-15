@@ -166,6 +166,16 @@ export const useRosterStore = defineStore('roster', () => {
       if (!res.error && res.data && idx >= 0) players.value[idx] = res.data
       else if (res.error) throw res.error
     } catch (e) {
+      // 409 = unique constraint violation on (owner_id, name).
+      // Give the user a specific, actionable message instead of a generic error.
+      const isNameConflict = e?.code === '23505' || e?.status === 409 ||
+        (e?.message || '').toLowerCase().includes('unique') ||
+        (e?.message || '').toLowerCase().includes('duplicate')
+      if (isNameConflict) {
+        if (before && idx >= 0) players.value[idx] = before
+        throw new Error(`A player named "${updates.name}" already exists in your roster. Use a different name or add a last initial (e.g. "Jason S").`)
+      }
+
       console.warn('[roster] SJS update failed, trying raw fetch:', e?.message)
       try {
         const { supaRawRequest } = await import('../modules/supaRaw')
@@ -173,8 +183,11 @@ export const useRosterStore = defineStore('roster', () => {
         const row = Array.isArray(rows) ? rows[0] : rows
         if (row && idx >= 0) players.value[idx] = row
       } catch (rawErr) {
-        console.error('[roster] raw update also failed, reverting optimistic update:', rawErr)
+        const isRawConflict = rawErr?.status === 409 || rawErr?.message?.includes('409')
         if (before && idx >= 0) players.value[idx] = before
+        if (isRawConflict) {
+          throw new Error(`A player named "${updates.name}" already exists in your roster. Use a different name or add a last initial.`)
+        }
         throw new Error('Could not save changes. Check your connection and try again.')
       }
     }

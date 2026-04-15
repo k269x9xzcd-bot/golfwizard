@@ -1330,11 +1330,17 @@ function onTouchDragEnd() {
 
 // ── Navigation guards ────────────────────────────────────────────
 const canNext = computed(() => {
-  if (step.value === 1) return !!form.value.courseName && teesForCourse.value.length > 0
+  if (step.value === 1) {
+    if (!form.value.courseName) return false
+    // Locked-course flow (invitee): course + tee are preset by the host round
+    if (props.lockedCourse) return !!form.value.tee || true // allow through even if tee somehow not set
+    // Normal flow: must have picked a tee OR there are no tees to pick (API course without data)
+    return teesForCourse.value.length === 0 || !!form.value.tee
+  }
   if (step.value === 2) return form.value.players.length >= 1
   return true
 })
-const canFinish = computed(() => form.value.players.length >= 1)
+const canFinish = computed(() => form.value.players.length >= 1 && !!form.value.courseName)
 
 function nextStep() {
   if (step.value === 1 && canNext.value) step.value++
