@@ -1,15 +1,25 @@
 <template>
-  <!-- Hidden entirely if we don't have a live match to surface -->
-  <RouterLink
-    v-if="display"
-    :to="`/cross-match/${display.match.id}`"
-    class="cmb"
-    :class="`cmb--${display.tone}`"
-  >
-    <span class="cmb-icon">{{ display.icon }}</span>
-    <span class="cmb-label">{{ display.label }}</span>
-    <span class="cmb-arrow">›</span>
-  </RouterLink>
+  <!-- Hidden entirely if we don't have a live match to surface, or if dismissed -->
+  <div v-if="display && !dismissed" class="cmb-wrapper">
+    <RouterLink
+      :to="`/cross-match/${display.match.id}`"
+      class="cmb"
+      :class="`cmb--${display.tone}`"
+    >
+      <span class="cmb-icon">{{ display.icon }}</span>
+      <span class="cmb-label">{{ display.label }}</span>
+      <span class="cmb-arrow">›</span>
+    </RouterLink>
+    <!-- Dismiss button on pending matches so user can continue their round
+         without Foursome B blocking anything. This only hides the banner
+         in the current session — the linked match still exists in the DB. -->
+    <button
+      v-if="display.tone === 'pending' || display.tone === 'waiting'"
+      class="cmb-dismiss"
+      @click.prevent="dismissBanner"
+      title="Hide this — continue scoring normally"
+    >✕</button>
+  </div>
 </template>
 
 <script setup>
@@ -23,6 +33,13 @@ import { computeLinkedMatch, summarizeLinkedMatch } from '../modules/linkedMatch
 const authStore = useAuthStore()
 const roundsStore = useRoundsStore()
 const linkedStore = useLinkedMatchesStore()
+
+// Session-only dismiss — hides the banner so the user can Finish Round normally.
+// The linked match is NOT cancelled; they can re-access it from /cross-match/:id.
+const dismissed = ref(false)
+function dismissBanner() {
+  dismissed.value = true
+}
 
 // Internal tick so we can recompute when scores change on either round.
 // Realtime subscription bumps this ref; `display` is computed off it.
@@ -168,6 +185,33 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.cmb-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.cmb-wrapper .cmb {
+  flex: 1;
+  margin-right: 0;
+}
+.cmb-dismiss {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  margin: 10px 16px 10px 4px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.1);
+  color: rgba(240,237,224,.55);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.cmb-dismiss:active { background: rgba(255,255,255,.12); }
+
 .cmb {
   display: flex;
   align-items: center;

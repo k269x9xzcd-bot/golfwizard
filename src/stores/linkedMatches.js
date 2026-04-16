@@ -170,12 +170,26 @@ export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
    * each with members + scores. Used by the standings detail view.
    */
   async function loadLinkedMatchDetail(matchId) {
-    const { data: match, error: mErr } = await supaCallWithRetry(
-      'linked_matches.byId',
-      () => supabase.from('linked_matches').select('*').eq('id', matchId).maybeSingle(),
-      8000,
-    )
-    if (mErr) throw mErr
+    // Try SJS first, fall back to raw fetch (iOS connection pool may be stuck)
+    let match = null
+    try {
+      const res = await supaCallWithRetry(
+        'linked_matches.byId',
+        () => supabase.from('linked_matches').select('*').eq('id', matchId).maybeSingle(),
+        5000,
+      )
+      match = res.data
+      if (res.error) throw res.error
+    } catch (e) {
+      console.warn('[linkedMatches] SJS byId failed, trying raw fetch:', e?.message)
+      try {
+        const rows = await supaRawRequest('GET', `linked_matches?id=eq.${matchId}&select=*&limit=1`, null, 8000)
+        match = Array.isArray(rows) ? rows[0] : rows
+      } catch (rawErr) {
+        console.error('[linkedMatches] raw byId also failed:', rawErr)
+        throw new Error('Could not load match details. Check your connection.')
+      }
+    }
     if (!match) return null
 
     const [roundA, roundB] = await Promise.all([
@@ -199,12 +213,27 @@ export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
           .select('*, round_members(*), scores(*)')
           .eq('id', roundId)
           .maybeSingle(),
-        8000,
+        5000,
       )
       if (error) throw error
-      return data || null
+      if (data) return data
     } catch (e) {
-      console.warn('[linkedMatches] loadRoundBundle failed:', e?.message || e)
+      console.warn('[linkedMatches] SJS loadRoundBundle failed, trying raw:', e?.message || e)
+    }
+    // Raw-fetch fallback
+    try {
+      const [rnd, members, scores] = await Promise.all([
+        supaRawRequest('GET', `rounds?id=eq.${roundId}&select=*&limit=1`, null, 8000),
+        supaRawRequest('GET', `round_members?round_id=eq.${roundId}&select=*`, null, 8000),
+        supaRawRequest('GET', `scores?round_id=eq.${roundId}&select=*`, null, 8000),
+      ])
+      const round = Array.isArray(rnd) ? rnd[0] : rnd
+      if (!round) return null
+      round.round_members = Array.isArray(members) ? members : []
+      round.scores = Array.isArray(scores) ? scores : []
+      return round
+    } catch (rawErr) {
+      console.warn('[linkedMatches] raw loadRoundBundle also failed:', rawErr)
       return null
     }
   }
