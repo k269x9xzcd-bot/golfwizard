@@ -591,15 +591,21 @@
                 Default is based on round-robin rotation ({{ pairingPicker.match.singlesOrder === 0 ? 'first meeting' : 'rematch' }}). Tap swap if you want different matchups.
               </div>
 
-              <!-- Course + tee (editable in case the default needs changing) -->
+              <!-- Course + tee dropdowns -->
               <div class="pairing-course-row">
                 <div class="pairing-course-field">
                   <label class="mm-section-label">Course</label>
-                  <input v-model="pairingPicker.course" class="mm-text-input" placeholder="Course name" />
+                  <select v-model="pairingPicker.course" class="mm-text-input">
+                    <option value="">— select —</option>
+                    <option v-for="name in allCourseNames" :key="name" :value="name">{{ name }}</option>
+                  </select>
                 </div>
                 <div class="pairing-course-field pairing-course-field--sm">
                   <label class="mm-section-label">Tee</label>
-                  <input v-model="pairingPicker.tee" class="mm-text-input" placeholder="Blue" />
+                  <select v-model="pairingPicker.tee" class="mm-text-input">
+                    <option value="">— select —</option>
+                    <option v-for="tee in teesForCourse(pairingPicker.course)" :key="tee" :value="tee">{{ tee }}</option>
+                  </select>
                 </div>
               </div>
 
@@ -729,6 +735,7 @@ import { ref, computed, reactive, triggerRef, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRoundsStore } from '../stores/rounds'
 import { useRosterStore } from '../stores/roster'
+import { useCoursesStore } from '../stores/courses'
 import {
   TOURNAMENT, TEAMS, SCHEDULE,
   getTeam, matchPoints, computeStandings, teamMatches,
@@ -740,6 +747,18 @@ const rosterStore = useRosterStore()
 
 const router = useRouter()
 const roundsStore = useRoundsStore()
+const coursesStore = useCoursesStore()
+
+// Courses + tees for the pairing picker dropdowns
+const allCourseNames = computed(() =>
+  (coursesStore.allCourses || []).map(c => c.name).sort()
+)
+function teesForCourse(courseName) {
+  const c = coursesStore.allCourses?.find(x => x.name === courseName)
+  if (!c) return []
+  const td = c.teesData || c.tees || {}
+  return Object.keys(td)
+}
 const tab = ref('standings')
 
 // Reactive trigger — SCHEDULE is a plain object so Vue can't detect mutations.

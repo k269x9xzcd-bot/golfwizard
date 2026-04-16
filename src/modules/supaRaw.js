@@ -80,7 +80,9 @@ export async function supaRawRequest(method, pathAndQuery, body, timeoutMs = 100
   // Synchronous read from localStorage — cannot hang even if the SJS
   // connection pool is stuck.
   const bearer = _getBearerSync()
-  const url = `${SUPABASE_URL}/rest/v1/${pathAndQuery}${pathAndQuery.includes('?') ? '&' : '?'}_t=${Date.now()}`
+  // Cache-busting goes in a header, NOT a query param. PostgREST tries to parse
+  // every query param as a filter and throws "failed to parse filter" on unknown keys.
+  const url = `${SUPABASE_URL}/rest/v1/${pathAndQuery}`
   _debugLog(`→ raw ${method} ${pathAndQuery.split('?')[0]} (auth=${bearer === SUPABASE_ANON_KEY ? 'anon' : 'user'})`)
   const t0 = Date.now()
 
@@ -95,6 +97,9 @@ export async function supaRawRequest(method, pathAndQuery, body, timeoutMs = 100
         Authorization: `Bearer ${bearer}`,
         'Content-Type': 'application/json',
         Prefer: 'return=representation',
+        // Cache-buster as header — PostgREST ignores unknown headers,
+        // unlike query params which it tries to parse as filters.
+        'x-gw-ts': String(Date.now()),
         ...extraHeaders,
       },
       body: body ? JSON.stringify(body) : null,
