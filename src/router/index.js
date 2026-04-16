@@ -18,6 +18,7 @@ const routes = [
   { path: '/cross-match/new', name: 'cross-match-new', component: () => import('../views/LinkedMatchSetup.vue') },
   { path: '/accept/:code',    name: 'cross-match-accept', component: () => import('../views/LinkedMatchAccept.vue') },
   { path: '/cross-match/:id', name: 'cross-match-detail', component: () => import('../views/LinkedMatchDetail.vue') },
+  { path: '/invite',          name: 'invite',             component: () => import('../views/InviteWelcome.vue') },
 ]
 
 export const router = createRouter({

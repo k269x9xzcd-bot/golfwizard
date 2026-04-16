@@ -4,9 +4,15 @@
       <h2>Players</h2>
       <div class="header-actions">
         <button class="btn-ghost btn-sm sort-btn" @click="toggleSort" :title="sortLabel">⇅ {{ sortLabel }}</button>
+        <button class="btn-ghost btn-sm invite-all-btn" @click="shareGroupInvite" title="Invite a player to GolfWizard">📨 Invite</button>
         <button class="btn-ghost btn-sm" @click="showAdd = !showAdd">{{ showAdd ? 'Cancel' : '+ Add' }}</button>
       </div>
     </header>
+
+    <!-- Invite hint (shown briefly after tapping Invite) -->
+    <div v-if="inviteHint" class="invite-hint-banner">
+      {{ inviteHint }}
+    </div>
 
     <!-- Add form -->
     <div v-if="showAdd" class="add-form card">
@@ -47,6 +53,7 @@
             <span v-if="p.email" class="player-email-check" :title="p.email">✓ email</span>
           </div>
         </div>
+        <button v-if="p.email" class="player-invite-btn" @click.stop="invitePlayer(p)" title="Invite to GolfWizard">📨</button>
         <span class="player-fav-star">★</span>
       </div>
     </div>
@@ -78,6 +85,7 @@
             <span v-if="p.email" class="player-email-check" :title="p.email">✓ email</span>
           </div>
         </div>
+        <button v-if="p.email" class="player-invite-btn" @click.stop="invitePlayer(p)" title="Invite to GolfWizard">📨</button>
       </div>
     </div>
 
@@ -146,8 +154,45 @@
 <script setup>
 import { ref, computed, reactive } from 'vue'
 import { useRosterStore } from '../stores/roster'
+import { buildInviteUrl, buildInviteEmail } from '../modules/preset'
+import { useAuthStore } from '../stores/auth'
 
 const rosterStore = useRosterStore()
+const authStore = useAuthStore()
+
+// ── Invite players to GolfWizard ────────────────────────────────
+const inviteHint = ref('')
+
+function invitePlayer(player) {
+  if (!player.email) return
+  const senderName = authStore.profile?.display_name?.split(' ')[0] || 'Jason'
+  const mailtoLink = buildInviteEmail(player, senderName)
+  window.location.href = mailtoLink
+  showInviteHint(`Invite sent to ${player.name.split(' ')[0]}!`)
+}
+
+async function shareGroupInvite() {
+  const url = buildInviteUrl()
+  const senderName = authStore.profile?.display_name?.split(' ')[0] || 'Jason'
+  const text = `${senderName} invited you to GolfWizard — golf scoring with handicaps, Nassau, Skins, and more. Open this link to get started with our group already loaded:\n${url}`
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: 'Join GolfWizard', text, url })
+    } catch {}
+  } else {
+    try {
+      await navigator.clipboard.writeText(url)
+      showInviteHint('Invite link copied to clipboard!')
+    } catch {
+      showInviteHint(`Share this link: ${url}`)
+    }
+  }
+}
+
+function showInviteHint(msg) {
+  inviteHint.value = msg
+  setTimeout(() => { inviteHint.value = '' }, 3000)
+}
 
 const showAdd = ref(false)
 const newFirst = ref('')
@@ -553,6 +598,38 @@ async function saveEdit() {
   background: rgba(34,160,107,.12);
   border-color: rgba(34,160,107,.3);
 }
+/* Invite button per player */
+.player-invite-btn {
+  font-size: 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px 5px;
+  border-radius: 8px;
+  -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
+  opacity: .7;
+  transition: opacity .15s;
+}
+.player-invite-btn:active { opacity: 1; transform: scale(.9); }
+
+/* Header invite button */
+.invite-all-btn { font-size: 11px !important; }
+
+/* Invite feedback hint banner */
+.invite-hint-banner {
+  margin: 4px 16px 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(34,197,94,.12);
+  border: 1px solid rgba(34,197,94,.3);
+  color: #4ade80;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  animation: card-in 200ms ease-out;
+}
+
 .player-email-check {
   display: inline-flex;
   align-items: center;

@@ -101,6 +101,7 @@ import { useRoundsStore } from '../stores/rounds'
 import { useLinkedMatchesStore } from '../stores/linkedMatches'
 import AuthModal from '../components/AuthModal.vue'
 import WizardOverlay from '../components/WizardOverlay.vue'
+import { applyPreset } from '../modules/preset'
 
 const route = useRoute()
 const router = useRouter()
@@ -128,6 +129,10 @@ const amIOwner = computed(() => {
 })
 
 onMounted(async () => {
+  // Seed the preset for first-timers opening a cross-match invite —
+  // same group players + Bonnie Briar get loaded into local storage.
+  applyPreset()
+
   loading.value = true
   try {
     const m = await linkedStore.fetchByCode(codeUpper.value)
