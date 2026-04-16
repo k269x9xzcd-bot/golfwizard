@@ -279,18 +279,24 @@ async function doDelete() {
   }
 }
 
-function reopenRound(round) {
-  // Set this round as active and navigate to scoring
-  roundsStore.setActiveRound(round)
-  router.push('/scoring')
+async function reopenRound(round) {
+  try {
+    await roundsStore.loadRound(round.id)
+    router.push('/scoring')
+  } catch (e) {
+    console.error('[history] reopenRound failed:', e)
+    alert('Could not open round: ' + (e?.message || 'unknown error'))
+  }
 }
 
-function viewScorecard(round) {
-  // Same as reopening — the scoring view is already read-only for non-captains.
-  // The round's is_complete flag controls the "Finish Round" button visibility,
-  // so completed rounds will open in view mode.
-  roundsStore.setActiveRound(round)
-  router.push('/scoring')
+async function viewScorecard(round) {
+  try {
+    await roundsStore.loadRound(round.id)
+    router.push('/scoring')
+  } catch (e) {
+    console.error('[history] viewScorecard failed:', e)
+    alert('Could not open scorecard: ' + (e?.message || 'unknown error'))
+  }
 }
 
 function formatMoney(val) {

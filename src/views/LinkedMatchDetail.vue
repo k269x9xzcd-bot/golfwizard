@@ -115,6 +115,17 @@
 
       <!-- Host actions -->
       <div v-if="isHost" class="lmd-host-actions">
+        <!-- Manual Foursome B override — when no one in Foursome B has the app -->
+        <div v-if="match.status === 'pending'" class="lmd-manual-override">
+          <div class="lmd-section-label" style="margin:0 0 8px">Nobody in Foursome B has the app?</div>
+          <div class="lmd-override-body">
+            Create Foursome B's round manually and score it yourself. The cross-match will auto-compute once both rounds have scores.
+          </div>
+          <button class="lmd-btn-override" @click="onManualB">
+            📝 Score Foursome B myself
+          </button>
+        </div>
+
         <button
           v-if="match.status !== 'cancelled' && match.status !== 'complete'"
           class="lmd-btn-danger"
@@ -197,6 +208,20 @@ function recompute() {
     console.warn('[lmd] compute failed:', e)
     result.value = null
   }
+}
+
+/**
+ * Manual override: host creates Foursome B's round by running the normal
+ * wizard. Once the round is created it's automatically linked to this match
+ * as round_b_id (via acceptLinkedMatch). The invite code gets used just like
+ * the invitee flow — but the host does it all on their own phone.
+ */
+async function onManualB() {
+  if (!match.value) return
+  // Navigate to the accept flow for this match's code so the same wizard
+  // + acceptLinkedMatch path runs. The user is already the host so the
+  // "already linked" guard won't fire (they own round A, not round B).
+  router.push(`/accept/${match.value.invite_code}`)
 }
 
 async function onCancel() {
@@ -379,4 +404,27 @@ watch(() => route.params.id, (id) => { if (id) load() })
   font-family: inherit;
   -webkit-tap-highlight-color: transparent;
 }
+
+/* Manual override for when Foursome B has nobody with the app */
+.lmd-manual-override {
+  margin: 8px 16px 14px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(212,175,55,.08);
+  border: 1px solid rgba(212,175,55,.3);
+}
+.lmd-override-body {
+  font-size: 12px;
+  color: rgba(240,237,224,.65);
+  line-height: 1.45;
+  margin-bottom: 10px;
+}
+.lmd-btn-override {
+  width: 100%; padding: 12px 14px; border-radius: 12px;
+  background: linear-gradient(135deg, #edd655, #d4af37, #b8961e);
+  color: #0c0f0d; font-weight: 800; border: none; cursor: pointer;
+  font-family: inherit; font-size: 14px; letter-spacing: .2px;
+  -webkit-tap-highlight-color: transparent;
+}
+.lmd-btn-override:active { transform: scale(.98); }
 </style>

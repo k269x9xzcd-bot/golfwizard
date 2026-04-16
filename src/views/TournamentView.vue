@@ -494,11 +494,35 @@
               <div class="pairing-hint">
                 Default is based on round-robin rotation ({{ pairingPicker.match.singlesOrder === 0 ? 'first meeting' : 'rematch' }}). Tap swap if you want different matchups.
               </div>
+
+              <!-- Course + tee (editable in case the default needs changing) -->
+              <div class="pairing-course-row">
+                <div class="pairing-course-field">
+                  <label class="mm-section-label">Course</label>
+                  <input v-model="pairingPicker.course" class="mm-text-input" placeholder="Course name" />
+                </div>
+                <div class="pairing-course-field pairing-course-field--sm">
+                  <label class="mm-section-label">Tee</label>
+                  <input v-model="pairingPicker.tee" class="mm-text-input" placeholder="Blue" />
+                </div>
+              </div>
+
+              <!-- Error from previous attempt -->
+              <div v-if="launchError" class="launch-error-card">
+                <div class="launch-error-title">⚠️ {{ launchError.message }}</div>
+                <details class="launch-error-details">
+                  <summary>Diagnostic info</summary>
+                  <pre class="launch-error-pre">{{ launchError.trace }}</pre>
+                </details>
+                <button class="launch-error-copy" @click="copyLaunchDiagnostic">
+                  {{ launchError.copied ? '✓ Copied' : '📋 Copy diagnostic' }}
+                </button>
+              </div>
             </div>
             <div class="mm-footer">
-              <button class="mm-btn-cancel" @click="pairingPicker = null">Cancel</button>
+              <button class="mm-btn-cancel" @click="pairingPicker = null; launchError = null">Cancel</button>
               <button class="mm-btn-save" @click="confirmPairingsAndLaunch" :disabled="launchingRound">
-                {{ launchingRound ? 'Creating…' : '⛳ Start Round' }}
+                {{ launchingRound ? 'Creating…' : launchError ? '🔁 Retry' : '⛳ Start Round' }}
               </button>
             </div>
           </div>
@@ -870,6 +894,30 @@ function singlesMatchups(match) {
 // ── Match modal ─────────────────────────────────────────────────
 const activeMatch = ref(null)
 const launchingRound = ref(false)
+const launchError = ref(null) // { message, trace, copied }
+
+function buildLaunchDiagnostic(msg) {
+  try {
+    const log = JSON.parse(localStorage.getItem('gw_create_log') || '[]')
+    const ua = navigator.userAgent
+    return [
+      `GolfWizard tournament round failure — ${new Date().toISOString()}`,
+      `Error: ${msg}`,
+      `UA: ${ua}`,
+      '',
+      ...log.slice(-40).map(l => `  ${l.t}  ${l.msg}`),
+    ].join('\n')
+  } catch { return `Error: ${msg}` }
+}
+
+async function copyLaunchDiagnostic() {
+  if (!launchError.value) return
+  try {
+    await navigator.clipboard.writeText(launchError.value.trace)
+    launchError.value.copied = true
+    setTimeout(() => { if (launchError.value) launchError.value.copied = false }, 2000)
+  } catch {}
+}
 const editResult = reactive({ bestBall: null, singles: [], playedDate: '' })
 
 function openMatch(round, match) {
@@ -954,6 +1002,8 @@ function openLaunchFlow() {
   pairingPicker.value = {
     match, t1, t2, isFinal: false,
     pairings: defaultPairings,
+    course: TOURNAMENT.defaultCourse || 'Bonnie Briar Country Club',
+    tee: TOURNAMENT.defaultTee || 'Blue',
   }
 }
 
@@ -1041,30 +1091,17 @@ async function _doLaunchRound({ match, t1, t2, isFinal, pairings }) {
   }
 
   launchingRound.value = true
-  try {
-    // Pre-flight ping — if iOS is stuck on a dead connection, creation will
-    // fail. Warn immediately so the user can force-quit before losing work.
-    const { supaPreflightOk } = await import('../modules/supaRaw')
-    const ok = await supaPreflightOk(3500)
-    if (!ok) {
-      const doReload = confirm(
-        "Can't reach the server — iOS is stuck on a dead connection.\n\n" +
-        "Tap OK to reload the app (fixes it instantly).\n" +
-        "Tap Cancel to force-quit manually and try again."
-      )
-      if (doReload) {
-        try { localStorage.removeItem('gw_create_log') } catch {}
-        const u = new URL(window.location.href)
-        u.searchParams.set('_reload', Date.now().toString())
-        window.location.replace(u.toString())
-      }
-      return
-    }
+  launchError.value = null
+  try { localStorage.setItem('gw_create_log', '[]') } catch {}
 
+  const courseName = pairingPicker.value?.course || TOURNAMENT.defaultCourse || 'Bonnie Briar Country Club'
+  const tee = pairingPicker.value?.tee || TOURNAMENT.defaultTee || 'Blue'
+
+  try {
     const round = await roundsStore.createRound({
       name: isFinal ? `FINAL: ${t1.name} vs ${t2.name}` : `${t1.name} vs ${t2.name}`,
-      courseName: TOURNAMENT.defaultCourse || 'Bonnie Briar Country Club',
-      tee: TOURNAMENT.defaultTee || 'Blue',
+      courseName,
+      tee,
       holesMode: '18',
       format: 'tournament',
       players,
@@ -1072,7 +1109,8 @@ async function _doLaunchRound({ match, t1, t2, isFinal, pairings }) {
     })
 
     if (!round) {
-      alert('Round creation returned no data. Please try again.')
+      const msg = 'Round creation returned no data.'
+      launchError.value = { message: msg, trace: buildLaunchDiagnostic(msg), copied: false }
       return
     }
 
@@ -1080,7 +1118,8 @@ async function _doLaunchRound({ match, t1, t2, isFinal, pairings }) {
     router.push('/scoring')
   } catch (e) {
     console.error('Failed to create tournament round:', e)
-    alert('Error: ' + (e.message || 'Failed to create round. Please try again.'))
+    const msg = e.message || 'Failed to create round. Please try again.'
+    launchError.value = { message: msg, trace: buildLaunchDiagnostic(msg), copied: false }
   } finally {
     launchingRound.value = false
   }
@@ -1775,6 +1814,42 @@ scheduleVersion.value++ // ensure computeds pick up loaded results
   font-size: 11px; color: rgba(240,237,224,.4);
   text-align: center; line-height: 1.4;
   padding: 0 4px;
+}
+.pairing-course-row {
+  display: flex; gap: 8px; margin-top: 4px;
+}
+.pairing-course-field {
+  flex: 1; display: flex; flex-direction: column; gap: 4px;
+}
+.pairing-course-field--sm { flex: 0 0 80px; }
+
+/* Launch error card in pairing picker */
+.launch-error-card {
+  padding: 12px 14px; border-radius: 10px;
+  background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.35);
+  margin-top: 8px;
+}
+.launch-error-title {
+  font-size: 13px; font-weight: 700; color: #f87171; margin-bottom: 6px;
+}
+.launch-error-details summary {
+  cursor: pointer; font-size: 11px; color: rgba(240,237,224,.5);
+  padding: 4px 0;
+}
+.launch-error-pre {
+  max-height: 120px; overflow: auto;
+  background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.06);
+  border-radius: 6px; padding: 6px 8px;
+  font-family: var(--gw-font-mono, monospace); font-size: 10px;
+  color: rgba(240,237,224,.8); white-space: pre-wrap;
+  -webkit-user-select: text; user-select: text;
+  margin: 6px 0 8px;
+}
+.launch-error-copy {
+  width: 100%; padding: 8px; border-radius: 8px;
+  background: rgba(212,175,55,.15); border: 1px solid rgba(212,175,55,.3);
+  color: var(--gw-gold); font-size: 12px; font-weight: 700;
+  cursor: pointer; font-family: inherit;
 }
 
 /* ── Team editor ──────────────────────────────────────── */
