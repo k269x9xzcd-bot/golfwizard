@@ -210,16 +210,92 @@
         </div>
       </div>
 
-      <!-- Finals teaser -->
-      <div class="finals-teaser">
+      <!-- Championship Final — hidden until all 6 rounds complete -->
+      <div v-if="allDone" class="finals-card" :class="{ 'finals-card--played': finalResult }">
+        <div class="finals-card-header">
+          <div class="finals-trophy">🏆</div>
+          <div class="finals-card-title">Championship Final</div>
+          <div class="finals-card-sub">18-hole best ball · winner take all</div>
+        </div>
+
+        <div class="finals-matchup">
+          <div class="finals-team" :style="{ color: finalTeam1?.color }">
+            {{ finalTeam1?.name || '?' }}
+          </div>
+          <div class="finals-vs">vs</div>
+          <div class="finals-team" :style="{ color: finalTeam2?.color }">
+            {{ finalTeam2?.name || '?' }}
+          </div>
+        </div>
+
+        <!-- Already have a result -->
+        <template v-if="finalResult">
+          <div class="finals-result">
+            <div class="finals-result-winner" :style="{ color: getTeam(finalResult.winner)?.color }">
+              🏆 {{ getTeam(finalResult.winner)?.name }} wins!
+            </div>
+            <div v-if="finalResult.detail" class="finals-result-detail">{{ finalResult.detail }}</div>
+          </div>
+          <div class="finals-actions">
+            <button class="finals-btn finals-btn--secondary" @click="clearFinalResult">Reset result</button>
+            <button class="finals-btn finals-btn--primary" @click="openFinalRound">View / re-score →</button>
+          </div>
+          <!-- Manual result entry -->
+          <button class="finals-btn finals-btn--secondary" style="margin-top:6px" @click="showFinalResultEntry = !showFinalResultEntry">
+            ✎ Edit result manually
+          </button>
+        </template>
+
+        <!-- No result yet -->
+        <template v-else>
+          <div class="finals-actions">
+            <button class="finals-btn finals-btn--primary" :disabled="launchingRound" @click="launchFinal">
+              {{ launchingRound ? 'Starting…' : '⛳ Start Final Round' }}
+            </button>
+            <button class="finals-btn finals-btn--secondary" @click="showFinalResultEntry = !showFinalResultEntry">
+              Enter result manually
+            </button>
+          </div>
+        </template>
+
+        <!-- Manual result entry form -->
+        <div v-if="showFinalResultEntry" class="finals-manual">
+          <div class="finals-manual-label">Who won the final?</div>
+          <div class="finals-manual-row">
+            <button
+              v-for="team in [finalTeam1, finalTeam2]"
+              :key="team.id"
+              class="finals-manual-btn"
+              :class="{ active: manualFinalWinner === team.id }"
+              :style="{ borderColor: team.color, color: manualFinalWinner === team.id ? team.color : undefined }"
+              @click="manualFinalWinner = team.id"
+            >
+              {{ team.name }}
+            </button>
+          </div>
+          <input v-model="manualFinalDetail" class="finals-manual-input" placeholder="Optional: e.g. 2&1, stroke play result..." />
+          <button class="finals-btn finals-btn--primary" :disabled="!manualFinalWinner" @click="saveFinalResult">
+            Save Result
+          </button>
+        </div>
+
+        <!-- Error from launch attempt -->
+        <div v-if="launchError" class="launch-error-card" style="margin-top:10px">
+          <div class="launch-error-title">⚠️ {{ launchError.message }}</div>
+          <button class="launch-error-copy" @click="copyLaunchDiagnostic">
+            {{ launchError.copied ? '✓ Copied' : '📋 Copy diagnostic' }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Before all rounds done: show as locked teaser -->
+      <div v-else class="finals-teaser">
         <div class="ft-icon">🏆</div>
         <div class="ft-text">
           <div class="ft-title">Championship Final</div>
           <div class="ft-sub">18-hole best ball · Top 2 teams advance</div>
         </div>
-        <div class="ft-badge" :class="finalistsKnown ? 'ft-badge--set' : 'ft-badge--pending'">
-          {{ finalistsKnown ? 'Set' : 'TBD' }}
-        </div>
+        <div class="ft-badge ft-badge--pending">TBD</div>
       </div>
     </div>
 
@@ -246,6 +322,26 @@
               {{ (p.nickname || p.name)[0] }}
             </div>
             <span class="tdc-player-name">{{ p.nickname || p.name }}</span>
+            <!-- Inline GHIN index editor -->
+            <span class="tdc-player-idx" @click.stop="startIdxEdit(team, p)">
+              <template v-if="editingIdx?.teamId === team.id && editingIdx?.playerId === p.id">
+                <input
+                  ref="idxInputEl"
+                  v-model.number="editingIdxValue"
+                  type="number"
+                  step="0.1"
+                  class="tdc-idx-input"
+                  @keyup.enter="saveIdxEdit"
+                  @keyup.escape="editingIdx = null"
+                  @blur="saveIdxEdit"
+                  @click.stop
+                />
+              </template>
+              <template v-else>
+                <span class="tdc-idx-label">{{ p.ghinIndex != null ? p.ghinIndex : '—' }}</span>
+                <span class="tdc-idx-edit-hint">✎</span>
+              </template>
+            </span>
           </div>
         </div>
         <!-- Mini schedule for this team -->
@@ -629,7 +725,7 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, triggerRef } from 'vue'
+import { ref, computed, reactive, triggerRef, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRoundsStore } from '../stores/rounds'
 import { useRosterStore } from '../stores/roster'
@@ -689,6 +785,39 @@ const standings = computed(() => {
 
 function teamStanding(teamId) {
   return standings.value.find(s => s.team.id === teamId)
+}
+
+// ── Inline GHIN index editor in Teams tab ───────────────────────
+const editingIdx = ref(null)  // { teamId, playerId }
+const editingIdxValue = ref(null)
+const idxInputEl = ref(null)
+
+function startIdxEdit(team, player) {
+  editingIdx.value = { teamId: team.id, playerId: player.id }
+  editingIdxValue.value = player.ghinIndex ?? null
+  nextTick(() => {
+    if (idxInputEl.value?.[0]) idxInputEl.value[0].focus()
+    else if (idxInputEl.value) idxInputEl.value.focus()
+  })
+}
+
+function saveIdxEdit() {
+  if (!editingIdx.value) return
+  const { teamId, playerId } = editingIdx.value
+  const newVal = editingIdxValue.value != null && !Number.isNaN(editingIdxValue.value)
+    ? parseFloat(editingIdxValue.value)
+    : null
+
+  // Update the player in the team override
+  const cur = getTeam(teamId)
+  if (cur) {
+    const players = cur.players.map(p =>
+      p.id === playerId ? { ...p, ghinIndex: newVal } : p
+    )
+    saveTeamPlayers(teamId, players)
+    scheduleVersion.value++ // trigger re-render
+  }
+  editingIdx.value = null
 }
 
 // ── Team editor ─────────────────────────────────────────────────
@@ -1195,6 +1324,67 @@ function _loadResults() {
 // Load results on mount
 _loadResults()
 scheduleVersion.value++ // ensure computeds pick up loaded results
+
+// ── Championship Final ─────────────────────────────────────────
+// Derived from the top 2 teams in standings (only meaningful when allDone)
+const finalTeam1 = computed(() => standings.value[0]?.team || null)
+const finalTeam2 = computed(() => standings.value[1]?.team || null)
+
+const FINAL_KEY = 'gw_tournament_final_2025'
+const finalResult = ref(null) // { winner: teamId, detail: string }
+const showFinalResultEntry = ref(false)
+const manualFinalWinner = ref('')
+const manualFinalDetail = ref('')
+
+function _loadFinalResult() {
+  try {
+    const raw = localStorage.getItem(FINAL_KEY)
+    if (raw) finalResult.value = JSON.parse(raw)
+  } catch {}
+}
+
+function saveFinalResult() {
+  if (!manualFinalWinner.value) return
+  finalResult.value = {
+    winner: manualFinalWinner.value,
+    detail: manualFinalDetail.value.trim() || null,
+    setAt: new Date().toISOString(),
+  }
+  localStorage.setItem(FINAL_KEY, JSON.stringify(finalResult.value))
+  showFinalResultEntry.value = false
+  manualFinalWinner.value = ''
+  manualFinalDetail.value = ''
+}
+
+function clearFinalResult() {
+  if (!confirm('Clear the final result?')) return
+  finalResult.value = null
+  localStorage.removeItem(FINAL_KEY)
+}
+
+function openFinalRound() {
+  router.push('/scoring')
+}
+
+async function launchFinal() {
+  if (!finalTeam1.value || !finalTeam2.value) return
+  const synthMatch = {
+    id: 'final',
+    team1: finalTeam1.value.id,
+    team2: finalTeam2.value.id,
+    singlesOrder: 0,
+    isFinal: true,
+    result: null,
+  }
+  activeMatch.value = { round: { round: 'final', deadline: '', label: 'Final', matches: [] }, match: synthMatch }
+  await _doLaunchRound({ match: synthMatch, t1: finalTeam1.value, t2: finalTeam2.value, isFinal: true, pairings: [] })
+  // When the round comes back, if no error, prompt user to set winner
+  if (!launchError.value) {
+    showFinalResultEntry.value = true
+  }
+}
+
+_loadFinalResult()
 </script>
 
 <style scoped>
@@ -1501,6 +1691,98 @@ scheduleVersion.value++ // ensure computeds pick up loaded results
   border: 1px solid rgba(212,175,55,.4);
 }
 
+/* ── Championship Final card ──────────────────────────── */
+.finals-card {
+  margin-top: 12px;
+  padding: 18px 16px 16px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(212,175,55,.18) 0%, rgba(212,175,55,.04) 100%);
+  border: 2px solid rgba(212,175,55,.5);
+  display: flex; flex-direction: column; gap: 14px;
+  animation: card-in 280ms ease-out both;
+}
+.finals-card--played {
+  border-color: rgba(34,197,94,.5);
+  background: linear-gradient(135deg, rgba(34,197,94,.12) 0%, rgba(34,197,94,.03) 100%);
+}
+.finals-card-header { text-align: center; }
+.finals-trophy { font-size: 36px; margin-bottom: 4px; }
+.finals-card-title {
+  font-family: var(--gw-font-display);
+  font-size: 22px; font-weight: 700; color: #d4af37; line-height: 1.2;
+}
+.finals-card-sub {
+  font-size: 12px; color: rgba(240,237,224,.55); margin-top: 3px;
+}
+
+.finals-matchup {
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(212,175,55,.2);
+  border-bottom: 1px solid rgba(212,175,55,.2);
+}
+.finals-team {
+  font-family: var(--gw-font-display);
+  font-size: 18px; font-weight: 700; text-align: center; flex: 1;
+}
+.finals-vs {
+  font-size: 12px; font-weight: 800; color: rgba(240,237,224,.35);
+  letter-spacing: .08em; flex-shrink: 0;
+}
+
+.finals-result { text-align: center; }
+.finals-result-winner {
+  font-family: var(--gw-font-display);
+  font-size: 20px; font-weight: 700; line-height: 1.2;
+}
+.finals-result-detail {
+  font-size: 12px; color: rgba(240,237,224,.6); margin-top: 4px;
+}
+
+.finals-actions { display: flex; flex-direction: column; gap: 8px; }
+.finals-btn {
+  padding: 12px 14px; border-radius: 12px;
+  font-family: inherit; font-size: 14px; font-weight: 800;
+  cursor: pointer; border: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .12s;
+}
+.finals-btn:active { transform: scale(.98); }
+.finals-btn--primary {
+  background: linear-gradient(135deg, #edd655, #d4af37, #b8961e);
+  color: #0c0f0d;
+}
+.finals-btn--primary[disabled] { opacity: .5; cursor: wait; }
+.finals-btn--secondary {
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
+  color: rgba(240,237,224,.7);
+}
+
+.finals-manual {
+  padding: 12px; border-radius: 12px;
+  background: rgba(0,0,0,.3); border: 1px solid rgba(255,255,255,.1);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.finals-manual-label {
+  font-size: 12px; font-weight: 700; color: var(--gw-gold);
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.finals-manual-row { display: flex; gap: 8px; }
+.finals-manual-btn {
+  flex: 1; padding: 10px 12px; border-radius: 10px;
+  background: rgba(255,255,255,.04); border: 2px solid rgba(255,255,255,.1);
+  color: rgba(240,237,224,.7); font-size: 14px; font-weight: 700;
+  cursor: pointer; font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.finals-manual-btn.active {
+  background: rgba(212,175,55,.15); border-color: currentColor;
+}
+.finals-manual-input {
+  padding: 10px 12px; border-radius: 10px;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
+  color: var(--gw-text, #f0ede0); font-family: inherit; font-size: 13px; outline: none;
+}
 /* ── Teams tab ──────────────────────────────────────────── */
 .team-detail-card {
   background: #1e2b22;
@@ -1539,6 +1821,42 @@ scheduleVersion.value++ // ensure computeds pick up loaded results
   font-size: 14px; font-weight: 800;
 }
 .tdc-player-name { font-size: 14px; font-weight: 600; color: #f0ede0; }
+
+/* Inline GHIN index edit */
+.tdc-player-idx {
+  margin-left: auto;
+  display: flex; align-items: center; gap: 4px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.tdc-idx-label {
+  font-size: 12px; font-weight: 700;
+  color: rgba(212,175,55,.8);
+  font-family: var(--gw-font-mono, monospace);
+}
+.tdc-idx-edit-hint {
+  font-size: 11px; color: rgba(240,237,224,.35);
+  opacity: 0;
+  transition: opacity .15s;
+}
+.tdc-player:hover .tdc-idx-edit-hint,
+.tdc-player-idx:active .tdc-idx-edit-hint {
+  opacity: 1;
+}
+.tdc-idx-input {
+  width: 52px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: rgba(212,175,55,.15);
+  border: 1.5px solid rgba(212,175,55,.6);
+  color: #d4af37;
+  font-family: var(--gw-font-mono, monospace);
+  font-size: 13px; font-weight: 700;
+  text-align: center; outline: none;
+  -moz-appearance: textfield;
+}
+.tdc-idx-input::-webkit-outer-spin-button,
+.tdc-idx-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 
 .tdc-schedule { padding: 8px 14px 12px; }
 .tdc-match-row {
