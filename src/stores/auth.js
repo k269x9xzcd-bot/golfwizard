@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { supabase } from '../supabase'
+import { clearPresetForAuthUser } from '../modules/preset'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref(null)
@@ -22,8 +23,12 @@ export const useAuthStore = defineStore('auth', () => {
 
       // Listen for auth state changes
       supabase.auth.onAuthStateChange(async (_event, session) => {
+        const wasGuest = !user.value
         user.value = session?.user ?? null
         if (user.value) {
+          // Just signed in — clean up any preset-injected guest data so it
+          // doesn't interfere with the authenticated user's real Supabase data.
+          if (wasGuest) clearPresetForAuthUser()
           await fetchProfile()
         } else {
           profile.value = null

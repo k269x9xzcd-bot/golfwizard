@@ -98,7 +98,9 @@ const playerNames = computed(() =>
 onMounted(async () => {
   // Brief animation delay so the seeding feels intentional
   await new Promise(r => setTimeout(r, 800))
-  applyPreset(true) // always re-apply so the data is fresh
+  // Never force-apply when authenticated — that overwrites real Supabase data.
+  // For new (unauthenticated) users, apply once to seed the local roster + course.
+  applyPreset(false)
   seeding.value = false
 })
 </script>

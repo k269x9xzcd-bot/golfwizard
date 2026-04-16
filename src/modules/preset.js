@@ -56,17 +56,37 @@ export const PRESET_COURSE = {
 }
 
 const SEEDED_KEY = 'gw_preset_seeded'
+// Keys used by the preset that must be cleaned up when a user signs in
+const PRESET_LOCAL_KEYS = ['gw_roster_players', 'gw_favorite_roster_players', 'gw_favorite_courses']
 
 /**
- * Seed the preset into guest/local storage. Safe to call on every app load
- * with a preset param — only seeds once (tracked by SEEDED_KEY).
+ * Seed the preset into guest/local storage.
+ * CRITICAL: This must NEVER run when the user is authenticated — it would
+ * overwrite their real Supabase-backed data with stub preset data, causing
+ * the swipe/toggle features to break (fake preset IDs don't exist in Supabase).
+ *
  * @param {boolean} force — re-seed even if already seeded (for re-invites)
  */
 export function applyPreset(force = false) {
+  // HARD GUARD: never run if user is authenticated
+  // Check the supabase-js session key directly to avoid circular imports
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key?.startsWith('sb-') && key?.endsWith('-auth-token')) {
+        const parsed = JSON.parse(localStorage.getItem(key) || 'null')
+        if (parsed?.access_token || parsed?.currentSession?.access_token) {
+          console.log('[preset] Skipping preset seed — user is authenticated')
+          return false
+        }
+      }
+    }
+  } catch {}
+
   if (!force && localStorage.getItem(SEEDED_KEY) === PRESET_ID) return false
 
-  // Seed players into local roster
-  const existing = JSON.parse(localStorage.getItem('gw_roster_players') || '[]')
+  // Seed players into local roster (guest-only storage key)
+  const existing = JSON.parse(localStorage.getItem('gw_roster') || '[]')
   const existingNames = new Set(existing.map(p => p.name))
   const toAdd = PRESET_PLAYERS.filter(p => !existingNames.has(p.name)).map(p => ({
     ...p,
@@ -74,10 +94,11 @@ export function applyPreset(force = false) {
     owner_id: null,
     created_at: new Date().toISOString(),
   }))
-  const merged = [...existing, ...toAdd]
-  localStorage.setItem('gw_roster_players', JSON.stringify(merged))
+  if (toAdd.length) {
+    localStorage.setItem('gw_roster', JSON.stringify([...existing, ...toAdd]))
+  }
 
-  // Seed course into local custom courses
+  // Seed course into local custom courses ONLY if not already there
   const existingCourses = JSON.parse(localStorage.getItem('golf_custom_courses') || '{}')
   if (!existingCourses[PRESET_COURSE.name]) {
     existingCourses[PRESET_COURSE.name] = {
@@ -91,21 +112,34 @@ export function applyPreset(force = false) {
   }
 
   // Mark Bonnie Briar as a favorite course
-  const favCourses = JSON.parse(localStorage.getItem('gw_favorite_courses') || '[]')
+  const favCourses = JSON.parse(localStorage.getItem('golf_favorites') || '[]')
   if (!favCourses.includes(PRESET_COURSE.name)) {
     favCourses.unshift(PRESET_COURSE.name)
-    localStorage.setItem('gw_favorite_courses', JSON.stringify(favCourses))
+    localStorage.setItem('golf_favorites', JSON.stringify(favCourses))
   }
-
-  // Mark all preset players as favorites
-  const favPlayers = JSON.parse(localStorage.getItem('gw_favorite_roster_players') || '[]')
-  for (const p of PRESET_PLAYERS) {
-    if (!favPlayers.includes(p.name)) favPlayers.push(p.name)
-  }
-  localStorage.setItem('gw_favorite_roster_players', JSON.stringify(favPlayers))
 
   localStorage.setItem(SEEDED_KEY, PRESET_ID)
-  return true // indicates seed was applied
+  return true
+}
+
+/**
+ * Called when an authenticated user signs in. Clears any preset localStorage
+ * keys so the authenticated user's real Supabase data takes over cleanly.
+ * Safe to call on every authenticated init — checks for preset-style IDs first.
+ */
+export function clearPresetForAuthUser() {
+  try {
+    // Clear any preset-injected player roster data (uses fake preset_* IDs)
+    const roster = JSON.parse(localStorage.getItem('gw_roster') || '[]')
+    const cleaned = roster.filter(p => p.id && !p.id.startsWith('preset_'))
+    if (cleaned.length !== roster.length) {
+      localStorage.setItem('gw_roster', JSON.stringify(cleaned))
+    }
+    // Do NOT clear golf_custom_courses — authenticated users might have
+    // their own local custom courses saved there
+    // DO clear the seeded flag so a future guest device can be seeded fresh
+    localStorage.removeItem(SEEDED_KEY)
+  } catch {}
 }
 
 /**
