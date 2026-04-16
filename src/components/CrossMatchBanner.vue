@@ -1,6 +1,6 @@
 <template>
-  <!-- Hidden entirely if we don't have a live match to surface, or if dismissed -->
-  <div v-if="display && !dismissed" class="cmb-wrapper">
+  <!-- Hidden entirely if we don't have a live match, silenced, or if a pending confirm is showing -->
+  <div v-if="display && !silenced" class="cmb-wrapper">
     <RouterLink
       :to="`/cross-match/${display.match.id}`"
       class="cmb"
@@ -10,15 +10,32 @@
       <span class="cmb-label">{{ display.label }}</span>
       <span class="cmb-arrow">›</span>
     </RouterLink>
-    <!-- Dismiss button on pending matches so user can continue their round
-         without Foursome B blocking anything. This only hides the banner
-         in the current session — the linked match still exists in the DB. -->
-    <button
-      v-if="display.tone === 'pending' || display.tone === 'waiting'"
-      class="cmb-dismiss"
-      @click.prevent="dismissBanner"
-      title="Hide this — continue scoring normally"
-    >✕</button>
+    <!-- Options button for pending matches -->
+    <div v-if="display.tone === 'pending' || display.tone === 'waiting'" class="cmb-options">
+      <button
+        class="cmb-options-btn"
+        @click.prevent="showOptions = !showOptions"
+        title="Options"
+      >⋯</button>
+      <div v-if="showOptions" class="cmb-options-menu" @click.stop>
+        <button class="cmb-opt" @click="silenceBanner">🔕 Silence — don't show again</button>
+        <button class="cmb-opt cmb-opt--danger" @click="confirmCancel">🚫 Cancel cross-match</button>
+        <button class="cmb-opt" @click="showOptions = false">Close</button>
+      </div>
+      <div v-if="showOptions" class="cmb-options-backdrop" @click="showOptions = false"></div>
+    </div>
+  </div>
+
+  <!-- Cancel confirm -->
+  <div v-if="confirmingCancel" class="cmb-cancel-confirm">
+    <div class="cmb-cancel-body">
+      <strong>Cancel this cross-match?</strong>
+      The invite code will stop working. Both foursomes' rounds are kept.
+    </div>
+    <div class="cmb-cancel-actions">
+      <button class="cmb-cancel-btn" @click="confirmingCancel = false">Keep it</button>
+      <button class="cmb-cancel-btn cmb-cancel-btn--danger" @click="doCancel">Yes, cancel</button>
+    </div>
   </div>
 </template>
 
@@ -34,11 +51,49 @@ const authStore = useAuthStore()
 const roundsStore = useRoundsStore()
 const linkedStore = useLinkedMatchesStore()
 
-// Session-only dismiss — hides the banner so the user can Finish Round normally.
-// The linked match is NOT cancelled; they can re-access it from /cross-match/:id.
-const dismissed = ref(false)
-function dismissBanner() {
-  dismissed.value = true
+// Silence — persistent in localStorage per match ID. Hides the banner
+// permanently until the match status changes to 'linked' or 'complete'.
+const SILENCE_KEY = 'gw_silenced_matches'
+const showOptions = ref(false)
+const confirmingCancel = ref(false)
+
+function _getSilenced() {
+  try { return JSON.parse(localStorage.getItem(SILENCE_KEY) || '[]') } catch { return [] }
+}
+const silenced = computed(() => {
+  const m = relevantMatch.value
+  if (!m) return false
+  // Auto-unsilence when match goes live or complete
+  if (m.status === 'linked' || m.status === 'complete') return false
+  return _getSilenced().includes(m.id)
+})
+
+function silenceBanner() {
+  showOptions.value = false
+  const m = relevantMatch.value
+  if (!m) return
+  const list = _getSilenced()
+  if (!list.includes(m.id)) list.push(m.id)
+  localStorage.setItem(SILENCE_KEY, JSON.stringify(list))
+  // Force reactivity tick
+  tick.value++
+}
+
+function confirmCancel() {
+  showOptions.value = false
+  confirmingCancel.value = true
+}
+
+async function doCancel() {
+  confirmingCancel.value = false
+  const m = relevantMatch.value
+  if (!m) return
+  try {
+    await linkedStore.cancelLinkedMatch(m.id)
+    tick.value++
+  } catch (e) {
+    console.warn('[cmb] cancel failed:', e)
+  }
 }
 
 // Internal tick so we can recompute when scores change on either round.
@@ -194,6 +249,76 @@ onUnmounted(() => {
   flex: 1;
   margin-right: 0;
 }
+/* Options button + dropdown */
+.cmb-options { position: relative; flex-shrink: 0; }
+.cmb-options-btn {
+  width: 34px; height: 34px;
+  margin: 10px 16px 10px 4px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.1);
+  color: rgba(240,237,224,.7);
+  font-size: 16px; line-height: 1;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+.cmb-options-btn:active { background: rgba(255,255,255,.12); }
+.cmb-options-backdrop {
+  position: fixed; inset: 0; z-index: 59; background: transparent;
+}
+.cmb-options-menu {
+  position: absolute;
+  top: 36px; right: 0;
+  z-index: 60;
+  background: var(--gw-neutral-800, #1e2720);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 14px;
+  min-width: 220px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  overflow: hidden;
+}
+.cmb-opt {
+  display: block; width: 100%;
+  padding: 13px 16px;
+  text-align: left; background: none; border: none;
+  font-size: 13px; font-weight: 600; color: var(--gw-text);
+  cursor: pointer; font-family: inherit;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  -webkit-tap-highlight-color: transparent;
+}
+.cmb-opt:last-child { border-bottom: none; }
+.cmb-opt:active { background: rgba(255,255,255,.06); }
+.cmb-opt--danger { color: #f87171; }
+
+/* Cancel confirm inline card */
+.cmb-cancel-confirm {
+  margin: 0 16px 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(239,68,68,.1);
+  border: 1px solid rgba(239,68,68,.4);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.cmb-cancel-body {
+  font-size: 12px; color: rgba(240,237,224,.8); line-height: 1.45;
+}
+.cmb-cancel-body strong { color: var(--gw-text); }
+.cmb-cancel-actions { display: flex; gap: 8px; }
+.cmb-cancel-btn {
+  flex: 1; padding: 9px 12px; border-radius: 9px;
+  font-size: 12px; font-weight: 700; cursor: pointer;
+  font-family: inherit; border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.06); color: var(--gw-text);
+  -webkit-tap-highlight-color: transparent;
+}
+.cmb-cancel-btn--danger {
+  background: rgba(239,68,68,.2); border-color: rgba(239,68,68,.5);
+  color: #f87171;
+}
+
 .cmb-dismiss {
   flex-shrink: 0;
   width: 32px;

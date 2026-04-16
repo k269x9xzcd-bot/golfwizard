@@ -232,10 +232,44 @@
         <template v-if="finalResult">
           <div class="finals-result">
             <div class="finals-result-winner" :style="{ color: getTeam(finalResult.winner)?.color }">
-              🏆 {{ getTeam(finalResult.winner)?.name }} wins!
+              🏆 {{ getTeam(finalResult.winner)?.name }} wins the Cup!
             </div>
             <div v-if="finalResult.detail" class="finals-result-detail">{{ finalResult.detail }}</div>
           </div>
+
+          <!-- ── Cup Settle-Up ─────────────────────── -->
+          <div class="finals-settle">
+            <div class="finals-settle-title">💰 Settle Up</div>
+            <div class="finals-settle-sub">
+              6 losers × $100 = $600 pot · each winner takes $300
+            </div>
+
+            <!-- Winner row -->
+            <div
+              v-for="p in getTeam(finalResult.winner)?.players || []"
+              :key="p.id"
+              class="finals-settle-row finals-settle-row--win"
+            >
+              <span class="fsr-name">{{ p.nickname || p.name }}</span>
+              <span class="fsr-amount fsr-win">+$300</span>
+            </div>
+
+            <!-- Losers -->
+            <div class="finals-settle-divider">pay $100 each</div>
+            <template v-for="team in TEAMS" :key="team.id">
+              <template v-if="team.id !== finalResult.winner">
+                <div
+                  v-for="p in getTeam(team.id)?.players || []"
+                  :key="p.id"
+                  class="finals-settle-row finals-settle-row--lose"
+                >
+                  <span class="fsr-name">{{ p.nickname || p.name }}</span>
+                  <span class="fsr-amount fsr-lose">−$100</span>
+                </div>
+              </template>
+            </template>
+          </div>
+
           <div class="finals-actions">
             <button class="finals-btn finals-btn--secondary" @click="clearFinalResult">Reset result</button>
             <button class="finals-btn finals-btn--primary" @click="openFinalRound">View / re-score →</button>
@@ -1756,6 +1790,39 @@ _loadFinalResult()
 }
 .finals-result-detail {
   font-size: 12px; color: rgba(240,237,224,.6); margin-top: 4px;
+}
+
+/* Cup Settle-Up */
+.finals-settle {
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(212,175,55,.08);
+  border: 1px solid rgba(212,175,55,.3);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.finals-settle-title {
+  font-size: 13px; font-weight: 800; color: var(--gw-gold);
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.finals-settle-sub {
+  font-size: 11px; color: rgba(240,237,224,.55); margin-bottom: 4px;
+}
+.finals-settle-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.06);
+}
+.finals-settle-row--win { background: rgba(34,197,94,.1); border-color: rgba(34,197,94,.3); }
+.finals-settle-row--lose { background: rgba(239,68,68,.06); border-color: rgba(239,68,68,.2); }
+.fsr-name { font-size: 14px; font-weight: 700; color: var(--gw-text); }
+.fsr-amount { font-family: var(--gw-font-mono, monospace); font-size: 15px; font-weight: 800; }
+.fsr-win { color: #4ade80; }
+.fsr-lose { color: #f87171; }
+.finals-settle-divider {
+  font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: rgba(240,237,224,.4); text-align: center; padding: 2px 0 4px;
 }
 
 .finals-actions { display: flex; flex-direction: column; gap: 8px; }
