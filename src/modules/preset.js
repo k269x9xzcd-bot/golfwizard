@@ -25,13 +25,18 @@ export const PRESET_PLAYERS = [
   { name: 'Shang Chen',    short_name: 'SC', ghin_index: 7.0,  nickname: 'Wang',   use_nickname: true,  is_favorite: true,  email: 'bonga13@gmail.com' },
 ]
 
+// NOTE: Only the 3 tees actually set up in jayspieler@aol.com's custom course.
+// SI for Blue is pending confirmation of Jason's edits — using current DB value.
+// UPDATE THIS when Jason confirms the correct Blue SI holes 1-18.
 export const PRESET_COURSE = {
   name: 'Bonnie Briar Country Club',
   is_favorite: true,
   tees: {
     'Blue': {
       slope: 138, yards: 6385, rating: 71.9,
-      siByHole: [6,12,16,10,18,2,14,4,8,13,3,11,1,9,17,7,5,15],
+      // TODO: Confirm Jason's edited Blue SI — currently using DB value.
+      // Ask Jason to go to Courses → Bonnie Briar → Blue SI row and report h1-h18.
+      siByHole: [4,12,18,10,14,2,16,6,8,13,3,9,1,11,17,7,5,15],
       yardsByHole: [468,341,168,366,185,403,309,408,491,202,453,333,458,320,133,525,518,304],
     },
     'White (M)': {
@@ -44,29 +49,9 @@ export const PRESET_COURSE = {
       siByHole: [6,12,16,10,18,2,14,4,8,13,3,11,1,9,17,7,5,15],
       yardsByHole: [451,341,168,366,151,403,309,380,491,202,428,333,426,320,133,508,496,304],
     },
-    'White (F)': {
-      slope: 134, yards: 5920, rating: 74.5,
-      siByHole: [6,10,16,14,18,2,12,8,4,15,9,11,3,7,17,1,5,13],
-      yardsByHole: [451,326,161,351,144,388,298,345,455,188,418,320,426,298,120,508,442,281],
-    },
-    'Green (M)': {
-      slope: 125, yards: 5419, rating: 67.1,
-      siByHole: [6,12,16,10,18,2,14,4,8,13,3,11,1,9,17,7,5,15],
-      yardsByHole: [435,315,146,309,120,370,286,337,447,179,409,307,396,281,114,445,288,235],
-    },
-    'Green (F)': {
-      slope: 131, yards: 5398, rating: 71.6,
-      siByHole: [6,10,16,14,18,2,12,8,4,15,9,11,3,7,17,1,5,13],
-      yardsByHole: [435,318,145,309,120,370,287,338,445,179,409,308,396,280,114,445,275,225],
-    },
-    'Gold': {
-      slope: 118, yards: 4284, rating: 65.9,
-      siByHole: [6,10,16,14,18,2,12,8,4,15,9,11,3,7,17,1,5,13],
-      yardsByHole: [300,231,145,224,120,259,230,253,370,119,281,308,276,208,114,323,288,235],
-    },
   },
   par: [4,4,3,4,3,4,4,4,5,3,4,4,5,4,3,5,5,4],
-  si: [6,12,16,10,18,2,14,4,8,13,3,11,1,9,17,7,5,15],
+  si: [4,12,18,10,14,2,16,6,8,13,3,9,1,11,17,7,5,15],
   defaultTee: 'Blue',
 }
 
