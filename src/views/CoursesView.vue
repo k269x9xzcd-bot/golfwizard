@@ -555,8 +555,10 @@ async function openEditCourse(c) {
   const teesData = c.teesData || {}
   const teeNames = Object.keys(teesData)
 
-  if (c.isCustom && teeNames.length > 0) {
-    console.log('[GW] openEditCourse: using saved custom course data for', c.name)
+  if (teeNames.length > 0) {
+    // Use saved data for both custom courses AND builtins with complete tee data
+    // Don't auto-fetch from API — that would overwrite correct built-in data
+    console.log('[GW] openEditCourse: using existing course data for', c.name, c.isCustom ? '(custom)' : '(builtin)')
     const tees = teeNames.map(name => ({
       name,
       rating: teesData[name].rating ?? null,
@@ -570,11 +572,11 @@ async function openEditCourse(c) {
       yards: teeNames.map(name => (teesData[name]?.yardsByHole?.[i]) || null),
     }))
     newCourse.value = { name: c.name, tees, holes }
-    apiFetchMsg.value = 'Loaded from saved data. Use "Reset from API" to re-fetch.'
+    apiFetchMsg.value = c.isCustom ? 'Loaded from saved data. Use "Reset from API" to re-fetch.' : 'Loaded from built-in data. Use "Fetch tees from golf database" to override.'
     return
   }
 
-  // Non-custom (built-in) course — try API first, fall back to built-in data
+  // No tee data at all — try API, fall back to built-in data
   newCourse.value = { name: c.name, tees: [], holes: [] }
   console.log('[GW] openEditCourse: fetching API data for', c.name)
   await fetchCourseFromApi()

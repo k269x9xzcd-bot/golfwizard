@@ -1372,7 +1372,18 @@ async function selectCourse(c) {
     console.log('[GW-wizard] Using saved custom course data for', c.name)
     apiEnrichedTees.value[c.name] = stored.teesData
     const teeNames = Object.keys(stored.teesData)
-    form.value.tee = teeNames[0] ?? ''
+    const preferred = typeof stored.tees === 'string' ? stored.tees : null
+    form.value.tee = (preferred && teeNames.includes(preferred)) ? preferred : (teeNames[0] ?? '')
+    return
+  }
+
+  // If builtin already has complete tee data, use it — don't overwrite with API data
+  if (!stored?.isCustom && stored?.teesData && Object.keys(stored.teesData).length > 0) {
+    console.log('[GW-wizard] Using builtin course data for', c.name)
+    apiEnrichedTees.value[c.name] = stored.teesData
+    const teeNames = Object.keys(stored.teesData)
+    const preferred = typeof stored.tees === 'string' ? stored.tees : null
+    form.value.tee = (preferred && teeNames.includes(preferred)) ? preferred : (teeNames[0] ?? '')
     return
   }
 
@@ -1436,19 +1447,24 @@ async function fetchAndApplyApiDetail(courseName, apiId, defaultTees) {
         // Already saved as custom — don't overwrite user edits
         console.log('[GW-wizard] Skipping API save — course already exists as custom:', courseName)
       } else if (existing && !existing.isCustom) {
-        // Built-in course — save as custom override with full API data
-        const teesData = detail.teesData
-        const teeNames = Object.keys(teesData)
-        try {
-          await coursesStore.addCourse({
-            name: courseName,
-            teesData,
-            tees: teesData,
-            par: detail.par,
-            si: detail.si,
-            defaultTee: (typeof defaultTees === 'string' ? defaultTees : teeNames[0]),
-          })
-        } catch { /* may already exist as custom */ }
+        // Built-in course — only save API override if builtin has no tee data
+        const hasBuiltinTees = existing.teesData && Object.keys(existing.teesData).length > 0
+        if (!hasBuiltinTees) {
+          const teesData = detail.teesData
+          const teeNames = Object.keys(teesData)
+          try {
+            await coursesStore.addCourse({
+              name: courseName,
+              teesData,
+              tees: teesData,
+              par: detail.par,
+              si: detail.si,
+              defaultTee: (typeof defaultTees === 'string' ? defaultTees : teeNames[0]),
+            })
+          } catch { /* may already exist as custom */ }
+        } else {
+          console.log('[GW-wizard] Builtin has complete tee data — skipping API save for', courseName)
+        }
       } else if (!existing) {
         // New API course
         const teesData = detail.teesData
