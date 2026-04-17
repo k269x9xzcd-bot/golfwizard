@@ -8,34 +8,34 @@ export const useRosterStore = defineStore('roster', () => {
   const loading = ref(false)
 
   const DEFAULT_PLAYERS = [
-    // ── Bandon Boys group ──────────────────────────────────────
+    // ── Favorites (seeded for all new users) ──────────────────
     { id: 'default_1',  name: 'Jason Spieler',     short_name: 'Spieler', ghin_index: 9.1,  is_favorite: true,  email: 'jayspieler@aol.com',          nickname: 'Spiels', use_nickname: true  },
-    { id: 'default_2',  name: 'Alex Dubin',         short_name: 'Dubin',   ghin_index: 6.6,  is_favorite: true,  email: null, nickname: null, use_nickname: false },
-    { id: 'default_3',  name: 'Craig Sedaka',       short_name: 'Sedaka',  ghin_index: 9.8,  is_favorite: true,  email: null, nickname: null, use_nickname: false },
-    { id: 'default_4',  name: 'Stephen Berkley',    short_name: 'Berkley', ghin_index: 15.8, is_favorite: true,  email: null, nickname: null, use_nickname: false },
-    { id: 'default_5',  name: 'Alex Pugatch',       short_name: 'Pugatch', ghin_index: 7.5,  is_favorite: true,  email: null, nickname: null, use_nickname: false },
-    { id: 'default_6',  name: 'Scott Millman',      short_name: 'Millman', ghin_index: 8.5,  is_favorite: true,  email: null, nickname: null, use_nickname: false },
-    { id: 'default_7',  name: 'Jeremy Collet',      short_name: 'Collet',  ghin_index: 10.3, is_favorite: true,  email: null, nickname: null, use_nickname: false },
-    { id: 'default_8',  name: 'Benny Salerno',      short_name: 'Salerno', ghin_index: 14.6, is_favorite: true,  email: null, nickname: null, use_nickname: false },
-    // ── Other regular players from backup ─────────────────────
-    { id: 'default_9',  name: 'Matt Derosa',        short_name: 'Derosa',  ghin_index: 6.0,  is_favorite: false, email: 'matt@derosasports.com',        nickname: 'Matt',   use_nickname: false },
-    { id: 'default_10', name: 'Rocco Cipriano',     short_name: 'Rocco',   ghin_index: 5.0,  is_favorite: false, email: null, nickname: null, use_nickname: false },
-    { id: 'default_11', name: 'Andy Shpiz',         short_name: 'Shpiz',   ghin_index: 6.0,  is_favorite: false, email: null, nickname: null, use_nickname: false },
-    { id: 'default_12', name: 'Marty Durkin',       short_name: 'Durkin',  ghin_index: 8.0,  is_favorite: false, email: 'martydurkin17@verizon.net',    nickname: 'Marty',  use_nickname: false },
-    { id: 'default_13', name: 'Harry Spadaro',      short_name: 'Harry',   ghin_index: 15.0, is_favorite: false, email: null, nickname: null, use_nickname: false },
-    { id: 'default_14', name: 'Joe Tomei',          short_name: 'Tomei',   ghin_index: 14.0, is_favorite: false, email: null, nickname: null, use_nickname: false },
-    { id: 'default_15', name: 'Alex Carroll',       short_name: 'Carroll', ghin_index: 2.7,  is_favorite: false, email: 'alexcarroll333@gmail.com',     nickname: 'Al',     use_nickname: true  },
-    { id: 'default_16', name: 'Sam Waters',         short_name: 'Waters',  ghin_index: 5.0,  is_favorite: false, email: null, nickname: null, use_nickname: false },
-    { id: 'default_17', name: 'Chris Raggo',        short_name: 'Raggo',   ghin_index: 4.4,  is_favorite: false, email: 'craggo@recordandreturn.com',   nickname: 'Chris',  use_nickname: false },
+    { id: 'default_2',  name: 'Alex Carroll',       short_name: 'Carroll', ghin_index: 4.0,  is_favorite: true,  email: 'alexcarroll333@gmail.com',     nickname: 'Al',     use_nickname: true  },
+    { id: 'default_3',  name: 'Andy Shpiz',         short_name: 'Shpiz',   ghin_index: 6.0,  is_favorite: true,  email: null, nickname: null, use_nickname: false },
+    { id: 'default_4',  name: 'Brian Cimons',       short_name: 'Cimons',  ghin_index: 6.0,  is_favorite: true,  email: 'bcimons19@yahoo.com',          nickname: 'Brian',  use_nickname: false },
+    { id: 'default_5',  name: 'Chris Raggo',        short_name: 'Chris',   ghin_index: 4.0,  is_favorite: true,  email: 'craggo@recordandreturn.com',   nickname: 'Chris',  use_nickname: false },
+    { id: 'default_6',  name: 'Harry Spadaro',      short_name: 'Harry',   ghin_index: 15.0, is_favorite: true,  email: null, nickname: null, use_nickname: false },
+    { id: 'default_7',  name: 'Jeremy Court',       short_name: 'Jeremy',  ghin_index: 5.0,  is_favorite: true,  email: 'jcourt93@gmail.com',           nickname: 'Jeremy', use_nickname: false },
+    { id: 'default_8',  name: 'Joe Tomei',          short_name: 'Tomei',   ghin_index: 14.0, is_favorite: true,  email: null, nickname: null, use_nickname: false },
+    { id: 'default_9',  name: 'Marty Durkin',       short_name: 'Marty',   ghin_index: 7.0,  is_favorite: true,  email: 'martydurkin17@verizon.net',    nickname: 'Marty',  use_nickname: false },
+    { id: 'default_10', name: 'Matt Derosa',        short_name: 'Matt',    ghin_index: 7.0,  is_favorite: true,  email: 'matt@derosasports.com',        nickname: 'Matt',   use_nickname: false },
+    { id: 'default_11', name: 'Sam Waters',         short_name: 'Waters',  ghin_index: 5.0,  is_favorite: true,  email: null, nickname: null, use_nickname: false },
+    { id: 'default_12', name: 'Shang Chen',         short_name: 'Shang',   ghin_index: 7.0,  is_favorite: true,  email: 'bonga13@gmail.com',            nickname: 'Wang',   use_nickname: true  },
+    // ── Non-favorites (owner's extended roster only) ──────────
+    { id: 'default_13', name: 'Alex Dubin',         short_name: 'Dubin',   ghin_index: 10.0, is_favorite: false, email: null, nickname: null, use_nickname: false },
+    { id: 'default_14', name: 'Alex Pugatch',       short_name: 'Pugatch', ghin_index: 10.0, is_favorite: false, email: null, nickname: null, use_nickname: false },
+    { id: 'default_15', name: 'Benny Salerno',      short_name: 'Benny',   ghin_index: 10.0, is_favorite: false, email: null, nickname: null, use_nickname: false },
+    { id: 'default_16', name: 'Bryan Pinto',        short_name: 'Pinto',   ghin_index: 15.8, is_favorite: false, email: null, nickname: null, use_nickname: false },
+    { id: 'default_17', name: 'Craig Sedaka',       short_name: 'Sedaka',  ghin_index: 10.0, is_favorite: false, email: null, nickname: null, use_nickname: false },
     { id: 'default_18', name: 'Dan Ko',             short_name: 'Ko',      ghin_index: 15.0, is_favorite: false, email: null, nickname: null, use_nickname: false },
-    { id: 'default_19', name: 'Nick Boccabella',    short_name: 'NickB',   ghin_index: 5.7,  is_favorite: false, email: null, nickname: null, use_nickname: false },
+    { id: 'default_19', name: 'Jeremy Collet',      short_name: 'Collet',  ghin_index: 10.0, is_favorite: false, email: null, nickname: null, use_nickname: false },
     { id: 'default_20', name: 'John Kogel',         short_name: 'Kogel',   ghin_index: 9.1,  is_favorite: false, email: null, nickname: null, use_nickname: false },
-    { id: 'default_21', name: 'Shang Chen',         short_name: 'Shang',   ghin_index: 5.8,  is_favorite: false, email: 'bonga13@gmail.com',            nickname: 'Wang',   use_nickname: true  },
-    { id: 'default_22', name: 'Jeremy Court',       short_name: 'Court',   ghin_index: 4.8,  is_favorite: false, email: 'jcourt93@gmail.com',           nickname: 'Jeremy', use_nickname: false },
-    { id: 'default_23', name: 'Todd Boccabella',    short_name: 'ToddB',   ghin_index: 6.5,  is_favorite: false, email: null, nickname: null, use_nickname: false },
-    { id: 'default_24', name: 'Brian Cimons',       short_name: 'Cimons',  ghin_index: 6.0,  is_favorite: false, email: 'bcimons19@yahoo.com',          nickname: 'Brian',  use_nickname: false },
-    { id: 'default_25', name: 'Jonathan Grant',     short_name: 'Grant',   ghin_index: 1.3,  is_favorite: false, email: null, nickname: null, use_nickname: false },
-    { id: 'default_26', name: 'Bryan Pinto',        short_name: 'Pinto',   ghin_index: 15.8, is_favorite: false, email: null, nickname: null, use_nickname: false },
+    { id: 'default_21', name: 'Jonathan Grant',     short_name: 'Grant',   ghin_index: 1.3,  is_favorite: false, email: null, nickname: null, use_nickname: false },
+    { id: 'default_22', name: 'Nick Boccabella',    short_name: 'NickB',   ghin_index: 5.7,  is_favorite: false, email: null, nickname: null, use_nickname: false },
+    { id: 'default_23', name: 'Rocco Cipriano',     short_name: 'Rocco',   ghin_index: 5.0,  is_favorite: false, email: null, nickname: null, use_nickname: false },
+    { id: 'default_24', name: 'Scott Millman',      short_name: 'Scott',   ghin_index: 10.0, is_favorite: false, email: null, nickname: null, use_nickname: false },
+    { id: 'default_25', name: 'Stephen Berkley',    short_name: 'Berkley', ghin_index: 10.0, is_favorite: false, email: null, nickname: null, use_nickname: false },
+    { id: 'default_26', name: 'Todd Boccabella',    short_name: 'ToddB',   ghin_index: 6.5,  is_favorite: false, email: null, nickname: null, use_nickname: false },
   ]
 
   async function fetchPlayers() {
@@ -71,7 +71,10 @@ export const useRosterStore = defineStore('roster', () => {
             players.value = []
           } else {
             try {
-              const rows = DEFAULT_PLAYERS.map(p => ({
+              // New users get only the favorite players as their starting roster.
+              // Full 26-player list is only for the app owner (Jason).
+              const seedPlayers = DEFAULT_PLAYERS.filter(p => p.is_favorite)
+              const rows = seedPlayers.map(p => ({
                 owner_id: auth.user.id,
                 name: p.name,
                 short_name: p.short_name,
