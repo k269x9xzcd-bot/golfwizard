@@ -174,7 +174,7 @@ export const useRoundsStore = defineStore('rounds', () => {
   }
 
   // ── Create a new round ──────────────────────────────────────
-  async function createRound({ name, courseName, tee, date, holesMode, format, withRoomCode = false, players = [], games = [] }) {
+  async function createRound({ name, courseName, tee, date, holesMode, format, withRoomCode = false, opponentPlayers = [], players = [], games = [] }) {
     const auth = useAuthStore()
     console.log('[rounds] createRound called, isAuthenticated:', auth.isAuthenticated, 'course:', courseName, 'players:', players.length)
 
@@ -277,6 +277,7 @@ export const useRoundsStore = defineStore('rounds', () => {
       format: format || 'social',
       room_code: roomCode,
       owner_id: auth.user?.id ?? null,
+      opponent_players: opponentPlayers.length > 0 ? opponentPlayers : [],
     }
 
     // Try Supabase JS first, fall back to raw fetch() on timeout.

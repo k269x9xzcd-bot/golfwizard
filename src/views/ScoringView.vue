@@ -25,7 +25,6 @@
           <div class="header-meta">
             <span class="meta-tag">{{ roundsStore.activeRound.tee }}</span>
             <span class="meta-tag">{{ holesLabel }}</span>
-            <span v-if="roundsStore.activeRound.room_code" class="meta-tag meta-live">🔗 {{ roundsStore.activeRound.room_code }}</span>
             <span v-if="!isCaptain" class="meta-tag meta-viewer" title="View-only — you're not the scorer for this round">👀 Viewer</span>
           </div>
         </div>
@@ -55,6 +54,12 @@
           </div>
         </div>
       </header>
+
+      <!-- Opponent group strip -->
+      <div v-if="opponentPlayers.length" class="opp-strip">
+        <span class="opp-strip-label">vs</span>
+        <span v-for="p in opponentPlayers" :key="p.id" class="opp-strip-player">{{ p.shortName || p.name }}</span>
+      </div>
 
       <!-- HCP Editor Modal -->
       <div v-if="showHcpEditor" class="hcp-editor-overlay" @click.self="showHcpEditor = false">
@@ -836,6 +841,13 @@ function onTouchEnd(e) {
 // everyone is effectively the captain. Non-captain viewers can read the
 // scorecard but can't tap to enter scores (RLS would block the write anyway
 // at the DB level, but we preempt it client-side with a clear toast).
+// Opponent group from the active round
+const opponentPlayers = computed(() => {
+  const r = roundsStore.activeRound
+  if (!r || !Array.isArray(r.opponent_players)) return []
+  return r.opponent_players
+})
+
 const isCaptain = computed(() => {
   const r = roundsStore.activeRound
   if (!r) return true
@@ -2255,6 +2267,34 @@ function formatDate(dateStr) {
   z-index: 10;
   background: var(--gw-bg, #0c150e);
   min-height: 56px;
+}
+.opp-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 16px 8px;
+  background: rgba(248,113,113,.05);
+  border-bottom: 1px solid rgba(248,113,113,.12);
+}
+.opp-strip-label {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  color: #f87171;
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: rgba(248,113,113,.12);
+}
+.opp-strip-player {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(252,165,165,.85);
+  padding: 3px 9px;
+  border-radius: 12px;
+  background: rgba(248,113,113,.08);
+  border: 1px solid rgba(248,113,113,.18);
 }
 .course-name {
   font-family: var(--gw-font-display, Georgia);

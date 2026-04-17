@@ -807,11 +807,81 @@
           </div>
         </div>
 
-        <!-- Room code -->
-        <label class="toggle-label" style="margin-top:16px;display:flex;gap:8px;align-items:center">
-          <input type="checkbox" v-model="form.withRoomCode" />
-          Share with another foursome (room code)
-        </label>
+        <!-- Opponent Group -->
+        <div class="opp-section">
+          <div class="opp-header" @click="form.withOpponents = !form.withOpponents">
+            <span class="opp-header-label">⚔️ Playing against another group?</span>
+            <span class="opp-toggle">{{ form.withOpponents ? '▲' : '▼' }}</span>
+          </div>
+          <div v-if="form.withOpponents" class="opp-body">
+            <div class="opp-hint">Pick their players from the roster. You'll track both groups' scores.</div>
+
+            <!-- Selected opponents -->
+            <div v-if="form.opponentPlayers.length" class="opp-selected">
+              <div v-for="(p, i) in form.opponentPlayers" :key="p.id" class="opp-chip">
+                <span class="opp-chip-name">{{ p.shortName || p.name }}</span>
+                <button class="opp-chip-remove" @click="form.opponentPlayers.splice(i, 1)">×</button>
+              </div>
+            </div>
+
+            <!-- Roster picker (excludes already-in-your-group players) -->
+            <input v-model="oppSearch" class="wiz-input wiz-input--sm" placeholder="Search roster…" />
+            <div class="opp-roster">
+              <template v-if="!oppSearch">
+                <div v-if="oppFavorites.length" class="section-label-sm">Favorites</div>
+                <div
+                  v-for="p in oppFavorites"
+                  :key="p.id"
+                  class="roster-option roster-option--sm"
+                  :class="{ selected: isOppAdded(p), disabled: isPlayerAdded(p) }"
+                  @click="toggleOpp(p)"
+                >
+                  <div class="roster-info">
+                    <span class="roster-name">{{ p.name }}</span>
+                    <span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span>
+                  </div>
+                  <span class="roster-check">{{ isOppAdded(p) ? '✓' : isPlayerAdded(p) ? '—' : '+' }}</span>
+                </div>
+                <div v-if="oppOthers.length" class="section-label-sm" style="margin-top:6px">All Players</div>
+                <div
+                  v-for="p in oppOthers"
+                  :key="p.id"
+                  class="roster-option roster-option--sm"
+                  :class="{ selected: isOppAdded(p), disabled: isPlayerAdded(p) }"
+                  @click="toggleOpp(p)"
+                >
+                  <div class="roster-info">
+                    <span class="roster-name">{{ p.name }}</span>
+                    <span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span>
+                  </div>
+                  <span class="roster-check">{{ isOppAdded(p) ? '✓' : isPlayerAdded(p) ? '—' : '+' }}</span>
+                </div>
+              </template>
+              <template v-else>
+                <div
+                  v-for="p in oppFiltered"
+                  :key="p.id"
+                  class="roster-option roster-option--sm"
+                  :class="{ selected: isOppAdded(p), disabled: isPlayerAdded(p) }"
+                  @click="toggleOpp(p)"
+                >
+                  <div class="roster-info">
+                    <span class="roster-name">{{ p.name }}</span>
+                    <span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span>
+                  </div>
+                  <span class="roster-check">{{ isOppAdded(p) ? '✓' : isPlayerAdded(p) ? '—' : '+' }}</span>
+                </div>
+              </template>
+            </div>
+
+            <!-- Quick-add guest opponent -->
+            <div class="quick-add-row" style="margin-top:6px">
+              <input v-model="oppGuestName" class="wiz-input" placeholder="Add guest opponent…" @keydown.enter="quickAddOpp" />
+              <input v-model="oppGuestHcp" class="wiz-input wiz-input-sm" placeholder="HCP" type="number" step="0.1" />
+              <button class="btn-ghost btn-sm" @click="quickAddOpp">Add</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Nav -->
@@ -1177,7 +1247,8 @@ const form = ref({
   date: new Date().toISOString().slice(0, 10),
   holesMode: '18',
   players: [],
-  withRoomCode: false,
+  withOpponents: false,
+  opponentPlayers: [],
 })
 
 const courseSearch = ref('')
@@ -1590,6 +1661,49 @@ function quickAddPlayer() {
   newHcp.value = ''
 }
 
+// ── Opponent group ───────────────────────────────────────────────
+const oppSearch = ref('')
+const oppGuestName = ref('')
+const oppGuestHcp = ref('')
+
+const oppFavorites = computed(() =>
+  rosterStore.players.filter(p => p.is_favorite).slice().sort(byLastName)
+)
+const oppOthers = computed(() =>
+  rosterStore.players.filter(p => !p.is_favorite).slice().sort(byLastName)
+)
+const oppFiltered = computed(() => {
+  const q = oppSearch.value.toLowerCase()
+  return rosterStore.players.filter(p => p.name.toLowerCase().includes(q)).slice().sort(byLastName)
+})
+
+function isOppAdded(p) { return form.value.opponentPlayers.some(op => op.id === p.id) }
+
+function toggleOpp(p) {
+  if (isPlayerAdded(p)) return // can't be in both groups
+  if (isOppAdded(p)) {
+    form.value.opponentPlayers = form.value.opponentPlayers.filter(op => op.id !== p.id)
+  } else {
+    form.value.opponentPlayers.push({
+      id: p.id, name: p.name,
+      shortName: p.short_name,
+      ghinIndex: p.ghin_index,
+    })
+  }
+}
+
+function quickAddOpp() {
+  if (!oppGuestName.value.trim()) return
+  form.value.opponentPlayers.push({
+    id: `opp_guest_${Date.now()}`,
+    name: oppGuestName.value.trim(),
+    shortName: oppGuestName.value.trim().split(' ')[0].slice(0, 8),
+    ghinIndex: oppGuestHcp.value ? parseFloat(oppGuestHcp.value) : null,
+  })
+  oppGuestName.value = ''
+  oppGuestHcp.value = ''
+}
+
 // ── Build game configs for round creation ────────────────────────
 function buildGameConfigs() {
   const games = []
@@ -1703,7 +1817,8 @@ async function create() {
           tee: form.value.tee,
           date: form.value.date,
           holesMode: form.value.holesMode,
-          withRoomCode: form.value.withRoomCode,
+          withRoomCode: false,
+          opponentPlayers: form.value.withOpponents ? form.value.opponentPlayers : [],
           players,
           games,
         }),
@@ -1804,6 +1919,87 @@ function reloadApp() {
 </script>
 
 <style scoped>
+/* ── Opponent group ────────────────────────────────── */
+.opp-section {
+  margin-top: 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(248,113,113,.25);
+  overflow: hidden;
+}
+.opp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 14px;
+  cursor: pointer;
+  background: rgba(248,113,113,.05);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.opp-header-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fca5a5;
+}
+.opp-toggle {
+  font-size: 11px;
+  color: rgba(252,165,165,.6);
+}
+.opp-body {
+  padding: 10px 14px 14px;
+  border-top: 1px solid rgba(248,113,113,.15);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.opp-hint {
+  font-size: 12px;
+  color: rgba(240,237,224,.5);
+}
+.opp-selected {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.opp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px 4px 10px;
+  border-radius: 20px;
+  background: rgba(248,113,113,.15);
+  border: 1px solid rgba(248,113,113,.3);
+  font-size: 12px;
+  font-weight: 700;
+  color: #fca5a5;
+}
+.opp-chip-remove {
+  background: none;
+  border: none;
+  color: rgba(252,165,165,.7);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+  line-height: 1;
+}
+.opp-roster {
+  max-height: 180px;
+  overflow-y: auto;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,.07);
+}
+.roster-option--sm {
+  padding: 7px 10px;
+}
+.roster-option.disabled {
+  opacity: 0.3;
+  pointer-events: none;
+}
+.wiz-input--sm {
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
 /* ── Wolf Tee Order ────────────────────────────────── */
 .wolf-tee-order-section { margin-top: 12px; padding: 12px; border-radius: 12px; background: rgba(96,165,250,.06); border: 1px solid rgba(96,165,250,.2); }
 .config-sublabel { font-size: 12px; font-weight: 700; color: #60a5fa; margin-bottom: 8px; }

@@ -56,7 +56,6 @@
             <span v-if="p.email" class="player-email-check" :title="p.email">✓ email</span>
           </div>
         </div>
-        <button v-if="p.email && authStore.isAuthenticated" class="player-challenge-btn" @click.stop="challengePlayer(p)" title="Challenge to cross-match">⚔️</button>
         <button v-if="p.email" class="player-invite-btn" @click.stop="invitePlayer(p)" title="Invite to GolfWizard">📨</button>
         <span class="player-fav-star">★</span>
       </div>
@@ -89,7 +88,6 @@
             <span v-if="p.email" class="player-email-check" :title="p.email">✓ email</span>
           </div>
         </div>
-        <button v-if="p.email && authStore.isAuthenticated" class="player-challenge-btn" @click.stop="challengePlayer(p)" title="Challenge to cross-match">⚔️</button>
         <button v-if="p.email" class="player-invite-btn" @click.stop="invitePlayer(p)" title="Invite to GolfWizard">📨</button>
       </div>
     </div>
@@ -154,56 +152,17 @@
       </div>
     </Teleport>
 
-    <!-- Challenge modal -->
-    <Teleport to="body">
-      <div v-if="challengeTarget" class="delete-backdrop" @click.self="challengeTarget = null">
-        <div class="delete-modal challenge-modal">
-          <div class="challenge-modal-icon">⚔️</div>
-          <div class="challenge-modal-title">Challenge {{ challengeTarget.name.split(' ')[0] }}?</div>
-          <div class="challenge-modal-sub">
-            They'll see a banner when they open GolfWizard. You both start your own rounds normally — the app links them automatically.
-          </div>
-
-          <!-- Format picker -->
-          <div class="challenge-format-row">
-            <button
-              v-for="f in [{ id:'tbd', label:'Decide on 1st tee' }, { id:'1bb', label:'1-Ball Best Ball' }, { id:'2bb', label:'2-Ball Best Ball' }]"
-              :key="f.id"
-              class="challenge-format-btn"
-              :class="{ active: challengeFormat === f.id }"
-              @click="challengeFormat = f.id"
-            >{{ f.label }}</button>
-          </div>
-
-          <div v-if="challengeError" class="edit-error">
-            {{ challengeError }}
-            <button v-if="challengeError.includes('hasn\'t joined')" class="challenge-invite-link" @click="sendInviteInstead">
-              Send invite instead →
-            </button>
-          </div>
-
-          <div class="delete-modal-actions">
-            <button class="delete-modal-cancel" @click="challengeTarget = null">Cancel</button>
-            <button class="delete-modal-confirm challenge-confirm-btn" :disabled="challengeSending" @click="sendChallenge">
-              {{ challengeSending ? 'Sending…' : 'Send Challenge ⚔️' }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, reactive } from 'vue'
 import { useRosterStore } from '../stores/roster'
-import { useChallengesStore } from '../stores/challenges'
 import { buildInviteUrl, buildInviteEmail } from '../modules/preset'
 import { useAuthStore } from '../stores/auth'
 
 const rosterStore = useRosterStore()
 const authStore = useAuthStore()
-const challengesStore = useChallengesStore()
 
 // ── Invite players to GolfWizard ────────────────────────────────
 const inviteHint = ref('')
@@ -232,48 +191,6 @@ async function shareGroupInvite() {
       showInviteHint(`Share this link: ${url}`)
     }
   }
-}
-
-// ── Challenge a player to a cross-match ─────────────────────────
-const challengeTarget = ref(null)  // player being challenged
-const challengeFormat = ref('tbd')
-const challengeSending = ref(false)
-const challengeError = ref('')
-
-async function challengePlayer(player) {
-  if (!player.email) return
-  challengeTarget.value = player
-  challengeFormat.value = 'tbd'
-  challengeError.value = ''
-}
-
-async function sendChallenge() {
-  if (!challengeTarget.value) return
-  challengeSending.value = true
-  challengeError.value = ''
-  try {
-    const senderName = authStore.profile?.display_name?.split(' ')[0] || 'Jason'
-    await challengesStore.sendChallenge(challengeTarget.value, challengeFormat.value, senderName)
-    showToast(`Challenge sent to ${challengeTarget.value.name.split(' ')[0]}!`, 'gold')
-    challengeTarget.value = null
-  } catch (e) {
-    if (e?.message === 'no_account') {
-      // No GolfWizard account — offer to send invite instead
-      challengeError.value = `${challengeTarget.value.name.split(' ')[0]} hasn't joined GolfWizard yet.`
-    } else if (e?.message === 'already_challenged') {
-      challengeError.value = 'You already have a pending challenge with this player.'
-    } else {
-      challengeError.value = e?.message || 'Could not send challenge. Try again.'
-    }
-  } finally {
-    challengeSending.value = false
-  }
-}
-
-function sendInviteInstead() {
-  const player = challengeTarget.value
-  challengeTarget.value = null
-  if (player) invitePlayer(player)
 }
 
 function showInviteHint(msg) {

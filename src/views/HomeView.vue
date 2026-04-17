@@ -15,11 +15,6 @@
       </div>
     </header>
 
-    <!-- Challenge banners (inbound + waiting outbound) -->
-    <ChallengeBanner v-if="authStore.isAuthenticated" />
-
-    <!-- Cross-match banner (shown when a linked match exists) -->
-    <CrossMatchBanner />
 
     <!-- Active round card — ONLY for non-tournament rounds -->
     <div
@@ -111,17 +106,13 @@ import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useRoundsStore } from '../stores/rounds'
 import { useTournamentStore } from '../stores/tournament.js'
-import { useChallengesStore } from '../stores/challenges.js'
 import AuthModal from '../components/AuthModal.vue'
-import CrossMatchBanner from '../components/CrossMatchBanner.vue'
-import ChallengeBanner from '../components/ChallengeBanner.vue'
 
 const appVersion = __APP_VERSION__
 
 const authStore = useAuthStore()
 const roundsStore = useRoundsStore()
 const tournamentStore = useTournamentStore()
-const challengesStore = useChallengesStore()
 const router = useRouter()
 const showAuth = ref(false)
 const openWizard = inject('openWizard', () => {})
@@ -152,7 +143,6 @@ onMounted(async () => {
   if (authStore.isAuthenticated) {
     await roundsStore.fetchRounds()
     tournamentStore.init()
-    challengesStore.fetchChallenges()
   }
 })
 
@@ -162,7 +152,6 @@ watch(() => authStore.isAuthenticated, async (authed) => {
   if (authed) {
     if (roundsStore.rounds.length === 0) await roundsStore.fetchRounds()
     tournamentStore.init()
-    challengesStore.fetchChallenges()
   }
 })
 

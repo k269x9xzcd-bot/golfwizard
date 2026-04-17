@@ -52,11 +52,10 @@ export const useCoursesStore = defineStore('courses', () => {
   })
 
   // Default favorites — set on first load when user hasn't favorited anything yet
+  // New users get Bonnie Briar as their only default favorite course.
+  // (The app owner's full list is stored in their user_preferences row in Supabase.)
   const DEFAULT_FAVORITES = [
     'Bonnie Briar Country Club',
-    'Manhattan Woods Golf Club',
-    'Kiawah Island Club',
-    'Bulls Bay Golf Club',
   ]
 
   const favoriteNames = computed(() => new Set(favorites.value))
