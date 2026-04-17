@@ -46,62 +46,71 @@ export const useTournamentStore = defineStore('tournament', () => {
       }
 
       // 3. Teams + players
+      // tournament_teams columns: id, team_key, name, short, color, color_dim, sort_order
+      // tournament_team_players columns: id, team_id (FK→tournament_teams.id), player_key, name, nickname, email, ghin_index, sort_order
       const teamsRes = await supaCall(
         'tournament.fetchTeams',
         supabase.from('tournament_teams').select('*').eq('tournament_id', TOURNAMENT_ID).order('sort_order', { ascending: true }),
         5000,
       )
+      // Fetch players for all teams in this tournament via a join
       const playersRes = await supaCall(
         'tournament.fetchPlayers',
-        supabase.from('tournament_team_players').select('*').eq('tournament_id', TOURNAMENT_ID).order('sort_order', { ascending: true }),
+        supabase
+          .from('tournament_team_players')
+          .select('*, tournament_teams!inner(tournament_id)')
+          .eq('tournament_teams.tournament_id', TOURNAMENT_ID)
+          .order('sort_order', { ascending: true }),
         5000,
       )
       if (!teamsRes.error) {
         const rawTeams = teamsRes.data ?? []
         const rawPlayers = playersRes.error ? [] : (playersRes.data ?? [])
         teams.value = rawTeams.map(t => ({
-          id: t.team_id,
+          id: t.team_key,          // team_key is the internal ID used throughout the app (BC, JA, MW, MS)
           name: t.name,
           short: t.short ?? t.name,
           color: t.color ?? '#888',
           colorDim: t.color_dim ?? 'rgba(136,136,136,.15)',
           players: rawPlayers
-            .filter(p => p.team_id === t.team_id)
+            .filter(p => p.team_id === t.id)   // t.id is the UUID PK of tournament_teams
             .map(p => ({
-              id: p.player_id,
+              id: p.player_key,    // player_key is the internal ID (brian, chris, etc.)
               name: p.name,
               nickname: p.nickname ?? p.name,
               email: p.email ?? null,
               ghinIndex: p.ghin_index ?? null,
             })),
-          _dbId: t.id,
+          _dbId: t.id,             // preserve UUID for DB operations
         }))
       }
 
       // 4. Schedule + matches
+      // tournament_schedule columns: id, round_num, label, deadline, sort_order
+      // tournament_matches columns: id, schedule_id, match_key, team1_key, team2_key, singles_order, result, round_id
       const schedRes = await supaCall(
         'tournament.fetchSchedule',
-        supabase.from('tournament_schedule').select('*').eq('tournament_id', TOURNAMENT_ID).order('round', { ascending: true }),
+        supabase.from('tournament_schedule').select('*').eq('tournament_id', TOURNAMENT_ID).order('sort_order', { ascending: true }),
         5000,
       )
       const matchesRes = await supaCall(
         'tournament.fetchMatches',
-        supabase.from('tournament_matches').select('*').eq('tournament_id', TOURNAMENT_ID).order('match_order', { ascending: true }),
+        supabase.from('tournament_matches').select('*').eq('tournament_id', TOURNAMENT_ID),
         5000,
       )
       if (!schedRes.error) {
         const rawRounds = schedRes.data ?? []
         const rawMatches = matchesRes.error ? [] : (matchesRes.data ?? [])
         schedule.value = rawRounds.map(r => ({
-          round: r.round,
+          round: r.round_num,           // round_num not round
           deadline: r.deadline,
-          label: r.label ?? `Round ${r.round}`,
+          label: r.label ?? `Round ${r.round_num}`,
           matches: rawMatches
-            .filter(m => m.round === r.round)
+            .filter(m => m.schedule_id === r.id)   // join on schedule_id FK
             .map(m => ({
-              id: m.match_id,
-              team1: m.team1_id,
-              team2: m.team2_id,
+              id: m.match_key,           // match_key is the internal ID (r1m1 etc.)
+              team1: m.team1_key,        // team1_key not team1_id
+              team2: m.team2_key,        // team2_key not team2_id
               singlesOrder: m.singles_order ?? 0,
               result: m.result ?? null,
               roundId: m.round_id ?? null,
@@ -145,24 +154,23 @@ export const useTournamentStore = defineStore('tournament', () => {
   }
 
   // ── saveTeamPlayers: delete+insert for a team ──────────────────
-  async function saveTeamPlayers(teamId, players) {
-    // Delete existing players for this team
+  async function saveTeamPlayers(teamKey, players) {
+    // teamKey is the internal key (BC, JA etc.) — find the UUID _dbId for the DB operation
+    const teamRow = teams.value.find(t => t.id === teamKey)
+    const teamDbId = teamRow?._dbId
+    if (!teamDbId) { console.warn('[tournament] saveTeamPlayers: unknown teamKey', teamKey); return }
+
+    // Delete existing players for this team (team_id is FK to tournament_teams.id UUID)
     await supaCallWithRetry(
       'tournament.deleteTeamPlayers',
-      () =>
-        supabase
-          .from('tournament_team_players')
-          .delete()
-          .eq('tournament_id', TOURNAMENT_ID)
-          .eq('team_id', teamId),
+      () => supabase.from('tournament_team_players').delete().eq('team_id', teamDbId),
       8000,
     )
-    // Insert new players
+    // Insert new players using correct column names
     if (players && players.length > 0) {
       const rows = players.map((p, i) => ({
-        tournament_id: TOURNAMENT_ID,
-        team_id: teamId,
-        player_id: p.id,
+        team_id: teamDbId,           // UUID FK to tournament_teams.id
+        player_key: p.id,            // internal key (brian, chris, etc.)
         name: p.name,
         nickname: p.nickname ?? p.name,
         email: p.email ?? null,
@@ -176,7 +184,7 @@ export const useTournamentStore = defineStore('tournament', () => {
       )
     }
     // Update local state
-    const idx = teams.value.findIndex(t => t.id === teamId)
+    const idx = teams.value.findIndex(t => t.id === teamKey)
     if (idx >= 0) {
       teams.value[idx] = {
         ...teams.value[idx],
