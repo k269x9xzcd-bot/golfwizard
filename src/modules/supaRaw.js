@@ -35,12 +35,12 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
  * Falls back to the anon key if no session is stored — RLS-protected
  * writes will then fail fast with a clear error rather than hanging.
  */
-function _getBearerSync() {
+/**
+ * Read the stored session from localStorage synchronously.
+ * Returns { accessToken, refreshToken, expiresAt } or null.
+ */
+function _readStoredSession() {
   try {
-    // supabase-js v2 stores the session at either of two key patterns:
-    //   sb-<project-ref>-auth-token   (new)
-    //   supabase.auth.token            (old)
-    // We scan for anything matching and pick the freshest.
     let best = null
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i)
@@ -48,16 +48,117 @@ function _getBearerSync() {
       if (!key.startsWith('sb-') || !key.endsWith('-auth-token')) continue
       try {
         const parsed = JSON.parse(localStorage.getItem(key) || 'null')
-        const tok = parsed?.access_token || parsed?.currentSession?.access_token
-        if (tok) {
-          const expiresAt = parsed?.expires_at || parsed?.currentSession?.expires_at || 0
-          if (!best || expiresAt > best.expiresAt) best = { tok, expiresAt }
+        const accessToken = parsed?.access_token || parsed?.currentSession?.access_token
+        const refreshToken = parsed?.refresh_token || parsed?.currentSession?.refresh_token
+        const expiresAt = parsed?.expires_at || parsed?.currentSession?.expires_at || 0
+        if (accessToken) {
+          if (!best || expiresAt > best.expiresAt) {
+            best = { accessToken, refreshToken, expiresAt, _key: key, _parsed: parsed }
+          }
         }
       } catch {}
     }
-    if (best?.tok) return best.tok
+    return best
   } catch {}
-  return SUPABASE_ANON_KEY
+  return null
+}
+
+/**
+ * Check if a JWT is expired (with 30s buffer).
+ * expiresAt is a Unix timestamp in seconds.
+ */
+function _isExpired(expiresAt) {
+  if (!expiresAt) return true
+  return (expiresAt - 30) < (Date.now() / 1000)
+}
+
+/**
+ * Use the Supabase auth refresh endpoint directly (raw fetch, no JS client)
+ * to get a fresh access token. Updates localStorage so subsequent calls work.
+ * Returns new access token or null on failure.
+ */
+async function _refreshTokenRaw(refreshToken) {
+  if (!refreshToken) return null
+  try {
+    _debugLog('[auth] refreshing expired JWT via raw fetch...')
+    const res = await fetch(
+      `${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,
+      {
+        method: 'POST',
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+        cache: 'no-store',
+        keepalive: false,
+        signal: AbortSignal.timeout(8000),
+      }
+    )
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      _debugLog(`[auth] refresh failed HTTP ${res.status}: ${JSON.stringify(body)}`)
+      return null
+    }
+    const data = await res.json()
+    if (!data.access_token) return null
+
+    // Write the refreshed session back to localStorage so the SJS client picks it up too
+    const session = data
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(key) || 'null')
+          if (parsed) {
+            // Update the stored session fields
+            const updated = {
+              ...parsed,
+              access_token: session.access_token,
+              refresh_token: session.refresh_token ?? parsed.refresh_token,
+              expires_at: session.expires_at ?? Math.floor(Date.now() / 1000) + (session.expires_in ?? 3600),
+              expires_in: session.expires_in ?? 3600,
+              token_type: session.token_type ?? 'bearer',
+            }
+            localStorage.setItem(key, JSON.stringify(updated))
+          }
+        } catch {}
+        break
+      }
+    }
+    _debugLog('[auth] JWT refreshed successfully')
+    return data.access_token
+  } catch (e) {
+    _debugLog(`[auth] refresh error: ${e.message}`)
+    return null
+  }
+}
+
+/**
+ * Get a valid bearer token. If the stored token is expired, refresh it first.
+ * Always uses raw fetch — never the Supabase JS client (which may be stuck).
+ */
+async function _getBearerAsync() {
+  const session = _readStoredSession()
+  if (!session) return SUPABASE_ANON_KEY
+
+  // Token is still valid — use it directly
+  if (!_isExpired(session.expiresAt)) return session.accessToken
+
+  // Token is expired — try to refresh
+  _debugLog('[auth] access token expired, attempting refresh...')
+  const fresh = await _refreshTokenRaw(session.refreshToken)
+  if (fresh) return fresh
+
+  // Refresh failed — return the expired token anyway; the request will 401
+  // but at least we tried and logged it
+  _debugLog('[auth] refresh failed, proceeding with expired token (will 401)')
+  return session.accessToken
+}
+
+function _getBearerSync() {
+  const session = _readStoredSession()
+  return session?.accessToken ?? SUPABASE_ANON_KEY
 }
 
 function _debugLog(msg) {
@@ -77,9 +178,8 @@ function _debugLog(msg) {
  * @param {object} extraHeaders   optional header overrides (e.g. { Prefer: 'return=representation' })
  */
 export async function supaRawRequest(method, pathAndQuery, body, timeoutMs = 10000, extraHeaders = {}) {
-  // Synchronous read from localStorage — cannot hang even if the SJS
-  // connection pool is stuck.
-  const bearer = _getBearerSync()
+  // Get a valid bearer token — refreshes if expired, using raw fetch (not SJS client).
+  const bearer = await _getBearerAsync()
   // Cache-busting goes in a header, NOT a query param. PostgREST tries to parse
   // every query param as a filter and throws "failed to parse filter" on unknown keys.
   const url = `${SUPABASE_URL}/rest/v1/${pathAndQuery}`

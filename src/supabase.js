@@ -34,6 +34,21 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   }
 })()
 
+// On iOS PWA, WKWebView suspends JS execution when backgrounded — Supabase's
+// autoRefreshToken timer never fires, so the JWT expires silently. When the
+// user foregrounds the app, we proactively call getSession() which triggers
+// a token refresh if needed. We do NOT ping Supabase (that backfired on iOS
+// 18.7 — see comments below). Just force the auth refresh, which writes the
+// new token to localStorage so supaRaw.js picks it up synchronously.
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      // Fire-and-forget — don't await, just kick off the refresh
+      supabase.auth.getSession().catch(() => {})
+    }
+  })
+}
+
 // Note: previous versions of this file fired a "warmup ping" on initial
 // load + on visibilitychange to try to clear stale WKWebView sockets.
 // That approach BACKFIRED on iOS 18.7 — the ping itself got stuck on the
