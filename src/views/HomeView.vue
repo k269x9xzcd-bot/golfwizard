@@ -129,7 +129,19 @@ const showTournament = computed(() => {
   const email = authStore.user?.email
   if (!email) return false
   const norm = email.toLowerCase().trim()
-  return tournamentStore.members.some(m => m.email?.toLowerCase().trim() === norm)
+  // Show if members are loaded and user is in the list
+  if (tournamentStore.members.length > 0) {
+    return tournamentStore.members.some(m => m.email?.toLowerCase().trim() === norm)
+  }
+  // Fallback: show for known authorized emails while members are loading
+  const AUTHORIZED = [
+    'jayspieler@aol.com','jtspieler@gmail.com',
+    'alexcarroll333@gmail.com','bcimons19@yahoo.com',
+    'jcourt93@gmail.com','craggo@recordandreturn.com',
+    'matt@derosasports.com','bonga13@gmail.com',
+    'martydurkin17@verizon.net',
+  ]
+  return AUTHORIZED.includes(norm)
 })
 const isTournamentRound = computed(() => {
   const r = roundsStore.activeRound
