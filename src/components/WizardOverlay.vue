@@ -235,62 +235,8 @@
       <!-- ── Step 3: Games ──────────────────────────────────── -->
       <div v-if="step === 3" class="wizard-step">
 
-        <!-- Opponent Group (top of step 3 — prominent) -->
-        <div class="opp-section">
-          <div class="opp-header" @click="form.withOpponents = !form.withOpponents">
-            <span class="opp-header-label">⚔️ Playing against another group?</span>
-            <span class="opp-toggle">{{ form.withOpponents ? '▲' : '▼' }}</span>
-          </div>
-          <div v-if="form.withOpponents" class="opp-body">
-            <div class="opp-hint">Pick their players from the roster. You'll track both groups' scores.</div>
-
-            <div v-if="form.opponentPlayers.length" class="opp-selected">
-              <div v-for="(p, i) in form.opponentPlayers" :key="p.id" class="opp-chip">
-                <span class="opp-chip-name">{{ p.shortName || p.name }}</span>
-                <button class="opp-chip-remove" @click="form.opponentPlayers.splice(i, 1)">×</button>
-              </div>
-            </div>
-
-            <input v-model="oppSearch" class="wiz-input wiz-input--sm" placeholder="Search roster…" />
-            <div class="opp-roster">
-              <template v-if="!oppSearch">
-                <div v-if="oppFavorites.length" class="section-label-sm">Favorites</div>
-                <div v-for="p in oppFavorites" :key="p.id"
-                  class="roster-option roster-option--sm"
-                  :class="{ selected: isOppAdded(p), disabled: isPlayerAdded(p) }"
-                  @click="toggleOpp(p)">
-                  <div class="roster-info"><span class="roster-name">{{ p.name }}</span><span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span></div>
-                  <span class="roster-check">{{ isOppAdded(p) ? '✓' : isPlayerAdded(p) ? '—' : '+' }}</span>
-                </div>
-                <div v-if="oppOthers.length" class="section-label-sm" style="margin-top:6px">All Players</div>
-                <div v-for="p in oppOthers" :key="p.id"
-                  class="roster-option roster-option--sm"
-                  :class="{ selected: isOppAdded(p), disabled: isPlayerAdded(p) }"
-                  @click="toggleOpp(p)">
-                  <div class="roster-info"><span class="roster-name">{{ p.name }}</span><span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span></div>
-                  <span class="roster-check">{{ isOppAdded(p) ? '✓' : isPlayerAdded(p) ? '—' : '+' }}</span>
-                </div>
-              </template>
-              <template v-else>
-                <div v-for="p in oppFiltered" :key="p.id"
-                  class="roster-option roster-option--sm"
-                  :class="{ selected: isOppAdded(p), disabled: isPlayerAdded(p) }"
-                  @click="toggleOpp(p)">
-                  <div class="roster-info"><span class="roster-name">{{ p.name }}</span><span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span></div>
-                  <span class="roster-check">{{ isOppAdded(p) ? '✓' : isPlayerAdded(p) ? '—' : '+' }}</span>
-                </div>
-              </template>
-            </div>
-
-            <div class="quick-add-row" style="margin-top:6px">
-              <input v-model="oppGuestName" class="wiz-input" placeholder="Add guest opponent…" @keydown.enter="quickAddOpp" />
-              <input v-model="oppGuestHcp" class="wiz-input wiz-input-sm" placeholder="HCP" type="number" step="0.1" />
-              <button class="btn-ghost btn-sm" @click="quickAddOpp">Add</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="game-section-label" style="margin-top:16px">Main Game</div>
+        <!-- Main game selector -->
+        <div class="game-section-label">Main Game</div>
 
         <!-- Collapsed: show selected game chip + change button -->
         <div v-if="!showMainGrid && mainGame.type !== 'none'" class="main-game-selected">
@@ -863,6 +809,82 @@
 
       </div>
 
+      <!-- ── Step 4: Opponent group ─────────────────────────── -->
+      <div v-if="step === 4" class="wizard-step">
+        <div class="opp-step-question">Playing against another group today?</div>
+        <div class="opp-step-sub">You can always set this later from the ⚙️ menu.</div>
+
+        <!-- Yes / No cards -->
+        <div v-if="form.withOpponents === null" class="opp-yn-row">
+          <button class="opp-yn-btn opp-yn-btn--yes" @click="form.withOpponents = true">
+            <span class="opp-yn-icon">⚔️</span>
+            <span class="opp-yn-label">Yes — pick their players</span>
+          </button>
+          <button class="opp-yn-btn opp-yn-btn--no" @click="skipOpponents">
+            <span class="opp-yn-icon">🚫</span>
+            <span class="opp-yn-label">No — just our group</span>
+          </button>
+        </div>
+
+        <!-- Picker (shown after Yes) -->
+        <div v-if="form.withOpponents === true" class="opp-pick-area">
+          <div class="opp-pick-header">
+            <span class="opp-pick-title">Opponent group</span>
+            <button class="opp-pick-change" @click="form.withOpponents = null; form.opponentPlayers = []">Change answer</button>
+          </div>
+
+          <!-- Selected chips -->
+          <div v-if="form.opponentPlayers.length" class="opp-selected">
+            <div v-for="(p, i) in form.opponentPlayers" :key="p.id" class="opp-chip">
+              <span>{{ p.shortName || p.name }}</span>
+              <button class="opp-chip-remove" @click="form.opponentPlayers.splice(i, 1)">×</button>
+            </div>
+          </div>
+          <div v-else class="opp-pick-hint">Tap players below to add them</div>
+
+          <!-- Search -->
+          <input v-model="oppSearch" class="wiz-input" placeholder="Search roster…" style="margin-bottom:6px" @focus="scrollInputIntoView" />
+
+          <!-- Roster list -->
+          <div class="opp-roster">
+            <template v-if="!oppSearch">
+              <div v-if="oppFavorites.length" class="section-label-sm">Favorites</div>
+              <div v-for="p in oppFavorites" :key="p.id"
+                class="roster-option"
+                :class="{ selected: isOppAdded(p), 'roster-option--dim': isPlayerAdded(p) }"
+                @click="toggleOpp(p)">
+                <div class="roster-info"><span class="roster-name">{{ p.name }}</span><span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span></div>
+                <span class="roster-check">{{ isOppAdded(p) ? '✓' : isPlayerAdded(p) ? '(yours)' : '+' }}</span>
+              </div>
+              <div v-if="oppOthers.length" class="section-label-sm" style="margin-top:6px">All Players</div>
+              <div v-for="p in oppOthers" :key="p.id"
+                class="roster-option"
+                :class="{ selected: isOppAdded(p), 'roster-option--dim': isPlayerAdded(p) }"
+                @click="toggleOpp(p)">
+                <div class="roster-info"><span class="roster-name">{{ p.name }}</span><span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span></div>
+                <span class="roster-check">{{ isOppAdded(p) ? '✓' : isPlayerAdded(p) ? '(yours)' : '+' }}</span>
+              </div>
+            </template>
+            <template v-else>
+              <div v-for="p in oppFiltered" :key="p.id"
+                class="roster-option"
+                :class="{ selected: isOppAdded(p), 'roster-option--dim': isPlayerAdded(p) }"
+                @click="toggleOpp(p)">
+                <div class="roster-info"><span class="roster-name">{{ p.name }}</span><span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span></div>
+                <span class="roster-check">{{ isOppAdded(p) ? '✓' : isPlayerAdded(p) ? '(yours)' : '+' }}</span>
+              </div>
+            </template>
+          </div>
+
+          <!-- Guest quick-add -->
+          <div class="quick-add-row" style="margin-top:8px">
+            <input v-model="oppGuestName" class="wiz-input" placeholder="Add guest opponent…" @keydown.enter="quickAddOpp" />
+            <input v-model="oppGuestHcp" class="wiz-input wiz-input-sm" placeholder="HCP" type="number" step="0.1" />
+            <button class="btn-ghost btn-sm" @click="quickAddOpp">Add</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Nav -->
       <div class="wizard-nav">
         <button v-if="step > 1" class="btn-ghost" @click="step--">← Back</button>
@@ -1025,9 +1047,9 @@ const rosterStore = useRosterStore()
 const roundsStore = useRoundsStore()
 
 const step = ref(1)
-const totalSteps = 3
+const totalSteps = 4
 const stepTitle = computed(() => {
-  return { 1: 'Where are you playing?', 2: "Who's playing?", 3: 'Set up games' }[step.value] || ''
+  return { 1: 'Where are you playing?', 2: "Who's playing?", 3: 'Set up games', 4: 'Opponent group?' }[step.value] || ''
 })
 const creating = ref(false)
 const creationError = ref(null) // { message, log, copied }
@@ -1226,7 +1248,7 @@ const form = ref({
   date: new Date().toISOString().slice(0, 10),
   holesMode: '18',
   players: [],
-  withOpponents: false,
+  withOpponents: null,   // null = not yet answered, true = yes, false = no
   opponentPlayers: [],
 })
 
@@ -1377,23 +1399,38 @@ function onTouchDragEnd() {
 const canNext = computed(() => {
   if (step.value === 1) {
     if (!form.value.courseName) return false
-    // Locked-course flow (invitee): course + tee are preset by the host round
-    if (props.lockedCourse) return !!form.value.tee || true // allow through even if tee somehow not set
-    // Normal flow: must have picked a tee OR there are no tees to pick (API course without data)
+    if (props.lockedCourse) return !!form.value.tee || true
     return teesForCourse.value.length === 0 || !!form.value.tee
   }
   if (step.value === 2) return form.value.players.length >= 1
+  if (step.value === 3) return true
+  // Step 4: can proceed if they answered No, or answered Yes and picked at least 1 player
+  if (step.value === 4) return form.value.withOpponents === false || (form.value.withOpponents === true && form.value.opponentPlayers.length >= 1)
   return true
 })
-const canFinish = computed(() => form.value.players.length >= 1 && !!form.value.courseName)
+const canFinish = computed(() => {
+  if (!form.value.players.length || !form.value.courseName) return false
+  // Step 4: must have answered the opponent question
+  if (step.value === 4) {
+    if (form.value.withOpponents === null) return false
+    if (form.value.withOpponents === true && form.value.opponentPlayers.length === 0) return false
+  }
+  return true
+})
 
 function nextStep() {
   if (step.value === 1 && canNext.value) step.value++
   else if (step.value === 2 && canNext.value) {
-    // Auto-split players into teams when entering the games step
     autoSplitTeams()
     step.value++
+  } else if (step.value === 3 && canNext.value) {
+    step.value++
   }
+}
+
+function skipOpponents() {
+  form.value.withOpponents = false
+  form.value.opponentPlayers = []
 }
 
 function autoSplitTeams() {
@@ -1898,46 +1935,67 @@ function reloadApp() {
 </script>
 
 <style scoped>
-/* ── Opponent group ────────────────────────────────── */
-.opp-section {
-  margin-top: 14px;
-  border-radius: 12px;
-  border: 1.5px solid rgba(248,113,113,.45);
-  overflow: hidden;
-  background: rgba(248,113,113,.06);
-}
-.opp-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 13px 16px;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  user-select: none;
-  min-height: 48px;
-}
-.opp-header-label {
-  font-size: 15px;
+/* ── Step 4: Opponent group ────────────────────────── */
+.opp-step-question {
+  font-family: var(--gw-font-display, Georgia);
+  font-size: 22px;
   font-weight: 700;
-  color: #fca5a5;
-  letter-spacing: 0.1px;
+  color: var(--gw-text, #f0ede0);
+  text-align: center;
+  margin-top: 12px;
+  margin-bottom: 6px;
+  line-height: 1.25;
 }
-.opp-toggle {
-  font-size: 13px;
-  color: rgba(252,165,165,.8);
-  font-weight: 700;
+.opp-step-sub {
+  font-size: 12px;
+  color: rgba(240,237,224,.45);
+  text-align: center;
+  margin-bottom: 20px;
 }
-.opp-body {
-  padding: 10px 14px 14px;
-  border-top: 1px solid rgba(248,113,113,.15);
+.opp-yn-row {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
-.opp-hint {
-  font-size: 12px;
-  color: rgba(240,237,224,.5);
+.opp-yn-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px;
+  border-radius: 16px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .1s, border-color .15s;
 }
+.opp-yn-btn:active { transform: scale(.97); }
+.opp-yn-btn--yes {
+  background: rgba(248,113,113,.1);
+  border-color: rgba(248,113,113,.4);
+}
+.opp-yn-btn--no {
+  background: rgba(255,255,255,.04);
+  border-color: rgba(255,255,255,.12);
+}
+.opp-yn-icon { font-size: 28px; flex-shrink: 0; }
+.opp-yn-label {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--gw-text, #f0ede0);
+  text-align: left;
+}
+.opp-pick-area { display: flex; flex-direction: column; gap: 8px; }
+.opp-pick-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 4px;
+}
+.opp-pick-title { font-size: 14px; font-weight: 700; color: #fca5a5; }
+.opp-pick-change {
+  font-size: 12px; color: rgba(240,237,224,.45); background: none;
+  border: none; cursor: pointer; font-family: inherit; text-decoration: underline;
+}
+.opp-pick-hint { font-size: 12px; color: rgba(240,237,224,.4); }
 .opp-selected {
   display: flex;
   flex-wrap: wrap;
@@ -1947,40 +2005,26 @@ function reloadApp() {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 4px 10px 4px 10px;
+  padding: 5px 12px;
   border-radius: 20px;
   background: rgba(248,113,113,.15);
-  border: 1px solid rgba(248,113,113,.3);
-  font-size: 12px;
+  border: 1px solid rgba(248,113,113,.35);
+  font-size: 13px;
   font-weight: 700;
   color: #fca5a5;
 }
 .opp-chip-remove {
-  background: none;
-  border: none;
-  color: rgba(252,165,165,.7);
-  cursor: pointer;
-  font-size: 14px;
-  padding: 0;
-  line-height: 1;
+  background: none; border: none; color: rgba(252,165,165,.7);
+  cursor: pointer; font-size: 15px; padding: 0; line-height: 1;
 }
 .opp-roster {
-  max-height: 180px;
+  max-height: 220px;
   overflow-y: auto;
-  border-radius: 8px;
-  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.08);
 }
-.roster-option--sm {
-  padding: 7px 10px;
-}
-.roster-option.disabled {
-  opacity: 0.3;
-  pointer-events: none;
-}
-.wiz-input--sm {
-  padding: 8px 12px;
-  font-size: 13px;
-}
+.roster-option--dim { opacity: 0.35; pointer-events: none; }
+.wiz-input--sm { padding: 8px 12px; font-size: 13px; }
 
 /* ── Wolf Tee Order ────────────────────────────────── */
 .wolf-tee-order-section { margin-top: 12px; padding: 12px; border-radius: 12px; background: rgba(96,165,250,.06); border: 1px solid rgba(96,165,250,.2); }
