@@ -82,16 +82,24 @@ export const COURSES={
   },
   // ── Courses from backup ───────────────────────────────────────
   'Bonnie Briar Country Club':{
-    // Par and SI sourced from official Blue tee scorecard (Oct 2020)
-    // Par: H1-9=35 (4,4,3,4,3,4,4,4,5), H10-18=36 (3,4,4,4,4,3,5,5,4), Total=71
-    // SI confirmed from Blue tee card: H3=18, H5=16 (prior code had these swapped)
+    // All data sourced directly from official physical scorecards (2024/2025)
+    // Blue tee card: rating 71.7/140, yardages & SI from Blue tee scorecard
+    // Blue/White & White: yardages from combo scorecard, ratings from back-of-card
+    // Par: H1-9=35, H10-18=36, Total=71
+    // SI: Blue uses Blue tee card SI; Blue/White & White use combo card SI
     par:[4,4,3,4,3,4,4,4,5,3,4,4,4,4,3,5,5,4],
-    si:[6,12,18,10,16,2,14,4,8,13,3,11,1,9,17,7,5,15],
+    si:[4,12,18,10,14,2,16,6,8,13,3,9,1,11,17,7,5,15],
     tees:'Blue',
     teesData:{
-      'Blue':{rating:71.9,slope:138,yards:6385,yardsByHole:[468,341,168,366,185,403,309,408,491,202,453,333,458,320,133,525,518,304]},
-      'White':{rating:70.0,slope:128,yards:6250,yardsByHole:[355,380,155,375,145,410,340,365,505,175,390,350,410,385,155,500,475,365]},
-      'Red':{rating:66.5,slope:120,yards:5600,yardsByHole:[310,335,130,330,120,360,295,320,455,150,345,305,360,340,130,450,425,320]},
+      'Blue':{rating:71.7,slope:140,yards:6385,
+        siByHole:[4,12,18,10,14,2,16,6,8,13,3,9,1,11,17,7,5,15],
+        yardsByHole:[468,341,168,366,185,403,309,408,491,202,428,333,426,298,125,508,518,304]},
+      'Blue/White':{rating:71.7,slope:140,yards:6206,
+        siByHole:[4,12,16,10,18,2,14,6,8,13,3,9,1,11,17,7,5,15],
+        yardsByHole:[451,341,168,366,151,403,309,380,480,202,428,333,426,298,125,503,496,304]},
+      'White':{rating:69.9,slope:134,yards:5977,
+        siByHole:[4,12,16,10,18,2,14,6,8,13,3,9,1,11,17,7,5,15],
+        yardsByHole:[326,326,161,351,151,389,299,365,455,188,320,426,298,125,508,442,294,303]},
     },
   },
   'Manhattan Woods Golf Club':{
