@@ -145,10 +145,11 @@ export function clearPresetForAuthUser() {
 /**
  * Build a shareable invite URL that opens GolfWizard with the preset.
  */
-export function buildInviteUrl() {
+export function buildInviteUrl(email = '') {
   if (typeof window === 'undefined') return `#/invite?preset=${PRESET_ID}`
   const origin = window.location.origin + window.location.pathname.replace(/\/+$/, '')
-  return `${origin}#/invite?preset=${PRESET_ID}`
+  const emailParam = email ? `&email=${encodeURIComponent(email)}` : ''
+  return `${origin}#/invite?preset=${PRESET_ID}${emailParam}`
 }
 
 /**
@@ -157,7 +158,7 @@ export function buildInviteUrl() {
  * @param {string} senderName — display name of the host
  */
 export function buildInviteEmail(player, senderName = 'Jason') {
-  const url = buildInviteUrl()
+  const url = buildInviteUrl(player.email || '')
   const first = player.name.split(' ')[0]
   const subject = `${senderName} invited you to GolfWizard`
   const body = [

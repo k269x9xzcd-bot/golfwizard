@@ -57,7 +57,7 @@
       <!-- Sign in / Continue -->
       <div class="invite-actions">
         <button v-if="!authStore.isAuthenticated" class="invite-btn-primary" @click="showAuth = true">
-          Sign In with Email →
+          {{ inviteEmail ? `Sign In as ${inviteEmail.split('@')[0]} →` : 'Sign In with Email →' }}
         </button>
         <button v-else class="invite-btn-primary" @click="router.push('/')">
           Go to GolfWizard →
@@ -72,7 +72,7 @@
       </div>
     </div>
 
-    <AuthModal v-if="showAuth" @close="showAuth = false" />
+    <AuthModal v-if="showAuth" :prefill-email="inviteEmail" @close="showAuth = false" />
   </div>
 </template>
 
@@ -91,6 +91,12 @@ const seeding = ref(true)
 const showAuth = ref(false)
 const fromName = ref('Jason Spieler')
 
+// Email pre-filled from the invite link (?email=...)
+const inviteEmail = computed(() => {
+  const e = route.query.email
+  return typeof e === 'string' ? decodeURIComponent(e) : ''
+})
+
 const playerNames = computed(() =>
   PRESET_PLAYERS.map(p => p.nickname || p.name.split(' ')[0]).join(', ')
 )
@@ -102,6 +108,12 @@ onMounted(async () => {
   // For new (unauthenticated) users, apply once to seed the local roster + course.
   applyPreset(false)
   seeding.value = false
+
+  // Auto-open auth modal when invite link contains an email and user isn't signed in.
+  // This sends them straight to the OTP code entry screen without any extra taps.
+  if (inviteEmail.value && !authStore.isAuthenticated) {
+    showAuth.value = true
+  }
 })
 </script>
 

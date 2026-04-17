@@ -111,14 +111,17 @@
 </template>
 
 <script setup>
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 
+const props = defineProps({
+  prefillEmail: { type: String, default: '' },
+})
 const emit = defineEmits(['close'])
 const authStore = useAuthStore()
 
 const step = ref('email')
-const email = ref('')
+const email = ref(props.prefillEmail || '')
 const otp = ref('')
 const sending = ref(false)
 const verifying = ref(false)
@@ -164,6 +167,15 @@ function resetForm() {
   otp.value = ''
   error.value = ''
 }
+
+// If opened with a pre-filled email (from invite link), auto-send the OTP
+// so the user lands directly on the code-entry screen.
+onMounted(async () => {
+  if (props.prefillEmail && email.value.trim()) {
+    await nextTick()
+    sendOtp()
+  }
+})
 </script>
 
 <style scoped>
