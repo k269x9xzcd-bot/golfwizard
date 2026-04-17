@@ -1,6 +1,14 @@
 <template>
   <div class="tournament-view">
 
+    <!-- Loading state -->
+    <div v-if="!tournamentStore.loaded" class="t-loading">
+      <div class="t-loading-icon">🏆</div>
+      <div class="t-loading-text">Loading tournament…</div>
+    </div>
+
+    <template v-else>
+
     <!-- Header -->
     <header class="t-header">
       <div class="t-header-top">
@@ -761,6 +769,7 @@
       </transition>
     </Teleport>
 
+    </template><!-- end v-else loaded -->
   </div>
 </template>
 
@@ -786,7 +795,13 @@ const coursesStore = useCoursesStore()
 
 // ── Initialize tournament data from Supabase ────────────────────
 const tournamentStore = useTournamentStore()
-onMounted(() => { tournamentStore.init() })
+onMounted(async () => {
+  await tournamentStore.init()
+  // If still not loaded (network issue), retry once after a short delay
+  if (!tournamentStore.loaded) {
+    setTimeout(() => tournamentStore.init(), 1500)
+  }
+})
 
 // Courses + tees for the pairing picker dropdowns
 const allCourseNames = computed(() =>
@@ -2364,4 +2379,10 @@ _loadFinalResult()
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+.t-loading {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 60vh; gap: 16px;
+}
+.t-loading-icon { font-size: 48px; animation: card-in .6s ease; }
+.t-loading-text { font-size: 15px; color: rgba(240,237,224,.5); font-weight: 600; }
 </style>
