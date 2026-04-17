@@ -1902,27 +1902,30 @@ function reloadApp() {
 .opp-section {
   margin-top: 14px;
   border-radius: 12px;
-  border: 1px solid rgba(248,113,113,.25);
+  border: 1.5px solid rgba(248,113,113,.45);
   overflow: hidden;
+  background: rgba(248,113,113,.06);
 }
 .opp-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 11px 14px;
+  padding: 13px 16px;
   cursor: pointer;
-  background: rgba(248,113,113,.05);
   -webkit-tap-highlight-color: transparent;
   user-select: none;
+  min-height: 48px;
 }
 .opp-header-label {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 700;
   color: #fca5a5;
+  letter-spacing: 0.1px;
 }
 .opp-toggle {
-  font-size: 11px;
-  color: rgba(252,165,165,.6);
+  font-size: 13px;
+  color: rgba(252,165,165,.8);
+  font-weight: 700;
 }
 .opp-body {
   padding: 10px 14px 14px;
