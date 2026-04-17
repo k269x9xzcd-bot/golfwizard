@@ -66,11 +66,12 @@
         <div class="player-info" @click="startEdit(p)">
           <div class="player-name">
             {{ p.name }}
-            <span v-if="p.ghin_index != null" class="player-hcp">({{ p.ghin_index }})</span>
+            <span v-if="p.ghin_index != null" class="player-hcp">
+              ({{ Number(p.ghin_index).toFixed(1) }}<span class="ghin-dot-inline" :class="ghinSyncStatus(p)" :title="ghinSyncTitle(p)"></span>)
+            </span>
           </div>
           <div class="player-meta">
             <span v-if="p.email" class="player-email-dot" title="Has email">✓</span>
-            <span class="ghin-dot" :class="ghinSyncStatus(p)" :title="ghinSyncTitle(p)"></span>
           </div>
         </div>
         <button v-if="p.email" class="player-invite-btn" @click.stop="invitePlayer(p)" title="Invite to GolfWizard">📨</button>
@@ -95,11 +96,12 @@
         <div class="player-info" @click="startEdit(p)">
           <div class="player-name">
             {{ p.name }}
-            <span v-if="p.ghin_index != null" class="player-hcp">({{ p.ghin_index }})</span>
+            <span v-if="p.ghin_index != null" class="player-hcp">
+              ({{ Number(p.ghin_index).toFixed(1) }}<span class="ghin-dot-inline" :class="ghinSyncStatus(p)" :title="ghinSyncTitle(p)"></span>)
+            </span>
           </div>
           <div class="player-meta">
             <span v-if="p.email" class="player-email-dot" title="Has email">✓</span>
-            <span class="ghin-dot" :class="ghinSyncStatus(p)" :title="ghinSyncTitle(p)"></span>
           </div>
         </div>
         <button v-if="p.email" class="player-invite-btn" @click.stop="invitePlayer(p)" title="Invite to GolfWizard">📨</button>
@@ -518,8 +520,13 @@ async function saveEdit() {
 .view-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .view-header h2 { font-size: 22px; font-weight: 700; margin: 0; color: var(--gw-text); }
 .header-actions { display: flex; gap: 6px; align-items: center; }
-.sort-btn, .sync-all-btn, .invite-all-btn { font-size: 11px; padding: 5px 9px; opacity: .75; }
-.sync-all-btn { color: #60a5fa; }
+.sort-btn, .invite-all-btn { font-size: 11px; padding: 5px 9px; opacity: .75; }
+.sync-all-btn {
+  font-size: 11px; padding: 5px 10px;
+  color: #fff; background: #60a5fa;
+  border: none; border-radius: 9999px;
+  font-weight: 600; opacity: 1;
+}
 .spin { display: inline-block; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -591,13 +598,16 @@ async function saveEdit() {
   font-size: 10px; font-weight: 700; color: #22c55e;
 }
 
-/* GHIN sync status dot */
-.ghin-dot {
-  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+/* GHIN sync status dot — inline next to HCP number */
+.ghin-dot-inline {
+  display: inline-block;
+  width: 7px; height: 7px; border-radius: 50%;
+  margin-left: 3px; margin-bottom: 1px;
+  vertical-align: middle; flex-shrink: 0;
 }
 .dot-blue { background: #60a5fa; }
 .dot-red { background: #ef4444; }
-.dot-none { background: rgba(255,255,255,.15); }
+.dot-none { background: rgba(255,255,255,.2); }
 
 .player-fav-star { font-size: 14px; color: #d4af37; flex-shrink: 0; line-height: 1; }
 
