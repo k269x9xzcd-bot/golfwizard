@@ -23,6 +23,9 @@ export const useTournamentStore = defineStore('tournament', () => {
 
   // ── init: fetch all tournament data from Supabase ──────────────
   async function init() {
+    // If already fully loaded, skip. If currently loading, wait for it to finish
+    // by returning early — the store will be populated when the in-flight call resolves.
+    if (loaded.value) return
     if (loading.value) return
     loading.value = true
     try {

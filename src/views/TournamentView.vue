@@ -765,7 +765,7 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, triggerRef, nextTick } from 'vue'
+import { ref, computed, reactive, triggerRef, nextTick, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRoundsStore } from '../stores/rounds'
 import { useRosterStore } from '../stores/roster'
@@ -786,7 +786,7 @@ const coursesStore = useCoursesStore()
 
 // ── Initialize tournament data from Supabase ────────────────────
 const tournamentStore = useTournamentStore()
-tournamentStore.init()
+onMounted(() => { tournamentStore.init() })
 
 // Courses + tees for the pairing picker dropdowns
 const allCourseNames = computed(() =>
