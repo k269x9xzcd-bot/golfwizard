@@ -34,6 +34,9 @@
         </div>
         <div v-if="showRoundMenu" class="round-menu-backdrop" @click="showRoundMenu = false"></div>
         <div v-if="showRoundMenu" class="round-menu-dropdown" @click.stop>
+          <button v-if="isCaptain" class="round-menu-item" @click="showRoundMenu = false; showOppEditor = true">
+            ⚔️ Set Opponent Group
+          </button>
           <button v-if="isCaptain" class="round-menu-item" @click="showRoundMenu = false; showHcpEditor = true">
             ✏️ Edit Player Handicaps
           </button>
@@ -78,6 +81,49 @@
             />
           </div>
           <button class="hcp-editor-done" @click="showHcpEditor = false">Done</button>
+        </div>
+      </div>
+
+      <!-- Opponent Group Editor -->
+      <div v-if="showOppEditor" class="hcp-editor-overlay" @click.self="showOppEditor = false">
+        <div class="hcp-editor-modal opp-editor-modal">
+          <div class="hcp-editor-title">⚔️ Opponent Group</div>
+          <div class="hcp-editor-note">Pick the players you're competing against today.</div>
+
+          <!-- Current opponents as removable chips -->
+          <div v-if="editOppPlayers.length" class="opp-edit-chips">
+            <div v-for="(p, i) in editOppPlayers" :key="p.id" class="opp-edit-chip">
+              <span>{{ p.shortName || p.name }}</span>
+              <button @click="editOppPlayers.splice(i, 1)">×</button>
+            </div>
+          </div>
+          <div v-else class="opp-edit-empty">No opponents set — pick from roster below</div>
+
+          <!-- Roster picker -->
+          <input v-model="oppEditorSearch" class="hcp-editor-input opp-editor-search" placeholder="Search roster…" style="width:100%;margin:8px 0" />
+          <div class="opp-editor-roster">
+            <div
+              v-for="p in oppEditorFiltered"
+              :key="p.id"
+              class="opp-editor-row"
+              :class="{ 'opp-editor-row--on': isEditOppAdded(p), 'opp-editor-row--mine': isMyPlayer(p) }"
+              @click="toggleEditOpp(p)"
+            >
+              <span class="opp-editor-name">{{ p.name }}</span>
+              <span class="opp-editor-hcp">idx {{ p.ghin_index ?? '—' }}</span>
+              <span class="opp-editor-check">{{ isEditOppAdded(p) ? '✓' : isMyPlayer(p) ? '—' : '+' }}</span>
+            </div>
+          </div>
+
+          <!-- Guest quick-add -->
+          <div class="quick-add-row" style="margin-top:8px">
+            <input v-model="oppEditorGuestName" class="hcp-editor-input" placeholder="Add guest…" style="flex:1" @keydown.enter="oppEditorAddGuest" />
+            <button class="hcp-editor-done" style="padding:8px 14px;flex-shrink:0" @click="oppEditorAddGuest">Add</button>
+          </div>
+
+          <div class="opp-editor-actions">
+            <button class="hcp-editor-done" @click="saveOppEditor">Save</button>
+          </div>
         </div>
       </div>
 
@@ -671,7 +717,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useRoundsStore } from '../stores/rounds'
 import { useCoursesStore } from '../stores/courses'
-import { displayName as rosterDisplayName, displayInitials as rosterDisplayInitials } from '../stores/roster'
+import { useRosterStore, displayName as rosterDisplayName, displayInitials as rosterDisplayInitials } from '../stores/roster'
 import { COURSES } from '../modules/courses'
 import {
   memberHandicap as _memberHandicap, strokesOnHole, holeSI, holePar, holeYards,
@@ -687,6 +733,7 @@ import CrossMatchBanner from '../components/CrossMatchBanner.vue'
 const authStore = useAuthStore()
 const roundsStore = useRoundsStore()
 const coursesStore = useCoursesStore()
+const rosterStore = useRosterStore()
 const router = useRouter()
 
 // ── View state ──────────────────────────────────────────────────
@@ -696,6 +743,76 @@ const showRoundMenu = ref(false)
 const confirmDeleteActive = ref(false)
 const showGameEditor = ref(false)
 const showHcpEditor = ref(false)
+const showOppEditor = ref(false)
+
+// ── Opponent editor state ─────────────────────────────────────────
+const editOppPlayers = ref([])
+const oppEditorSearch = ref('')
+const oppEditorGuestName = ref('')
+
+watch(showOppEditor, (open) => {
+  if (open) {
+    // Seed from active round
+    editOppPlayers.value = [...(roundsStore.activeRound?.opponent_players || [])]
+    oppEditorSearch.value = ''
+    oppEditorGuestName.value = ''
+  }
+})
+
+const oppEditorFiltered = computed(() => {
+  const q = oppEditorSearch.value.toLowerCase()
+  const all = rosterStore.players
+  const list = q ? all.filter(p => p.name.toLowerCase().includes(q)) : all
+  return list.slice().sort((a, b) => {
+    const la = (a.name.split(' ').pop() + a.name).toLowerCase()
+    const lb = (b.name.split(' ').pop() + b.name).toLowerCase()
+    return la.localeCompare(lb)
+  })
+})
+
+function isEditOppAdded(p) { return editOppPlayers.value.some(op => op.id === p.id) }
+function isMyPlayer(p) { return roundsStore.activeMembers.some(m => (m.profile_id === p.id) || (m.guest_name === p.name)) }
+
+function toggleEditOpp(p) {
+  if (isMyPlayer(p)) return
+  if (isEditOppAdded(p)) {
+    editOppPlayers.value = editOppPlayers.value.filter(op => op.id !== p.id)
+  } else {
+    editOppPlayers.value.push({ id: p.id, name: p.name, shortName: p.short_name, ghinIndex: p.ghin_index })
+  }
+}
+
+function oppEditorAddGuest() {
+  if (!oppEditorGuestName.value.trim()) return
+  editOppPlayers.value.push({
+    id: `opp_guest_${Date.now()}`,
+    name: oppEditorGuestName.value.trim(),
+    shortName: oppEditorGuestName.value.trim().split(' ')[0].slice(0, 8),
+    ghinIndex: null,
+  })
+  oppEditorGuestName.value = ''
+}
+
+async function saveOppEditor() {
+  if (!roundsStore.activeRound) return
+  const players = editOppPlayers.value
+  // Update local state immediately
+  roundsStore.activeRound.opponent_players = players
+  showOppEditor.value = false
+  // Persist to Supabase
+  try {
+    const { supaRawRequest } = await import('../modules/supaRaw')
+    await supaRawRequest(
+      'PATCH',
+      `rounds?id=eq.${roundsStore.activeRound.id}`,
+      { opponent_players: players },
+      8000,
+      { Prefer: 'return=minimal' }
+    )
+  } catch (e) {
+    console.warn('[scoring] saveOppEditor failed:', e?.message)
+  }
+}
 const showNotations = ref(true)   // per-score-cell shapes (birdie circle, bogey box, etc.)
 const showGameRows = ref(true)    // game-outcome tfoot rows (Nassau status, match L/W/½, etc.)
 const showFinishReview = ref(false)
@@ -2398,6 +2515,30 @@ function formatDate(dateStr) {
   width: 100%; margin-top: 14px; padding: 10px; background: #d4af37; color: #0c0f0d;
   font-weight: 700; border: none; border-radius: 10px; font-size: 14px; cursor: pointer;
 }
+.opp-editor-modal { max-height: 80vh; }
+.opp-edit-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.opp-edit-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 20px;
+  background: rgba(248,113,113,.15); border: 1px solid rgba(248,113,113,.3);
+  font-size: 12px; font-weight: 700; color: #fca5a5;
+}
+.opp-edit-chip button { background: none; border: none; color: #f87171; cursor: pointer; font-size: 14px; padding: 0; line-height: 1; }
+.opp-edit-empty { font-size: 12px; color: rgba(255,255,255,.3); margin-bottom: 6px; }
+.opp-editor-search { width: 100%; box-sizing: border-box; }
+.opp-editor-roster { max-height: 200px; overflow-y: auto; border: 1px solid rgba(255,255,255,.07); border-radius: 8px; }
+.opp-editor-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,.05);
+  cursor: pointer;
+}
+.opp-editor-row--on { background: rgba(248,113,113,.1); }
+.opp-editor-row--mine { opacity: 0.3; pointer-events: none; }
+.opp-editor-name { flex: 1; font-size: 13px; color: rgba(255,255,255,.85); }
+.opp-editor-hcp { font-size: 11px; color: rgba(255,255,255,.4); }
+.opp-editor-check { font-size: 13px; color: #f87171; width: 16px; text-align: center; }
+.opp-editor-actions { margin-top: 10px; }
+
 .round-menu-note {
   font-size: 11px;
   color: rgba(147,197,253,.75);

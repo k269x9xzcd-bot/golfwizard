@@ -235,8 +235,62 @@
       <!-- ── Step 3: Games ──────────────────────────────────── -->
       <div v-if="step === 3" class="wizard-step">
 
-        <!-- Main game selector -->
-        <div class="game-section-label">Main Game</div>
+        <!-- Opponent Group (top of step 3 — prominent) -->
+        <div class="opp-section">
+          <div class="opp-header" @click="form.withOpponents = !form.withOpponents">
+            <span class="opp-header-label">⚔️ Playing against another group?</span>
+            <span class="opp-toggle">{{ form.withOpponents ? '▲' : '▼' }}</span>
+          </div>
+          <div v-if="form.withOpponents" class="opp-body">
+            <div class="opp-hint">Pick their players from the roster. You'll track both groups' scores.</div>
+
+            <div v-if="form.opponentPlayers.length" class="opp-selected">
+              <div v-for="(p, i) in form.opponentPlayers" :key="p.id" class="opp-chip">
+                <span class="opp-chip-name">{{ p.shortName || p.name }}</span>
+                <button class="opp-chip-remove" @click="form.opponentPlayers.splice(i, 1)">×</button>
+              </div>
+            </div>
+
+            <input v-model="oppSearch" class="wiz-input wiz-input--sm" placeholder="Search roster…" />
+            <div class="opp-roster">
+              <template v-if="!oppSearch">
+                <div v-if="oppFavorites.length" class="section-label-sm">Favorites</div>
+                <div v-for="p in oppFavorites" :key="p.id"
+                  class="roster-option roster-option--sm"
+                  :class="{ selected: isOppAdded(p), disabled: isPlayerAdded(p) }"
+                  @click="toggleOpp(p)">
+                  <div class="roster-info"><span class="roster-name">{{ p.name }}</span><span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span></div>
+                  <span class="roster-check">{{ isOppAdded(p) ? '✓' : isPlayerAdded(p) ? '—' : '+' }}</span>
+                </div>
+                <div v-if="oppOthers.length" class="section-label-sm" style="margin-top:6px">All Players</div>
+                <div v-for="p in oppOthers" :key="p.id"
+                  class="roster-option roster-option--sm"
+                  :class="{ selected: isOppAdded(p), disabled: isPlayerAdded(p) }"
+                  @click="toggleOpp(p)">
+                  <div class="roster-info"><span class="roster-name">{{ p.name }}</span><span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span></div>
+                  <span class="roster-check">{{ isOppAdded(p) ? '✓' : isPlayerAdded(p) ? '—' : '+' }}</span>
+                </div>
+              </template>
+              <template v-else>
+                <div v-for="p in oppFiltered" :key="p.id"
+                  class="roster-option roster-option--sm"
+                  :class="{ selected: isOppAdded(p), disabled: isPlayerAdded(p) }"
+                  @click="toggleOpp(p)">
+                  <div class="roster-info"><span class="roster-name">{{ p.name }}</span><span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span></div>
+                  <span class="roster-check">{{ isOppAdded(p) ? '✓' : isPlayerAdded(p) ? '—' : '+' }}</span>
+                </div>
+              </template>
+            </div>
+
+            <div class="quick-add-row" style="margin-top:6px">
+              <input v-model="oppGuestName" class="wiz-input" placeholder="Add guest opponent…" @keydown.enter="quickAddOpp" />
+              <input v-model="oppGuestHcp" class="wiz-input wiz-input-sm" placeholder="HCP" type="number" step="0.1" />
+              <button class="btn-ghost btn-sm" @click="quickAddOpp">Add</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="game-section-label" style="margin-top:16px">Main Game</div>
 
         <!-- Collapsed: show selected game chip + change button -->
         <div v-if="!showMainGrid && mainGame.type !== 'none'" class="main-game-selected">
@@ -807,81 +861,6 @@
           </div>
         </div>
 
-        <!-- Opponent Group -->
-        <div class="opp-section">
-          <div class="opp-header" @click="form.withOpponents = !form.withOpponents">
-            <span class="opp-header-label">⚔️ Playing against another group?</span>
-            <span class="opp-toggle">{{ form.withOpponents ? '▲' : '▼' }}</span>
-          </div>
-          <div v-if="form.withOpponents" class="opp-body">
-            <div class="opp-hint">Pick their players from the roster. You'll track both groups' scores.</div>
-
-            <!-- Selected opponents -->
-            <div v-if="form.opponentPlayers.length" class="opp-selected">
-              <div v-for="(p, i) in form.opponentPlayers" :key="p.id" class="opp-chip">
-                <span class="opp-chip-name">{{ p.shortName || p.name }}</span>
-                <button class="opp-chip-remove" @click="form.opponentPlayers.splice(i, 1)">×</button>
-              </div>
-            </div>
-
-            <!-- Roster picker (excludes already-in-your-group players) -->
-            <input v-model="oppSearch" class="wiz-input wiz-input--sm" placeholder="Search roster…" />
-            <div class="opp-roster">
-              <template v-if="!oppSearch">
-                <div v-if="oppFavorites.length" class="section-label-sm">Favorites</div>
-                <div
-                  v-for="p in oppFavorites"
-                  :key="p.id"
-                  class="roster-option roster-option--sm"
-                  :class="{ selected: isOppAdded(p), disabled: isPlayerAdded(p) }"
-                  @click="toggleOpp(p)"
-                >
-                  <div class="roster-info">
-                    <span class="roster-name">{{ p.name }}</span>
-                    <span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span>
-                  </div>
-                  <span class="roster-check">{{ isOppAdded(p) ? '✓' : isPlayerAdded(p) ? '—' : '+' }}</span>
-                </div>
-                <div v-if="oppOthers.length" class="section-label-sm" style="margin-top:6px">All Players</div>
-                <div
-                  v-for="p in oppOthers"
-                  :key="p.id"
-                  class="roster-option roster-option--sm"
-                  :class="{ selected: isOppAdded(p), disabled: isPlayerAdded(p) }"
-                  @click="toggleOpp(p)"
-                >
-                  <div class="roster-info">
-                    <span class="roster-name">{{ p.name }}</span>
-                    <span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span>
-                  </div>
-                  <span class="roster-check">{{ isOppAdded(p) ? '✓' : isPlayerAdded(p) ? '—' : '+' }}</span>
-                </div>
-              </template>
-              <template v-else>
-                <div
-                  v-for="p in oppFiltered"
-                  :key="p.id"
-                  class="roster-option roster-option--sm"
-                  :class="{ selected: isOppAdded(p), disabled: isPlayerAdded(p) }"
-                  @click="toggleOpp(p)"
-                >
-                  <div class="roster-info">
-                    <span class="roster-name">{{ p.name }}</span>
-                    <span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span>
-                  </div>
-                  <span class="roster-check">{{ isOppAdded(p) ? '✓' : isPlayerAdded(p) ? '—' : '+' }}</span>
-                </div>
-              </template>
-            </div>
-
-            <!-- Quick-add guest opponent -->
-            <div class="quick-add-row" style="margin-top:6px">
-              <input v-model="oppGuestName" class="wiz-input" placeholder="Add guest opponent…" @keydown.enter="quickAddOpp" />
-              <input v-model="oppGuestHcp" class="wiz-input wiz-input-sm" placeholder="HCP" type="number" step="0.1" />
-              <button class="btn-ghost btn-sm" @click="quickAddOpp">Add</button>
-            </div>
-          </div>
-        </div>
       </div>
 
       <!-- Nav -->
