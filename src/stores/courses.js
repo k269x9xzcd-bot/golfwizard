@@ -3,7 +3,8 @@ import { ref, computed } from 'vue'
 import { supabase } from '../supabase'
 import { useAuthStore } from './auth'
 import { COURSES as BUILTIN_COURSES } from '../modules/courses'
-import { supaCallWithRetry } from '../modules/supabaseOps'
+import { supaCallWithRetry, supaCall } from '../modules/supabaseOps'
+import { supaRawRequest } from '../modules/supaRaw'
 
 export const useCoursesStore = defineStore('courses', () => {
   const customCourses = ref([])  // user's private courses from Supabase
@@ -60,7 +61,7 @@ export const useCoursesStore = defineStore('courses', () => {
 
   const favoriteNames = computed(() => new Set(favorites.value))
 
-  // Ensure favorites array has no duplicates (can accumulate from localStorage)
+  // Ensure favorites array has no duplicates (can accumulate from various sources)
   function _dedupFavorites() {
     const seen = new Set()
     const deduped = favorites.value.filter(name => {
@@ -70,13 +71,43 @@ export const useCoursesStore = defineStore('courses', () => {
     })
     if (deduped.length !== favorites.value.length) {
       favorites.value = deduped
-      localStorage.setItem('golf_favorites', JSON.stringify(deduped))
+    }
+  }
+
+  // ── Upsert favorites to user_preferences in Supabase ──────────
+  // Uses 5s timeout + supaRawRequest fallback for iOS safety.
+  async function _saveFavoritesToSupabase(userId, favs) {
+    const row = { user_id: userId, favorite_courses: favs, updated_at: new Date().toISOString() }
+    try {
+      const res = await supaCall(
+        'courses.saveFavorites',
+        supabase
+          .from('user_preferences')
+          .upsert(row, { onConflict: 'user_id' }),
+        5000,
+      )
+      if (!res.error) return
+      throw res.error
+    } catch (e) {
+      // iOS fallback: raw fetch bypasses stuck WKWebView connection pool
+      try {
+        await supaRawRequest(
+          'POST',
+          `/rest/v1/user_preferences?on_conflict=user_id`,
+          { ...row, favorite_courses: JSON.stringify(favs) },
+          10000,
+          { Prefer: 'resolution=merge-duplicates' },
+        )
+      } catch (e2) {
+        console.warn('[courses] _saveFavoritesToSupabase fallback failed:', e2)
+      }
     }
   }
 
   async function fetchCustomCourses() {
     const auth = useAuthStore()
     if (!auth.isAuthenticated) {
+      // Guest path — keep localStorage as-is
       const local = JSON.parse(localStorage.getItem('golf_custom_courses') || '{}')
       customCourses.value = Object.entries(local).map(([name, data]) => ({
         id: `local_${name}`,
@@ -95,24 +126,49 @@ export const useCoursesStore = defineStore('courses', () => {
       _dedupFavorites()
       return
     }
+
+    // Authenticated path
     loading.value = true
-    const { data, error } = await supabase
+    // Fetch custom courses
+    const { data: coursesData, error: coursesError } = await supabase
       .from('courses')
       .select('*')
       .eq('owner_id', auth.user.id)
-    if (!error) {
+    if (!coursesError) {
       // Dedup by name (keep most recently updated)
       const byName = {}
-      for (const c of (data ?? [])) {
+      for (const c of (coursesData ?? [])) {
         if (!byName[c.name] || (c.updated_at > byName[c.name].updated_at)) byName[c.name] = c
       }
       customCourses.value = Object.values(byName)
     }
-    favorites.value = JSON.parse(localStorage.getItem('golf_favorites') || 'null')
-    if (!favorites.value) {
-      favorites.value = [...DEFAULT_FAVORITES]
-      localStorage.setItem('golf_favorites', JSON.stringify(favorites.value))
+
+    // Fetch favorites from user_preferences
+    try {
+      const prefRes = await supaCall(
+        'courses.fetchPrefs',
+        supabase
+          .from('user_preferences')
+          .select('favorite_courses')
+          .eq('user_id', auth.user.id)
+          .single(),
+        5000,
+      )
+      if (!prefRes.error && prefRes.data) {
+        const stored = prefRes.data.favorite_courses
+        favorites.value = Array.isArray(stored) ? stored : (JSON.parse(stored || 'null') ?? [...DEFAULT_FAVORITES])
+      } else if (prefRes.error?.code === 'PGRST116') {
+        // No row yet — upsert with defaults
+        favorites.value = [...DEFAULT_FAVORITES]
+        await _saveFavoritesToSupabase(auth.user.id, favorites.value)
+      } else {
+        // Query error — fall back to localStorage
+        favorites.value = JSON.parse(localStorage.getItem('golf_favorites') || 'null') ?? [...DEFAULT_FAVORITES]
+      }
+    } catch {
+      favorites.value = JSON.parse(localStorage.getItem('golf_favorites') || 'null') ?? [...DEFAULT_FAVORITES]
     }
+
     _dedupFavorites()
     loading.value = false
   }
@@ -226,7 +282,15 @@ export const useCoursesStore = defineStore('courses', () => {
     const idx = favorites.value.indexOf(name)
     if (idx >= 0) favorites.value.splice(idx, 1)
     else favorites.value.push(name)
-    localStorage.setItem('golf_favorites', JSON.stringify(favorites.value))
+
+    const auth = useAuthStore()
+    if (auth.isAuthenticated) {
+      // Persist to Supabase for authenticated users
+      _saveFavoritesToSupabase(auth.user.id, favorites.value)
+    } else {
+      // Guests: keep localStorage
+      localStorage.setItem('golf_favorites', JSON.stringify(favorites.value))
+    }
   }
 
   function getCourse(name) {

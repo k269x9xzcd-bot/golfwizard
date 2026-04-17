@@ -57,13 +57,14 @@ import { RouterView, RouterLink, useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 import { useRosterStore } from './stores/roster'
 import { useCoursesStore } from './stores/courses'
-import { hasTournamentAccess } from './stores/tournament.js'
+import { hasTournamentAccess, useTournamentStore } from './stores/tournament.js'
 import WizardOverlay from './components/WizardOverlay.vue'
 import JoinOverlay from './components/JoinOverlay.vue'
 
 const authStore = useAuthStore()
 const rosterStore = useRosterStore()
 const coursesStore = useCoursesStore()
+const tournamentStore = useTournamentStore()
 const router = useRouter()
 const route = useRoute()
 
@@ -94,6 +95,7 @@ onMounted(async () => {
     await Promise.all([
       rosterStore.fetchPlayers(),
       coursesStore.fetchCustomCourses(),
+      tournamentStore.init(),
     ])
   } catch (e) { console.warn('Data load error:', e) }
 

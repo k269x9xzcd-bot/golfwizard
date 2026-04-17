@@ -775,6 +775,7 @@ import {
   getTeam, matchPoints, computeStandings, teamMatches,
   nextMatch, fmtDate, daysUntil,
   saveTeamPlayers, clearTeamOverride,
+  useTournamentStore,
 } from '../stores/tournament.js'
 
 const rosterStore = useRosterStore()
@@ -782,6 +783,10 @@ const rosterStore = useRosterStore()
 const router = useRouter()
 const roundsStore = useRoundsStore()
 const coursesStore = useCoursesStore()
+
+// ── Initialize tournament data from Supabase ────────────────────
+const tournamentStore = useTournamentStore()
+tournamentStore.init()
 
 // Courses + tees for the pairing picker dropdowns
 const allCourseNames = computed(() =>
@@ -799,11 +804,11 @@ const tab = ref('standings')
 // Increment this after any mutation to force computed properties to re-evaluate.
 const scheduleVersion = ref(0)
 
-// ── Tournament name/format override (persisted to localStorage) ─
-const EDIT_KEY = 'gw_tournament_meta_2025'
-const savedMeta = (() => { try { return JSON.parse(localStorage.getItem(EDIT_KEY) || '{}') } catch { return {} } })()
-const editedName = ref(savedMeta.name || '')
-const editedFormat = ref(savedMeta.format || '')
+// ── Tournament name/format edit (persisted to Supabase) ────────
+// editedName/editedFormat are local UI state only; TOURNAMENT.name/format
+// are read from the store which is authoritative after init().
+const editedName = ref('')
+const editedFormat = ref('')
 
 // Edit modal
 const showEditModal = ref(false)
@@ -811,15 +816,18 @@ const editModalName = ref('')
 const editModalFormat = ref('')
 
 function openEdit() {
-  editModalName.value = editedName.value || TOURNAMENT.name
-  editModalFormat.value = editedFormat.value || TOURNAMENT.format
+  editModalName.value = TOURNAMENT.name
+  editModalFormat.value = TOURNAMENT.format
   showEditModal.value = true
 }
 
-function saveEdit() {
-  editedName.value = editModalName.value.trim()
-  editedFormat.value = editModalFormat.value.trim()
-  localStorage.setItem(EDIT_KEY, JSON.stringify({ name: editedName.value, format: editedFormat.value }))
+async function saveEdit() {
+  const name = editModalName.value.trim()
+  const format = editModalFormat.value.trim()
+  editedName.value = name
+  editedFormat.value = format
+  // Persist to Supabase tournaments table
+  await tournamentStore.updateTournamentMeta({ name, format })
   showEditModal.value = false
 }
 
