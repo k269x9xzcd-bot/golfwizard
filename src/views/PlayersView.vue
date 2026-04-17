@@ -23,7 +23,10 @@
       <input v-model="newGhin" class="wiz-input" placeholder="GHIN Index (e.g. 14.2)" type="number" step="0.1" />
       <input v-model="newNickname" class="wiz-input" placeholder="Nickname (optional, e.g. Wang)" />
       <input v-model="newEmail"    class="wiz-input" placeholder="Email address" type="email" autocomplete="email" />
-      <button class="btn-primary btn-sm" @click="add">Add Player</button>
+      <div v-if="addError" class="edit-error">{{ addError }}</div>
+      <button class="btn-primary btn-sm" :disabled="addingPlayer" @click="add">
+        {{ addingPlayer ? 'Adding…' : 'Add Player' }}
+      </button>
     </div>
 
     <!-- Favorites section -->
@@ -223,21 +226,34 @@ function sortByLastName(arr) {
 const favoritePlayers = computed(() => sortByLastName(rosterStore.players.filter(p => p.is_favorite)))
 const otherPlayers = computed(() => sortByLastName(rosterStore.players.filter(p => !p.is_favorite)))
 
+const addError = ref('')
+const addingPlayer = ref(false)
+
 async function add() {
   const first = newFirst.value.trim()
   const last = newLast.value.trim()
-  if (!first) return
-  const fullName = last ? `${first} ${last}` : first
-  await rosterStore.addPlayer({
-    name: fullName,
-    short_name: last || first.slice(0, 8),
-    ghin_index: newGhin.value !== '' ? parseFloat(newGhin.value) : null,
-    nickname: newNickname.value.trim() || null,
-    email: newEmail.value.trim() || null,
-    use_nickname: false,
-    is_favorite: true,
-  })
-  newFirst.value = ''; newLast.value = ''; newGhin.value = ''; newNickname.value = ''; newEmail.value = ''; showAdd.value = false
+  if (!first) { addError.value = 'First name is required.'; return }
+  addError.value = ''
+  addingPlayer.value = true
+  try {
+    const fullName = last ? `${first} ${last}` : first
+    await rosterStore.addPlayer({
+      name: fullName,
+      short_name: last || first.slice(0, 8),
+      ghin_index: newGhin.value !== '' ? parseFloat(newGhin.value) : null,
+      nickname: newNickname.value.trim() || null,
+      email: newEmail.value.trim() || null,
+      use_nickname: false,
+      is_favorite: true,
+    })
+    newFirst.value = ''; newLast.value = ''; newGhin.value = ''; newNickname.value = ''; newEmail.value = ''
+    showAdd.value = false
+    showToast(`${fullName} added`, 'gold')
+  } catch (err) {
+    addError.value = err?.message || 'Could not add player. Check your connection and try again.'
+  } finally {
+    addingPlayer.value = false
+  }
 }
 
 // ── Swipe gestures ──────────────────────────────────────────────
