@@ -135,7 +135,7 @@ const showTournament = computed(() => {
   }
   // Fallback: show for known authorized emails while members are loading
   const AUTHORIZED = [
-    'jayspieler@aol.com','jtspieler@gmail.com',
+    'jayspieler@aol.com',
     'alexcarroll333@gmail.com','bcimons19@yahoo.com',
     'jcourt93@gmail.com','craggo@recordandreturn.com',
     'matt@derosasports.com','bonga13@gmail.com',
