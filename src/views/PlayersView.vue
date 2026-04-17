@@ -226,6 +226,7 @@ async function syncAllGhin() {
       body: {
         ghin_number: profile.ghin_number,
         password: profile.ghin_password,
+        state: 'NY',
         players,
       }
     })
@@ -249,15 +250,15 @@ async function syncAllGhin() {
           club_name: r.club_name || undefined,
         })
         updated++
-      } else if (r.status === 'no_ghin') {
-        noGhin++
-      } else {
+      } else if (r.status === 'multiple') {
+        multipleMatchPlayer.value = r
+        break
+      } else if (r.status === 'not_found') {
         notFound++
       }
     }
 
     const parts = [`✓ ${updated} synced`]
-    if (noGhin) parts.push(`${noGhin} need GHIN #`)
     if (notFound) parts.push(`${notFound} not found`)
     syncMsg.value = parts.join(', ')
     syncMsgType.value = 'success'
