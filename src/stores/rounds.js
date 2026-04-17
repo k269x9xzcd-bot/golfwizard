@@ -22,9 +22,11 @@ function _buildCourseSnapshot(courseName) {
   let course = null
   try {
     const cs = useCoursesStore()
-    course = cs.allCourses?.find?.(c => c.name === courseName) || null
+    // allCourses puts custom courses first, builtins second — first match is always the user's version
+    course = cs.allCourses?.find?.(c => c.name === courseName) ?? null
   } catch {}
-  if (!course) course = BUILTIN_COURSES[courseName] || null
+  // Only fall back to builtin if store wasn't ready yet
+  if (!course) course = BUILTIN_COURSES[courseName] ?? null
   if (!course) return null
 
   // Extract par/si: built-in courses use top-level par/si arrays.
@@ -35,8 +37,8 @@ function _buildCourseSnapshot(courseName) {
   const si = Array.isArray(course.si)
     ? course.si.slice(0, 18)
     : Array.from({ length: 18 }, (_, i) => i + 1)
-  const teesData = course.teesData || course.tees || {}
-  const defaultTee = course.defaultTee || Object.keys(teesData)[0] || null
+  const teesData = course.teesData ?? course.tees ?? {}
+  const defaultTee = course.defaultTee ?? Object.keys(teesData)[0] ?? null
 
   return {
     name: courseName,

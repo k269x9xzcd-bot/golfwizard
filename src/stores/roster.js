@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { supabase } from '../supabase'
 import { useAuthStore } from './auth'
 
@@ -242,8 +242,10 @@ export const useRosterStore = defineStore('roster', () => {
     localStorage.setItem('gw_roster', JSON.stringify(players.value))
   }
 
+  const favoritePlayers = computed(() => players.value.filter(p => p.is_favorite))
+
   return {
-    players, loading,
+    players, favoritePlayers, loading,
     fetchPlayers, addPlayer, updatePlayer, deletePlayer,
     toggleFavorite, migrateFromLocalStorage,
     displayName, displayInitials,

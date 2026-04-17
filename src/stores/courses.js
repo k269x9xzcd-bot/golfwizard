@@ -182,7 +182,13 @@ export const useCoursesStore = defineStore('courses', () => {
     const si = updates.si ?? null
     const supaUpdates = {}
     if (teesData) supaUpdates.tees = teesData
-    if (par || si) supaUpdates.holes = (par ?? Array(18).fill(4)).map((p, i) => ({ par: p, si: (si ?? [])[i] ?? (i + 1) }))
+    // Only update holes if we have at least par OR si; use COALESCE-style logic to avoid overwriting with nulls
+    if (par !== null || si !== null) {
+      const existingCourse = customCourses.value.find(c => c.id === id)
+      const existingPar = par ?? (Array.isArray(existingCourse?.par) ? existingCourse.par : null) ?? Array(18).fill(4)
+      const existingSi = si ?? (Array.isArray(existingCourse?.si) ? existingCourse.si : null) ?? Array.from({ length: 18 }, (_, i) => i + 1)
+      supaUpdates.holes = existingPar.map((p, i) => ({ par: p, si: existingSi[i] ?? (i + 1) }))
+    }
     if (updates.name) supaUpdates.name = updates.name
     const { data, error } = await supaCallWithRetry(
       'courses.updateCourse',
@@ -192,6 +198,11 @@ export const useCoursesStore = defineStore('courses', () => {
     if (error) throw error
     const idx = customCourses.value.findIndex(c => c.id === id)
     if (idx >= 0) customCourses.value[idx] = { ...customCourses.value[idx], ...data }
+  }
+
+  // Convenience alias — always upserts via updateCourse
+  async function saveCourse(id, updates) {
+    return updateCourse(id, updates)
   }
 
   async function deleteCourse(id) {
@@ -318,11 +329,19 @@ export const useCoursesStore = defineStore('courses', () => {
           yards: tee.total_yards ?? tee.totalYards ?? (holes.reduce((s, h) => s + (h.yardage || h.yards || 0), 0) || null),
           yardsByHole: holes.map(h => h.yardage || h.yards || null),
           siByHole: holes.map(h => h.handicap || h.stroke_index || null),
+          parByHole: holes.map(h => h.par || null),
         }
       }
-      // Global par/si from first tee or holes on course object
+      // Global par/si: prefer tee with most complete par data (stable across API call order)
       const firstTeeHoles = teesFlat[0]?.holes || course.holes || []
-      const par = firstTeeHoles.map(h => h.par || 4)
+      let bestParSource = null
+      for (const tee of teesFlat) {
+        const pars = (tee.holes || []).map(h => h.par || null)
+        if (pars.filter(Boolean).length > (bestParSource?.filter(Boolean).length ?? 0)) {
+          bestParSource = pars
+        }
+      }
+      const par = (bestParSource ?? firstTeeHoles.map(h => h.par || null)).map(p => p || 4)
       // si: use first tee that has handicap data
       let si = null
       for (const tee of teesFlat) {
@@ -365,7 +384,7 @@ export const useCoursesStore = defineStore('courses', () => {
 
   return {
     customCourses, favorites, allCourses, favoriteNames, loading,
-    fetchCustomCourses, addCourse, updateCourse, deleteCourse,
+    fetchCustomCourses, addCourse, updateCourse, saveCourse, deleteCourse,
     toggleFavorite, getCourse, migrateFromLocalStorage,
     searchCoursesApi, apiSearchCache,
     fetchCourseDetail, apiDetailCache,

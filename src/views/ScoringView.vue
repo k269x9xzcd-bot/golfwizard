@@ -35,6 +35,9 @@
         </div>
         <div v-if="showRoundMenu" class="round-menu-backdrop" @click="showRoundMenu = false"></div>
         <div v-if="showRoundMenu" class="round-menu-dropdown" @click.stop>
+          <button v-if="isCaptain" class="round-menu-item" @click="showRoundMenu = false; showHcpEditor = true">
+            ✏️ Edit Player Handicaps
+          </button>
           <button v-if="isCaptain" class="round-menu-item" @click="showRoundMenu = false; showGameEditor = true">
             🎲 Edit Games & Stakes
           </button>
@@ -52,6 +55,26 @@
           </div>
         </div>
       </header>
+
+      <!-- HCP Editor Modal -->
+      <div v-if="showHcpEditor" class="hcp-editor-overlay" @click.self="showHcpEditor = false">
+        <div class="hcp-editor-modal">
+          <div class="hcp-editor-title">Edit Handicap Indexes</div>
+          <div class="hcp-editor-note">Changes apply to this round only and recalculate strokes immediately.</div>
+          <div v-for="m in roundsStore.activeMembers" :key="m.id" class="hcp-editor-row">
+            <span class="hcp-editor-name">{{ m.short_name || m.guest_name }}</span>
+            <input
+              type="number"
+              step="0.1"
+              class="hcp-editor-input"
+              :value="m.ghin_index"
+              @change="updateMemberHcp(m.id, $event.target.value)"
+              placeholder="—"
+            />
+          </div>
+          <button class="hcp-editor-done" @click="showHcpEditor = false">Done</button>
+        </div>
+      </div>
 
       <!-- Delete active round confirmation -->
       <div v-if="confirmDeleteActive" class="delete-overlay" @click="confirmDeleteActive = false">
@@ -667,6 +690,7 @@ const selectedGame = ref(null)
 const showRoundMenu = ref(false)
 const confirmDeleteActive = ref(false)
 const showGameEditor = ref(false)
+const showHcpEditor = ref(false)
 const showNotations = ref(true)   // per-score-cell shapes (birdie circle, bogey box, etc.)
 const showGameRows = ref(true)    // game-outcome tfoot rows (Nassau status, match L/W/½, etc.)
 const showFinishReview = ref(false)
@@ -2100,6 +2124,21 @@ async function deleteActiveRound() {
   }
 }
 
+async function updateMemberHcp(memberId, rawValue) {
+  const newIndex = rawValue === '' || rawValue === null ? null : parseFloat(rawValue)
+  if (isNaN(newIndex) && rawValue !== '' && rawValue !== null) return
+  // Optimistic update in store
+  const m = roundsStore.activeMembers.find(x => x.id === memberId)
+  if (m) m.ghin_index = newIndex
+  // Persist to Supabase
+  try {
+    const { supabase } = await import('../supabase')
+    await supabase.from('round_members').update({ ghin_index: newIndex }).eq('id', memberId)
+  } catch (e) {
+    console.warn('[ScoringView] updateMemberHcp failed:', e)
+  }
+}
+
 async function addSnakeEvent(pid) {
   if (!snakeGame.value) return
   const events = snakeGame.value.config.events || []
@@ -2294,6 +2333,31 @@ function formatDate(dateStr) {
 }
 .round-menu-item:active { background: rgba(255,255,255,.06); }
 .round-menu-danger { color: #f87171; }
+
+/* HCP Editor Modal */
+.hcp-editor-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 200;
+  display: flex; align-items: center; justify-content: center;
+}
+.hcp-editor-modal {
+  background: #1a2218; border: 1px solid rgba(255,255,255,.12); border-radius: 16px;
+  padding: 20px; width: min(340px, 90vw); max-height: 70vh; overflow-y: auto;
+}
+.hcp-editor-title { font-size: 16px; font-weight: 700; color: #d4af37; margin-bottom: 4px; }
+.hcp-editor-note { font-size: 12px; color: rgba(255,255,255,.5); margin-bottom: 14px; }
+.hcp-editor-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.06);
+}
+.hcp-editor-name { font-size: 14px; color: rgba(255,255,255,.85); }
+.hcp-editor-input {
+  width: 70px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.15);
+  border-radius: 8px; color: #fff; font-size: 14px; text-align: center; padding: 6px 8px;
+}
+.hcp-editor-done {
+  width: 100%; margin-top: 14px; padding: 10px; background: #d4af37; color: #0c0f0d;
+  font-weight: 700; border: none; border-radius: 10px; font-size: 14px; cursor: pointer;
+}
 .round-menu-note {
   font-size: 11px;
   color: rgba(147,197,253,.75);
