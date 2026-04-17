@@ -4,7 +4,9 @@
     <!-- Loading state -->
     <div v-if="!tournamentStore.loaded" class="t-loading">
       <div class="t-loading-icon">🏆</div>
-      <div class="t-loading-text">Loading tournament…</div>
+      <div class="t-loading-text">{{ tournamentStore.initError ? 'Failed to load' : 'Loading tournament…' }}</div>
+      <div v-if="tournamentStore.initError" class="t-loading-error">{{ tournamentStore.initError }}</div>
+      <button v-if="tournamentStore.initError" class="t-retry-btn" @click="tournamentStore.init()">Retry</button>
     </div>
 
     <template v-else>
@@ -2385,4 +2387,6 @@ _loadFinalResult()
 }
 .t-loading-icon { font-size: 48px; animation: card-in .6s ease; }
 .t-loading-text { font-size: 15px; color: rgba(240,237,224,.5); font-weight: 600; }
+.t-loading-error { font-size: 12px; color: #f87171; max-width: 280px; text-align: center; line-height: 1.4; }
+.t-retry-btn { margin-top: 8px; padding: 10px 24px; border-radius: 10px; background: rgba(212,175,55,.2); border: 1px solid rgba(212,175,55,.4); color: #d4af37; font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer; }
 </style>

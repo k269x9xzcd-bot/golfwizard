@@ -20,14 +20,15 @@ export const useTournamentStore = defineStore('tournament', () => {
   const schedule = ref([])         // assembled schedule (rounds with nested matches)
   const loaded = ref(false)
   const loading = ref(false)
+  const initError = ref('')
 
   // ── init: fetch all tournament data from Supabase ──────────────
   async function init() {
-    // If already fully loaded, skip. If currently loading, wait for it to finish
-    // by returning early — the store will be populated when the in-flight call resolves.
+    // Skip if already successfully loaded or currently in-flight
     if (loaded.value) return
     if (loading.value) return
     loading.value = true
+    initError.value = ''
     try {
       // All fetches use supaRawRequest — proven reliable on iOS PWA (fresh HTTP connection,
       // not subject to WKWebView HTTP/2 pool stalls that kill supabase-js calls).
@@ -95,7 +96,9 @@ export const useTournamentStore = defineStore('tournament', () => {
 
       loaded.value = true
     } catch (e) {
-      console.warn('[tournament.init] error:', e)
+      console.warn('[tournament.init] error:', e?.message, e?.status, e?.detail)
+      // Store error for UI display
+      initError.value = e?.message || 'Unknown error'
     } finally {
       loading.value = false
     }
@@ -199,6 +202,7 @@ export const useTournamentStore = defineStore('tournament', () => {
     schedule,
     loaded,
     loading,
+    initError,
     init,
     hasTournamentAccessAsync,
     saveTeamPlayers,
