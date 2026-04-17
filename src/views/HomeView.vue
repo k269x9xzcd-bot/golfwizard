@@ -35,16 +35,6 @@
 
     <button v-if="roundsStore.activeRound || roundsStore.rounds.length" class="new-round-pill" @click="openWizard()">+ New Round</button>
 
-    <!-- Cross-Foursome Match entry card -->
-    <RouterLink v-if="authStore.isAuthenticated" to="/cross-match/new" class="cm-home-card">
-      <div class="cm-home-icon">🤝</div>
-      <div class="cm-home-body">
-        <div class="cm-home-title">Cross-Foursome Match</div>
-        <div class="cm-home-sub">1BB or 2BB Net between two foursomes · sharable invite</div>
-      </div>
-      <div class="cm-home-arrow">›</div>
-    </RouterLink>
-
     <!-- Tournament / Cup entry card (only for authorized users) -->
     <template v-if="showTournament">
       <!-- Cup with in-progress tournament round nested -->
@@ -149,7 +139,7 @@ const isTournamentRound = computed(() => {
 onMounted(async () => {
   if (authStore.isAuthenticated) {
     await roundsStore.fetchRounds()
-    if (tournamentStore.members.length === 0) tournamentStore.init()
+    tournamentStore.init()
     challengesStore.fetchChallenges()
   }
 })
@@ -159,7 +149,7 @@ onMounted(async () => {
 watch(() => authStore.isAuthenticated, async (authed) => {
   if (authed) {
     if (roundsStore.rounds.length === 0) await roundsStore.fetchRounds()
-    if (tournamentStore.members.length === 0) tournamentStore.init()
+    tournamentStore.init()
     challengesStore.fetchChallenges()
   }
 })

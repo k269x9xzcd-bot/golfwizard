@@ -8,6 +8,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { supabase } from '../supabase'
 import { supaCall, supaCallWithRetry } from '../modules/supabaseOps'
+import { supaRawRequest } from '../modules/supaRaw'
 
 const TOURNAMENT_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
 
@@ -35,14 +36,28 @@ export const useTournamentStore = defineStore('tournament', () => {
         tournament.value = tRes.data
       }
 
-      // 2. Members (for access control)
-      const mRes = await supaCall(
-        'tournament.fetchMembers',
-        supabase.from('tournament_members').select('*').eq('tournament_id', TOURNAMENT_ID),
-        5000,
-      )
-      if (!mRes.error) {
-        members.value = mRes.data ?? []
+      // 2. Members (for access control) — use raw fetch first (iOS HTTP/2 reliable),
+      // fall back to SJS if raw fetch fails.
+      try {
+        const rows = await supaRawRequest(
+          'GET',
+          `tournament_members?tournament_id=eq.${TOURNAMENT_ID}&select=*`,
+          null,
+          6000,
+        )
+        members.value = Array.isArray(rows) ? rows : []
+      } catch (rawErr) {
+        console.warn('[tournament] raw members fetch failed, trying SJS:', rawErr?.message)
+        try {
+          const mRes = await supaCall(
+            'tournament.fetchMembers',
+            supabase.from('tournament_members').select('*').eq('tournament_id', TOURNAMENT_ID),
+            8000,
+          )
+          if (!mRes.error) members.value = mRes.data ?? []
+        } catch (e) {
+          console.warn('[tournament] members fetch failed entirely:', e?.message)
+        }
       }
 
       // 3. Teams + players
@@ -122,6 +137,7 @@ export const useTournamentStore = defineStore('tournament', () => {
       loaded.value = true
     } catch (e) {
       console.warn('[tournament.init] error:', e)
+      loading.value = false  // reset so a retry is possible
     } finally {
       loading.value = false
     }
