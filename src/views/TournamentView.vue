@@ -776,8 +776,9 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, triggerRef, nextTick, onMounted, watch } from 'vue'
+import { ref, computed, reactive, triggerRef, nextTick, onMounted, watch, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
 import { useRoundsStore } from '../stores/rounds'
 import { useRosterStore } from '../stores/roster'
 import { useCoursesStore } from '../stores/courses'
@@ -796,12 +797,16 @@ const roundsStore = useRoundsStore()
 const coursesStore = useCoursesStore()
 
 // ── Initialize tournament data from Supabase ────────────────────
+const authStore = useAuthStore()
 const tournamentStore = useTournamentStore()
-onMounted(async () => {
-  await tournamentStore.init()
-  // If still not loaded (network issue), retry once after a short delay
-  if (!tournamentStore.loaded) {
-    setTimeout(() => tournamentStore.init(), 1500)
+
+// Wait for auth to be ready before fetching — RLS requires a valid JWT.
+// authStore.loading goes false once getSession() resolves.
+// watchEffect runs immediately and re-runs when deps change.
+const _stopAuthWatch = watchEffect(() => {
+  if (!authStore.loading) {
+    _stopAuthWatch()
+    tournamentStore.init()
   }
 })
 
