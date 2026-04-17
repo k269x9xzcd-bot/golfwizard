@@ -14,7 +14,7 @@
     <div v-if="display.tone === 'pending' || display.tone === 'waiting'" class="cmb-options">
       <button
         class="cmb-options-btn"
-        @click.prevent="showOptions = !showOptions"
+        @click.prevent.stop="showOptions = !showOptions"
         title="Options"
       >⋯</button>
       <div v-if="showOptions" class="cmb-options-menu" @click.stop>
@@ -56,6 +56,7 @@ const linkedStore = useLinkedMatchesStore()
 const SILENCE_KEY = 'gw_silenced_matches'
 const showOptions = ref(false)
 const confirmingCancel = ref(false)
+const pendingCancelId = ref(null)
 
 function _getSilenced() {
   try { return JSON.parse(localStorage.getItem(SILENCE_KEY) || '[]') } catch { return [] }
@@ -81,15 +82,18 @@ function silenceBanner() {
 
 function confirmCancel() {
   showOptions.value = false
+  // Cache the match ID now — relevantMatch may go null after status changes
+  pendingCancelId.value = relevantMatch.value?.id || null
   confirmingCancel.value = true
 }
 
 async function doCancel() {
+  const id = pendingCancelId.value
   confirmingCancel.value = false
-  const m = relevantMatch.value
-  if (!m) return
+  pendingCancelId.value = null
+  if (!id) return
   try {
-    await linkedStore.cancelLinkedMatch(m.id)
+    await linkedStore.cancelLinkedMatch(id)
     tick.value++
   } catch (e) {
     console.warn('[cmb] cancel failed:', e)
