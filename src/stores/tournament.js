@@ -29,118 +29,73 @@ export const useTournamentStore = defineStore('tournament', () => {
     if (loading.value) return
     loading.value = true
     try {
+      // All fetches use supaRawRequest — proven reliable on iOS PWA (fresh HTTP connection,
+      // not subject to WKWebView HTTP/2 pool stalls that kill supabase-js calls).
+
       // 1. Tournament meta
-      const tRes = await supaCall(
-        'tournament.fetchMeta',
-        supabase.from('tournaments').select('*').eq('id', TOURNAMENT_ID).single(),
-        5000,
-      )
-      if (!tRes.error && tRes.data) {
-        tournament.value = tRes.data
+      const tRows = await supaRawRequest('GET', `tournaments?id=eq.${TOURNAMENT_ID}&select=*`, null, 6000)
+      const tRow = Array.isArray(tRows) ? tRows[0] : null
+      if (tRow) tournament.value = tRow
+
+      // 2. Members
+      const mRows = await supaRawRequest('GET', `tournament_members?tournament_id=eq.${TOURNAMENT_ID}&select=*`, null, 6000)
+      members.value = Array.isArray(mRows) ? mRows : []
+
+      // 3. Teams
+      const rawTeams = await supaRawRequest('GET', `tournament_teams?tournament_id=eq.${TOURNAMENT_ID}&select=*&order=sort_order.asc`, null, 6000)
+
+      // 4. Players (all teams in one query)
+      const teamIds = (Array.isArray(rawTeams) ? rawTeams : []).map(t => t.id)
+      let rawPlayers = []
+      if (teamIds.length) {
+        rawPlayers = await supaRawRequest('GET', `tournament_team_players?team_id=in.(${teamIds.join(',')})&select=*&order=sort_order.asc`, null, 6000)
+        if (!Array.isArray(rawPlayers)) rawPlayers = []
       }
 
-      // 2. Members (for access control) — use raw fetch first (iOS HTTP/2 reliable),
-      // fall back to SJS if raw fetch fails.
-      try {
-        const rows = await supaRawRequest(
-          'GET',
-          `tournament_members?tournament_id=eq.${TOURNAMENT_ID}&select=*`,
-          null,
-          6000,
-        )
-        members.value = Array.isArray(rows) ? rows : []
-      } catch (rawErr) {
-        console.warn('[tournament] raw members fetch failed, trying SJS:', rawErr?.message)
-        try {
-          const mRes = await supaCall(
-            'tournament.fetchMembers',
-            supabase.from('tournament_members').select('*').eq('tournament_id', TOURNAMENT_ID),
-            8000,
-          )
-          if (!mRes.error) members.value = mRes.data ?? []
-        } catch (e) {
-          console.warn('[tournament] members fetch failed entirely:', e?.message)
-        }
-      }
+      teams.value = (Array.isArray(rawTeams) ? rawTeams : []).map(t => ({
+        id: t.team_key,
+        name: t.name,
+        short: t.short ?? t.name,
+        color: t.color ?? '#888',
+        colorDim: t.color_dim ?? 'rgba(136,136,136,.15)',
+        players: rawPlayers
+          .filter(p => p.team_id === t.id)
+          .map(p => ({
+            id: p.player_key,
+            name: p.name,
+            nickname: p.nickname ?? p.name,
+            email: p.email ?? null,
+            ghinIndex: p.ghin_index ?? null,
+          })),
+        _dbId: t.id,
+      }))
 
-      // 3. Teams + players
-      // tournament_teams columns: id, team_key, name, short, color, color_dim, sort_order
-      // tournament_team_players columns: id, team_id (FK→tournament_teams.id), player_key, name, nickname, email, ghin_index, sort_order
-      const teamsRes = await supaCall(
-        'tournament.fetchTeams',
-        supabase.from('tournament_teams').select('*').eq('tournament_id', TOURNAMENT_ID).order('sort_order', { ascending: true }),
-        5000,
-      )
-      // Fetch players for all teams in this tournament via a join
-      const playersRes = await supaCall(
-        'tournament.fetchPlayers',
-        supabase
-          .from('tournament_team_players')
-          .select('*, tournament_teams!inner(tournament_id)')
-          .eq('tournament_teams.tournament_id', TOURNAMENT_ID)
-          .order('sort_order', { ascending: true }),
-        5000,
-      )
-      if (!teamsRes.error) {
-        const rawTeams = teamsRes.data ?? []
-        const rawPlayers = playersRes.error ? [] : (playersRes.data ?? [])
-        teams.value = rawTeams.map(t => ({
-          id: t.team_key,          // team_key is the internal ID used throughout the app (BC, JA, MW, MS)
-          name: t.name,
-          short: t.short ?? t.name,
-          color: t.color ?? '#888',
-          colorDim: t.color_dim ?? 'rgba(136,136,136,.15)',
-          players: rawPlayers
-            .filter(p => p.team_id === t.id)   // t.id is the UUID PK of tournament_teams
-            .map(p => ({
-              id: p.player_key,    // player_key is the internal ID (brian, chris, etc.)
-              name: p.name,
-              nickname: p.nickname ?? p.name,
-              email: p.email ?? null,
-              ghinIndex: p.ghin_index ?? null,
-            })),
-          _dbId: t.id,             // preserve UUID for DB operations
-        }))
-      }
+      // 5. Schedule
+      const rawRounds = await supaRawRequest('GET', `tournament_schedule?tournament_id=eq.${TOURNAMENT_ID}&select=*&order=sort_order.asc`, null, 6000)
 
-      // 4. Schedule + matches
-      // tournament_schedule columns: id, round_num, label, deadline, sort_order
-      // tournament_matches columns: id, schedule_id, match_key, team1_key, team2_key, singles_order, result, round_id
-      const schedRes = await supaCall(
-        'tournament.fetchSchedule',
-        supabase.from('tournament_schedule').select('*').eq('tournament_id', TOURNAMENT_ID).order('sort_order', { ascending: true }),
-        5000,
-      )
-      const matchesRes = await supaCall(
-        'tournament.fetchMatches',
-        supabase.from('tournament_matches').select('*').eq('tournament_id', TOURNAMENT_ID),
-        5000,
-      )
-      if (!schedRes.error) {
-        const rawRounds = schedRes.data ?? []
-        const rawMatches = matchesRes.error ? [] : (matchesRes.data ?? [])
-        schedule.value = rawRounds.map(r => ({
-          round: r.round_num,           // round_num not round
-          deadline: r.deadline,
-          label: r.label ?? `Round ${r.round_num}`,
-          matches: rawMatches
-            .filter(m => m.schedule_id === r.id)   // join on schedule_id FK
-            .map(m => ({
-              id: m.match_key,           // match_key is the internal ID (r1m1 etc.)
-              team1: m.team1_key,        // team1_key not team1_id
-              team2: m.team2_key,        // team2_key not team2_id
-              singlesOrder: m.singles_order ?? 0,
-              result: m.result ?? null,
-              roundId: m.round_id ?? null,
-              _dbId: m.id,
-            })),
-        }))
-      }
+      // 6. Matches
+      const rawMatches = await supaRawRequest('GET', `tournament_matches?tournament_id=eq.${TOURNAMENT_ID}&select=*`, null, 6000)
+
+      schedule.value = (Array.isArray(rawRounds) ? rawRounds : []).map(r => ({
+        round: r.round_num,
+        deadline: r.deadline,
+        label: r.label ?? `Round ${r.round_num}`,
+        matches: (Array.isArray(rawMatches) ? rawMatches : [])
+          .filter(m => m.schedule_id === r.id)
+          .map(m => ({
+            id: m.match_key,
+            team1: m.team1_key,
+            team2: m.team2_key,
+            singlesOrder: m.singles_order ?? 0,
+            result: m.result ?? null,
+            roundId: m.round_id ?? null,
+            _dbId: m.id,
+          })),
+      }))
 
       loaded.value = true
     } catch (e) {
       console.warn('[tournament.init] error:', e)
-      loading.value = false  // reset so a retry is possible
     } finally {
       loading.value = false
     }
