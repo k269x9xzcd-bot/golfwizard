@@ -18,15 +18,15 @@
 
     <!-- Multiple matches modal -->
     <Teleport to="body">
-      <div v-if="multipleMatchPlayer" class="delete-backdrop" @click.self="multipleMatchPlayer = null">
+      <div v-if="multipleMatchPlayer" class="delete-backdrop" @click.self="advanceMultipleQueue">
         <div class="delete-modal">
-          <div class="delete-header">Multiple matches for {{ multipleMatchPlayer.name }}</div>
-          <div class="delete-message">Select the correct golfer:</div>
+          <div class="delete-header">Multiple matches for "{{ multipleMatchPlayer.name }}"</div>
+          <div class="delete-message">{{ multipleMatchQueue.length > 1 ? `${multipleMatchQueue.indexOf(multipleMatchPlayer)+1} of ${multipleMatchQueue.length} — ` : '' }}Select the correct golfer:</div>
           <div v-for="m in multipleMatchPlayer.matches" :key="m.ghin_number" class="match-option" @click="selectMatch(multipleMatchPlayer.id, m)">
             <div class="match-name">{{ m.full_name }}</div>
-            <div class="match-meta">{{ m.club_name }} · HCP {{ m.handicap_index }}</div>
+            <div class="match-meta">{{ m.club_name }} · HCP {{ m.handicap_index }} · #{{ m.ghin_number }}</div>
           </div>
-          <button class="btn-ghost" style="margin-top:12px;width:100%" @click="multipleMatchPlayer = null">Skip</button>
+          <button class="btn-ghost" style="margin-top:12px;width:100%" @click="advanceMultipleQueue">Skip →</button>
         </div>
       </div>
     </Teleport>
@@ -200,6 +200,7 @@ const ghinSyncing = ref(false)
 const syncMsg = ref('')
 const syncMsgType = ref('success')
 const multipleMatchPlayer = ref(null)
+const multipleMatchQueue = ref([])
 
 async function syncAllGhin() {
   if (ghinSyncing.value) return
@@ -236,9 +237,9 @@ async function syncAllGhin() {
 
     const results = data.results || []
     let updated = 0
-    let noGhin = 0
     let notFound = 0
     const today = new Date().toISOString()
+    const multipleQueue = []
 
     for (const r of results) {
       if (r.status === 'found') {
@@ -251,15 +252,21 @@ async function syncAllGhin() {
         })
         updated++
       } else if (r.status === 'multiple') {
-        multipleMatchPlayer.value = r
-        break
+        multipleQueue.push(r)
       } else if (r.status === 'not_found') {
         notFound++
       }
     }
 
+    // Show multiple-match queue one at a time
+    if (multipleQueue.length) {
+      multipleMatchQueue.value = multipleQueue
+      multipleMatchPlayer.value = multipleQueue[0]
+    }
+
     const parts = [`✓ ${updated} synced`]
     if (notFound) parts.push(`${notFound} not found`)
+    if (multipleQueue.length) parts.push(`${multipleQueue.length} need review`)
     syncMsg.value = parts.join(', ')
     syncMsgType.value = 'success'
     setTimeout(() => { syncMsg.value = '' }, 4000)
@@ -272,8 +279,19 @@ async function syncAllGhin() {
   }
 }
 
+function advanceMultipleQueue() {
+  const queue = multipleMatchQueue.value
+  const current = multipleMatchPlayer.value
+  const idx = queue.indexOf(current)
+  if (idx >= 0 && idx < queue.length - 1) {
+    multipleMatchPlayer.value = queue[idx + 1]
+  } else {
+    multipleMatchPlayer.value = null
+    multipleMatchQueue.value = []
+  }
+}
+
 async function selectMatch(playerId, golfer) {
-  multipleMatchPlayer.value = null
   const today = new Date().toISOString()
   await rosterStore.updatePlayer(playerId, {
     ghin_index: golfer.handicap_index,
@@ -283,6 +301,7 @@ async function selectMatch(playerId, golfer) {
     club_name: golfer.club_name || undefined,
   })
   showToast(`Updated ${golfer.full_name}`, 'gold')
+  advanceMultipleQueue()
 }
 
 // ── Invite ───────────────────────────────────────────────────────
