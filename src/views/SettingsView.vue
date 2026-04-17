@@ -202,10 +202,14 @@ async function saveGhinCredentials() {
   ghinCredentialsSaving.value = true
   ghinSyncErr.value = ''
   try {
-    await authStore.updateProfile({
-      ghin_number: ghinNumber.value.trim() || null,
-      ghin_password: ghinPassword.value.trim() || null,
-    })
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        ghin_number: ghinNumber.value.trim() || null,
+        ghin_password: ghinPassword.value.trim() || null,
+      })
+      .eq('id', authStore.user.id)
+    if (error) throw error
     ghinSyncMsg.value = '✓ GHIN credentials saved'
     setTimeout(() => { ghinSyncMsg.value = '' }, 2500)
   } catch (err) {
