@@ -233,6 +233,13 @@ async function syncAllGhin() {
     if (error) throw error
     if (data?.error) throw new Error(data.error)
 
+    // Debug mode — show raw API test results
+    if (data?.debug) {
+      syncMsg.value = data.debug.map(d => `[${d.test}] ${d.status} hits:${d.golfers_count ?? '?'} ${JSON.stringify(d.sample).slice(0,80)}`).join(' | ')
+      syncMsgType.value = 'info'
+      return
+    }
+
     const results = data.results || []
     let updated = 0
     let notFound = 0
