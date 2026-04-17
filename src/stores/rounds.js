@@ -5,7 +5,7 @@ import { useAuthStore } from './auth'
 import { useCoursesStore } from './courses'
 import { computeAllSettlements } from '../modules/settlements'
 import { getCourse, COURSES as BUILTIN_COURSES } from '../modules/courses'
-import { supaRawInsert, supaRawSelect } from '../modules/supaRaw'
+import { supaRawInsert, supaRawSelect, supaRawUpdate, supaRawRequest } from '../modules/supaRaw'
 
 /**
  * Build a deterministic, self-contained snapshot of a course at the moment
@@ -730,23 +730,38 @@ export const useRoundsStore = defineStore('rounds', () => {
     }
 
     // ── AUTHENTICATED PATH ──────────────────────────────────
-    // 1. Mark round complete
-    const { error } = await supabase
-      .from('rounds')
-      .update({ is_complete: true })
-      .eq('id', roundId)
-    if (error) throw error
+    // 1. Mark round complete — use raw fetch with timeout to avoid iOS hang
+    const _withTimeout = (promise, ms, label) => Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms))
+    ])
+
+    try {
+      await _withTimeout(
+        supabase.from('rounds').update({ is_complete: true }).eq('id', roundId),
+        5000, 'rounds.complete'
+      )
+    } catch (e) {
+      // SJS timed out or failed — fall back to raw fetch
+      console.warn('[rounds] completeRound SJS failed, trying raw:', e.message)
+      await supaRawUpdate('rounds', `id=eq.${roundId}`, { is_complete: true }, 8000)
+    }
 
     // 2. Save settlement JSON snapshot
     if (settlementData) {
-      const { error: sErr } = await supabase
-        .from('round_settlements')
-        .upsert({
-          round_id: roundId,
-          settlement_json: settlementData,
-          computed_at: new Date().toISOString(),
-        }, { onConflict: 'round_id' })
-      if (sErr) console.warn('Failed to save settlement snapshot:', sErr)
+      try {
+        await _withTimeout(
+          supabase.from('round_settlements').upsert({
+            round_id: roundId,
+            settlement_json: settlementData,
+            computed_at: new Date().toISOString(),
+          }, { onConflict: 'round_id' }),
+          5000, 'round_settlements.upsert'
+        )
+      } catch (e) {
+        console.warn('Failed to save settlement snapshot:', e.message)
+        // Non-fatal — round is already marked complete
+      }
 
       // 3. Save individual ledger entries
       if (settlementData.ledger?.length) {
@@ -757,10 +772,15 @@ export const useRoundsStore = defineStore('rounds', () => {
           amount: l.amount,
           note: l.note || 'Round settlement',
         }))
-        const { error: lErr } = await supabase
-          .from('ledger_entries')
-          .insert(rows)
-        if (lErr) console.warn('Failed to save ledger entries:', lErr)
+        try {
+          await _withTimeout(
+            supabase.from('ledger_entries').insert(rows),
+            5000, 'ledger_entries.insert'
+          )
+        } catch (e) {
+          console.warn('Failed to save ledger entries:', e.message)
+          // Non-fatal
+        }
       }
     }
 
