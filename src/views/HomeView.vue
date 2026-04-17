@@ -117,7 +117,7 @@ import { ref, computed, onMounted, watch, inject } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useRoundsStore } from '../stores/rounds'
-import { hasTournamentAccess } from '../stores/tournament.js'
+import { useTournamentStore } from '../stores/tournament.js'
 import AuthModal from '../components/AuthModal.vue'
 import CrossMatchBanner from '../components/CrossMatchBanner.vue'
 
@@ -125,24 +125,34 @@ const appVersion = __APP_VERSION__
 
 const authStore = useAuthStore()
 const roundsStore = useRoundsStore()
+const tournamentStore = useTournamentStore()
 const router = useRouter()
 const showAuth = ref(false)
 const openWizard = inject('openWizard', () => {})
-const showTournament = computed(() => hasTournamentAccess(authStore.user?.email))
+const showTournament = computed(() => {
+  const email = authStore.user?.email
+  if (!email) return false
+  const norm = email.toLowerCase().trim()
+  return tournamentStore.members.some(m => m.email?.toLowerCase().trim() === norm)
+})
 const isTournamentRound = computed(() => {
   const r = roundsStore.activeRound
   return !!(r && r.format === 'tournament')
 })
 
 onMounted(async () => {
-  if (authStore.isAuthenticated) await roundsStore.fetchRounds()
+  if (authStore.isAuthenticated) {
+    await roundsStore.fetchRounds()
+    if (tournamentStore.members.length === 0) tournamentStore.init()
+  }
 })
 
 // Auth might not be restored yet when onMounted fires (async session init).
 // Watch for isAuthenticated becoming true and fetch rounds if we haven't yet.
 watch(() => authStore.isAuthenticated, async (authed) => {
-  if (authed && roundsStore.rounds.length === 0) {
-    await roundsStore.fetchRounds()
+  if (authed) {
+    if (roundsStore.rounds.length === 0) await roundsStore.fetchRounds()
+    if (tournamentStore.members.length === 0) tournamentStore.init()
   }
 })
 
