@@ -23,8 +23,8 @@ export function hasTournamentAccess(email) {
 
 // ─── TOURNAMENT DEFINITION ──────────────────────────────────────
 export const TOURNAMENT = {
-  name: '2025 Match Play Championship',
-  season: '2025',
+  name: '2026 Bonnie Boyz Team Championship',
+  season: '2026',
   format: 'Round Robin',
   pointsPerMatch: 4,          // 2 best ball + 1 + 1 singles
   bestBallPoints: 2,
