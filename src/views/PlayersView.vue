@@ -233,15 +233,9 @@ async function syncAllGhin() {
     if (error) throw error
     if (data?.error) throw new Error(data.error)
 
-    // Debug mode — show raw API test results
-    if (data?.debug) {
-      syncMsg.value = data.debug.map(d => `[${d.test}] ${d.status} hits:${d.golfers_count ?? '?'} ${JSON.stringify(d.sample).slice(0,80)}`).join(' | ')
-      syncMsgType.value = 'info'
-      return
-    }
-
     const results = data.results || []
     let updated = 0
+    let noGhin = 0
     let notFound = 0
     const today = new Date().toISOString()
 
@@ -255,16 +249,17 @@ async function syncAllGhin() {
           club_name: r.club_name || undefined,
         })
         updated++
-      } else if (r.status === 'multiple') {
-        // Queue for manual resolution
-        multipleMatchPlayer.value = r
-        break
+      } else if (r.status === 'no_ghin') {
+        noGhin++
       } else {
         notFound++
       }
     }
 
-    syncMsg.value = `✓ ${updated} synced${notFound ? `, ${notFound} not found` : ''}`
+    const parts = [`✓ ${updated} synced`]
+    if (noGhin) parts.push(`${noGhin} need GHIN #`)
+    if (notFound) parts.push(`${notFound} not found`)
+    syncMsg.value = parts.join(', ')
     syncMsgType.value = 'success'
     setTimeout(() => { syncMsg.value = '' }, 4000)
   } catch (e) {
