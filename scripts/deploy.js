@@ -13,8 +13,17 @@
  */
 
 import { execSync, spawnSync } from 'child_process'
-import { readFileSync } from 'fs'
+import { readFileSync, writeFileSync } from 'fs'
 import { resolve } from 'path'
+
+// ── 0. Auto-bump patch version in package.json ────────────────────
+const pkgPath = resolve('./package.json')
+const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
+const parts = pkg.version.split('.').map(Number)
+parts[2] += 1  // bump patch
+pkg.version = parts.join('.')
+writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
+console.log(`📦 Version bumped to ${pkg.version}`)
 
 const LIVE_URL  = 'https://k269x9xzcd-bot.github.io/golfwizard/_version.json'
 const POLL_MS   = 15_000   // 15 seconds between checks

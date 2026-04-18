@@ -332,7 +332,7 @@ export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
           .select('*')
           .eq('status', 'pending')
           .is('round_b_id', null)
-          .filter('match_config->foursomeBPlayers', 'cs', JSON.stringify([{ id: rp.id }])),
+          .filter('match_config', 'cs', JSON.stringify({ foursomeBPlayers: [{ id: rp.id }] })),
         6000,
       )
       if (error) throw error
