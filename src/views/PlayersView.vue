@@ -171,6 +171,10 @@
               {{ ghinSearching ? '…' : '🔍 GHIN' }}
             </button>
           </div>
+          <!-- First-name prefix hint for ambiguous names -->
+          <div class="ghin-prefix-row">
+            <input v-model="editGhinPrefix" class="wiz-input ghin-prefix-input" placeholder="First name starts with… (e.g. Sh, Andy)" />
+          </div>
           <!-- In-app GHIN search results -->
           <div v-if="ghinSearchResults.length" class="ghin-search-results">
             <div class="ghin-search-label">Select the correct golfer:</div>
@@ -527,6 +531,7 @@ const editFirst = ref('')
 const editLast = ref('')
 const editGhin = ref('')
 const editGhinNumber = ref('')
+const editGhinPrefix = ref('')
 const editNickname = ref('')
 const editUseNickname = ref(false)
 const ghinSearching = ref(false)
@@ -539,6 +544,7 @@ const editSaving = ref(false)
 function startEdit(p) {
   ghinSearchResults.value = []
   ghinSearchMsg.value = ''
+  editGhinPrefix.value = ''
   editTarget.value = p
   const parts = p.name.trim().split(' ')
   editFirst.value = parts[0] || ''
@@ -568,24 +574,31 @@ async function searchGhinForEdit() {
   ghinSearching.value = true
   ghinSearchResults.value = []
   ghinSearchMsg.value = ''
+  const prefix = editGhinPrefix.value.trim() || first
   try {
     const { data, error } = await supabase.functions.invoke('ghin-roster-sync', {
       body: {
         ghin_number: profile.ghin_number,
         password: profile.ghin_password,
-        state: 'NY',
-        players: [{ id: 'lookup', name: `${first} ${last}` }],
+        players: [{ id: 'lookup', name: `${first} ${last}`, first_name_prefix: prefix }],
       }
     })
     if (error) throw error
     const r = data?.results?.[0]
     if (!r) throw new Error('No response')
-    if (r.status === 'found') {
-      ghinSearchResults.value = [r]
-    } else if (r.status === 'multiple') {
-      ghinSearchResults.value = r.matches
+    if (r.status === 'updated') {
+      // Single match — auto-populate
+      ghinSearchResults.value = [{
+        ghin_number: r.ghin_number,
+        full_name: r.full_name,
+        handicap_index: r.handicap_index,
+        club_name: r.club_name,
+      }]
+    } else if (r.status === 'multiple_matches') {
+      ghinSearchResults.value = r.matches ?? []
+      if (!ghinSearchResults.value.length) ghinSearchMsg.value = `No matches for "${prefix}" — try fewer letters`
     } else {
-      ghinSearchMsg.value = `No GHIN match found for "${first} ${last}" in NY`
+      ghinSearchMsg.value = `No GHIN match found for "${prefix} ${last}" — try typing fewer letters in the prefix field`
     }
   } catch (e) {
     ghinSearchMsg.value = e?.message || 'Search failed'
@@ -879,6 +892,9 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
   color: #fca5a5; font-size: 12px; line-height: 1.4;
 }
 .ghin-number-row { display: flex; align-items: center; gap: 8px; }
+.ghin-prefix-row { margin-top: -4px; }
+.ghin-prefix-input { font-size: 12px; color: rgba(240,237,224,.6); }
+.ghin-prefix-input::placeholder { font-size: 11px; opacity: 0.5; }
 .edit-club-row { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: rgba(255,255,255,.04); border-radius: 8px; margin-bottom: 4px; }
 .edit-club-icon { font-size: 13px; }
 .edit-club-name { font-size: 12px; color: rgba(240,237,224,.5); font-style: italic; }
