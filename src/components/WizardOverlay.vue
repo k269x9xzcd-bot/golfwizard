@@ -1,6 +1,6 @@
 <template>
-  <div class="modal-overlay wizard-overlay">
-    <div class="modal wizard-modal">
+  <div :class="props.inline ? 'wizard-inline' : 'modal-overlay wizard-overlay'">
+    <div :class="props.inline ? 'wizard-inline-body' : 'modal wizard-modal'">
       <div class="wizard-header">
         <div class="wizard-step-indicator">Step {{ step }} of {{ totalSteps }}</div>
         <div v-if="stepTitle" class="wizard-header-title">{{ stepTitle }}</div>
@@ -1041,12 +1041,19 @@ const props = defineProps({
   lockedCourse: { type: String, default: null },
   lockedTee: { type: String, default: null },
   lockedHint: { type: String, default: null },
+  // Pre-populated players (linked match accept flow). When provided the
+  // wizard skips straight to the games step.
+  lockedPlayers: { type: Array, default: null },
+  // Start on a specific step (1-4). Used by accept flow to skip to games.
+  startStep: { type: Number, default: 1 },
+  // Render without the full-screen modal overlay (embedded in another view).
+  inline: { type: Boolean, default: false },
 })
 const coursesStore = useCoursesStore()
 const rosterStore = useRosterStore()
 const roundsStore = useRoundsStore()
 
-const step = ref(1)
+const step = ref(props.startStep || 1)
 const totalSteps = 4
 const stepTitle = computed(() => {
   return { 1: 'Where are you playing?', 2: "Who's playing?", 3: 'Set up games', 4: 'Opponent group?' }[step.value] || ''
@@ -1247,7 +1254,7 @@ const form = ref({
   tee: props.lockedTee || '',
   date: new Date().toISOString().slice(0, 10),
   holesMode: '18',
-  players: [],
+  players: props.lockedPlayers ? props.lockedPlayers.map(p => ({ ...p })) : [],
   withOpponents: null,   // null = not yet answered, true = yes, false = no
   opponentPlayers: [],
 })
@@ -1935,6 +1942,21 @@ function reloadApp() {
 </script>
 
 <style scoped>
+/* ── Inline mode (embedded in accept view) ── */
+.wizard-inline { display: block; }
+.wizard-inline-body {
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  max-height: none;
+  overflow: visible;
+  padding: 0;
+}
+/* Hide header close button and step indicator in inline mode */
+.wizard-inline-body .wizard-header { display: none; }
+/* Hide step 4 (opponent group) in inline mode — not relevant for accept flow */
+.wizard-inline-body .wizard-step:last-child { display: none; }
+
 /* ── Step 4: Opponent group ────────────────────────── */
 .opp-step-question {
   font-family: var(--gw-font-display, Georgia);

@@ -1,17 +1,36 @@
 <template>
   <!-- Hidden entirely if we don't have a live match, silenced, or if a pending confirm is showing -->
   <div v-if="display && !silenced" class="cmb-wrapper">
-    <RouterLink
-      :to="`/cross-match/${display.match.id}`"
-      class="cmb"
-      :class="`cmb--${display.tone}`"
-    >
+
+    <!-- Live match: two-button layout -->
+    <div v-if="display.tone === 'live' || display.tone === 'waiting'" class="cmb cmb--live-row" :class="`cmb--${display.tone}`">
       <span class="cmb-icon">{{ display.icon }}</span>
       <span class="cmb-label">{{ display.label }}</span>
-      <span class="cmb-arrow">›</span>
-    </RouterLink>
+      <div class="cmb-live-actions">
+        <button class="cmb-score-btn" @click="goScore">
+          🏌️ Score
+        </button>
+        <RouterLink :to="`/cross-match/${display.match.id}`" class="cmb-standings-btn">
+          Standings ›
+        </RouterLink>
+      </div>
+    </div>
+
+    <!-- Pending / other states: tap to view -->
+    <template v-else>
+      <RouterLink
+        :to="`/cross-match/${display.match.id}`"
+        class="cmb"
+        :class="`cmb--${display.tone}`"
+      >
+        <span class="cmb-icon">{{ display.icon }}</span>
+        <span class="cmb-label">{{ display.label }}</span>
+        <span class="cmb-arrow">›</span>
+      </RouterLink>
+    </template>
+
     <!-- Options button for pending matches -->
-    <div v-if="display.tone === 'pending' || display.tone === 'waiting'" class="cmb-options">
+    <div v-if="display.tone === 'pending'" class="cmb-options">
       <button
         class="cmb-options-btn"
         @click.prevent.stop="showOptions = !showOptions"
@@ -41,7 +60,7 @@
 
 <script setup>
 import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useRoundsStore } from '../stores/rounds'
 import { useLinkedMatchesStore } from '../stores/linkedMatches'
@@ -50,6 +69,7 @@ import { computeLinkedMatch, summarizeLinkedMatch } from '../modules/linkedMatch
 const authStore = useAuthStore()
 const roundsStore = useRoundsStore()
 const linkedStore = useLinkedMatchesStore()
+const router = useRouter()
 
 // Silence — persistent in localStorage per match ID. Hides the banner
 // permanently until the match status changes to 'linked' or 'complete'.
@@ -232,6 +252,43 @@ watch(relevantMatch, (m, prev) => {
   }
 }, { immediate: true })
 
+/**
+ * Load the current user's round for this match and navigate to scoring.
+ * Checks which round (A or B) they own by comparing owner_id in the cache.
+ */
+async function goScore() {
+  const m = relevantMatch.value
+  if (!m) return
+  try {
+    const ra = roundsCache.value[m.round_a_id]
+    const rb = roundsCache.value[m.round_b_id]
+    const uid = authStore.user?.id
+    let roundId = null
+    if (ra?.owner_id === uid) roundId = m.round_a_id
+    else if (rb?.owner_id === uid) roundId = m.round_b_id
+    // Fallback: if cache doesn't have owner_id, check active round
+    if (!roundId && roundsStore.activeRound?.id) {
+      const ar = roundsStore.activeRound.id
+      if (ar === m.round_a_id || ar === m.round_b_id) roundId = ar
+    }
+    // Last fallback: load from DB
+    if (!roundId) {
+      const { supabase } = await import('../supabase')
+      const ids = [m.round_a_id, m.round_b_id].filter(Boolean)
+      for (const id of ids) {
+        const { data } = await supabase.from('rounds').select('id,owner_id').eq('id', id).maybeSingle()
+        if (data?.owner_id === uid) { roundId = id; break }
+      }
+    }
+    if (!roundId) { router.push(`/cross-match/${m.id}`); return }
+    await roundsStore.loadRound(roundId)
+    router.push('/scoring')
+  } catch (e) {
+    console.warn('[cmb] goScore failed:', e)
+    router.push(`/cross-match/${m.id}`)
+  }
+}
+
 onMounted(async () => {
   if (authStore.isAuthenticated && !linkedStore.linkedMatches.length) {
     await linkedStore.fetchUserLinkedMatches()
@@ -365,6 +422,53 @@ onUnmounted(() => {
   background: rgba(255,255,255,.04);
   border-color: rgba(212,175,55,.25);
 }
+/* Live match: two-button row */
+.cmb--live-row {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 16px;
+  padding: 10px 12px 10px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(212,175,55,.5);
+  background: linear-gradient(135deg, rgba(212,175,55,.16) 0%, rgba(212,175,55,.04) 100%);
+  animation: cmb-pulse 2.4s ease-in-out infinite;
+}
+.cmb-live-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.cmb-score-btn {
+  padding: 7px 12px;
+  border-radius: 9px;
+  background: linear-gradient(145deg, #edd655, #d4af37);
+  color: #0c0f0d;
+  font-size: 12px;
+  font-weight: 800;
+  border: none;
+  cursor: pointer;
+  font-family: var(--gw-font-body);
+  -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
+}
+.cmb-score-btn:active { transform: scale(.95); }
+.cmb-standings-btn {
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.12);
+  color: rgba(240,237,224,.6);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+.cmb-standings-btn:active { background: rgba(255,255,255,.12); }
+
 .cmb--live {
   background: linear-gradient(135deg, rgba(212,175,55,.16) 0%, rgba(212,175,55,.04) 100%);
   border-color: rgba(212,175,55,.5);
