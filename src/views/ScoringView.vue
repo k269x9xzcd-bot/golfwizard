@@ -21,7 +21,15 @@
       <!-- Header -->
       <header class="scoring-header">
         <div class="header-left">
-          <h1 class="course-name">{{ roundsStore.activeRound.course_name }}</h1>
+          <div class="course-name-row">
+            <img
+              v-if="isBonnieBriar"
+              src="../assets/bonnie-briar-logo.png"
+              class="course-logo"
+              alt="Bonnie Briar Country Club"
+            />
+            <h1 class="course-name" :class="{ 'course-name--with-logo': isBonnieBriar }">{{ roundsStore.activeRound.course_name }}</h1>
+          </div>
           <div class="header-meta">
             <span class="meta-tag">{{ roundsStore.activeRound.tee }}</span>
             <span class="meta-tag">{{ holesLabel }}</span>
@@ -270,6 +278,15 @@
         <!-- Cross-match banner (shown only when a linked match touches this round) -->
         <CrossMatchBanner />
 
+        <!-- Challenge another foursome — shown when no linked match is active -->
+        <div v-if="isCaptain && !roundsStore.activeRound?.is_complete" class="challenge-strip">
+          <router-link to="/cross-match/new" class="challenge-btn">
+            <span class="challenge-icon">⚔️</span>
+            <span class="challenge-label">Challenge another foursome</span>
+            <span class="challenge-arrow">›</span>
+          </router-link>
+        </div>
+
         <!-- Finish Round Banner -->
         <div v-if="roundCompletionInfo.allScored && !roundsStore.activeRound?.is_complete" class="finish-banner finish-ready">
           <div class="finish-banner-text">
@@ -484,7 +501,15 @@
 
         <!-- Settle Up Panel -->
         <div v-if="liveSettlements && roundsStore.activeGames.length > 0 && roundsStore.activeRound?.is_complete" class="settle-box">
-          <div class="settle-box-label">💵 Settle Up</div>
+          <div class="settle-box-header">
+            <div class="settle-box-label">💵 Settle Up</div>
+            <img
+              v-if="isBonnieBriar"
+              src="../assets/bonnie-briar-logo.png"
+              class="settle-club-logo"
+              alt="Bonnie Briar Country Club"
+            />
+          </div>
           <!-- Player totals row -->
           <div class="settle-totals">
             <div
@@ -963,6 +988,11 @@ const opponentPlayers = computed(() => {
   const r = roundsStore.activeRound
   if (!r || !Array.isArray(r.opponent_players)) return []
   return r.opponent_players
+})
+
+const isBonnieBriar = computed(() => {
+  const name = roundsStore.activeRound?.course_name ?? ''
+  return name.toLowerCase().includes('bonnie briar')
 })
 
 const isCaptain = computed(() => {
@@ -2385,6 +2415,46 @@ function formatDate(dateStr) {
   background: var(--gw-bg, #0c150e);
   min-height: 56px;
 }
+/* ── Challenge another foursome strip ───────────────────── */
+.challenge-strip {
+  padding: 8px 16px 4px;
+}
+.challenge-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  background: rgba(212,175,55,.08);
+  border: 1px solid rgba(212,175,55,.22);
+  border-radius: 10px;
+  text-decoration: none;
+  color: #d4af37;
+  transition: background 0.15s, border-color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.challenge-btn:active {
+  background: rgba(212,175,55,.16);
+  border-color: rgba(212,175,55,.4);
+}
+.challenge-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.challenge-label {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  color: #d4af37;
+}
+.challenge-arrow {
+  font-size: 18px;
+  font-weight: 300;
+  color: rgba(212,175,55,.6);
+  line-height: 1;
+}
+
 .opp-strip {
   display: flex;
   align-items: center;
@@ -2413,6 +2483,18 @@ function formatDate(dateStr) {
   background: rgba(248,113,113,.08);
   border: 1px solid rgba(248,113,113,.18);
 }
+.course-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.course-logo {
+  height: 28px;
+  width: 28px;
+  object-fit: contain;
+  flex-shrink: 0;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.4));
+}
 .course-name {
   font-family: var(--gw-font-display, Georgia);
   font-size: 20px;
@@ -2420,6 +2502,9 @@ function formatDate(dateStr) {
   color: var(--gw-text, #f0ede0);
   margin: 0;
   line-height: 1.2;
+}
+.course-name--with-logo {
+  font-size: 17px;
 }
 .header-meta {
   display: flex;
@@ -2955,9 +3040,22 @@ function formatDate(dateStr) {
   padding: 12px 14px;
   margin: 8px 12px;
 }
+.settle-box-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.settle-club-logo {
+  height: 24px;
+  width: 24px;
+  object-fit: contain;
+  opacity: 0.7;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.4));
+}
 .settle-box-label {
   font-size: 10px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .8px; color: rgba(240,237,224,.45); margin-bottom: 8px;
+  letter-spacing: .8px; color: rgba(240,237,224,.45); margin-bottom: 0;
 }
 .settle-totals {
   display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px;

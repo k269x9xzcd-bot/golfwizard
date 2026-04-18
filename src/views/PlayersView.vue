@@ -162,7 +162,13 @@
           </div>
           <input v-model="editGhin" class="wiz-input" placeholder="GHIN Index" type="number" step="0.1" />
           <div v-if="editTarget?.club_name" class="edit-club-row">
-            <span class="edit-club-icon">⛳</span>
+            <img
+              v-if="editTarget.club_name.toLowerCase().includes('bonnie briar')"
+              src="../assets/bonnie-briar-logo.png"
+              class="edit-club-logo"
+              alt=""
+            />
+            <span v-else class="edit-club-icon">⛳</span>
             <span class="edit-club-name">{{ editTarget.club_name }}</span>
           </div>
           <div class="ghin-number-row">
@@ -268,8 +274,10 @@ async function syncAllGhin() {
     )
     const { data, error } = await Promise.race([invokePromise, timeoutPromise])
 
-    if (error) throw error
+    // Supabase invoke puts non-2xx in `error`, but the body is in data for edge functions.
+    // Check data.error first (our structured error from 503/400/etc), then fall back to error obj.
     if (data?.error) throw new Error(data.error)
+    if (error) throw error
 
     const results = data.results || []
     let updated = 0
@@ -911,6 +919,7 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 .ghin-prefix-input { font-size: 12px; color: rgba(240,237,224,.6); }
 .ghin-prefix-input::placeholder { font-size: 11px; opacity: 0.5; }
 .edit-club-row { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: rgba(255,255,255,.04); border-radius: 8px; margin-bottom: 4px; }
+.edit-club-logo { height: 18px; width: 18px; object-fit: contain; flex-shrink: 0; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3)); }
 .edit-club-icon { font-size: 13px; }
 .edit-club-name { font-size: 12px; color: rgba(240,237,224,.5); font-style: italic; }
 .ghin-lookup-btn {
