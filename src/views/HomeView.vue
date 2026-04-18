@@ -28,6 +28,7 @@
       <div class="card-cta">Continue →</div>
     </div>
 
+    <CrossMatchBanner />
     <!-- Pending 4v4 match invites banner -->
     <div
       v-for="invite in linkedStore.pendingInvites"
@@ -123,6 +124,7 @@ import { useRoundsStore } from '../stores/rounds'
 import { useTournamentStore } from '../stores/tournament.js'
 import { useLinkedMatchesStore } from '../stores/linkedMatches'
 import AuthModal from '../components/AuthModal.vue'
+import CrossMatchBanner from '../components/CrossMatchBanner.vue'
 
 const appVersion = __APP_VERSION__
 
@@ -160,6 +162,7 @@ onMounted(async () => {
   if (authStore.isAuthenticated) {
     await roundsStore.fetchRounds()
     tournamentStore.init()
+    linkedStore.fetchUserLinkedMatches()
     linkedStore.fetchPendingInvites()
   }
 })
@@ -170,6 +173,7 @@ watch(() => authStore.isAuthenticated, async (authed) => {
   if (authed) {
     if (roundsStore.rounds.length === 0) await roundsStore.fetchRounds()
     tournamentStore.init()
+    linkedStore.fetchUserLinkedMatches()
     linkedStore.fetchPendingInvites()
   }
 })
