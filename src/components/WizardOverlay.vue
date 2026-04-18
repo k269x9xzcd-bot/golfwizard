@@ -1254,7 +1254,7 @@ const form = ref({
   tee: props.lockedTee || '',
   date: new Date().toISOString().slice(0, 10),
   holesMode: '18',
-  players: props.lockedPlayers ? props.lockedPlayers.map(p => ({ ...p })) : [],
+  players: props.lockedPlayers ? props.lockedPlayers.map(p => ({ ...p, ghinIndex: p.ghinIndex ?? p.ghin_index ?? null })) : [],
   withOpponents: null,   // null = not yet answered, true = yes, false = no
   opponentPlayers: [],
 })
@@ -1819,7 +1819,7 @@ async function create() {
       return {
         ...p,
         team,
-        roundHcp: p.ghinIndex != null ? Math.round(p.ghinIndex) : null,
+        roundHcp: p.ghinIndex != null ? Math.round(p.ghinIndex) : p.ghin_index != null ? Math.round(p.ghin_index) : null,
       }
     })
 
@@ -1883,7 +1883,13 @@ async function create() {
     console.log('[Wizard] Round created:', round?.id)
 
     if (round) {
-      emit('created', round)
+      emit('created', round, {
+        withOpponents: form.value.withOpponents === true,
+        opponentPlayers: form.value.opponentPlayers ?? [],
+        courseName: form.value.courseName,
+        tee: form.value.tee,
+        holesMode: form.value.holesMode,
+      })
     } else {
       console.error('[Wizard] createRound returned null/undefined')
       const msg = 'Round creation returned no data.'

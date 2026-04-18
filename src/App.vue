@@ -15,6 +15,20 @@
       <!-- Join by room code overlay -->
       <JoinOverlay v-if="showJoin" @close="showJoin = false" />
 
+      <!-- 4v4 Invite modal — shown after round + linked match created -->
+      <div v-if="inviteModal" class="invite-modal-backdrop" @click.self="inviteModal = null">
+        <div class="invite-modal">
+          <div class="invite-modal-icon">🤝</div>
+          <div class="invite-modal-title">4v4 Match Created!</div>
+          <div class="invite-modal-sub">Share this link with the other foursome</div>
+          <div class="invite-modal-code">{{ inviteModal.inviteCode }}</div>
+          <button class="invite-modal-copy" @click="copyInvite">
+            {{ inviteModal.copied ? '✓ Copied!' : '📋 Copy invite link' }}
+          </button>
+          <button class="invite-modal-dismiss" @click="inviteModal = null">Go to scorecard →</button>
+        </div>
+      </div>
+
       <!-- Main content -->
       <div class="app-container">
         <RouterView />
@@ -58,6 +72,7 @@ import { useAuthStore } from './stores/auth'
 import { useRosterStore } from './stores/roster'
 import { useCoursesStore } from './stores/courses'
 import { hasTournamentAccess, useTournamentStore } from './stores/tournament.js'
+import { useLinkedMatchesStore } from './stores/linkedMatches'
 import WizardOverlay from './components/WizardOverlay.vue'
 import JoinOverlay from './components/JoinOverlay.vue'
 
@@ -65,6 +80,7 @@ const authStore = useAuthStore()
 const rosterStore = useRosterStore()
 const coursesStore = useCoursesStore()
 const tournamentStore = useTournamentStore()
+const linkedMatchesStore = useLinkedMatchesStore()
 const router = useRouter()
 const route = useRoute()
 
@@ -76,6 +92,10 @@ const isWizardRoute = computed(() => WIZARD_ROUTES.has(route.name))
 
 const showWizard = ref(false)
 const showJoin = ref(false)
+
+// Invite modal state — shown after round+linked match created together
+const inviteModal = ref(null)  // { inviteCode, inviteUrl, copied }
+
 
 provide('openWizard', () => { showWizard.value = true })
 
@@ -112,9 +132,41 @@ onMounted(async () => {
   }
 })
 
-function onRoundCreated(round) {
+async function onRoundCreated(round, meta) {
   showWizard.value = false
+  if (meta?.withOpponents && meta.opponentPlayers?.length > 0 && authStore.isAuthenticated) {
+    try {
+      const result = await linkedMatchesStore.createLinkedMatch({
+        name: (meta.courseName || 'GolfWizard') + ' 4v4',
+        roundAId: round.id,
+        ballsToCount: 1,
+        stake: 20,
+        courseName: meta.courseName,
+        tee: meta.tee,
+        holesMode: meta.holesMode,
+        foursomeBPlayers: meta.opponentPlayers,
+      })
+      inviteModal.value = {
+        inviteCode: result.match?.invite_code,
+        inviteUrl: result.inviteUrl,
+        copied: false,
+      }
+    } catch (e) {
+      console.warn('[app] linked match creation failed:', e)
+    }
+  }
   router.push('/scoring')
+}
+
+async function copyInvite() {
+  if (!inviteModal.value?.inviteUrl) return
+  try {
+    await navigator.clipboard.writeText(inviteModal.value.inviteUrl)
+    inviteModal.value.copied = true
+    setTimeout(() => { if (inviteModal.value) inviteModal.value.copied = false }, 2000)
+  } catch {
+    inviteModal.value.copied = true
+  }
 }
 
 function onSetupCourse(courseName, apiId) {
@@ -125,3 +177,40 @@ function onSetupCourse(courseName, apiId) {
   router.push({ path: '/courses', query })
 }
 </script>
+
+<style>
+.invite-modal-backdrop {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,0.75);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.invite-modal {
+  background: #1e2720;
+  border: 1px solid #22a06b;
+  border-radius: 20px;
+  padding: 32px 24px;
+  max-width: 360px;
+  width: 100%;
+  text-align: center;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.invite-modal-icon { font-size: 48px; }
+.invite-modal-title { font-size: 22px; font-weight: 700; color: #fff; }
+.invite-modal-sub { font-size: 14px; color: #a3b8aa; }
+.invite-modal-code {
+  font-size: 32px; font-weight: 800; letter-spacing: 6px;
+  color: #34c77e; font-family: 'DM Mono', monospace;
+  background: #0d3325; border-radius: 12px; padding: 12px;
+}
+.invite-modal-copy {
+  background: #1a7a55; color: #fff; border: none;
+  border-radius: 12px; padding: 14px; font-size: 16px;
+  font-weight: 600; cursor: pointer; width: 100%;
+}
+.invite-modal-copy:active { background: #166044; }
+.invite-modal-dismiss {
+  background: transparent; color: #7d9283; border: none;
+  font-size: 14px; cursor: pointer; padding: 4px;
+}
+</style>
