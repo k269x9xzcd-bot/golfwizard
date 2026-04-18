@@ -113,6 +113,13 @@
         </div>
       </div>
 
+
+      <!-- Foursome B scoring CTA -->
+      <div v-if="isRoundBOwner && match.status === 'linked'" class="lmd-score-cta">
+        <button class="lmd-btn-score" @click="goScore">
+          🏌️ Score your round →
+        </button>
+      </div>
       <!-- Host actions -->
       <div v-if="isHost" class="lmd-host-actions">
         <!-- Manual Foursome B override — when no one in Foursome B has the app -->
