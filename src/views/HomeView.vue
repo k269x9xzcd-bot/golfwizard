@@ -28,6 +28,21 @@
       <div class="card-cta">Continue →</div>
     </div>
 
+    <!-- Pending 4v4 match invites banner -->
+    <div
+      v-for="invite in linkedStore.pendingInvites"
+      :key="invite.id"
+      class="match-invite-banner"
+      @click="$router.push(`/accept/${invite.invite_code}`)"
+    >
+      <div class="mib-icon">⚔️</div>
+      <div class="mib-body">
+        <div class="mib-title">You're invited to a 4v4</div>
+        <div class="mib-sub">{{ invite.name }} · tap to accept and start scoring</div>
+      </div>
+      <div class="mib-arrow">›</div>
+    </div>
+
     <button v-if="roundsStore.activeRound || roundsStore.rounds.length" class="new-round-pill" @click="openWizard()">+ New Round</button>
 
     <!-- Tournament / Cup entry card (only for authorized users) -->
@@ -106,6 +121,7 @@ import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useRoundsStore } from '../stores/rounds'
 import { useTournamentStore } from '../stores/tournament.js'
+import { useLinkedMatchesStore } from '../stores/linkedMatches'
 import AuthModal from '../components/AuthModal.vue'
 
 const appVersion = __APP_VERSION__
@@ -113,6 +129,7 @@ const appVersion = __APP_VERSION__
 const authStore = useAuthStore()
 const roundsStore = useRoundsStore()
 const tournamentStore = useTournamentStore()
+const linkedStore = useLinkedMatchesStore()
 const router = useRouter()
 const showAuth = ref(false)
 const openWizard = inject('openWizard', () => {})
@@ -143,6 +160,7 @@ onMounted(async () => {
   if (authStore.isAuthenticated) {
     await roundsStore.fetchRounds()
     tournamentStore.init()
+    linkedStore.fetchPendingInvites()
   }
 })
 
@@ -152,6 +170,7 @@ watch(() => authStore.isAuthenticated, async (authed) => {
   if (authed) {
     if (roundsStore.rounds.length === 0) await roundsStore.fetchRounds()
     tournamentStore.init()
+    linkedStore.fetchPendingInvites()
   }
 })
 
@@ -175,6 +194,30 @@ async function openRound(id) {
 </script>
 
 <style scoped>
+.match-invite-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 16px 0;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(212,175,55,.15) 0%, rgba(212,175,55,.05) 100%);
+  border: 1px solid rgba(212,175,55,.45);
+  border-radius: 16px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  animation: pulse-gold 2.5s ease-in-out infinite;
+}
+.match-invite-banner:active { transform: scale(.98); }
+@keyframes pulse-gold {
+  0%, 100% { border-color: rgba(212,175,55,.45); }
+  50% { border-color: rgba(212,175,55,.8); }
+}
+.mib-icon { font-size: 26px; flex-shrink: 0; }
+.mib-body { flex: 1; min-width: 0; }
+.mib-title { font-family: var(--gw-font-display); font-size: 15px; font-weight: 700; color: var(--gw-gold); }
+.mib-sub { font-size: 12px; color: rgba(240,237,224,.6); margin-top: 2px; }
+.mib-arrow { font-size: 22px; color: var(--gw-gold); opacity: .7; }
+
 .new-round-pill {
   display: block;
   margin: 16px auto 0;

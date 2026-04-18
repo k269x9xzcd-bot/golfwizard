@@ -30,6 +30,7 @@ export const useAuthStore = defineStore('auth', () => {
           // doesn't interfere with the authenticated user's real Supabase data.
           if (wasGuest) clearPresetForAuthUser()
           await fetchProfile()
+          linkUserToRosterPlayer() // fire-and-forget; non-blocking
         } else {
           profile.value = null
         }
@@ -39,6 +40,22 @@ export const useAuthStore = defineStore('auth', () => {
     } finally {
       // Always clear loading — no matter what — so the app never stays blank
       loading.value = false
+    }
+  }
+
+  // After sign-in, write user_id onto the roster_player row that matches by email.
+  // This enables the pending-match banner on HomeView.
+  async function linkUserToRosterPlayer() {
+    if (!user.value?.email) return
+    const email = user.value.email.toLowerCase().trim()
+    try {
+      await supabase
+        .from('roster_players')
+        .update({ user_id: user.value.id })
+        .eq('email', email)
+        .is('user_id', null) // only set once; don't overwrite if already linked
+    } catch (e) {
+      console.warn('[auth] linkUserToRosterPlayer failed:', e?.message)
     }
   }
 
@@ -136,7 +153,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   return {
     user, profile, loading, isGuest, isAuthenticated,
-    init, fetchProfile, updateProfile, upsertRosterEntry,
+    init, fetchProfile, updateProfile, upsertRosterEntry, linkUserToRosterPlayer,
     signInWithGoogle, signInWithApple, signInWithEmail, verifyOtp, signOut,
   }
 })

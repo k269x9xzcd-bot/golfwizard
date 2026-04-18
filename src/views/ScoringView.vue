@@ -278,31 +278,19 @@
         <!-- Cross-match banner (shown only when a linked match touches this round) -->
         <CrossMatchBanner />
 
-        <!-- Challenge another foursome — shown when no linked match is active -->
-        <div v-if="isCaptain && !roundsStore.activeRound?.is_complete" class="challenge-strip">
+        <!-- Challenge another foursome — only when no games/opponents set yet.
+             Once you have games configured, cross-team scoring is already live in the card. -->
+        <div v-if="isCaptain && !roundsStore.activeRound?.is_complete && roundsStore.activeGames.length === 0 && !opponentPlayers.length" class="challenge-strip">
           <router-link to="/cross-match/new" class="challenge-btn">
             <span class="challenge-icon">⚔️</span>
-            <span class="challenge-label">Challenge another foursome</span>
+            <span class="challenge-label">Challenge another foursome (separate device)</span>
             <span class="challenge-arrow">›</span>
           </router-link>
         </div>
 
         <!-- Finish Round Banner -->
-        <div v-if="roundCompletionInfo.allScored && !roundsStore.activeRound?.is_complete" class="finish-banner finish-ready">
-          <div class="finish-banner-text">
-            <div class="finish-banner-title">All {{ visibleHoles.length }} holes scored!</div>
-            <div class="finish-banner-sub">Ready to finalize this round?</div>
-          </div>
-          <button class="finish-btn" @click="finishRound">Finish Round</button>
-        </div>
-        <div v-else-if="roundCompletionInfo.scoredCount > 0 && !roundCompletionInfo.allScored && !roundsStore.activeRound?.is_complete" class="finish-banner finish-partial">
-          <div class="finish-banner-text">
-            <div class="finish-banner-title">{{ roundCompletionInfo.scoredCount }}/{{ visibleHoles.length }} holes scored</div>
-            <div class="finish-banner-sub">{{ roundCompletionInfo.missingHoles.length }} holes missing scores</div>
-          </div>
-          <button class="finish-btn finish-btn-review" @click="activeHole = roundCompletionInfo.missingHoles[0]">Go to H{{ roundCompletionInfo.missingHoles[0] }}</button>
-        </div>
-        <div v-else-if="roundsStore.activeRound?.is_complete" class="finish-banner finish-done">
+        <!-- Round complete badge — only shown after the round is finalized -->
+        <div v-if="roundsStore.activeRound?.is_complete" class="finish-banner finish-done">
           <div class="finish-banner-text">
             <div class="finish-banner-title">Round Complete ✓</div>
           </div>

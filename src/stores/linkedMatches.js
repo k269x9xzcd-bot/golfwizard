@@ -62,7 +62,7 @@ export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
    * Host creates the linked match. Called AFTER foursome A's round has been
    * created (because we need round_a_id). Returns { match, inviteUrl }.
    */
-  async function createLinkedMatch({ name, roundAId, ballsToCount, stake }) {
+  async function createLinkedMatch({ name, roundAId, ballsToCount, stake, courseName, tee, holesMode, courseSnapshot, foursomeBPlayers }) {
     const auth = useAuthStore()
     if (!auth.isAuthenticated) throw new Error('Sign in required to create a linked match.')
 
@@ -92,6 +92,12 @@ export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
       match_config: {
         ballsToCount: ballsToCount ?? 1,
         stake: stake ?? 20,
+        // Pre-built round B config — stored so accept flow needs no wizard
+        courseName: courseName ?? null,
+        tee: tee ?? null,
+        holesMode: holesMode ?? '18',
+        courseSnapshot: courseSnapshot ?? null,
+        foursomeBPlayers: foursomeBPlayers ?? [],
       },
       invite_code: inviteCode,
       status: 'pending',
@@ -300,6 +306,43 @@ export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
     } catch { /* non-fatal */ }
   }
 
+  /**
+   * Fetch pending linked matches where this user is in foursomeBPlayers.
+   * Requires the user's roster_player row to have user_id set (done by auth store on sign-in).
+   */
+  const pendingInvites = ref([])
+
+  async function fetchPendingInvites() {
+    const auth = useAuthStore()
+    if (!auth.isAuthenticated) { pendingInvites.value = []; return }
+    try {
+      // Find the user's roster player id by user_id
+      const { data: rp } = await supabase
+        .from('roster_players')
+        .select('id')
+        .eq('user_id', auth.user.id)
+        .maybeSingle()
+      if (!rp?.id) { pendingInvites.value = []; return }
+
+      // Find pending matches where this player id appears in foursomeBPlayers JSON array
+      const { data, error } = await supaCallWithRetry(
+        'linked_matches.pendingInvites',
+        () => supabase
+          .from('linked_matches')
+          .select('*')
+          .eq('status', 'pending')
+          .is('round_b_id', null)
+          .filter('match_config->foursomeBPlayers', 'cs', JSON.stringify([{ id: rp.id }])),
+        6000,
+      )
+      if (error) throw error
+      pendingInvites.value = data ?? []
+    } catch (e) {
+      console.warn('[linkedMatches] fetchPendingInvites failed:', e?.message || e)
+      pendingInvites.value = []
+    }
+  }
+
   // ── Derived ──────────────────────────────────────────────────
   // Which linked matches involve a round I currently own?
   const matchesForRound = (roundId) => computed(() =>
@@ -308,10 +351,11 @@ export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
 
   return {
     linkedMatches, activeLinkedMatch, activeRoundA, activeRoundB,
+    pendingInvites,
     fetchUserLinkedMatches, fetchByCode, createLinkedMatch, acceptLinkedMatch,
     cancelLinkedMatch, loadLinkedMatchDetail,
     subscribeLinkedMatch, unsubscribeLinkedMatch, reloadActiveMatchScores,
-    matchesForRound,
+    matchesForRound, fetchPendingInvites,
   }
 })
 

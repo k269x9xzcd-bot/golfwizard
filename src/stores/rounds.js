@@ -864,48 +864,10 @@ export const useRoundsStore = defineStore('rounds', () => {
     }
 
     // ── AUTHENTICATED PATH ──
-    // Helper: race each delete against a 6s timeout so a stalled HTTP/2
-    // socket on iOS PWA doesn't leave the UI waiting forever.
-    function _raceDelete(label, promise, ms = 6000) {
-      const timeout = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
-      )
-      return Promise.race([promise, timeout])
-    }
-
-    // Helper: try SJS first, fall back to raw DELETE on timeout (iOS HTTP/2 fix)
-    async function _deleteTable(table, column, value, ms = 8000) {
-      try {
-        await _raceDelete(`${table}.delete`, supabase.from(table).delete().eq(column, value), ms)
-      } catch (e) {
-        console.warn(`[deleteRound] SJS ${table} timed out, trying raw fetch:`, e?.message)
-        try {
-          const { supaRawRequest } = await import('../modules/supaRaw')
-          await supaRawRequest('DELETE', `${table}?${column}=eq.${value}`, null, ms)
-        } catch (rawErr) {
-          // Child row deletes are non-fatal — log and continue so the parent delete still runs
-          console.warn(`[deleteRound] raw ${table} delete also failed:`, rawErr?.message)
-        }
-      }
-    }
-
-    // Child rows first (foreign keys block deleting the parent round until gone).
-    await Promise.all([
-      _deleteTable('scores', 'round_id', roundId),
-      _deleteTable('game_configs', 'round_id', roundId),
-      _deleteTable('round_settlements', 'round_id', roundId),
-      _deleteTable('ledger_entries', 'round_id', roundId),
-      _deleteTable('round_members', 'round_id', roundId),
-    ])
-
-    // Now delete the parent round itself — this one IS fatal if it fails
-    try {
-      await _raceDelete('rounds.delete', supabase.from('rounds').delete().eq('id', roundId), 8000)
-    } catch (e) {
-      console.warn('[deleteRound] SJS rounds delete timed out, trying raw fetch:', e?.message)
-      const { supaRawRequest } = await import('../modules/supaRaw')
-      await supaRawRequest('DELETE', `rounds?id=eq.${roundId}`, null, 10000)
-    }
+    // All child tables (scores, round_members, game_configs, round_settlements)
+    // have ON DELETE CASCADE — one delete on the parent round wipes everything.
+    const { error } = await supabase.from('rounds').delete().eq('id', roundId)
+    if (error) throw new Error(error.message)
 
     // Clear active if this was the active round
     if (activeRound.value?.id === roundId) {
