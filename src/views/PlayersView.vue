@@ -79,8 +79,11 @@
             <span v-if="p.ghin_index != null" class="player-hcp">
               ({{ Number(p.ghin_index).toFixed(1) }}<span class="ghin-dot-inline" :class="ghinSyncStatus(p)" :title="ghinSyncTitle(p)"></span>)
             </span>
+            <span v-if="p.hard_cap === 'true' || p.hard_cap === true" class="cap-badge cap-hard" title="Hard Cap applied">HC</span>
+            <span v-else-if="p.soft_cap === 'true' || p.soft_cap === true" class="cap-badge cap-soft" title="Soft Cap applied">SC</span>
           </div>
           <div class="player-meta">
+            <span v-if="p.club_name" class="player-club">{{ p.club_name }}</span>
             <span v-if="p.email" class="player-email-dot" title="Has email">✓</span>
           </div>
         </div>
@@ -109,8 +112,11 @@
             <span v-if="p.ghin_index != null" class="player-hcp">
               ({{ Number(p.ghin_index).toFixed(1) }}<span class="ghin-dot-inline" :class="ghinSyncStatus(p)" :title="ghinSyncTitle(p)"></span>)
             </span>
+            <span v-if="p.hard_cap === 'true' || p.hard_cap === true" class="cap-badge cap-hard" title="Hard Cap applied">HC</span>
+            <span v-else-if="p.soft_cap === 'true' || p.soft_cap === true" class="cap-badge cap-soft" title="Soft Cap applied">SC</span>
           </div>
           <div class="player-meta">
+            <span v-if="p.club_name" class="player-club">{{ p.club_name }}</span>
             <span v-if="p.email" class="player-email-dot" title="Has email">✓</span>
           </div>
         </div>
@@ -741,6 +747,9 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 .player-email-dot {
   font-size: 10px; font-weight: 700; color: #22c55e;
 }
+.player-club {
+  font-size: 10px; color: rgba(240,237,224,.35); margin-right: 4px;
+}
 
 /* GHIN sync status dot — inline next to HCP number */
 .ghin-dot-inline {
@@ -751,6 +760,17 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 }
 .dot-blue { background: #60a5fa; }
 .dot-red { background: #ef4444; }
+
+/* Soft/Hard cap badges */
+.cap-badge {
+  display: inline-block;
+  font-size: 9px; font-weight: 800; letter-spacing: .04em;
+  padding: 1px 4px; border-radius: 4px;
+  margin-left: 4px; vertical-align: middle;
+  line-height: 14px;
+}
+.cap-soft { background: rgba(251,191,36,.2); color: #fbbf24; border: 1px solid rgba(251,191,36,.4); }
+.cap-hard { background: rgba(239,68,68,.2); color: #f87171; border: 1px solid rgba(239,68,68,.4); }
 .dot-none { background: rgba(255,255,255,.2); }
 
 .player-fav-star { font-size: 14px; color: #d4af37; flex-shrink: 0; line-height: 1; }
