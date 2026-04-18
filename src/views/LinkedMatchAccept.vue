@@ -152,6 +152,7 @@ const error = ref('')
 const showAuth = ref(false)
 // Used only in wizard-fallback path to get course name from round_a
 const hostCourseName = ref(null)
+const roundBOwnerId = ref(null)
 
 const codeUpper = computed(() => (route.params.code || '').toUpperCase())
 
@@ -172,8 +173,8 @@ const isBonnieBriar = computed(() =>
 
 const amIOwner = computed(() => {
   if (!match.value?.round_b_id) return false
-  // If the match is already linked, user is the owner if they're not the host
-  return authStore.user?.id != null
+  // Only if current user owns round_b
+  return roundBOwnerId.value != null && roundBOwnerId.value === authStore.user?.id
 })
 
 function initials(name = '') {
@@ -186,9 +187,13 @@ onMounted(async () => {
   try {
     const m = await linkedStore.fetchByCode(codeUpper.value)
     match.value = m
+    const { supabase } = await import('../supabase')
+    if (m?.round_b_id) {
+      const { data: rb } = await supabase.from('rounds').select('id,owner_id').eq('id', m.round_b_id).maybeSingle()
+      roundBOwnerId.value = rb?.owner_id ?? null
+    }
     // Only need host round_a if wizard fallback (no pre-built config)
     if (m?.round_a_id && !(m.match_config?.foursomeBPlayers?.length)) {
-      const { supabase } = await import('../supabase')
       const { data } = await supabase
         .from('rounds')
         .select('id,course_name,tee,owner_id')
