@@ -27,7 +27,7 @@
             </div>
           </div>
           <div class="match-list">
-            <div v-for="m in multipleMatchPlayer.matches" :key="m.ghin_number" class="match-option" @click="selectMatch(multipleMatchPlayer.id, m)">
+            <div v-for="m in multipleMatchPlayer.matches" :key="m.ghin_number" class="match-option" @click="selectMatch(multipleMatchPlayer.player_id, m)">
               <div class="match-name">{{ m.full_name }}</div>
               <div class="match-meta">{{ [m.club_name, m.handicap_index != null ? `HCP ${m.handicap_index}` : 'HCP NH', `#${m.ghin_number}`].filter(Boolean).join(' · ') }}</div>
             </div>
@@ -285,8 +285,8 @@ async function syncAllGhin() {
     const multipleQueue = []
 
     for (const r of results) {
-      if (r.status === 'found') {
-        await rosterStore.updatePlayer(r.id, {
+      if (r.status === 'updated') {
+        await rosterStore.updatePlayer(r.player_id, {
           ghin_index: r.handicap_index,
           ghin_number: r.ghin_number || undefined,
           ghin_synced_at: today,
@@ -294,7 +294,7 @@ async function syncAllGhin() {
           club_name: r.club_name || undefined,
         })
         updated++
-      } else if (r.status === 'multiple') {
+      } else if (r.status === 'multiple_matches') {
         multipleQueue.push(r)
       } else if (r.status === 'not_found') {
         notFound++
