@@ -1813,14 +1813,34 @@ async function create() {
   try {
     const games = buildGameConfigs()
     _wizLog(`built ${games.length} game configs`)
+    // Resolve slope/rating/par for USGA course handicap formula
+    const _selectedTee = teesForCourse.value.find(t => t.name === form.value.tee)
+    const _slope = _selectedTee?.slope || 113
+    const _rating = _selectedTee?.rating || null
+    const _courseObj = coursesStore.getCourse(form.value.courseName)
+    const _coursePar = Array.isArray(_courseObj?.par)
+      ? _courseObj.par.reduce((s, v) => s + v, 0)
+      : 72
+
+    function _courseHcp(ghinIndex) {
+      if (ghinIndex == null) return null
+      if (_rating != null) {
+        // USGA formula: round(index × slope/113 + (rating - par))
+        return Math.round(ghinIndex * _slope / 113 + (_rating - _coursePar))
+      }
+      // No rating: fall back to slope-only approximation
+      return Math.round(ghinIndex * _slope / 113)
+    }
+
     const players = form.value.players.map(p => {
       const team1 = mainGame.value.config?.team1 || []
       const team2 = mainGame.value.config?.team2 || []
       const team = team1.includes(p.id) ? 1 : team2.includes(p.id) ? 2 : null
+      const idx = p.ghinIndex ?? p.ghin_index ?? null
       return {
         ...p,
         team,
-        roundHcp: p.ghinIndex != null ? Math.round(p.ghinIndex) : p.ghin_index != null ? Math.round(p.ghin_index) : null,
+        roundHcp: _courseHcp(idx),
       }
     })
 

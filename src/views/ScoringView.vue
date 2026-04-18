@@ -2124,6 +2124,23 @@ function gameSummaryHtml(game) {
       return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} ${cfg.label || 'BB Net'}</span><span class="muted" style="font-size:10px;margin-left:4px">${r.ballsToCount || 1}BB ${r.scoring === 'gross' ? 'Gross' : 'Net'}</span><br><span class="muted" style="font-size:11px">Total: ${totalStr}</span></div>`
     }
 
+    // ── 5-3-1 (Nines) ──
+    if (t === 'fivethreeone') {
+      const r = computeFiveThreeOne(ctx, cfg)
+      if (!r) return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} 5-3-1</span><span class="muted" style="font-size:11px"> Need 3+ players</span></div>`
+
+      const ppt = r.ppt || cfg.ppt || 1
+      const played = (r.holeResults || []).filter(h => !h.incomplete).length
+      const sorted = [...r.settlements].sort((a, b) => b.net - a.net)
+
+      const standStr = sorted.map(s => {
+        const color = s.net > 0 ? '#4ade80' : s.net < 0 ? '#f87171' : '#d4af37'
+        return `<span style="color:${color};font-weight:700">${s.name}: ${s.net > 0 ? '+$' : s.net < 0 ? '-$' : '$'}${Math.abs(s.net)} (${s.pts}pts)</span>`
+      }).join(' · ')
+
+      return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} 5-3-1</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppt}/pt${played > 0 ? ' · thru ' + played : ''}</span><div style="font-size:11px;margin-top:3px">${standStr || 'No complete holes yet'}</div></div>`
+    }
+
     // Default fallback
     return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} ${gameLabel(game.type, cfg)}</span></div>`
   } catch(e) {
