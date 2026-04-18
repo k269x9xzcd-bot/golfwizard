@@ -1054,7 +1054,8 @@ const rosterStore = useRosterStore()
 const roundsStore = useRoundsStore()
 
 const step = ref(props.startStep || 1)
-const totalSteps = 4
+// When lockedPlayers is set (inline accept flow), skip the opponent step — already linked via invite
+const totalSteps = computed(() => props.lockedPlayers ? 3 : 4)
 const stepTitle = computed(() => {
   return { 1: 'Where are you playing?', 2: "Who's playing?", 3: 'Set up games', 4: 'Opponent group?' }[step.value] || ''
 })
@@ -1255,7 +1256,7 @@ const form = ref({
   date: new Date().toISOString().slice(0, 10),
   holesMode: '18',
   players: props.lockedPlayers ? props.lockedPlayers.map(p => ({ ...p, ghinIndex: p.ghinIndex ?? p.ghin_index ?? null })) : [],
-  withOpponents: null,   // null = not yet answered, true = yes, false = no
+  withOpponents: props.lockedPlayers ? false : null,   // auto-false in accept flow (already linked via invite)
   opponentPlayers: [],
 })
 
