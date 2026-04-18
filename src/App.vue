@@ -70,6 +70,7 @@ import { ref, computed, onMounted, provide } from 'vue'
 import { RouterView, RouterLink, useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 import { useRosterStore } from './stores/roster'
+import { useRoundsStore } from './stores/rounds'
 import { useCoursesStore } from './stores/courses'
 import { hasTournamentAccess, useTournamentStore } from './stores/tournament.js'
 import { useLinkedMatchesStore } from './stores/linkedMatches'
@@ -78,6 +79,7 @@ import JoinOverlay from './components/JoinOverlay.vue'
 
 const authStore = useAuthStore()
 const rosterStore = useRosterStore()
+const roundsStore = useRoundsStore()
 const coursesStore = useCoursesStore()
 const tournamentStore = useTournamentStore()
 const linkedMatchesStore = useLinkedMatchesStore()
@@ -118,6 +120,22 @@ onMounted(async () => {
       tournamentStore.init(),
     ])
   } catch (e) { console.warn('Data load error:', e) }
+
+  // Auto-rehydrate most recent active round after reload (so scoring view isn't blank)
+  if (authStore.isAuthenticated && !roundsStore.activeRound) {
+    try {
+      const { supabase } = await import('./supabase')
+      const { data } = await supabase
+        .from('rounds')
+        .select('id')
+        .eq('owner_id', authStore.user.id)
+        .eq('is_complete', false)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (data?.id) await roundsStore.loadRound(data.id)
+    } catch (e) { console.warn('Auto-rehydrate round failed:', e) }
+  }
 
   const hash = window.location.hash
   const joinMatch = hash.match(/\/join\/([A-Z0-9]{6})/i)
