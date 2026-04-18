@@ -253,21 +253,14 @@ async function syncAllGhin() {
   syncMsgType.value = 'info'
 
   try {
-    const players = rosterStore.players.map(p => ({
-      id: p.id,
-      name: p.name,
-      ghin_number: p.ghin_number || null,
-    }))
-
-    // bulk:true skips last-name fallback (too slow for 26 players)
-    // 55s client timeout so the button never hangs forever
+    // Don't send players array — let edge function pull from DB by owner_id.
+    // This means the edge function handles all DB writes itself (ghin_index, club_name, etc.)
+    // and we just refresh the store after. Fixes: non-favorites not updating.
     const invokePromise = supabase.functions.invoke('ghin-roster-sync', {
       body: {
         ghin_number: profile.ghin_number,
         password: profile.ghin_password,
-        state: 'NY',
         bulk: true,
-        players,
       }
     })
     const timeoutPromise = new Promise((_, reject) =>
@@ -281,18 +274,10 @@ async function syncAllGhin() {
     const results = data.results || []
     let updated = 0
     let notFound = 0
-    const today = new Date().toISOString()
     const multipleQueue = []
 
     for (const r of results) {
       if (r.status === 'updated') {
-        await rosterStore.updatePlayer(r.player_id, {
-          ghin_index: r.handicap_index,
-          ghin_number: r.ghin_number || undefined,
-          ghin_synced_at: today,
-          low_hi: r.low_hi || undefined,
-          club_name: r.club_name || undefined,
-        })
         updated++
       } else if (r.status === 'multiple_matches') {
         multipleQueue.push(r)
@@ -300,6 +285,9 @@ async function syncAllGhin() {
         notFound++
       }
     }
+
+    // Refresh local store so UI reflects DB changes written by edge function
+    await rosterStore.fetchPlayers()
 
     // Show multiple-match queue one at a time
     if (multipleQueue.length) {
