@@ -191,6 +191,11 @@ onMounted(async () => {
     if (m?.round_b_id) {
       const { data: rb } = await supabase.from('rounds').select('id,owner_id').eq('id', m.round_b_id).maybeSingle()
       roundBOwnerId.value = rb?.owner_id ?? null
+      // Already linked and I own round_b — go straight to match detail
+      if (m.status === 'linked' && rb?.owner_id === authStore.user?.id) {
+        router.replace('/cross-match/' + m.id)
+        return
+      }
     }
     // Only need host round_a if wizard fallback (no pre-built config)
     if (m?.round_a_id && !(m.match_config?.foursomeBPlayers?.length)) {
