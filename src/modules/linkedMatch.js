@@ -229,7 +229,7 @@ function deriveTeamName(members) {
  *       | 'live' (in progress, at least 1 hole scored by both)
  *       | 'final' (both rounds complete)
  */
-export function summarizeLinkedMatch(linkedMatch, roundA, roundB, result) {
+export function summarizeLinkedMatch(linkedMatch, roundA, roundB, result, myRoundId) {
   if (!linkedMatch) return { state: 'pending', label: 'No linked match' }
   if (linkedMatch.status === 'cancelled') return { state: 'cancelled', label: 'Match cancelled' }
 
@@ -244,27 +244,37 @@ export function summarizeLinkedMatch(linkedMatch, roundA, roundB, result) {
     return { state: 'waiting', label: '⛳ 4v4 linked · waiting for both foursomes to score hole 1' }
   }
 
+  // Determine if viewer is Team A or Team B so we can say "Your team" vs "Opponents"
+  const myTeam = myRoundId
+    ? (linkedMatch.round_a_id === myRoundId ? 'A' : linkedMatch.round_b_id === myRoundId ? 'B' : null)
+    : null
+
+  function teamLabel(team) {
+    if (!myTeam) return team === 'A' ? result.teamA.name : result.teamB.name
+    return team === myTeam ? 'Your team' : 'Opponents'
+  }
+
   if (result.allHolesComplete && result.settlement) {
     const s = result.settlement
     if (!s.winner) {
       return { state: 'final', label: `🏆 4v4 final · tied · no payout`, tone: 'tie' }
     }
-    const winnerName = s.winner === 'A' ? result.teamA.name : result.teamB.name
+    const winnerLabel = teamLabel(s.winner)
     const deltaStrokes = Math.abs(result.delta)
     return {
       state: 'final',
-      label: `🏆 4v4 final · ${winnerName} wins by ${deltaStrokes} · $${s.stakePerPlayer}/player`,
+      label: `🏆 4v4 final · ${winnerLabel} win by ${deltaStrokes} · $${s.stakePerPlayer}/player`,
       tone: 'win',
     }
   }
 
   // Live
-  const leaderName = result.currentLeader === 'A' ? result.teamA.name : result.currentLeader === 'B' ? result.teamB.name : null
   const deltaStrokes = Math.abs(result.delta)
-  if (leaderName) {
+  if (result.currentLeader) {
+    const leaderLabel = teamLabel(result.currentLeader)
     return {
       state: 'live',
-      label: `🎮 4v4 · ${leaderName} leads by ${deltaStrokes} thru ${result.holesBoth}`,
+      label: `🎮 4v4 · ${leaderLabel} up ${deltaStrokes} thru ${result.holesBoth}`,
       tone: 'live',
     }
   }
