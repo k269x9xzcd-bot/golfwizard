@@ -59,6 +59,9 @@
         <button v-if="!authStore.isAuthenticated" class="invite-btn-primary" @click="showAuth = true">
           {{ inviteEmail ? `Sign In as ${inviteEmail.split('@')[0]} →` : 'Sign In with Email →' }}
         </button>
+        <button v-else-if="!ghinDone" class="invite-btn-primary" @click="showGhinStep = true">
+          Set Up Your Handicap →
+        </button>
         <button v-else class="invite-btn-primary" @click="router.push('/')">
           Go to GolfWizard →
         </button>
@@ -72,7 +75,45 @@
       </div>
     </div>
 
-    <AuthModal v-if="showAuth" :prefill-email="inviteEmail" @close="showAuth = false" />
+    <AuthModal v-if="showAuth" :prefill-email="inviteEmail" @close="onAuthClose" />
+
+    <!-- GHIN setup step -->
+    <Teleport to="body">
+      <div v-if="showGhinStep" class="ghin-step-backdrop">
+        <div class="ghin-step-sheet">
+          <div class="ghin-step-header">
+            <div class="ghin-step-title">Connect Your Handicap</div>
+            <div class="ghin-step-sub">Pull your official GHIN index automatically</div>
+          </div>
+
+          <div class="ghin-step-fields">
+            <div class="ghin-field-group">
+              <label class="ghin-field-label">GHIN Number</label>
+              <input v-model="ghinNum" class="wiz-input" placeholder="e.g. 1321498" type="text" inputmode="numeric" autocomplete="off" />
+            </div>
+            <div class="ghin-field-group">
+              <label class="ghin-field-label">GHIN Password</label>
+              <div class="ghin-pw-row">
+                <input v-model="ghinPw" class="wiz-input" placeholder="GHIN password" :type="showPw ? 'text' : 'password'" autocomplete="off" />
+                <button class="eye-btn" @click="showPw = !showPw" type="button">{{ showPw ? '🙈' : '👁️' }}</button>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="ghinMsg" class="ghin-success-msg">{{ ghinMsg }}</div>
+          <div v-if="ghinErr" class="ghin-error-msg">{{ ghinErr }}</div>
+
+          <div class="ghin-step-actions">
+            <button class="invite-btn-primary" :disabled="ghinSyncing || !ghinNum.trim() || !ghinPw.trim()" @click="syncGhin">
+              {{ ghinSyncing ? 'Syncing…' : '↻ Sync My Handicap' }}
+            </button>
+            <button class="invite-btn-ghost" @click="skipGhin">Skip for now</button>
+          </div>
+
+          <div class="ghin-step-note">Your credentials are stored privately and never shared.</div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -81,6 +122,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { applyPreset, PRESET_PLAYERS } from '../modules/preset'
+import { supabase } from '../supabase'
 import AuthModal from '../components/AuthModal.vue'
 
 const router = useRouter()
@@ -91,7 +133,16 @@ const seeding = ref(true)
 const showAuth = ref(false)
 const fromName = ref('Jason Spieler')
 
-// Email pre-filled from the invite link (?email=...)
+// GHIN step
+const showGhinStep = ref(false)
+const ghinDone = ref(false)
+const ghinNum = ref('')
+const ghinPw = ref('')
+const showPw = ref(false)
+const ghinSyncing = ref(false)
+const ghinMsg = ref('')
+const ghinErr = ref('')
+
 const inviteEmail = computed(() => {
   const e = route.query.email
   return typeof e === 'string' ? decodeURIComponent(e) : ''
@@ -101,18 +152,74 @@ const playerNames = computed(() =>
   PRESET_PLAYERS.map(p => p.nickname || p.name.split(' ')[0]).join(', ')
 )
 
+function onAuthClose() {
+  showAuth.value = false
+  // After signing in, prompt GHIN setup if they don't have it yet
+  if (authStore.isAuthenticated && !authStore.profile?.ghin_number) {
+    showGhinStep.value = true
+  }
+}
+
+function skipGhin() {
+  showGhinStep.value = false
+  ghinDone.value = true
+}
+
+async function syncGhin() {
+  if (ghinSyncing.value) return
+  ghinSyncing.value = true
+  ghinMsg.value = ''
+  ghinErr.value = ''
+  try {
+    // Save credentials first
+    await supabase.from('profiles').update({
+      ghin_number: ghinNum.value.trim(),
+      ghin_password: ghinPw.value.trim(),
+    }).eq('id', authStore.user.id)
+
+    // Sync handicap
+    const { data, error } = await supabase.functions.invoke('ghin-sync', {
+      body: { ghin_number: ghinNum.value.trim(), password: ghinPw.value.trim() }
+    })
+    if (error) throw error
+    if (data?.error) throw new Error(data.error)
+
+    // Update profile with HCP and update their roster entry
+    await authStore.updateProfile({ ghin_index: data.handicap_index })
+    await authStore.upsertRosterEntry({
+      name: authStore.profile?.display_name || '',
+      nickname: authStore.profile?.nickname || null,
+      useNickname: authStore.profile?.use_nickname || false,
+    })
+
+    // Also update ghin_number + ghin_index on their own roster entry
+    if (authStore.user?.email) {
+      await supabase.from('roster_players')
+        .update({ ghin_number: ghinNum.value.trim(), ghin_index: data.handicap_index, ghin_synced_at: new Date().toISOString() })
+        .eq('email', authStore.user.email)
+    }
+
+    ghinMsg.value = `✓ Handicap synced: ${data.hi_display} (${data.full_name})`
+    setTimeout(() => {
+      showGhinStep.value = false
+      ghinDone.value = true
+    }, 1800)
+  } catch (e) {
+    ghinErr.value = e?.message || 'Sync failed — check your GHIN credentials'
+  } finally {
+    ghinSyncing.value = false
+  }
+}
+
 onMounted(async () => {
-  // Brief animation delay so the seeding feels intentional
   await new Promise(r => setTimeout(r, 800))
-  // Never force-apply when authenticated — that overwrites real Supabase data.
-  // For new (unauthenticated) users, apply once to seed the local roster + course.
   applyPreset(false)
   seeding.value = false
 
-  // Auto-open auth modal when invite link contains an email and user isn't signed in.
-  // This sends them straight to the OTP code entry screen without any extra taps.
   if (inviteEmail.value && !authStore.isAuthenticated) {
     showAuth.value = true
+  } else if (authStore.isAuthenticated && !authStore.profile?.ghin_number) {
+    showGhinStep.value = true
   }
 })
 </script>
@@ -307,4 +414,35 @@ onMounted(async () => {
   line-height: 1.4;
   margin-top: 4px;
 }
+
+/* GHIN setup step */
+.ghin-step-backdrop {
+  position: fixed; inset: 0; z-index: 500;
+  background: rgba(0,0,0,.7);
+  display: flex; align-items: flex-end;
+}
+.ghin-step-sheet {
+  width: 100%;
+  background: var(--gw-neutral-900, #141a16);
+  border-radius: 24px 24px 0 0;
+  padding: 28px 20px calc(env(safe-area-inset-bottom) + 28px);
+  display: flex; flex-direction: column; gap: 20px;
+}
+.ghin-step-header { text-align: center; }
+.ghin-step-title {
+  font-family: var(--gw-font-display);
+  font-size: 22px; font-weight: 700; color: var(--gw-text);
+  margin-bottom: 6px;
+}
+.ghin-step-sub { font-size: 14px; color: rgba(240,237,224,.55); }
+.ghin-step-fields { display: flex; flex-direction: column; gap: 14px; }
+.ghin-field-group { display: flex; flex-direction: column; gap: 6px; }
+.ghin-field-label { font-size: 12px; font-weight: 600; color: rgba(240,237,224,.6); }
+.ghin-pw-row { display: flex; gap: 8px; align-items: center; }
+.ghin-pw-row .wiz-input { flex: 1; }
+.eye-btn { background: none; border: none; cursor: pointer; font-size: 18px; padding: 0 4px; }
+.ghin-step-actions { display: flex; flex-direction: column; gap: 10px; }
+.ghin-success-msg { font-size: 13px; color: #34d399; font-weight: 600; background: rgba(52,211,153,.1); border: 1px solid rgba(52,211,153,.2); border-radius: 8px; padding: 10px 12px; }
+.ghin-error-msg { font-size: 13px; color: #f87171; background: rgba(248,113,113,.1); border: 1px solid rgba(248,113,113,.2); border-radius: 8px; padding: 10px 12px; }
+.ghin-step-note { font-size: 11px; color: rgba(240,237,224,.3); text-align: center; }
 </style>

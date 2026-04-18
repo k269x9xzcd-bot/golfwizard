@@ -147,7 +147,10 @@
             <input v-model="editLast" class="wiz-input" placeholder="Last name" />
           </div>
           <input v-model="editGhin" class="wiz-input" placeholder="GHIN Index" type="number" step="0.1" />
-          <input v-model="editGhinNumber" class="wiz-input" placeholder="GHIN # (e.g. 1321498)" type="text" inputmode="numeric" />
+          <div class="ghin-number-row">
+            <input v-model="editGhinNumber" class="wiz-input" placeholder="GHIN # (e.g. 1321498)" type="text" inputmode="numeric" style="flex:1" />
+            <a :href="`https://www.ghin.com/golfer-lookup?lastName=${encodeURIComponent(editLast)}&firstName=${encodeURIComponent(editFirst)}`" target="_blank" class="ghin-lookup-btn" title="Look up on GHIN">🔍 GHIN</a>
+          </div>
           <div class="edit-nickname-row">
             <input v-model="editNickname" class="wiz-input" placeholder="Nickname (e.g. Spiels)" style="flex:1" />
             <label class="nick-toggle-label">
@@ -699,6 +702,15 @@ async function saveEdit() {
   padding: 10px 12px; border-radius: 10px;
   background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.3);
   color: #fca5a5; font-size: 12px; line-height: 1.4;
+}
+.ghin-number-row { display: flex; align-items: center; gap: 8px; }
+.ghin-lookup-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 10px 12px; border-radius: var(--gw-radius-full);
+  background: rgba(96,165,250,.15); border: 1px solid rgba(96,165,250,.3);
+  color: #60a5fa; font-size: 12px; font-weight: 600;
+  text-decoration: none; white-space: nowrap; flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
 }
 .edit-nickname-row { display: flex; align-items: center; gap: 10px; }
 .nick-toggle-label { display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; flex-shrink: 0; }

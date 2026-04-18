@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { supabase, generateRoomCode } from '../supabase'
 import { useAuthStore } from './auth'
 import { useCoursesStore } from './courses'
+import { useRosterStore } from './roster'
 import { computeAllSettlements } from '../modules/settlements'
 import { getCourse, COURSES as BUILTIN_COURSES } from '../modules/courses'
 import { supaRawInsert, supaRawSelect, supaRawUpdate, supaRawRequest } from '../modules/supaRaw'
@@ -170,6 +171,37 @@ export const useRoundsStore = defineStore('rounds', () => {
     } finally {
       // ALWAYS clear loading — even on timeout or error — so UI doesn't hang.
       loading.value = false
+    }
+  }
+
+  // ── Auto-save co-players to roster after round creation ────
+  async function _autoSaveCoPlayers(players, auth) {
+    if (!auth?.isAuthenticated || !auth?.user?.id) return
+    const rosterStore = useRosterStore()
+    const existingEmails = new Set(rosterStore.players.map(p => p.email).filter(Boolean))
+    const existingNames = new Set(rosterStore.players.map(p => p.name?.toLowerCase()).filter(Boolean))
+
+    for (const p of players) {
+      // Skip the current user themselves
+      if (p.email && p.email === auth.user?.email) continue
+      if (!p.email && p.name === auth.profile?.display_name) continue
+      // Skip if already in roster (by email or exact name)
+      if (p.email && existingEmails.has(p.email)) continue
+      if (!p.email && p.name && existingNames.has(p.name.toLowerCase())) continue
+      // Add to roster
+      try {
+        await rosterStore.addPlayer({
+          name: p.name || p.guest_name || '',
+          short_name: p.shortName || p.name?.split(' ')[0]?.slice(0, 8) || '',
+          nickname: p.nickname || null,
+          use_nickname: p.use_nickname || false,
+          ghin_index: p.ghinIndex ?? null,
+          email: p.email || null,
+          is_favorite: false,
+        })
+      } catch (e) {
+        console.warn('[rounds] autoSave player failed:', p.name, e)
+      }
     }
   }
 
@@ -441,6 +473,11 @@ export const useRoundsStore = defineStore('rounds', () => {
     setTimeout(() => {
       try { subscribeToRound(round.id) } catch (e) { console.warn('[rounds] Subscribe failed (non-critical):', e) }
     }, 0)
+
+    // Auto-save co-players to this user's roster (fire-and-forget)
+    setTimeout(() => {
+      try { _autoSaveCoPlayers(players, auth) } catch (e) { console.warn('[rounds] autoSaveCoPlayers failed:', e) }
+    }, 500)
 
     return round
   }
