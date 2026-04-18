@@ -149,8 +149,19 @@
           <input v-model="editGhin" class="wiz-input" placeholder="GHIN Index" type="number" step="0.1" />
           <div class="ghin-number-row">
             <input v-model="editGhinNumber" class="wiz-input" placeholder="GHIN # (e.g. 1321498)" type="text" inputmode="numeric" style="flex:1" />
-            <a :href="`https://www.ghin.com/golfer-lookup?lastName=${encodeURIComponent(editLast)}&firstName=${encodeURIComponent(editFirst)}`" target="_blank" class="ghin-lookup-btn" title="Look up on GHIN">🔍 GHIN</a>
+            <button class="ghin-lookup-btn" @click="searchGhinForEdit" :disabled="ghinSearching" type="button">
+              {{ ghinSearching ? '…' : '🔍 GHIN' }}
+            </button>
           </div>
+          <!-- In-app GHIN search results -->
+          <div v-if="ghinSearchResults.length" class="ghin-search-results">
+            <div class="ghin-search-label">Select the correct golfer:</div>
+            <div v-for="r in ghinSearchResults" :key="r.ghin_number" class="ghin-search-option" @click="applyGhinResult(r)">
+              <div class="ghin-search-name">{{ r.full_name }}</div>
+              <div class="ghin-search-meta">{{ r.club_name }} · HCP {{ r.handicap_index }} · #{{ r.ghin_number }}</div>
+            </div>
+          </div>
+          <div v-if="ghinSearchMsg" class="ghin-search-msg">{{ ghinSearchMsg }}</div>
           <div class="edit-nickname-row">
             <input v-model="editNickname" class="wiz-input" placeholder="Nickname (e.g. Spiels)" style="flex:1" />
             <label class="nick-toggle-label">
@@ -493,11 +504,16 @@ const editGhin = ref('')
 const editGhinNumber = ref('')
 const editNickname = ref('')
 const editUseNickname = ref(false)
+const ghinSearching = ref(false)
+const ghinSearchResults = ref([])
+const ghinSearchMsg = ref('')
 const editEmail = ref('')
 const editError = ref('')
 const editSaving = ref(false)
 
 function startEdit(p) {
+  ghinSearchResults.value = []
+  ghinSearchMsg.value = ''
   editTarget.value = p
   const parts = p.name.trim().split(' ')
   editFirst.value = parts[0] || ''
@@ -509,6 +525,55 @@ function startEdit(p) {
   editEmail.value = p.email || ''
   editError.value = ''
   editSaving.value = false
+}
+
+async function searchGhinForEdit() {
+  if (ghinSearching.value) return
+  const first = editFirst.value.trim()
+  const last = editLast.value.trim()
+  if (!first || !last) {
+    ghinSearchMsg.value = 'Enter first and last name first'
+    return
+  }
+  const profile = authStore.profile
+  if (!profile?.ghin_number || !profile?.ghin_password) {
+    ghinSearchMsg.value = 'Add your GHIN credentials in Profile first'
+    return
+  }
+  ghinSearching.value = true
+  ghinSearchResults.value = []
+  ghinSearchMsg.value = ''
+  try {
+    const { data, error } = await supabase.functions.invoke('ghin-roster-sync', {
+      body: {
+        ghin_number: profile.ghin_number,
+        password: profile.ghin_password,
+        state: 'NY',
+        players: [{ id: 'lookup', name: `${first} ${last}` }],
+      }
+    })
+    if (error) throw error
+    const r = data?.results?.[0]
+    if (!r) throw new Error('No response')
+    if (r.status === 'found') {
+      ghinSearchResults.value = [r]
+    } else if (r.status === 'multiple') {
+      ghinSearchResults.value = r.matches
+    } else {
+      ghinSearchMsg.value = `No GHIN match found for "${first} ${last}" in NY`
+    }
+  } catch (e) {
+    ghinSearchMsg.value = e?.message || 'Search failed'
+  } finally {
+    ghinSearching.value = false
+  }
+}
+
+function applyGhinResult(r) {
+  editGhinNumber.value = r.ghin_number
+  editGhin.value = r.handicap_index != null ? String(r.handicap_index) : editGhin.value
+  ghinSearchResults.value = []
+  ghinSearchMsg.value = `✓ Selected ${r.full_name}`
 }
 
 async function saveEdit() {
@@ -710,8 +775,25 @@ async function saveEdit() {
   background: rgba(96,165,250,.15); border: 1px solid rgba(96,165,250,.3);
   color: #60a5fa; font-size: 12px; font-weight: 600;
   text-decoration: none; white-space: nowrap; flex-shrink: 0;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.ghin-lookup-btn:disabled { opacity: 0.5; cursor: default; }
+.ghin-search-results {
+  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
+  border-radius: var(--gw-radius-md); overflow: hidden;
+}
+.ghin-search-label {
+  font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: rgba(240,237,224,.4); padding: 8px 12px 4px;
+}
+.ghin-search-option {
+  padding: 10px 12px; cursor: pointer; border-top: 1px solid rgba(255,255,255,.06);
   -webkit-tap-highlight-color: transparent;
 }
+.ghin-search-option:active { background: rgba(96,165,250,.15); }
+.ghin-search-name { font-size: 14px; font-weight: 600; color: var(--gw-text); }
+.ghin-search-meta { font-size: 12px; color: rgba(240,237,224,.5); margin-top: 2px; }
+.ghin-search-msg { font-size: 12px; color: rgba(240,237,224,.5); padding: 4px 2px; }
 .edit-nickname-row { display: flex; align-items: center; gap: 10px; }
 .nick-toggle-label { display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
 .nick-toggle-cb { width: 16px; height: 16px; accent-color: #22a06b; cursor: pointer; }
