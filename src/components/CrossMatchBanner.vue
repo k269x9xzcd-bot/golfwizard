@@ -261,18 +261,24 @@ async function goScore() {
   const m = relevantMatch.value
   if (!m) return
   try {
-    const ra = roundsCache.value[m.round_a_id]
-    const rb = roundsCache.value[m.round_b_id]
     const uid = authStore.user?.id
     let roundId = null
-    if (ra?.owner_id === uid) roundId = m.round_a_id
-    else if (rb?.owner_id === uid) roundId = m.round_b_id
-    // Fallback: if cache doesn't have owner_id, check active round
-    if (!roundId && roundsStore.activeRound?.id) {
-      const ar = roundsStore.activeRound.id
-      if (ar === m.round_a_id || ar === m.round_b_id) roundId = ar
+
+    // 1. Check current round first (fastest, works even if RLS blocks cross-read)
+    const cur = roundsStore.currentRound?.id
+    if (cur && (cur === m.round_a_id || cur === m.round_b_id)) {
+      roundId = cur
     }
-    // Last fallback: load from DB
+
+    // 2. Check cache owner_id
+    if (!roundId) {
+      const ra = roundsCache.value[m.round_a_id]
+      const rb = roundsCache.value[m.round_b_id]
+      if (ra?.owner_id === uid) roundId = m.round_a_id
+      else if (rb?.owner_id === uid) roundId = m.round_b_id
+    }
+
+    // 3. DB fallback — query only the rounds the user can see
     if (!roundId) {
       const { supabase } = await import('../supabase')
       const ids = [m.round_a_id, m.round_b_id].filter(Boolean)
@@ -281,6 +287,7 @@ async function goScore() {
         if (data?.owner_id === uid) { roundId = id; break }
       }
     }
+
     if (!roundId) { router.push(`/cross-match/${m.id}`); return }
     await roundsStore.loadRound(roundId)
     router.push('/scoring')
