@@ -83,7 +83,6 @@
             <span v-else-if="p.soft_cap === 'true' || p.soft_cap === true" class="cap-badge cap-soft" title="Soft Cap applied">SC</span>
           </div>
           <div class="player-meta">
-            <span v-if="p.club_name" class="player-club">{{ p.club_name }}</span>
             <span v-if="p.email" class="player-email-dot" title="Has email">✓</span>
           </div>
         </div>
@@ -116,7 +115,6 @@
             <span v-else-if="p.soft_cap === 'true' || p.soft_cap === true" class="cap-badge cap-soft" title="Soft Cap applied">SC</span>
           </div>
           <div class="player-meta">
-            <span v-if="p.club_name" class="player-club">{{ p.club_name }}</span>
             <span v-if="p.email" class="player-email-dot" title="Has email">✓</span>
           </div>
         </div>
@@ -163,6 +161,10 @@
             <input v-model="editLast" class="wiz-input" placeholder="Last name" />
           </div>
           <input v-model="editGhin" class="wiz-input" placeholder="GHIN Index" type="number" step="0.1" />
+          <div v-if="editTarget?.club_name" class="edit-club-row">
+            <span class="edit-club-icon">⛳</span>
+            <span class="edit-club-name">{{ editTarget.club_name }}</span>
+          </div>
           <div class="ghin-number-row">
             <input v-model="editGhinNumber" class="wiz-input" placeholder="GHIN # (e.g. 1321498)" type="text" inputmode="numeric" style="flex:1" />
             <button class="ghin-lookup-btn" @click="searchGhinForEdit" :disabled="ghinSearching" type="button">
@@ -747,10 +749,6 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 .player-email-dot {
   font-size: 10px; font-weight: 700; color: #22c55e;
 }
-.player-club {
-  font-size: 10px; color: rgba(240,237,224,.35); margin-right: 4px;
-}
-
 /* GHIN sync status dot — inline next to HCP number */
 .ghin-dot-inline {
   display: inline-block;
@@ -881,6 +879,9 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
   color: #fca5a5; font-size: 12px; line-height: 1.4;
 }
 .ghin-number-row { display: flex; align-items: center; gap: 8px; }
+.edit-club-row { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: rgba(255,255,255,.04); border-radius: 8px; margin-bottom: 4px; }
+.edit-club-icon { font-size: 13px; }
+.edit-club-name { font-size: 12px; color: rgba(240,237,224,.5); font-style: italic; }
 .ghin-lookup-btn {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 10px 12px; border-radius: var(--gw-radius-full);
