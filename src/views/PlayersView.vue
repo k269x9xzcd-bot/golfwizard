@@ -585,23 +585,60 @@ async function saveEdit() {
     return
   }
   const fullName = editLast.value.trim() ? `${editFirst.value.trim()} ${editLast.value.trim()}` : editFirst.value.trim()
+  const newGhinNumber = editGhinNumber.value.trim() || null
+  const prevGhinNumber = editTarget.value?.ghin_number || null
+  const ghinNumberChanged = newGhinNumber && newGhinNumber !== prevGhinNumber
+  const playerId = editTarget.value.id
+
   editSaving.value = true
   try {
-    await rosterStore.updatePlayer(editTarget.value.id, {
+    await rosterStore.updatePlayer(playerId, {
       name: fullName,
       short_name: editLast.value.trim() || editFirst.value.trim().slice(0, 8),
       ghin_index: editGhin.value !== '' ? parseFloat(editGhin.value) : null,
-      ghin_number: editGhinNumber.value.trim() || null,
+      ghin_number: newGhinNumber,
       nickname: editNickname.value.trim() || null,
       use_nickname: editUseNickname.value,
       email: emailTrimmed || null,
     })
     editTarget.value = null
+
+    // Auto-pull handicap if GHIN # was just entered/changed and user has creds
+    if (ghinNumberChanged) {
+      const profile = authStore.profile
+      if (profile?.ghin_number && profile?.ghin_password) {
+        _autoSyncGhinNumber(playerId, newGhinNumber, profile)
+      }
+    }
   } catch (e) {
     editError.value = e?.message || 'Could not save.'
   } finally {
     editSaving.value = false
   }
+}
+
+async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
+  try {
+    const { data, error } = await supabase.functions.invoke('ghin-roster-sync', {
+      body: {
+        ghin_number: profile.ghin_number,
+        password: profile.ghin_password,
+        state: 'NY',
+        players: [{ id: playerId, name: '', ghin_number: ghinNumber }],
+      }
+    })
+    if (error || data?.error) return
+    const r = data?.results?.[0]
+    if (r?.status === 'found') {
+      await rosterStore.updatePlayer(playerId, {
+        ghin_index: r.handicap_index,
+        ghin_synced_at: new Date().toISOString(),
+        low_hi: r.low_hi || undefined,
+        club_name: r.club_name || undefined,
+      })
+      showToast(`HCP synced: ${r.handicap_index}`, 'green')
+    }
+  } catch { /* silent — manual sync still available */ }
 }
 </script>
 
