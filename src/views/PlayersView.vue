@@ -18,15 +18,25 @@
 
     <!-- Multiple matches modal -->
     <Teleport to="body">
-      <div v-if="multipleMatchPlayer" class="delete-backdrop" @click.self="advanceMultipleQueue">
-        <div class="delete-modal">
-          <div class="delete-header">Multiple matches for "{{ multipleMatchPlayer.name }}"</div>
-          <div class="delete-message">{{ multipleMatchQueue.length > 1 ? `${multipleMatchQueue.indexOf(multipleMatchPlayer)+1} of ${multipleMatchQueue.length} — ` : '' }}Select the correct golfer:</div>
-          <div v-for="m in multipleMatchPlayer.matches" :key="m.ghin_number" class="match-option" @click="selectMatch(multipleMatchPlayer.id, m)">
-            <div class="match-name">{{ m.full_name }}</div>
-            <div class="match-meta">{{ m.club_name }} · HCP {{ m.handicap_index }} · #{{ m.ghin_number }}</div>
+      <div v-if="multipleMatchPlayer" class="match-backdrop" @click.self="advanceMultipleQueue">
+        <div class="match-sheet">
+          <div class="match-sheet-header">
+            <div class="match-sheet-title">Multiple matches</div>
+            <div class="match-sheet-sub">
+              {{ multipleMatchQueue.length > 1 ? `${multipleMatchQueue.indexOf(multipleMatchPlayer)+1} of ${multipleMatchQueue.length} · ` : '' }}"{{ multipleMatchPlayer.name }}" — tap the correct golfer
+            </div>
           </div>
-          <button class="btn-ghost" style="margin-top:12px;width:100%" @click="advanceMultipleQueue">Skip →</button>
+          <div class="match-list">
+            <div v-for="m in multipleMatchPlayer.matches" :key="m.ghin_number" class="match-option" @click="selectMatch(multipleMatchPlayer.id, m)">
+              <div class="match-name">{{ m.full_name }}</div>
+              <div class="match-meta">{{ [m.club_name, m.handicap_index != null ? `HCP ${m.handicap_index}` : 'HCP NH', `#${m.ghin_number}`].filter(Boolean).join(' · ') }}</div>
+            </div>
+          </div>
+          <div class="match-sheet-footer">
+            <button class="btn-ghost" style="width:100%" @click="advanceMultipleQueue">
+              {{ multipleMatchQueue.indexOf(multipleMatchPlayer) < multipleMatchQueue.length - 1 ? 'Skip → next player' : 'Skip' }}
+            </button>
+          </div>
         </div>
       </div>
     </Teleport>
@@ -237,14 +247,21 @@ async function syncAllGhin() {
       ghin_number: p.ghin_number || null,
     }))
 
-    const { data, error } = await supabase.functions.invoke('ghin-roster-sync', {
+    // bulk:true skips last-name fallback (too slow for 26 players)
+    // 55s client timeout so the button never hangs forever
+    const invokePromise = supabase.functions.invoke('ghin-roster-sync', {
       body: {
         ghin_number: profile.ghin_number,
         password: profile.ghin_password,
         state: 'NY',
+        bulk: true,
         players,
       }
     })
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Sync timed out — try again')), 55000)
+    )
+    const { data, error } = await Promise.race([invokePromise, timeoutPromise])
 
     if (error) throw error
     if (data?.error) throw new Error(data.error)
@@ -768,14 +785,52 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 .delete-footer { display: flex; gap: 10px; }
 .delete-footer .btn-ghost, .delete-footer .btn-danger { flex: 1; }
 
-.match-option {
-  padding: 10px 12px; border-radius: 10px; margin-bottom: 6px;
-  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
-  cursor: pointer;
+/* Multiple match bottom sheet */
+.match-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,.65);
+  z-index: 300; display: flex; align-items: flex-end;
 }
-.match-option:active { background: rgba(255,255,255,.1); }
-.match-name { font-size: 14px; font-weight: 600; color: #f0ede0; }
-.match-meta { font-size: 12px; color: rgba(240,237,224,.5); margin-top: 2px; }
+.match-sheet {
+  width: 100%;
+  background: var(--gw-neutral-900, #111a14);
+  border-radius: 20px 20px 0 0;
+  border: 1px solid rgba(255,255,255,.1);
+  box-shadow: 0 -8px 30px rgba(0,0,0,.5);
+  display: flex; flex-direction: column;
+  max-height: 80vh;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.match-sheet-header {
+  padding: 20px 20px 12px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  flex-shrink: 0;
+}
+.match-sheet-title {
+  font-size: 17px; font-weight: 700; color: #f0ede0; margin-bottom: 4px;
+}
+.match-sheet-sub {
+  font-size: 13px; color: rgba(240,237,224,.55); line-height: 1.4;
+}
+.match-list {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  flex: 1;
+  padding: 12px 16px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.match-sheet-footer {
+  padding: 12px 16px 16px;
+  border-top: 1px solid rgba(255,255,255,.08);
+  flex-shrink: 0;
+}
+.match-option {
+  padding: 12px 14px; border-radius: 12px;
+  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
+  cursor: pointer; flex-shrink: 0;
+}
+.match-option:active { background: rgba(255,255,255,.12); }
+.match-name { font-size: 15px; font-weight: 600; color: #f0ede0; }
+.match-meta { font-size: 12px; color: rgba(240,237,224,.5); margin-top: 3px; }
 
 .btn-danger {
   background: #ef4444; color: white; border: none;
