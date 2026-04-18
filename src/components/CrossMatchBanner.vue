@@ -177,7 +177,8 @@ const display = computed(() => {
 
   try {
     const result = computeLinkedMatch(ra, rb, m.match_config || {})
-    const s = summarizeLinkedMatch(m, ra, rb, result)
+    const myRoundId = roundsStore.currentRound?.id ?? null
+    const s = summarizeLinkedMatch(m, ra, rb, result, myRoundId)
     const iconByTone = { pending: '⛳', waiting: '⏳', live: '🎮', final: '🏆', tie: '🤝', cancelled: '🚫' }
     return {
       match: m,
