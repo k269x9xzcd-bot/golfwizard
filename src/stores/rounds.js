@@ -178,6 +178,12 @@ export const useRoundsStore = defineStore('rounds', () => {
   async function _autoSaveCoPlayers(players, auth) {
     if (!auth?.isAuthenticated || !auth?.user?.id) return
     const rosterStore = useRosterStore()
+
+    // Ensure roster is loaded before checking for duplicates
+    if (rosterStore.players.length === 0) {
+      await rosterStore.fetchPlayers()
+    }
+
     const existingEmails = new Set(rosterStore.players.map(p => p.email).filter(Boolean))
     const existingNames = new Set(rosterStore.players.map(p => p.name?.toLowerCase()).filter(Boolean))
 
@@ -188,19 +194,31 @@ export const useRoundsStore = defineStore('rounds', () => {
       // Skip if already in roster (by email or exact name)
       if (p.email && existingEmails.has(p.email)) continue
       if (!p.email && p.name && existingNames.has(p.name.toLowerCase())) continue
-      // Add to roster
+
+      const name = (p.name || p.guest_name || '').trim()
+      if (!name) continue
+
+      // Add to roster — catch 409 conflicts silently (race condition between check and insert)
       try {
         await rosterStore.addPlayer({
-          name: p.name || p.guest_name || '',
-          short_name: p.shortName || p.name?.split(' ')[0]?.slice(0, 8) || '',
+          name,
+          short_name: p.shortName || name.split(' ')[0].slice(0, 8),
           nickname: p.nickname || null,
           use_nickname: p.use_nickname || false,
           ghin_index: p.ghinIndex ?? null,
           email: p.email || null,
           is_favorite: false,
         })
+        // Keep sets in sync so subsequent loop iterations don't re-attempt
+        existingNames.add(name.toLowerCase())
+        if (p.email) existingEmails.add(p.email)
       } catch (e) {
-        console.warn('[rounds] autoSave player failed:', p.name, e)
+        // 409 = already exists — not an error worth surfacing
+        const is409 = e?.code === '23505' || e?.status === 409 ||
+          (e?.message || '').toLowerCase().includes('unique') ||
+          (e?.message || '').toLowerCase().includes('duplicate') ||
+          (e?.message || '').toLowerCase().includes('already exists')
+        if (!is409) console.warn('[rounds] autoSave player failed:', name, e)
       }
     }
   }
