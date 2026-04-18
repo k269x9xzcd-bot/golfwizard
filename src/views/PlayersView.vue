@@ -560,12 +560,6 @@ function startEdit(p) {
 
 async function searchGhinForEdit() {
   if (ghinSearching.value) return
-  const first = editFirst.value.trim()
-  const last = editLast.value.trim()
-  if (!first || !last) {
-    ghinSearchMsg.value = 'Enter first and last name first'
-    return
-  }
   const profile = authStore.profile
   if (!profile?.ghin_number || !profile?.ghin_password) {
     ghinSearchMsg.value = 'Add your GHIN credentials in Profile first'
@@ -574,8 +568,42 @@ async function searchGhinForEdit() {
   ghinSearching.value = true
   ghinSearchResults.value = []
   ghinSearchMsg.value = ''
-  const prefix = editGhinPrefix.value.trim() || first
+
+  const typedGhinNumber = editGhinNumber.value.trim()
+  const first = editFirst.value.trim()
+  const last = editLast.value.trim()
+
   try {
+    // ── Path A: GHIN # typed → look up directly, no name needed ──
+    if (typedGhinNumber) {
+      const { data, error } = await supabase.functions.invoke('ghin-roster-sync', {
+        body: {
+          ghin_number: profile.ghin_number,
+          password: profile.ghin_password,
+          players: [{ id: 'lookup', name: `${first} ${last}`.trim() || 'Unknown', ghin_number: typedGhinNumber }],
+        }
+      })
+      if (error) throw error
+      const r = data?.results?.[0]
+      if (r?.status === 'updated') {
+        ghinSearchResults.value = [{
+          ghin_number: r.ghin_number,
+          full_name: r.full_name,
+          handicap_index: r.handicap_index,
+          club_name: r.club_name,
+        }]
+      } else {
+        ghinSearchMsg.value = `No golfer found for GHIN # ${typedGhinNumber}`
+      }
+      return
+    }
+
+    // ── Path B: Name search ────────────────────────────────────
+    if (!first || !last) {
+      ghinSearchMsg.value = 'Enter a GHIN # or first + last name'
+      return
+    }
+    const prefix = editGhinPrefix.value.trim() || first
     const { data, error } = await supabase.functions.invoke('ghin-roster-sync', {
       body: {
         ghin_number: profile.ghin_number,
@@ -587,7 +615,6 @@ async function searchGhinForEdit() {
     const r = data?.results?.[0]
     if (!r) throw new Error('No response')
     if (r.status === 'updated') {
-      // Single match — auto-populate
       ghinSearchResults.value = [{
         ghin_number: r.ghin_number,
         full_name: r.full_name,
@@ -598,7 +625,7 @@ async function searchGhinForEdit() {
       ghinSearchResults.value = r.matches ?? []
       if (!ghinSearchResults.value.length) ghinSearchMsg.value = `No matches for "${prefix}" — try fewer letters`
     } else {
-      ghinSearchMsg.value = `No GHIN match found for "${prefix} ${last}" — try typing fewer letters in the prefix field`
+      ghinSearchMsg.value = `No match for "${prefix} ${last}" — try fewer letters in the prefix field`
     }
   } catch (e) {
     ghinSearchMsg.value = e?.message || 'Search failed'
