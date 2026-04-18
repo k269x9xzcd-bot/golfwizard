@@ -162,8 +162,8 @@ const players = computed(() =>
     id: p.id,
     name: p.name,
     short_name: p.short_name || p.name.split(' ')[0],
-    ghin_index: p.ghin_index ?? null,
-    ghin_number: p.ghin_number ?? null,
+    ghin_index: p.ghin_index ?? p.ghinIndex ?? null,
+    ghin_number: p.ghin_number ?? p.ghinNumber ?? null,
     nickname: p.nickname ?? null,
     use_nickname: p.use_nickname ?? false,
   }))
