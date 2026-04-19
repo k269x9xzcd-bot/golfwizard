@@ -1665,7 +1665,7 @@ function togglePlayer(p) {
       ghinIndex: p.ghin_index,
       nickname: p.nickname ?? null,
       use_nickname: p.use_nickname ?? false,
-      profileId: null,
+      profileId: p.user_id ?? null,
     })
   }
 }

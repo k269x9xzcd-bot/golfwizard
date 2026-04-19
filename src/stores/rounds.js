@@ -68,6 +68,9 @@ export const useRoundsStore = defineStore('rounds', () => {
   let scoreSubscription = null
   let memberSubscription = null
 
+  // Sync error visible to UI — set when scores fail to save for non-offline reasons
+  const scoreSyncError = ref(null)  // null | 'rls' | 'db'
+
   // ── Offline write queue ─────────────────────────────────────
   // Scores that failed to save get queued and retried when back online
   const _QUEUE_KEY = 'gw_score_queue'
@@ -588,12 +591,19 @@ export const useRoundsStore = defineStore('rounds', () => {
     try {
       const { error } = await supabase.from('scores').upsert(entry, { onConflict: 'round_id,member_id,hole' })
       if (error) {
-        // Network or DB error — queue for retry when back online
         console.warn('Score save failed, queuing for retry:', error.message)
         _enqueue(entry)
+        // RLS / auth errors won't be fixed by retrying — surface to UI
+        if (error.code === '42501' || error.message?.includes('row-level') || error.message?.includes('policy')) {
+          scoreSyncError.value = 'rls'
+        } else {
+          scoreSyncError.value = 'db'
+        }
+      } else {
+        scoreSyncError.value = null  // clear on success
       }
     } catch (e) {
-      // Offline — queue silently
+      // Offline — queue silently, no error banner (expected)
       console.warn('Score save offline, queued:', e.message)
       _enqueue(entry)
     }
@@ -786,6 +796,9 @@ export const useRoundsStore = defineStore('rounds', () => {
     }
 
     // ── AUTHENTICATED PATH ──────────────────────────────────
+    // 0. Flush any queued scores before marking complete
+    try { await _flushQueue() } catch (e) { console.warn('[rounds] flush before complete failed:', e.message) }
+
     // 1. Mark round complete — use raw fetch with timeout to avoid iOS hang
     const _withTimeout = (promise, ms, label) => Promise.race([
       promise,
@@ -951,7 +964,7 @@ export const useRoundsStore = defineStore('rounds', () => {
 
   return {
     activeRound, activeMembers, activeScores, activeGames,
-    rounds, loading, activeRoundId,
+    rounds, loading, activeRoundId, scoreSyncError,
     fetchRounds, createRound, loadRound, setScore,
     saveGameConfig, updateGameConfig, deleteGameConfig,
     joinByRoomCode, completeRound, deleteRound, setActiveRound,

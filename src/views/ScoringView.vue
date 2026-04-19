@@ -18,6 +18,11 @@
       <transition name="fade">
         <div v-if="viewerToast" class="viewer-toast">{{ viewerToast }}</div>
       </transition>
+      <!-- Score sync error banner -->
+      <div v-if="roundsStore.scoreSyncError" class="sync-error-banner">
+        <span v-if="roundsStore.scoreSyncError === 'rls'">⚠️ Scores not saving — session issue. Please sign out and back in.</span>
+        <span v-else>⚠️ Scores not saving to cloud. Check your connection.</span>
+      </div>
       <!-- Header -->
       <header class="scoring-header">
         <div class="header-left">
@@ -56,6 +61,12 @@
           </button>
           <button class="round-menu-item" v-if="isCaptain && !roundsStore.activeRound?.is_complete" @click="showRoundMenu = false; finishRound()">
             ✅ Finish Round
+          </button>
+          <button class="round-menu-item" @click="doShareScorecard" :disabled="sharing">
+            {{ sharing ? '⏳ Sharing…' : '📸 Share Scorecard' }}
+          </button>
+          <button class="round-menu-item" @click="doShareRecap" :disabled="sharing">
+            {{ sharing ? '⏳ Sharing…' : '📋 Share Recap' }}
           </button>
           <button v-if="isCaptain" class="round-menu-item round-menu-danger" @click="showRoundMenu = false; confirmDeleteActive = true">
             🗑️ Delete Round
@@ -327,6 +338,7 @@
             {{ showFullHcp ? 'Full HCP' : 'Low-Man HCP' }}
           </button>
           <span class="sct-spacer"></span>
+          <button class="sim-btn" @click="doShareScorecard" :disabled="sharing" title="Share scorecard">{{ sharing ? '⏳' : '↑' }}</button>
           <button class="sim-btn" @click="simulateFill" title="Fill random scores">🎲</button>
           <button class="sim-btn sim-btn-reset" @click="resetScores" title="Reset all scores">↺</button>
         </div>
@@ -741,6 +753,7 @@ import {
   holeRange
 } from '../modules/gameEngine'
 import { computeAllSettlements } from '../modules/settlements'
+import { shareScorecard, shareRecap } from '../modules/scorecardShare'
 import CrossMatchBanner from '../components/CrossMatchBanner.vue'
 
 const authStore = useAuthStore()
@@ -2277,6 +2290,57 @@ async function finishRound() {
   }
 }
 
+const sharing = ref(false)
+
+function buildGameLines() {
+  if (!liveSettlements.value) return []
+  const lines = []
+  for (const [gameId, s] of Object.entries(liveSettlements.value)) {
+    const game = roundsStore.activeGames.find(g => g.id === gameId)
+    if (!game) continue
+    const label = gameLabel(game.type, game.config || {})
+    if (s?.summary) lines.push(`${label}: ${s.summary}`)
+    else if (s?.total !== undefined && s.total !== 0) {
+      const sign = s.total > 0 ? '+' : ''
+      lines.push(`${label}: ${sign}$${Math.abs(s.total)}`)
+    } else {
+      lines.push(`${label}: All square`)
+    }
+  }
+  return lines
+}
+
+function _shareCtx() {
+  const round = roundsStore.activeRound
+  const members = roundsStore.activeMembers
+  const scores = roundsStore.activeScores
+  const course = coursesStore.getCourse(round?.course_name) || {}
+  return { round, members, scores, course }
+}
+
+async function doShareScorecard() {
+  if (sharing.value) return
+  sharing.value = true
+  showRoundMenu.value = false
+  try {
+    const { round, members, scores, course } = _shareCtx()
+    await shareScorecard(round, members, scores, course)
+  } catch (e) { console.error('Share scorecard failed:', e) }
+  finally { sharing.value = false }
+}
+
+async function doShareRecap() {
+  if (sharing.value) return
+  sharing.value = true
+  showRoundMenu.value = false
+  try {
+    const { round, members, scores, course } = _shareCtx()
+    const lines = buildGameLines()
+    await shareRecap(round, members, scores, course, lines)
+  } catch (e) { console.error('Share recap failed:', e) }
+  finally { sharing.value = false }
+}
+
 async function deleteActiveRound() {
   if (!roundsStore.activeRound) return
   try {
@@ -2529,6 +2593,20 @@ function formatDate(dateStr) {
   color: #93c5fd;
   background: rgba(96,165,250,.12);
   border: 1px solid rgba(96,165,250,.3);
+}
+
+/* Score sync error banner */
+.sync-error-banner {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: #7f1d1d;
+  border-bottom: 1px solid #ef4444;
+  color: #fca5a5;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  padding: 8px 16px;
 }
 
 /* Viewer-mode toast (non-captain taps a score cell) */
