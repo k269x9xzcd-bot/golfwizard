@@ -155,7 +155,7 @@
 
       <!-- Delete active round confirmation -->
       <!-- ── Edit Score Dialog (viewOnly mode) ───────────────────── -->
-      <div v-if="editScoreDialog" class="delete-overlay" @click="editScoreDialog = null">
+      <div v-if="editScoreDialog" class="delete-overlay" @click="!editScoreSaving && (editScoreDialog = null)">
         <div class="delete-dialog" @click.stop>
           <div class="delete-title">Edit Score</div>
           <div class="delete-msg">{{ editScoreDialog.memberName }} — Hole {{ editScoreDialog.hole }}</div>
@@ -166,11 +166,18 @@
             max="20"
             v-model="editScoreValue"
             @keyup.enter="saveEditScore"
+            :disabled="editScoreSaving"
             autofocus
           />
+          <transition name="fade">
+            <div v-if="editScoreToast === 'saved'" class="edit-score-toast edit-score-toast--ok">✓ Saved</div>
+            <div v-else-if="editScoreToast === 'error'" class="edit-score-toast edit-score-toast--err">⚠ Save failed — try again</div>
+          </transition>
           <div class="delete-actions">
-            <button class="btn-cancel" @click="editScoreDialog = null">Cancel</button>
-            <button class="btn-delete-confirm" style="background:#22c55e" @click="saveEditScore">Save</button>
+            <button class="btn-cancel" @click="editScoreDialog = null" :disabled="editScoreSaving">Cancel</button>
+            <button class="btn-delete-confirm" style="background:#22c55e" @click="saveEditScore" :disabled="editScoreSaving">
+              {{ editScoreSaving ? 'Saving…' : 'Save' }}
+            </button>
           </div>
         </div>
       </div>
@@ -813,6 +820,8 @@ const showOppEditor = ref(false)
 // ── View-only edit score dialog ───────────────────────────────────
 const editScoreDialog = ref(null) // { memberId, memberName, hole, current }
 const editScoreValue = ref('')
+const editScoreSaving = ref(false)
+const editScoreToast = ref('') // '' | 'saved' | 'error'
 
 function openEditScoreDialog(memberId, hole) {
   if (!isViewOnly.value) return
@@ -824,16 +833,28 @@ function openEditScoreDialog(memberId, hole) {
     current: roundsStore.activeScores[memberId]?.[hole] ?? '',
   }
   editScoreValue.value = String(editScoreDialog.value.current || '')
+  editScoreToast.value = ''
 }
 
 async function saveEditScore() {
-  if (!editScoreDialog.value) return
+  if (!editScoreDialog.value || editScoreSaving.value) return
   const { memberId, hole } = editScoreDialog.value
   const val = parseInt(editScoreValue.value)
   if (!val || val < 1 || val > 20) return
-  // Save score directly — does NOT change is_complete
-  await roundsStore.setScore(memberId, hole, val)
-  editScoreDialog.value = null
+  editScoreSaving.value = true
+  editScoreToast.value = ''
+  try {
+    await roundsStore.setScore(memberId, hole, val)
+    editScoreToast.value = 'saved'
+    setTimeout(() => {
+      editScoreDialog.value = null
+      editScoreToast.value = ''
+      editScoreSaving.value = false
+    }, 800)
+  } catch (e) {
+    editScoreToast.value = 'error'
+    editScoreSaving.value = false
+  }
 }
 
 function goBackToHistory() {
@@ -2712,6 +2733,17 @@ function formatDate(dateStr) {
   margin: 12px 0;
   box-sizing: border-box;
 }
+.edit-score-input:disabled { opacity: .5; }
+.edit-score-toast {
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 0;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+.edit-score-toast--ok  { color: #22c55e; }
+.edit-score-toast--err { color: #f87171; }
 
 /* Score sync error banner */
 .sync-error-banner {
