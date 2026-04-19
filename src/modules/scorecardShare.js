@@ -97,5 +97,15 @@ export async function shareRecap(round) {
   const el = document.getElementById('gw-capture-target')
   if (!el) throw new Error('Scorecard element not found')
   const filename = `${(round.course_name || 'recap').replace(/\s+/g, '-')}-${round.date || 'today'}-recap.png`
-  await captureElement(el, filename, `GolfWizard Recap · ${round.course_name}`)
+  await captureElement(el, filename, `GolfWizard Recap \u00b7 ${round.course_name}`)
+}
+
+/**
+ * Share a history round recap from the HistoryView expanded card.
+ * el is the .round-detail DOM element passed directly from the component.
+ */
+export async function shareHistoryRecap(round, el) {
+  if (!el) throw new Error('Round detail element not found')
+  const filename = `${(round.course_name || 'recap').replace(/\s+/g, '-')}-${round.date || 'today'}-recap.png`
+  await captureElement(el, filename, `GolfWizard Recap \u00b7 ${round.course_name}`)
 }
