@@ -265,11 +265,13 @@
             v-for="g in MAIN_GAMES"
             :key="g.key"
             class="game-type-btn"
-            :class="{ selected: mainGame.type === g.key }"
+            :class="{ selected: mainGame.type === g.key, 'game-type-btn--disabled': g.key === 'fiveThreeOne' && lockedPlayers.length !== 3 }"
+            :disabled="g.key === 'fiveThreeOne' && lockedPlayers.length !== 3"
+            :title="g.key === 'fiveThreeOne' && lockedPlayers.length !== 3 ? '5-3-1 requires exactly 3 players' : ''"
             @click="setMainGame(g.key)"
           >
             <span class="gtb-icon">{{ g.icon }}</span>
-            <span class="gtb-label">{{ g.label }}</span>
+            <span class="gtb-label">{{ g.label }}<span v-if="g.key === 'fiveThreeOne' && lockedPlayers.length !== 3" style="font-size:9px;display:block;opacity:.6;">3 players only</span></span>
             <button class="btn-game-info btn-game-info-grid" @click.stop="toggleGameInfo(g.key)" title="How to play" v-if="g.key !== 'none'">ℹ️</button>
           </button>
         </div>

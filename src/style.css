@@ -1123,6 +1123,12 @@ body {
   transform: scale(0.95);
 }
 
+.game-type-btn--disabled, .game-type-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .game-type-btn.selected {
   background: linear-gradient(135deg, rgba(212,175,55,.18) 0%, rgba(26,122,85,.22) 100%);
   border-color: var(--gw-gold);

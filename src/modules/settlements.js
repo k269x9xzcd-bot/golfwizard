@@ -10,6 +10,7 @@ import {
   computeSnake, computeHiLow, computeStableford, computeWolf,
   computeHammer, computeSixes, computeFiveThreeOne, computeDots,
   computeFidget, computeBestBallNet, computeBestBall,
+  computeBbb, computeScotch6s, computeTeamDay,
 } from './gameEngine.js'
 
 const ENGINE_MAP = {
@@ -29,6 +30,9 @@ const ENGINE_MAP = {
   fidget: computeFidget,
   bestball: computeBestBall,
   bbn: computeBestBallNet,
+  bbb: computeBbb,
+  scotch6s: computeScotch6s,
+  teamday: computeTeamDay,
 }
 
 /**
@@ -181,6 +185,37 @@ function extractPlayerNets(type, result, config, members) {
       nets.push({ id: m.id, name: m.short_name, net: perOther })
     }
     return nets
+  }
+
+  // ── BBB — pairwise settlements, convert to per-player net ──
+  if (t === 'bbb') {
+    if (result.standings) return result.standings.map(s => ({ id: s.id, name: s.name, net: s.net ?? 0 }))
+    return []
+  }
+
+  // ── Scotch6s — team-based, diff × ppt ──
+  if (t === 'scotch6s') {
+    const diff = result.diff ?? 0
+    if (diff === 0) return []
+    const t1Ids = config.team1 || []
+    const t2Ids = config.team2 || []
+    const perPlayer = diff / Math.max(t1Ids.length, 1)
+    const nets = []
+    for (const id of t1Ids) {
+      const m = members.find(m => m.id === id)
+      nets.push({ id, name: m?.short_name || '?', net: perPlayer })
+    }
+    for (const id of t2Ids) {
+      const m = members.find(m => m.id === id)
+      nets.push({ id, name: m?.short_name || '?', net: -perPlayer })
+    }
+    return nets
+  }
+
+  // ── Team Day — standings already computed by engine ──
+  if (t === 'teamday') {
+    if (result.standings) return result.standings.map(s => ({ id: s.id, name: s.name, net: s.net ?? 0 }))
+    return []
   }
 
   // ── Standings-based games: wolf, stableford, sixes, fiveThreeOne ──
