@@ -7,8 +7,8 @@
  * so the screenshot matches the landscape layout shown in the example.
  * Captures the full scrollable table width (reads from .scorecard-scroll).
  *
- * For HistoryView: captures the .round-detail card as-is, and builds a
- * plain-text summary of game results + settlement to attach to the share message.
+ * For HistoryView: renders a hidden ScorecardGrid component, captures it
+ * landscape, and attaches a plain-text game results + settlement summary.
  */
 
 /**
@@ -19,14 +19,20 @@
  * @param {string}      filename      - output filename
  * @param {string}      text          - share message text
  * @param {object}      opts
- * @param {boolean}     opts.landscape - force .is-landscape before capture
+ * @param {boolean}     opts.landscape     - force .is-landscape before capture
+ * @param {string}      opts.landscapeRoot - CSS selector for element to add .is-landscape to
+ *                                           (defaults to .scoring-view for ScoringView,
+ *                                            use '#gw-history-capture-target' wrapper for History)
  */
 async function captureElement(el, filename, text, opts = {}) {
   const html2canvas = (await import('html2canvas')).default
 
   // --- 1. Force landscape layout if requested ---
+  // For ScoringView: add .is-landscape to .scoring-view (triggers CSS layout)
+  // For HistoryView: the hidden grid is already full-width; just widen el itself
+  const landscapeRootSel = opts.landscapeRoot || '.scoring-view'
   const scoringRoot = opts.landscape
-    ? document.querySelector('.scoring-view')
+    ? document.querySelector(landscapeRootSel)
     : null
   if (scoringRoot) scoringRoot.classList.add('is-landscape')
 
@@ -117,12 +123,18 @@ export async function shareScorecard(round) {
 
 /**
  * Share scorecard + settle-box (from ScoringView).
+ * @param {object} round      - active round
+ * @param {Array}  gameRows   - result of buildGameLines() from ScoringView
+ * @param {object} settlement - liveSettlements.value
  */
-export async function shareRecap(round) {
+export async function shareRecap(round, gameRows, settlement) {
   const el = document.getElementById('gw-capture-target')
   if (!el) throw new Error('Scorecard element not found')
   const filename = `${(round.course_name || 'recap').replace(/\s+/g, '-')}-${round.date || 'today'}-recap.png`
-  await captureElement(el, filename, `GolfWizard Recap · ${round.course_name}`, { landscape: true })
+  const gamesSummary = buildGamesSummaryText(gameRows, settlement)
+  const header = `GolfWizard Recap \u00b7 ${round.course_name} \u00b7 ${round.date || ''}`
+  const text = gamesSummary ? `${header}\n\n${gamesSummary}` : header
+  await captureElement(el, filename, text, { landscape: true })
 }
 
 /**
@@ -134,9 +146,9 @@ function buildGamesSummaryText(gameRows, settlement) {
   const lines = []
 
   if (gameRows?.length) {
-    lines.push('⛳ GAMES')
+    lines.push('\u26f3 GAMES')
     for (const g of gameRows) {
-      const icon = g.icon || '🏌️'
+      const icon = g.icon || '\ud83c\udfcc\ufe0f'
       const label = g.label || ''
       if (g.winnerLine) {
         lines.push(`${icon} ${label}: ${g.winnerLine}`)
@@ -149,15 +161,15 @@ function buildGamesSummaryText(gameRows, settlement) {
 
   if (settlement?.ledger?.length) {
     if (lines.length) lines.push('')
-    lines.push('💵 SETTLE UP')
+    lines.push('\ud83d\udcb5 SETTLE UP')
     for (const e of settlement.ledger) {
-      lines.push(`${e.from_name} → ${e.to_name}: $${e.amount}`)
+      lines.push(`${e.from_name} \u2192 ${e.to_name}: $${e.amount}`)
     }
   } else if (settlement?.playerTotals) {
     const totals = Object.values(settlement.playerTotals)
     if (totals.some(t => t.total !== 0)) {
       if (lines.length) lines.push('')
-      lines.push('💵 SETTLE UP')
+      lines.push('\ud83d\udcb5 SETTLE UP')
       for (const t of totals) {
         const sign = t.total > 0 ? '+' : ''
         lines.push(`${t.name}: ${sign}$${Math.abs(t.total)}`)
@@ -170,19 +182,24 @@ function buildGamesSummaryText(gameRows, settlement) {
 
 /**
  * Share a recap from the History view.
- * Captures the expanded .round-detail card as the image.
- * Attaches a plain-text game results + settlement summary to the share message.
+ * Captures the hidden ScorecardGrid (#gw-history-capture-{roundId}) in landscape,
+ * and attaches a plain-text game results + settlement summary.
  *
- * @param {object}      round      - round object from the rounds store
- * @param {HTMLElement} detailEl   - the .round-detail DOM element
- * @param {Array}       gameRows   - result of gameRecapRows(round)
- * @param {object}      settlement - settlementsCache[round.id]
+ * @param {object} round      - round object
+ * @param {Array}  gameRows   - result of gameRecapRows(round)
+ * @param {object} settlement - settlementsCache[round.id]
  */
-export async function shareHistoryRecap(round, detailEl, gameRows, settlement) {
-  if (!detailEl) throw new Error('Round detail element not found')
+export async function shareHistoryRecap(round, gameRows, settlement) {
+  const captureId = `gw-history-capture-${round.id}`
+  const el = document.getElementById(captureId)
+  if (!el) throw new Error('History scorecard grid not found — is the round expanded?')
   const filename = `${(round.course_name || 'recap').replace(/\s+/g, '-')}-${round.date || 'today'}-recap.png`
   const gamesSummary = buildGamesSummaryText(gameRows, settlement)
-  const header = `GolfWizard Recap · ${round.course_name} · ${round.date || ''}`
+  const header = `GolfWizard Recap \u00b7 ${round.course_name} \u00b7 ${round.date || ''}`
   const text = gamesSummary ? `${header}\n\n${gamesSummary}` : header
-  await captureElement(detailEl, filename, text)
+  // The hidden wrapper is already 900px wide (effectively landscape).
+  // We don't need landscape: true here — that flag only applies to ScoringView's
+  // .is-landscape CSS class which controls its own layout. The hidden grid
+  // renders full-width by virtue of the off-screen 900px container.
+  await captureElement(el, filename, text)
 }

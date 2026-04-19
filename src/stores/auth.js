@@ -14,10 +14,25 @@ export const useAuthStore = defineStore('auth', () => {
   async function init() {
     loading.value = true
     try {
-      // Add a 5s timeout so a Supabase hiccup never hangs the splash screen
-      const sessionPromise = supabase.auth.getSession()
-      const timeout = new Promise(resolve => setTimeout(() => resolve({ data: { session: null } }), 5000))
-      const { data: { session } } = await Promise.race([sessionPromise, timeout])
+      // Attempt a token refresh first so we start with a valid JWT.
+      // On iOS PWA, the stored session may have an expired access_token —
+      // refreshSession() exchanges the refresh_token for a new one before
+      // any data fetches run, preventing 403s on the first requests.
+      let session = null
+      try {
+        const refreshTimeout = new Promise(resolve => setTimeout(() => resolve({ data: { session: null } }), 4000))
+        const { data: refreshData } = await Promise.race([supabase.auth.refreshSession(), refreshTimeout])
+        session = refreshData?.session ?? null
+      } catch {}
+
+      // Fall back to getSession() if refresh didn't work (e.g. no stored session)
+      if (!session) {
+        const sessionPromise = supabase.auth.getSession()
+        const timeout = new Promise(resolve => setTimeout(() => resolve({ data: { session: null } }), 5000))
+        const { data: { session: s } } = await Promise.race([sessionPromise, timeout])
+        session = s ?? null
+      }
+
       user.value = session?.user ?? null
       if (user.value) await fetchProfile()
 

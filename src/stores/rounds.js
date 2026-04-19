@@ -153,24 +153,43 @@ export const useRoundsStore = defineStore('rounds', () => {
     }
     loading.value = true
     try {
-      // Race against a timeout so a stalled HTTP/2 stream (iOS PWA issue)
-      // doesn't leave the History tab spinning forever.
-      const query = supabase
-        .from('rounds')
-        .select(`
-          *,
-          round_members (*),
-          game_configs (*),
-          scores (*)
-        `)
-        .order('date', { ascending: false })
-      const timeout = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('fetchRounds timed out after 10s')), 10000)
-      )
-      const { data, error } = await Promise.race([query, timeout])
-      if (!error) rounds.value = data ?? []
-    } catch (e) {
-      console.warn('[rounds] fetchRounds failed, keeping previous list:', e?.message || e)
+      // Try Supabase JS client first (5s budget), then fall back to raw fetch.
+      // iOS PWA HTTP/2 stuck socket causes SJS to queue behind a zombie request —
+      // raw fetch() with cache:'no-store' forces a fresh connection.
+      let data = null
+      let sjsOk = false
+      try {
+        const query = supabase
+          .from('rounds')
+          .select(`*, round_members (*), game_configs (*), scores (*)`)
+          .order('date', { ascending: false })
+        const timeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('fetchRounds timed out after 5s')), 5000)
+        )
+        const res = await Promise.race([query, timeout])
+        if (!res.error) { data = res.data; sjsOk = true }
+        else console.warn('[rounds] SJS fetchRounds error:', res.error.message)
+      } catch (e) {
+        console.warn('[rounds] SJS fetchRounds timed out, trying raw fetch fallback:', e?.message)
+      }
+
+      if (!sjsOk) {
+        // Raw fetch fallback — forces a fresh HTTP connection, bypassing stuck pool
+        try {
+          const rows = await supaRawSelect(
+            'rounds',
+            'select=*,round_members(*),game_configs(*),scores(*)&order=date.desc',
+            12000
+          )
+          data = Array.isArray(rows) ? rows : []
+          console.log('[rounds] raw fetchRounds succeeded, count:', data.length)
+        } catch (rawErr) {
+          console.warn('[rounds] raw fetchRounds also failed:', rawErr?.message)
+          // Keep existing rounds.value — don't wipe what we had
+        }
+      }
+
+      if (data !== null) rounds.value = data
     } finally {
       // ALWAYS clear loading — even on timeout or error — so UI doesn't hang.
       loading.value = false

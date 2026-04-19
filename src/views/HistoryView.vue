@@ -161,12 +161,22 @@
                 <button class="round-action-btn round-action-edit" @click.stop="reopenRound(round)">
                   ✏️ Edit
                 </button>
-                <button class="round-action-btn round-action-share" @click.stop="doShareRecap(round, $event)" :disabled="sharingId === round.id">
+                <button class="round-action-btn round-action-share" @click.stop="doShareRecap(round)" :disabled="sharingId === round.id">
                   {{ sharingId === round.id ? '⏳' : '↑ Share' }}
                 </button>
                 <button class="round-action-btn round-action-delete" @click.stop="confirmDelete(round)">
                   🗑️
                 </button>
+              </div>
+
+              <!-- Hidden scorecard grid rendered off-screen for sharing.
+                   html2canvas captures this element; it's never visible to the user. -->
+              <div style="position:absolute;left:-9999px;top:-9999px;width:900px;overflow:visible;">
+                <ScorecardGrid
+                  :round="round"
+                  :ctx="_buildCtxForRound(round)"
+                  :captureId="'gw-history-capture-' + round.id"
+                />
               </div>
 
             </div>
@@ -199,6 +209,7 @@ import { useCoursesStore } from '../stores/courses'
 import { useRouter, useRoute } from 'vue-router'
 import { computeAllSettlements } from '../modules/settlements'
 import { shareHistoryRecap } from '../modules/scorecardShare'
+import ScorecardGrid from '../components/ScorecardGrid.vue'
 import {
   computeNassau, computeSkins, computeMatch, computeBestBall, computeBestBallNet,
   computeVegas, computeDots, computeFidget, computeSnake, computeWolf,
@@ -265,17 +276,13 @@ const deleting = ref(false)
 
 const sharingId = ref(null)
 
-async function doShareRecap(round, event) {
+async function doShareRecap(round) {
   if (sharingId.value) return
   sharingId.value = round.id
   try {
-    // Walk up from the button to find the round-detail container
-    const btn = event?.currentTarget
-    const detail = btn?.closest('.round-detail')
-    if (!detail) throw new Error('Could not find round detail element')
     const gameRows = gameRecapRows(round)
     const settlement = settlementsCache[round.id] || null
-    await shareHistoryRecap(round, detail, gameRows, settlement)
+    await shareHistoryRecap(round, gameRows, settlement)
   } catch (e) {
     console.error('[history] shareRecap failed:', e)
     alert('Share failed: ' + (e?.message || 'unknown error'))
