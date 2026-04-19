@@ -292,7 +292,7 @@ async function reopenRound(round) {
 async function viewScorecard(round) {
   try {
     await roundsStore.loadRound(round.id)
-    router.push('/scoring')
+    router.push({ path: '/scoring', query: { viewOnly: 'true' } })
   } catch (e) {
     console.error('[history] viewScorecard failed:', e)
     alert('Could not open scorecard: ' + (e?.message || 'unknown error'))

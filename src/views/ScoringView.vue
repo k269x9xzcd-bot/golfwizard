@@ -38,7 +38,11 @@
           <div class="header-meta">
             <span class="meta-tag">{{ roundsStore.activeRound.tee }}</span>
             <span class="meta-tag">{{ holesLabel }}</span>
-            <span v-if="!isCaptain" class="meta-tag meta-viewer" title="View-only — you're not the scorer for this round">👀 Viewer</span>
+            <span v-if="isViewOnly" class="meta-tag meta-viewer" title="Viewing completed round — tap any score to edit">📋 History View</span>
+            <span v-else-if="!isCaptain" class="meta-tag meta-viewer" title="View-only — you're not the scorer for this round">👀 Viewer</span>
+          </div>
+          <div v-if="isViewOnly" style="margin-top:6px">
+            <button class="back-to-history-btn" @click="goBackToHistory">← Back to History</button>
           </div>
         </div>
         <div class="header-right-actions">
@@ -150,6 +154,27 @@
       </div>
 
       <!-- Delete active round confirmation -->
+      <!-- ── Edit Score Dialog (viewOnly mode) ───────────────────── -->
+      <div v-if="editScoreDialog" class="delete-overlay" @click="editScoreDialog = null">
+        <div class="delete-dialog" @click.stop>
+          <div class="delete-title">Edit Score</div>
+          <div class="delete-msg">{{ editScoreDialog.memberName }} — Hole {{ editScoreDialog.hole }}</div>
+          <input
+            class="edit-score-input"
+            type="number"
+            min="1"
+            max="20"
+            v-model="editScoreValue"
+            @keyup.enter="saveEditScore"
+            autofocus
+          />
+          <div class="delete-actions">
+            <button class="btn-cancel" @click="editScoreDialog = null">Cancel</button>
+            <button class="btn-delete-confirm" style="background:#22c55e" @click="saveEditScore">Save</button>
+          </div>
+        </div>
+      </div>
+
       <div v-if="confirmDeleteActive" class="delete-overlay" @click="confirmDeleteActive = false">
         <div class="delete-dialog" @click.stop>
           <div class="delete-title">Delete this round?</div>
@@ -437,7 +462,7 @@
                     :key="h"
                     class="col-score-cell"
                     :class="{ 'cell-winner': isNetWinner(group.member.id, h), 'cell-defidget': isFidgetWinner(group.member.id, h) }"
-                    @click="activeHole = h"
+                    @click="isViewOnly ? openEditScoreDialog(group.member.id, h) : (activeHole = h)"
                   >
                     <span v-if="getScore(group.member.id, h)" :class="showNotations ? scoreNotation(getScore(group.member.id, h), parForHole(h)) : ''">{{ getScore(group.member.id, h) }}</span>
                     <span v-else class="score-empty-dot">·</span>
@@ -451,7 +476,7 @@
                     :key="h"
                     class="col-score-cell"
                     :class="{ 'cell-winner': isNetWinner(group.member.id, h), 'cell-defidget': isFidgetWinner(group.member.id, h) }"
-                    @click="activeHole = h"
+                    @click="isViewOnly ? openEditScoreDialog(group.member.id, h) : (activeHole = h)"
                   >
                     <span v-if="getScore(group.member.id, h)" :class="showNotations ? scoreNotation(getScore(group.member.id, h), parForHole(h)) : ''">{{ getScore(group.member.id, h) }}</span>
                     <span v-else class="score-empty-dot">·</span>
@@ -703,12 +728,12 @@
           <span v-else class="hole-nav-spacer"></span>
         </div>
 
-        <!-- Finish Round on last hole -->
-        <div v-if="activeHole === visibleHoles[visibleHoles.length - 1] && roundCompletionInfo.allScored && !roundsStore.activeRound?.is_complete" class="hole-finish-banner">
+        <!-- Finish Round on last hole (hidden in viewOnly mode) -->
+        <div v-if="!isViewOnly && activeHole === visibleHoles[visibleHoles.length - 1] && roundCompletionInfo.allScored && !roundsStore.activeRound?.is_complete" class="hole-finish-banner">
           <div class="hole-finish-text">All {{ visibleHoles.length }} holes scored!</div>
           <button class="finish-btn finish-btn-lg" @click="showFinishReview = true">Review & Finish Round</button>
         </div>
-        <div v-else-if="activeHole === visibleHoles[visibleHoles.length - 1] && !roundCompletionInfo.allScored && roundCompletionInfo.scoredCount > 0 && !roundsStore.activeRound?.is_complete" class="hole-finish-banner hole-finish-partial">
+        <div v-else-if="!isViewOnly && activeHole === visibleHoles[visibleHoles.length - 1] && !roundCompletionInfo.allScored && roundCompletionInfo.scoredCount > 0 && !roundsStore.activeRound?.is_complete" class="hole-finish-banner hole-finish-partial">
           <div class="hole-finish-text">{{ roundCompletionInfo.missingHoles.length }} holes still need scores</div>
           <button class="finish-btn finish-btn-review" @click="activeHole = roundCompletionInfo.missingHoles[0]">Go to H{{ roundCompletionInfo.missingHoles[0] }}</button>
         </div>
@@ -740,7 +765,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useRoundsStore } from '../stores/rounds'
 import { useCoursesStore } from '../stores/courses'
@@ -763,6 +788,10 @@ const roundsStore = useRoundsStore()
 const coursesStore = useCoursesStore()
 const rosterStore = useRosterStore()
 const router = useRouter()
+const route = useRoute()
+
+// ── View-only mode (opened from history to review a completed round) ──
+const isViewOnly = computed(() => route.query.viewOnly === 'true')
 
 // ── View state ──────────────────────────────────────────────────
 const activeHole = ref(0) // 0 = Card view, >0 = Hole entry
@@ -772,6 +801,36 @@ const confirmDeleteActive = ref(false)
 const showGameEditor = ref(false)
 const showHcpEditor = ref(false)
 const showOppEditor = ref(false)
+
+// ── View-only edit score dialog ───────────────────────────────────
+const editScoreDialog = ref(null) // { memberId, memberName, hole, current }
+const editScoreValue = ref('')
+
+function openEditScoreDialog(memberId, hole) {
+  if (!isViewOnly.value) return
+  const member = roundsStore.activeMembers.find(m => m.id === memberId)
+  editScoreDialog.value = {
+    memberId,
+    memberName: member?.short_name || memberId,
+    hole,
+    current: roundsStore.activeScores[memberId]?.[hole] ?? '',
+  }
+  editScoreValue.value = String(editScoreDialog.value.current || '')
+}
+
+async function saveEditScore() {
+  if (!editScoreDialog.value) return
+  const { memberId, hole } = editScoreDialog.value
+  const val = parseInt(editScoreValue.value)
+  if (!val || val < 1 || val > 20) return
+  // Save score directly — does NOT change is_complete
+  await roundsStore.setScore(memberId, hole, val)
+  editScoreDialog.value = null
+}
+
+function goBackToHistory() {
+  router.push('/history')
+}
 
 // ── Opponent editor state ─────────────────────────────────────────
 const editOppPlayers = ref([])
@@ -2621,6 +2680,28 @@ function formatDate(dateStr) {
   color: #93c5fd;
   background: rgba(96,165,250,.12);
   border: 1px solid rgba(96,165,250,.3);
+}
+.back-to-history-btn {
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.15);
+  color: #cbd5e1;
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.back-to-history-btn:active { background: rgba(255,255,255,.14); }
+.edit-score-input {
+  width: 100%;
+  padding: 10px;
+  font-size: 24px;
+  text-align: center;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,.2);
+  background: rgba(255,255,255,.08);
+  color: #f1f5f9;
+  margin: 12px 0;
+  box-sizing: border-box;
 }
 
 /* Score sync error banner */
