@@ -24,7 +24,7 @@
         </div>
 
         <div class="field-group">
-          <label class="field-label">Full Name</label>
+          <label class="field-label">Full Name <span style="color:#e53e3e;">*</span></label>
           <input v-model="displayName" class="wiz-input" placeholder="e.g. Jason Spieler" type="text" autocomplete="name" />
         </div>
 

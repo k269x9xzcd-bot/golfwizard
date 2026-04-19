@@ -21,7 +21,7 @@
               type="email"
               class="auth-input"
               placeholder="you@example.com"
-              autocomplete="email"
+              autocomplete="username email"
               autocapitalize="none"
               autocorrect="off"
               spellcheck="false"
