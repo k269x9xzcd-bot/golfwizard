@@ -8,7 +8,7 @@
  * Captures the full scrollable table width (reads from .scorecard-scroll).
  *
  * For HistoryView: captures the .round-detail card as-is, and builds a
- * text summary of scores + game results to attach to the share message.
+ * plain-text summary of game results + settlement to attach to the share message.
  */
 
 /**
@@ -63,10 +63,9 @@ async function captureElement(el, filename, text, opts = {}) {
   }
 
   // --- 5. Measure full scrollable width ---
-  // Use the inner table width so we capture all 18 columns, not the clipped outer div.
   const tableEl = el.querySelector('.scorecard-grid')
   const captureWidth = tableEl
-    ? tableEl.scrollWidth + 32   // +32 for sticky col + padding
+    ? tableEl.scrollWidth + 32
     : captureTarget.scrollWidth
 
   try {
@@ -91,7 +90,6 @@ async function captureElement(el, filename, text, opts = {}) {
       URL.revokeObjectURL(url)
     }
   } finally {
-    // Restore everything
     el.style.overflow      = prevOverflow
     el.style.maxHeight     = prevMaxHeight
     el.style.borderRadius  = prevBorderRadius
@@ -124,69 +122,67 @@ export async function shareRecap(round) {
   const el = document.getElementById('gw-capture-target')
   if (!el) throw new Error('Scorecard element not found')
   const filename = `${(round.course_name || 'recap').replace(/\s+/g, '-')}-${round.date || 'today'}-recap.png`
-  await captureElement(el, filename, `GolfWizard Recap \u00b7 ${round.course_name}`, { landscape: true })
+  await captureElement(el, filename, `GolfWizard Recap · ${round.course_name}`, { landscape: true })
 }
 
 /**
- * Share a history round recap from HistoryView.
- *
- * Captures the expanded .round-detail card as the image.
- * Builds a plain-text score + game summary to attach to the share message
- * so recipients get the data even if they can't see the image.
- *
- * @param {object}      round  - round object from the rounds store
- * @param {HTMLElement} el     - the .round-detail DOM element
- * @param {string}      [textSummary] - optional pre-built text (gameRecap lines)
+ * Build a plain-text games + settlement summary for the share message body.
+ * This appears in the iOS share sheet text field so recipients get the data
+ * even if they can't view the image.
  */
-export async function shareHistoryRecap(round, el, textSummary) {
-  if (!el) throw new Error('Round detail element not found')
+function buildGamesSummaryText(gameRows, settlement) {
+  const lines = []
 
-  const filename = `${(round.course_name || 'recap').replace(/\s+/g, '-')}-${round.date || 'today'}-recap.png`
-
-  // Build share text from round data
-  const members = round.round_members || []
-  const scores  = round.scores || []
-  const scoreLines = members.map(m => {
-    const total = scores
-      .filter(s => s.member_id === m.id)
-      .reduce((sum, s) => sum + (s.score ?? s.strokes ?? 0), 0)
-    return `${m.short_name || m.guest_name || '?'}: ${total || '—'}`
-  }).join(', ')
-
-  const header = `\u26f3 ${round.course_name} \u00b7 ${round.date || ''}\n`
-  const text = textSummary
-    ? `${header}${scoreLines}\n\n${textSummary}`
-    : `${header}${scoreLines}`
-
-  // Unlock the card so html2canvas captures full height
-  const prevMaxHeight = el.style.maxHeight
-  const prevOverflow  = el.style.overflow
-  el.style.maxHeight  = 'none'
-  el.style.overflow   = 'visible'
-
-  const html2canvas = (await import('html2canvas')).default
-  try {
-    const canvas = await html2canvas(el, {
-      backgroundColor: '#0c150e',
-      scale: 2,
-      useCORS: true,
-      logging: false,
-      width: el.scrollWidth,
-      windowWidth: el.scrollWidth + 40,
-    })
-    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
-    const file = new File([blob], filename, { type: 'image/png' })
-
-    if (navigator.share && navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ files: [file], title: 'GolfWizard Recap', text })
-    } else {
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url; a.download = filename; a.click()
-      URL.revokeObjectURL(url)
+  if (gameRows?.length) {
+    lines.push('⛳ GAMES')
+    for (const g of gameRows) {
+      const icon = g.icon || '🏌️'
+      const label = g.label || ''
+      if (g.winnerLine) {
+        lines.push(`${icon} ${label}: ${g.winnerLine}`)
+        if (g.detail) lines.push(`   ${g.detail}`)
+      } else if (g.detail) {
+        lines.push(`${icon} ${label}: ${g.detail}`)
+      }
     }
-  } finally {
-    el.style.maxHeight = prevMaxHeight
-    el.style.overflow  = prevOverflow
   }
+
+  if (settlement?.ledger?.length) {
+    if (lines.length) lines.push('')
+    lines.push('💵 SETTLE UP')
+    for (const e of settlement.ledger) {
+      lines.push(`${e.from_name} → ${e.to_name}: $${e.amount}`)
+    }
+  } else if (settlement?.playerTotals) {
+    const totals = Object.values(settlement.playerTotals)
+    if (totals.some(t => t.total !== 0)) {
+      if (lines.length) lines.push('')
+      lines.push('💵 SETTLE UP')
+      for (const t of totals) {
+        const sign = t.total > 0 ? '+' : ''
+        lines.push(`${t.name}: ${sign}$${Math.abs(t.total)}`)
+      }
+    }
+  }
+
+  return lines.join('\n')
+}
+
+/**
+ * Share a recap from the History view.
+ * Captures the expanded .round-detail card as the image.
+ * Attaches a plain-text game results + settlement summary to the share message.
+ *
+ * @param {object}      round      - round object from the rounds store
+ * @param {HTMLElement} detailEl   - the .round-detail DOM element
+ * @param {Array}       gameRows   - result of gameRecapRows(round)
+ * @param {object}      settlement - settlementsCache[round.id]
+ */
+export async function shareHistoryRecap(round, detailEl, gameRows, settlement) {
+  if (!detailEl) throw new Error('Round detail element not found')
+  const filename = `${(round.course_name || 'recap').replace(/\s+/g, '-')}-${round.date || 'today'}-recap.png`
+  const gamesSummary = buildGamesSummaryText(gameRows, settlement)
+  const header = `GolfWizard Recap · ${round.course_name} · ${round.date || ''}`
+  const text = gamesSummary ? `${header}\n\n${gamesSummary}` : header
+  await captureElement(detailEl, filename, text)
 }
