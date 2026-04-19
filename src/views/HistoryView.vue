@@ -558,9 +558,9 @@ function _recapOne(ctx, game) {
         const winner = total > 0 ? t1n : t2n
         base.winnerLine = `${winner} +$${Math.abs(total)}`
         const parts = []
-        if (s.front) parts.push(`F ${s.front > 0 ? '+' : ''}$${Math.abs(s.front)}`)
-        if (s.back) parts.push(`B ${s.back > 0 ? '+' : ''}$${Math.abs(s.back)}`)
-        if (s.overall) parts.push(`O ${s.overall > 0 ? '+' : ''}$${Math.abs(s.overall)}`)
+        if (s.front) parts.push(`F ${s.front > 0 ? '+' : '-'}$${Math.abs(s.front)}`)
+        if (s.back) parts.push(`B ${s.back > 0 ? '+' : '-'}$${Math.abs(s.back)}`)
+        if (s.overall) parts.push(`O ${s.overall > 0 ? '+' : '-'}$${Math.abs(s.overall)}`)
         base.detail = parts.length ? parts.join(' · ') : `${t1n} vs ${t2n}`
       }
       return base
