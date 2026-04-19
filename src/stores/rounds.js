@@ -393,6 +393,7 @@ export const useRoundsStore = defineStore('rounds', () => {
         role: i === 0 && auth.user?.id ? 'admin' : 'player',
         nickname: p.nickname ?? null,
         use_nickname: p.use_nickname ?? false,
+        email: p.email ?? null,
       }))
       try {
         const { data: mData, error: mErr } = await supaWithTimeout(

@@ -68,6 +68,9 @@
           <button class="round-menu-item" @click="doShareRecap" :disabled="sharing">
             {{ sharing ? '⏳ Sharing…' : '📋 Share Recap' }}
           </button>
+          <button v-if="isCaptain" class="round-menu-item" @click="doSimulateFill">
+            🎲 Simulate Scores
+          </button>
           <button v-if="isCaptain" class="round-menu-item round-menu-danger" @click="showRoundMenu = false; confirmDeleteActive = true">
             🗑️ Delete Round
           </button>
@@ -339,7 +342,6 @@
           </button>
           <span class="sct-spacer"></span>
           <button class="sim-btn" @click="doShareScorecard" :disabled="sharing" title="Share scorecard">{{ sharing ? '⏳' : '↑' }}</button>
-          <button class="sim-btn" @click="simulateFill" title="Fill random scores">🎲</button>
           <button class="sim-btn sim-btn-reset" @click="resetScores" title="Reset all scores">↺</button>
         </div>
 
@@ -2205,6 +2207,12 @@ function inlineDec(member) {
 // saveScore removed — inline entry auto-saves
 
 // ── Score Simulator ─────────────────────────────────────────────
+function doSimulateFill() {
+  showRoundMenu.value = false
+  if (!confirm('Simulate random scores for all players? This will overwrite any existing scores.')) return
+  simulateFill()
+}
+
 function simulateFill() {
   const members = roundsStore.activeMembers
   const holes = visibleHoles.value
@@ -2293,18 +2301,38 @@ async function finishRound() {
 const sharing = ref(false)
 
 function buildGameLines() {
-  if (!liveSettlements.value) return []
+  if (!liveSettlements.value?.summary) return []
   const lines = []
-  for (const [gameId, s] of Object.entries(liveSettlements.value)) {
+  for (const [gameId, s] of Object.entries(liveSettlements.value.summary)) {
     const game = roundsStore.activeGames.find(g => g.id === gameId)
     if (!game) continue
     const label = gameLabel(game.type, game.config || {})
-    if (s?.summary) lines.push(`${label}: ${s.summary}`)
-    else if (s?.total !== undefined && s.total !== 0) {
-      const sign = s.total > 0 ? '+' : ''
-      lines.push(`${label}: ${sign}$${Math.abs(s.total)}`)
-    } else {
+    if (s?.error) {
+      lines.push(`${label}: —`)
+      continue
+    }
+    const nets = s?.nets || []
+    if (!nets.length) {
       lines.push(`${label}: All square`)
+      continue
+    }
+    // Build "Name: +$X" strings, sorted winners first
+    const parts = nets
+      .filter(n => n.net !== 0)
+      .sort((a, b) => b.net - a.net)
+      .map(n => {
+        const sign = n.net > 0 ? '+' : '-'
+        return `${n.name}: ${sign}$${Math.abs(n.net)}`
+      })
+    lines.push(`${label}: ${parts.length ? parts.join(' · ') : 'All square'}`)
+  }
+  // Also append ledger settle-up
+  const ledger = liveSettlements.value.ledger || []
+  if (ledger.length) {
+    lines.push('')
+    lines.push('Settle Up:')
+    for (const e of ledger) {
+      lines.push(`${e.from_name} → ${e.to_name}: $${e.amount}`)
     }
   }
   return lines

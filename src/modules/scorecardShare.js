@@ -27,20 +27,21 @@ function yardsFor(course, tee) {
 }
 
 function scoreColor(gross, par) {
-  if (!gross || !par) return '#e8e0cc'
+  if (!gross || !par) return '#f0ebdd'
   const diff = gross - par
-  if (diff <= -2) return '#ffd700'   // eagle — gold
-  if (diff === -1) return '#60a5fa'  // birdie — blue
-  if (diff === 0)  return '#e8e0cc'  // par — cream
-  if (diff === 1)  return '#f97316'  // bogey — orange
-  return '#ef4444'                   // double+ — red
+  if (diff <= -2) return '#f59e0b'   // eagle — amber
+  if (diff === -1) return '#22c55e'  // birdie — green
+  if (diff === 0)  return '#f0ebdd'  // par — parchment
+  if (diff === 1)  return '#ef4444'  // bogey — red
+  return '#dc2626'                   // double+ — dark red
 }
 
 function scoreBorder(gross, par) {
-  if (!gross || !par) return '1px solid #444'
+  if (!gross || !par) return '1px solid #d1c9b8'
   const diff = gross - par
-  if (diff <= -1) return '2px solid #60a5fa'
-  return '1px solid #555'
+  if (diff <= -2) return '2px solid #f59e0b'
+  if (diff === -1) return '2px solid #22c55e'
+  return '1px solid #d1c9b8'
 }
 
 function netScore(gross, roundHcp, siArr, hole) {
@@ -73,14 +74,14 @@ function buildScorecardHtml(round, members, scores, course, gameResults) {
   const backPar  = back.reduce((s,h) => s+(parArr[h-1]??4), 0)
   const totalPar = frontPar + backPar
 
-  // Colors
-  const BG       = '#0d1f12'
-  const HEADER   = '#1a2e1a'
-  const GOLD     = '#d4af37'
-  const GREEN    = '#22a06b'
-  const CREAM    = '#e8e0cc'
-  const MUTED    = '#8a9e8a'
-  const CELL     = '#162118'
+  // Colors — cream/parchment scheme matching the app scorecard
+  const BG       = '#faf7f0'
+  const HEADER   = '#f0ebdd'
+  const GOLD     = '#9a7a1e'
+  const GREEN    = '#166534'
+  const CREAM    = '#1a1f1b'
+  const MUTED    = '#6b7280'
+  const CELL     = '#faf7f0'
 
   // ── Cell builder ───────────────────────────────────────────────
   function scoreCell(gross, par, size='28px') {
@@ -88,7 +89,8 @@ function buildScorecardHtml(round, members, scores, course, gameResults) {
     const bg = scoreColor(gross, par)
     const border = scoreBorder(gross, par)
     const diff = gross - par
-    const fg = diff <= 0 ? '#0d1f12' : '#fff'
+    // eagle/birdie have colored bg — use dark text. bogey/dbl have red bg — use white.
+    const fg = diff <= -1 ? '#fff' : diff >= 1 ? '#fff' : CREAM
     const radius = diff <= -1 ? '50%' : '4px'
     return `<td style="text-align:center;padding:2px;">
       <div style="background:${bg};color:${fg};border:${border};border-radius:${radius};
@@ -129,7 +131,7 @@ function buildScorecardHtml(round, members, scores, course, gameResults) {
     const gross      = frontTotal + backTotal
     const net        = gross - (m.round_hcp ?? 0)
 
-    const nameColor = m.team === 1 ? '#60a5fa' : m.team === 2 ? '#f87171' : CREAM
+    const nameColor = m.team === 1 ? '#1d4ed8' : m.team === 2 ? '#b91c1c' : CREAM
 
     return `<tr style="border-bottom:1px solid #1e3020;">
       <td style="padding:4px 8px;white-space:nowrap;">
@@ -166,7 +168,7 @@ function buildScorecardHtml(round, members, scores, course, gameResults) {
   const html = `
   <div id="gw-scorecard-export" style="
     background:${BG};color:${CREAM};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-    padding:20px;width:780px;border-radius:16px;box-shadow:0 4px 32px rgba(0,0,0,.6);
+    padding:20px;width:780px;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,.15);
   ">
     <!-- Header -->
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
@@ -211,7 +213,7 @@ function buildScorecardHtml(round, members, scores, course, gameResults) {
 
     <!-- Game results (if provided) -->
     ${gameResults ? `
-    <div style="margin-top:16px;padding:12px 16px;background:${HEADER};border-radius:10px;border:1px solid #2a4030;">
+    <div style="margin-top:16px;padding:12px 16px;background:${HEADER};border-radius:10px;border:1px solid #d1c9b8;">
       <div style="font-size:11px;font-weight:700;color:${MUTED};margin-bottom:8px;letter-spacing:.05em;">GAME RESULTS</div>
       <div style="font-size:13px;color:${CREAM};line-height:1.8;">${gameResults}</div>
     </div>` : ''}
@@ -237,7 +239,7 @@ async function captureAndShare(html, filename, text) {
   try {
     const html2canvas = (await import('html2canvas')).default
     const canvas = await html2canvas(el, {
-      backgroundColor: '#0d1f12',
+      backgroundColor: '#faf7f0',
       scale: 2,
       useCORS: true,
       logging: false,

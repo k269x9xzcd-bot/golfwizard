@@ -1666,6 +1666,7 @@ function togglePlayer(p) {
       nickname: p.nickname ?? null,
       use_nickname: p.use_nickname ?? false,
       profileId: p.user_id ?? null,
+      email: p.email ?? null,
     })
   }
 }
