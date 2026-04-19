@@ -963,6 +963,10 @@ export const useRoundsStore = defineStore('rounds', () => {
     return JSON.parse(localStorage.getItem('gw_guest_rounds') || '[]')
   }
 
+  function clearActiveRound() {
+    activeRound.value = null
+  }
+
   return {
     activeRound, activeMembers, activeScores, activeGames,
     rounds, loading, activeRoundId, scoreSyncError,
@@ -972,5 +976,6 @@ export const useRoundsStore = defineStore('rounds', () => {
     fetchSettlements, fetchLedgerEntries,
     subscribeToRound, unsubscribe,
     saveGuestRound, loadGuestRounds,
+    clearActiveRound,
   }
 })

@@ -18,7 +18,7 @@
 
     <!-- Active round card — ONLY for non-tournament rounds -->
     <div
-      v-if="roundsStore.activeRound && !isTournamentRound"
+      v-if="roundsStore.activeRound && !roundsStore.activeRound.is_complete && !isTournamentRound"
       class="active-round-card card"
       @click="$router.push('/scoring')"
     >
@@ -28,7 +28,9 @@
       <div class="card-cta">Continue →</div>
     </div>
 
+    <!-- Active cross-match banner (host/round owner) -->
     <CrossMatchBanner />
+
     <!-- Pending 4v4 match invites banner -->
     <div
       v-for="invite in linkedStore.pendingInvites"

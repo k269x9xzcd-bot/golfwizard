@@ -371,7 +371,15 @@
         </div>
 
         <!-- Horizontal Scorecard Grid -->
-        <div class="scorecard-outer">
+        <div class="scorecard-outer" id="gw-capture-target">
+          <!-- Capture-only header: hidden in app, shown when taking screenshot -->
+          <div class="capture-header">
+            <div class="capture-header-left">
+              <div class="capture-course">{{ roundsStore.activeRound.course_name }}</div>
+              <div class="capture-meta">{{ roundsStore.activeRound.date }} · {{ roundsStore.activeRound.tee }} tees · {{ holesLabel }}</div>
+            </div>
+            <div class="capture-header-right">⛳ GolfWizard</div>
+          </div>
         <div class="scorecard-scroll">
           <table class="scorecard-grid">
             <thead>
@@ -942,6 +950,10 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  // If we were in viewOnly mode, clear activeRound so Home doesn't show it as in-progress
+  if (isViewOnly.value && roundsStore.activeRound?.is_complete) {
+    roundsStore.clearActiveRound()
+  }
   // Leaving the view: make sure the body class is cleared
   if (typeof document !== 'undefined') document.body.classList.remove('gw-landscape')
   if (!_landscapeMql) return
@@ -2410,8 +2422,7 @@ async function doShareScorecard() {
   sharing.value = true
   showRoundMenu.value = false
   try {
-    const { round, members, scores, course } = _shareCtx()
-    await shareScorecard(round, members, scores, course)
+    await shareScorecard(roundsStore.activeRound)
   } catch (e) { console.error('Share scorecard failed:', e) }
   finally { sharing.value = false }
 }
@@ -2421,9 +2432,7 @@ async function doShareRecap() {
   sharing.value = true
   showRoundMenu.value = false
   try {
-    const { round, members, scores, course } = _shareCtx()
-    const lines = buildGameLines()
-    await shareRecap(round, members, scores, course, lines)
+    await shareRecap(roundsStore.activeRound)
   } catch (e) { console.error('Share recap failed:', e) }
   finally { sharing.value = false }
 }
@@ -3290,6 +3299,25 @@ function formatDate(dateStr) {
   overflow: hidden;
   background: #faf7f0;
   box-shadow: 0 4px 14px rgba(0,0,0,.35), 0 1px 3px rgba(0,0,0,.2);
+}
+/* Capture header — hidden in normal app view, shown only during screenshot */
+.capture-header { display: none; }
+.gw-capturing .capture-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 14px 16px 10px;
+  background: #faf7f0;
+  border-bottom: 1px solid #e2ddd4;
+}
+.capture-course {
+  font-size: 20px; font-weight: 800; color: #9a7a1e;
+}
+.capture-meta {
+  font-size: 12px; color: #6b7280; margin-top: 2px;
+}
+.capture-header-right {
+  font-size: 13px; font-weight: 700; color: #166534;
 }
 
 .scorecard-scroll {
