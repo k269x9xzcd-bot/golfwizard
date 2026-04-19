@@ -131,7 +131,7 @@
       </div>
 
       <!-- ── Step 2: Players ────────────────────────────────── -->
-      <div v-if="step === 2" class="wizard-step">
+      <div v-if="step === 2" class="wizard-step wizard-step--players">
         <input
           v-model="playerSearch"
           class="wiz-input"
@@ -139,12 +139,12 @@
           @focus="scrollInputIntoView"
         />
 
-        <!-- Added players with drag-to-reorder -->
-        <div v-if="form.players.length" class="player-cards">
+        <!-- Selected players: compact horizontal chip strip -->
+        <div v-if="form.players.length" class="player-chip-strip">
           <div
             v-for="(p, i) in form.players"
             :key="p.id"
-            class="player-card"
+            class="player-chip"
             :class="{ 'dragging': dragIdx === i }"
             draggable="true"
             @dragstart="onDragStart(i)"
@@ -154,22 +154,31 @@
             @touchmove.prevent="onTouchDragMove"
             @touchend="onTouchDragEnd"
           >
-            <span class="drag-handle" title="Drag to reorder">⠿</span>
-            <span class="player-card-name">{{ p.name }}</span>
-            <label class="player-card-field">
-              <span class="player-card-label">IDX</span>
-              <input
-                type="number"
-                step="0.1"
-                class="player-card-input"
-                :value="p.ghinIndex"
-                @input="p.ghinIndex = $event.target.value ? parseFloat($event.target.value) : null"
-                placeholder="—"
-              />
-            </label>
-            <button class="player-card-remove" @click="form.players.splice(i, 1)" title="Remove">×</button>
+            <span class="chip-drag">⠿</span>
+            <div class="chip-body">
+              <span class="chip-name">{{ p.shortName || p.name.split(' ')[0] }}</span>
+              <div class="chip-idx-row">
+                <span
+                  v-if="p.ghinSyncedAt"
+                  class="ghin-dot"
+                  :class="ghinDotClass(p.ghinSyncedAt)"
+                  :title="ghinDotTitle(p.ghinSyncedAt)"
+                />
+                <input
+                  type="number"
+                  step="0.1"
+                  class="chip-idx-input"
+                  :value="p.ghinIndex"
+                  @input="p.ghinIndex = $event.target.value ? parseFloat($event.target.value) : null"
+                  placeholder="—"
+                />
+              </div>
+            </div>
+            <button class="chip-remove" @click.stop="form.players.splice(i, 1)" title="Remove">×</button>
           </div>
         </div>
+
+        <!-- Roster list — fills remaining space -->
         <div class="roster-list">
           <!-- Favorites section -->
           <template v-if="!playerSearch">
@@ -184,7 +193,15 @@
               >
                 <div class="roster-info">
                   <span class="roster-name">{{ p.name }}</span>
-                  <span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span>
+                  <div class="roster-hcp-row">
+                    <span
+                      v-if="p.ghin_synced_at"
+                      class="ghin-dot"
+                      :class="ghinDotClass(p.ghin_synced_at)"
+                      :title="ghinDotTitle(p.ghin_synced_at)"
+                    />
+                    <span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span>
+                  </div>
                 </div>
                 <span class="roster-check">{{ isPlayerAdded(p) ? '✓' : '+' }}</span>
               </div>
@@ -200,7 +217,15 @@
               >
                 <div class="roster-info">
                   <span class="roster-name">{{ p.name }}</span>
-                  <span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span>
+                  <div class="roster-hcp-row">
+                    <span
+                      v-if="p.ghin_synced_at"
+                      class="ghin-dot"
+                      :class="ghinDotClass(p.ghin_synced_at)"
+                      :title="ghinDotTitle(p.ghin_synced_at)"
+                    />
+                    <span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span>
+                  </div>
                 </div>
                 <span class="roster-check">{{ isPlayerAdded(p) ? '✓' : '+' }}</span>
               </div>
@@ -217,7 +242,15 @@
             >
               <div class="roster-info">
                 <span class="roster-name">{{ p.name }}</span>
-                <span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span>
+                <div class="roster-hcp-row">
+                  <span
+                    v-if="p.ghin_synced_at"
+                    class="ghin-dot"
+                    :class="ghinDotClass(p.ghin_synced_at)"
+                    :title="ghinDotTitle(p.ghin_synced_at)"
+                  />
+                  <span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span>
+                </div>
               </div>
               <span class="roster-check">{{ isPlayerAdded(p) ? '✓' : '+' }}</span>
             </div>
@@ -1665,12 +1698,29 @@ function togglePlayer(p) {
       id: p.id, name: p.name,
       shortName: p.short_name,
       ghinIndex: p.ghin_index,
+      ghinSyncedAt: p.ghin_synced_at ?? null,
       nickname: p.nickname ?? null,
       use_nickname: p.use_nickname ?? false,
       profileId: p.user_id ?? null,
       email: p.email ?? null,
     })
   }
+}
+
+// ── GHIN sync dot helpers ────────────────────────────────────────
+function ghinDotClass(syncedAt) {
+  if (!syncedAt) return 'ghin-dot--manual'
+  const days = (Date.now() - new Date(syncedAt).getTime()) / 86400000
+  if (days <= 30) return 'ghin-dot--fresh'   // blue — synced within 30 days
+  if (days <= 90) return 'ghin-dot--stale'   // gray — synced 30-90 days ago
+  return 'ghin-dot--old'                      // red — older than 90 days
+}
+function ghinDotTitle(syncedAt) {
+  if (!syncedAt) return 'Handicap entered manually'
+  const days = Math.floor((Date.now() - new Date(syncedAt).getTime()) / 86400000)
+  if (days === 0) return 'GHIN synced today'
+  if (days === 1) return 'GHIN synced yesterday'
+  return `GHIN synced ${days} days ago`
 }
 
 function quickAddPlayer() {

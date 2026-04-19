@@ -6,19 +6,30 @@
  */
 
 import { execSync } from 'child_process'
-import { readFileSync, writeFileSync } from 'fs'
-import { resolve } from 'path'
+import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { resolve, dirname } from 'path'
+import { fileURLToPath } from 'url'
 
 process.on('SIGINT',  () => { console.log('\n🛑 Interrupted.'); process.exit(1) })
 process.on('SIGTERM', () => { console.log('\n🛑 Terminated.'); process.exit(1) })
 
-function run(cmd) {
+// Always resolve git root relative to this script — works regardless of cwd
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const GIT_ROOT = resolve(__dirname, '..')   // src/ is one level up from scripts/
+
+if (!existsSync(resolve(GIT_ROOT, '.git'))) {
+  console.error(`\n❌ No .git found at ${GIT_ROOT}`)
+  console.error('   Run deploy from the Desktop copy, not the iCloud copy.')
+  process.exit(1)
+}
+
+function run(cmd, opts = {}) {
   console.log(`\n$ ${cmd}`)
-  execSync(cmd, { stdio: 'inherit' })
+  execSync(cmd, { stdio: 'inherit', cwd: GIT_ROOT, ...opts })
 }
 
 // 1. Bump patch version
-const pkgPath = resolve('./package.json')
+const pkgPath = resolve(GIT_ROOT, 'package.json')
 const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
 const parts = pkg.version.split('.').map(Number)
 parts[2] += 1

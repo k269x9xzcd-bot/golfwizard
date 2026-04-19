@@ -952,98 +952,153 @@ body {
   align-items: center;
 }
 
-/* ── Player cards (wizard step 2) ─────────────────────── */
-.player-cards {
+/* ── Player chip strip (wizard step 2) ────────────────── */
+/* Replaces the old stacked .player-cards layout.
+   Chips sit in a single scrollable row below the search bar,
+   taking ~64px total regardless of player count. */
+.player-chip-strip {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 4px 2px 6px;
+  flex-shrink: 0;
+  scrollbar-width: none;
+}
+.player-chip-strip::-webkit-scrollbar { display: none; }
+
+.player-chip {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 6px;
-}
-.player-card {
-  display: flex;
   align-items: center;
-  gap: 6px;
+  flex-shrink: 0;
+  width: 72px;
   background: var(--gw-green-800, #0d3325);
   border: 1px solid var(--gw-green-700, #114a35);
   border-radius: var(--gw-radius-md, 12px);
-  padding: 6px 8px 6px 10px;
+  padding: 6px 6px 4px;
+  position: relative;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
-.player-card-name {
-  flex: 1;
-  font-size: 14px;
-  font-weight: 600;
+.player-chip.dragging {
+  opacity: 0.45;
+  border-color: rgba(212,175,55,.5);
+  background: rgba(212,175,55,.08);
+}
+
+.chip-drag {
+  position: absolute;
+  top: 3px;
+  left: 5px;
+  font-size: 10px;
+  color: var(--gw-text-muted, #7d9283);
+  opacity: 0.5;
+  line-height: 1;
+}
+
+.chip-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 100%;
+  padding-top: 2px;
+}
+
+.chip-name {
+  font-size: 12px;
+  font-weight: 700;
   color: var(--gw-text, #f0ede0);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  min-width: 0;
+  max-width: 58px;
+  text-align: center;
 }
-.player-card-remove {
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
+
+.chip-idx-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  justify-content: center;
+}
+
+.chip-idx-input {
+  width: 44px;
+  padding: 3px 4px;
+  border-radius: 6px;
+  border: 1px solid rgba(212,175,55,.25);
+  background: rgba(255,255,255,.06);
+  color: var(--gw-gold, #d4af37);
+  font-family: var(--gw-font-mono, monospace);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  -webkit-appearance: none;
+}
+.chip-idx-input:focus {
+  outline: none;
+  border-color: var(--gw-gold, #d4af37);
+}
+.chip-idx-input::placeholder { color: var(--gw-text-muted); font-weight: 400; }
+
+.chip-remove {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
-  border: none;
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255,255,255,.12);
+  background: var(--gw-neutral-800, #1e2720);
   color: var(--gw-text-muted, #7d9283);
-  font-size: 14px;
+  font-size: 11px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   -webkit-tap-highlight-color: transparent;
-}
-.drag-handle {
-  flex-shrink: 0;
-  color: var(--gw-text-muted, #7d9283);
-  font-size: 18px;
-  cursor: grab;
-  padding: 0 4px;
-  user-select: none;
-  -webkit-user-select: none;
-  touch-action: none;
   line-height: 1;
-  opacity: 0.6;
 }
-.player-card.dragging {
-  opacity: 0.5;
-  background: rgba(212, 175, 55, 0.1);
-  border-color: rgba(212, 175, 55, 0.4);
+.chip-remove:active { background: rgba(248,113,113,.2); color: #f87171; }
+
+/* ── GHIN sync dot ────────────────────────────────────── */
+.ghin-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
 }
-.player-card-field {
+.ghin-dot--fresh  { background: #60a5fa; }   /* blue  — synced ≤30 days */
+.ghin-dot--stale  { background: #6b7280; }   /* gray  — 30–90 days */
+.ghin-dot--old    { background: #f87171; }   /* red   — >90 days */
+.ghin-dot--manual { display: none; }          /* no dot for manual entry */
+
+/* roster hcp row — dot + idx inline */
+.roster-hcp-row {
   display: flex;
   align-items: center;
-  gap: 5px;
-  flex-shrink: 0;
+  gap: 4px;
 }
-.player-card-label {
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--gw-text-muted, #7d9283);
-}
-.player-card-input {
-  width: 56px;
-  padding: 5px 8px;
-  border-radius: 8px;
-  border: 1px solid var(--gw-green-700, #114a35);
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--gw-gold, #d4af37);
-  font-family: var(--gw-font-mono, monospace);
-  font-size: 14px;
-  font-weight: 700;
-  text-align: center;
-  -webkit-appearance: none;
-}
-.player-card-input:focus {
-  outline: none;
-  border-color: var(--gw-gold, #d4af37);
-}
-.player-card-input::placeholder {
-  color: var(--gw-text-muted, #7d9283);
-  font-weight: 400;
-}
+
+/* ── Keep old player-card classes for any legacy refs ── */
+.player-cards { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+.player-card { display: flex; align-items: center; gap: 6px; background: var(--gw-green-800,#0d3325); border: 1px solid var(--gw-green-700,#114a35); border-radius: var(--gw-radius-md,12px); padding: 6px 8px 6px 10px; }
+.player-card-name { flex:1; font-size:14px; font-weight:600; color:var(--gw-text,#f0ede0); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+.player-card-remove { flex-shrink:0; width:24px; height:24px; border-radius:50%; border:none; background:rgba(255,255,255,.06); color:var(--gw-text-muted,#7d9283); font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+.drag-handle { flex-shrink:0; color:var(--gw-text-muted,#7d9283); font-size:18px; cursor:grab; padding:0 4px; user-select:none; -webkit-user-select:none; touch-action:none; line-height:1; opacity:.6; }
+.player-card.dragging { opacity:.5; background:rgba(212,175,55,.1); border-color:rgba(212,175,55,.4); }
+.player-card-field { display:flex; align-items:center; gap:5px; flex-shrink:0; }
+.player-card-label { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; color:var(--gw-text-muted,#7d9283); }
+.player-card-input { width:56px; padding:5px 8px; border-radius:8px; border:1px solid var(--gw-green-700,#114a35); background:rgba(255,255,255,.06); color:var(--gw-gold,#d4af37); font-family:var(--gw-font-mono,monospace); font-size:14px; font-weight:700; text-align:center; -webkit-appearance:none; }
+.player-card-input:focus { outline:none; border-color:var(--gw-gold,#d4af37); }
+.player-card-input::placeholder { color:var(--gw-text-muted,#7d9283); font-weight:400; }
 
 /* Legacy (keep for compat) */
 .added-players {

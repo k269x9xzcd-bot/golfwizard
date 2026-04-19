@@ -70,10 +70,44 @@
         <span v-if="!search" class="swipe-hint">← delete &nbsp;·&nbsp; favorite →</span>
       </div>
 
-      <div v-if="filteredCourses.length === 0" class="empty-state">
+      <!-- Empty local results: show API search results or prompt -->
+      <template v-if="filteredCourses.length === 0 && search">
+        <!-- API searching spinner -->
+        <div v-if="mainSearchApiLoading" class="empty-state">
+          <div class="loading-spinner" />
+          <div class="empty-text">Searching golf database…</div>
+        </div>
+        <!-- API results -->
+        <template v-else-if="mainSearchApiResults.length">
+          <div class="section-label">From Golf Database</div>
+          <div
+            v-for="r in mainSearchApiResults"
+            :key="r.apiId"
+            class="api-result-row"
+            @click="openAddCourseFromApi(r)"
+          >
+            <div class="api-result-info">
+              <div class="api-result-name">{{ r.name }}</div>
+              <div v-if="r.location" class="api-result-loc">{{ r.location }}</div>
+            </div>
+            <button class="api-result-add">＋ Add</button>
+          </div>
+          <div class="empty-state empty-state--secondary">
+            <div class="empty-text">Not what you're looking for?</div>
+            <button class="btn-ghost" @click="openAddCourse">Add manually</button>
+          </div>
+        </template>
+        <!-- No API results either -->
+        <div v-else class="empty-state">
+          <div class="empty-icon">⛳</div>
+          <div class="empty-text">No courses found for "{{ search }}"</div>
+          <button class="btn-primary" @click="openAddCourse">Add manually</button>
+        </div>
+      </template>
+      <div v-else-if="filteredCourses.length === 0" class="empty-state">
         <div class="empty-icon">⛳</div>
-        <div class="empty-text">No courses found</div>
-        <button class="btn-primary" @click="openAddCourse">Add "{{ search }}"</button>
+        <div class="empty-text">No courses yet</div>
+        <button class="btn-primary" @click="openAddCourse">Add a Course</button>
       </div>
 
       <div
@@ -468,6 +502,41 @@ const filteredCourses = computed(() => {
   })
   return sortCourses(base)
 })
+
+// ── Main search bar: API fallback when local results empty ──
+const mainSearchApiResults = ref([])
+const mainSearchApiLoading = ref(false)
+let mainSearchTimer = null
+
+watch(search, (q) => {
+  clearTimeout(mainSearchTimer)
+  mainSearchApiResults.value = []
+  if (!q || q.trim().length < 3) { mainSearchApiLoading.value = false; return }
+  // Only hit API if local results are empty
+  mainSearchTimer = setTimeout(async () => {
+    if (filteredCourses.value.length > 0) return
+    mainSearchApiLoading.value = true
+    try {
+      mainSearchApiResults.value = await coursesStore.searchCoursesApi(q.trim())
+    } catch (_) {
+      mainSearchApiResults.value = []
+    }
+    mainSearchApiLoading.value = false
+  }, 600)
+})
+
+async function openAddCourseFromApi(apiResult) {
+  // Pre-populate the add overlay with the API result and auto-fetch detail
+  editingCourse.value = null
+  newCourse.value = freshCourse()
+  newCourse.value.name = apiResult.name
+  addStep.value = 1
+  step1Error.value = ''
+  step2Error.value = ''
+  selectedTeeIdx.value = 0
+  showAddOverlay.value = true
+  // fetchCourseFromApi is triggered by the name watch inside the overlay
+}
 
 function teeSummary(course) {
   const t = course.tees
@@ -1195,12 +1264,33 @@ function showToast(msg, type = 'neutral') {
   text-align: center;
   padding: 40px 20px;
 }
+.empty-state--secondary { padding: 16px 20px; }
 .empty-icon { font-size: 40px; margin-bottom: 12px; }
 .empty-text {
   font-family: var(--gw-font-body);
   color: var(--gw-text-muted);
   margin-bottom: 20px;
 }
+
+/* ── API result rows ─────────────────────────────────────── */
+.api-result-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  margin: 0 0 6px;
+  background: var(--gw-card-bg);
+  border-radius: var(--gw-radius-md);
+  border: 1px solid rgba(212,175,55,.2);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.api-result-row:active { background: rgba(212,175,55,.08); }
+.api-result-info { flex: 1; min-width: 0; }
+.api-result-name { font-size: 15px; font-weight: 600; color: var(--gw-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.api-result-loc { font-size: 12px; color: var(--gw-text-muted); margin-top: 2px; }
+.api-result-add { flex-shrink: 0; margin-left: 12px; padding: 6px 12px; background: rgba(212,175,55,.15); border: 1px solid rgba(212,175,55,.3); border-radius: var(--gw-radius-full); color: var(--gw-gold); font-size: 13px; font-weight: 600; cursor: pointer; }
+.loading-spinner { width: 28px; height: 28px; border: 3px solid rgba(255,255,255,.1); border-top-color: var(--gw-gold); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 12px; }
 
 /* ── Overlay ─────────────────────────────────────────────── */
 .overlay-backdrop {

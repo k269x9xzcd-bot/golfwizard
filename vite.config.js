@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import { readFileSync, writeFileSync } from 'fs'
+import { readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { resolve } from 'path'
 
 const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'))
@@ -13,7 +13,10 @@ function stampServiceWorker() {
   return {
     name: 'stamp-sw',
     closeBundle() {
-      const swPath = resolve('./dist/sw.js')
+      const distPath = resolve('./dist')
+
+      // Stamp sw.js
+      const swPath = resolve(distPath, 'sw.js')
       try {
         let sw = readFileSync(swPath, 'utf-8')
         sw = sw.replace('__BUILD_VERSION__', BUILD_STAMP)
@@ -21,14 +24,20 @@ function stampServiceWorker() {
       } catch (e) {
         console.warn('Could not stamp sw.js:', e.message)
       }
+
       // Write a version manifest — used by deploy validation
-      const versionPath = resolve('./dist/_version.json')
-      writeFileSync(versionPath, JSON.stringify({
-        version: pkg.version,
-        stamp: BUILD_STAMP,
-        builtAt: new Date(BUILD_TS).toISOString(),
-      }, null, 2))
-      console.log(`\n✅ Build stamped: ${BUILD_STAMP}\n`)
+      try {
+        mkdirSync(distPath, { recursive: true })
+        const versionPath = resolve(distPath, '_version.json')
+        writeFileSync(versionPath, JSON.stringify({
+          version: pkg.version,
+          stamp: BUILD_STAMP,
+          builtAt: new Date(BUILD_TS).toISOString(),
+        }, null, 2))
+        console.log(`\n✅ Build stamped: ${BUILD_STAMP}\n`)
+      } catch (e) {
+        console.warn('Could not write _version.json:', e.message)
+      }
     }
   }
 }

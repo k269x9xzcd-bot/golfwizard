@@ -48,10 +48,12 @@
               </div>
             </div>
             <div class="round-card-right">
-              <!-- Compact summary: leader + how many strokes ahead -->
-              <div v-if="roundLeaderSummary(round)" class="round-leader-chip">
-                <span class="rls-name">🏆 {{ roundLeaderSummary(round).name }}</span>
-                <span class="rls-total">{{ roundLeaderSummary(round).total }}</span>
+              <!-- All-players score strip -->
+              <div v-if="roundScoresStrip(round).length" class="round-scores-strip">
+                <div v-for="p in roundScoresStrip(round)" :key="p.id" class="mini-score">
+                  <div class="mini-name">{{ p.name }}</div>
+                  <div class="mini-total" :class="{ 'mini-total--leader': p.isLeader }">{{ p.total ?? '—' }}</div>
+                </div>
               </div>
               <div class="expand-arrow" :class="{ expanded: expandedIds.has(round.id) }">›</div>
             </div>
@@ -154,13 +156,16 @@
               <!-- Round actions -->
               <div class="round-actions">
                 <button class="round-action-btn round-action-view" @click.stop="viewScorecard(round)">
-                  👁 View Scorecard
+                  👁 View
                 </button>
                 <button class="round-action-btn round-action-edit" @click.stop="reopenRound(round)">
-                  ✏️ Edit Scores
+                  ✏️ Edit
+                </button>
+                <button class="round-action-btn round-action-share" @click.stop="doShareRecap(round, $event)" :disabled="sharingId === round.id">
+                  {{ sharingId === round.id ? '⏳' : '↑ Share' }}
                 </button>
                 <button class="round-action-btn round-action-delete" @click.stop="confirmDelete(round)">
-                  🗑️ Delete
+                  🗑️
                 </button>
               </div>
 
@@ -193,6 +198,7 @@ import { useRoundsStore } from '../stores/rounds'
 import { useCoursesStore } from '../stores/courses'
 import { useRouter, useRoute } from 'vue-router'
 import { computeAllSettlements } from '../modules/settlements'
+import { shareHistoryRecap } from '../modules/scorecardShare'
 import {
   computeNassau, computeSkins, computeMatch, computeBestBall, computeBestBallNet,
   computeVegas, computeDots, computeFidget, computeSnake, computeWolf,
@@ -256,6 +262,27 @@ async function toggleRound(id) {
 const deleteTarget = ref(null)
 const deleteError = ref('')
 const deleting = ref(false)
+
+const sharingId = ref(null)
+
+async function doShareRecap(round, event) {
+  if (sharingId.value) return
+  sharingId.value = round.id
+  try {
+    // Walk up from the button to find the round-detail container
+    const btn = event?.currentTarget
+    const detail = btn?.closest('.round-detail')
+    if (!detail) throw new Error('Could not find round detail element')
+    const gameRows = gameRecapRows(round)
+    const settlement = settlementsCache[round.id] || null
+    await shareHistoryRecap(round, detail, gameRows, settlement)
+  } catch (e) {
+    console.error('[history] shareRecap failed:', e)
+    alert('Share failed: ' + (e?.message || 'unknown error'))
+  } finally {
+    sharingId.value = null
+  }
+}
 
 function confirmDelete(round) {
   deleteTarget.value = round
@@ -343,7 +370,9 @@ function topPlayers(round) {
 }
 
 function getMembersWithScores(round) {
-  const members = round.round_members || []
+  const members = [...(round.round_members || [])]
+  // Sort by group_index to match scorecard order
+  members.sort((a, b) => (a.group_index ?? 999) - (b.group_index ?? 999))
   const scores = round.scores || []
 
   return members.map(m => {
@@ -381,17 +410,17 @@ const GAME_LABELS = {
 function gameIcon(type) { return GAME_ICONS[(type || '').toLowerCase()] || '🏌️' }
 function gameLabel(type) { return GAME_LABELS[(type || '').toLowerCase()] || type }
 
-// ── Card-header: round leader chip ─────────────────────────
-function roundLeaderSummary(round) {
+// ── Card-header: all-players score strip ───────────────────
+function roundScoresStrip(round) {
   const rows = getMembersWithScores(round).filter(m => m.total)
-  if (!rows.length) return null
-  // Lowest total = leader
-  rows.sort((a, b) => a.total - b.total)
-  const leader = rows[0]
-  return {
-    name: leader.short_name || leader.guest_name?.split(/\s+/)[0] || '?',
-    total: leader.total,
-  }
+  if (!rows.length) return []
+  const minTotal = Math.min(...rows.map(r => r.total))
+  return rows.map(m => ({
+    id: m.id,
+    name: m.short_name || m.guest_name?.split(/\s+/)[0] || '?',
+    total: m.total,
+    isLeader: m.total === minTotal,
+  }))
 }
 
 // ── Game Recap: per-game outcome lines ─────────────────────
@@ -559,9 +588,21 @@ function _recapOne(ctx, game) {
     if (t === 'fidget') {
       const r = computeFidget(ctx, cfg)
       if (!r) return base
-      base.detail = (r.atRisk || []).length
-        ? `At risk: ${(r.atRisk || []).map(m => m.name).join(', ')}`
-        : 'Everyone has won at least one hole'
+      const fidgeters = r.fidgeters || []
+      const incomplete = (r.holeLog || []).some(h => h.incomplete)
+      if (fidgeters.length) {
+        const names = fidgeters.map(m => m.short_name || m.guest_name || '?').join(', ')
+        base.winnerLine = null
+        base.detail = `Fidget: ${names} (owes $${r.ppp} per player)`
+      } else if (incomplete) {
+        // Round in progress — show who hasn't won yet
+        const atRisk = (r.members || ctx.members).filter(m => !r.hasWon?.[m.id])
+        base.detail = atRisk.length
+          ? `At risk: ${atRisk.map(m => m.short_name || '?').join(', ')}`
+          : 'Everyone has won a hole'
+      } else {
+        base.detail = 'Everyone won at least one hole — no fidget'
+      }
       return base
     }
 
@@ -776,6 +817,9 @@ function _computeSettlementFromRound(round) {
   font-weight: 700;
   color: var(--gw-text);
   line-height: 1.2;
+}
+.mini-total--leader {
+  color: var(--gw-gold);
 }
 
 .expand-arrow {
@@ -995,7 +1039,8 @@ function _computeSettlementFromRound(round) {
 .round-action-btn:active { background: rgba(255,255,255,.08); }
 .round-action-edit { border-color: rgba(96,165,250,.3); color: #60a5fa; }
 .round-action-view { border-color: rgba(147,197,253,.25); color: #93c5fd; }
-.round-action-delete { border-color: rgba(248,113,113,.3); color: #f87171; }
+.round-action-share { border-color: rgba(212,175,55,.3); color: var(--gw-gold); }
+.round-action-delete { border-color: rgba(248,113,113,.3); color: #f87171; flex: 0 0 auto; padding: 10px 14px; }
 
 /* Delete confirmation overlay */
 .delete-overlay {
