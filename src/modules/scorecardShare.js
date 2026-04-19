@@ -68,7 +68,14 @@ async function captureElement(el, filename, text, opts = {}) {
     captureTarget = wrapper
   }
 
-  // --- 5. Measure full scrollable width ---
+  // --- 5. Disable position:sticky — html2canvas mis-renders sticky columns
+  //        when the element is off-screen or inside a clipped container.
+  //        Convert all sticky cells to position:static before capture and restore after.
+  const stickyEls = Array.from(captureTarget.querySelectorAll('.col-sticky'))
+  const stickyPrev = stickyEls.map(s => ({ el: s, pos: s.style.position, zIndex: s.style.zIndex, left: s.style.left }))
+  stickyEls.forEach(s => { s.style.position = 'static'; s.style.zIndex = ''; s.style.left = '' })
+
+  // --- 6. Measure full scrollable width ---
   const tableEl = el.querySelector('.scorecard-grid')
   const captureWidth = tableEl
     ? tableEl.scrollWidth + 32
@@ -96,6 +103,12 @@ async function captureElement(el, filename, text, opts = {}) {
       URL.revokeObjectURL(url)
     }
   } finally {
+    // Restore sticky positioning
+    stickyPrev.forEach(({ el: s, pos, zIndex, left }) => {
+      s.style.position = pos
+      s.style.zIndex = zIndex
+      s.style.left = left
+    })
     el.style.overflow      = prevOverflow
     el.style.maxHeight     = prevMaxHeight
     el.style.borderRadius  = prevBorderRadius
