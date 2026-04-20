@@ -641,7 +641,7 @@
           <div v-if="!nassauGameForAloha.config?.aloha?.status && nassauLosingTeam(nassauGameForAloha) !== null && (myNassauTeam(nassauGameForAloha) === null || nassauLosingTeam(nassauGameForAloha) === myNassauTeam(nassauGameForAloha))"
                class="aloha-banner aloha-call">
             <span class="aloha-icon">🌺</span>
-            <div class="aloha-text"><strong>You're down</strong> — call Aloha to go double or nothing on hole 18</div>
+            <div class="aloha-text"><strong>{{ nassauLosingTeam(nassauGameForAloha) === myNassauTeam(nassauGameForAloha) ? "You're down" : "Aloha available" }}</strong> — call to go double or nothing on hole 18</div>
             <button class="aloha-btn" @click="openAlohaCallModal(nassauGameForAloha)">Call Aloha</button>
           </div>
           <div v-else-if="nassauGameForAloha.config?.aloha?.status === 'pending' && (myNassauTeam(nassauGameForAloha) === null || myNassauTeam(nassauGameForAloha) !== nassauGameForAloha.config.aloha.calledBy)"
@@ -1628,7 +1628,8 @@ const nassauGameForAloha = computed(() => {
   const nassau = games.find(g => g.type?.toLowerCase() === 'nassau') ?? null
   console.log('[ALOHA DEBUG]', { hole, holeType: typeof hole, isComplete, gamesCount: games.length, nassauFound: !!nassau })
   if (hole !== 18) return null
-  if (isComplete) return null
+  // keep showing if aloha is active/pending even after round complete
+  if (isComplete && !nassau?.config?.aloha?.status) return null
   return nassau
 })
 
