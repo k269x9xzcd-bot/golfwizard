@@ -512,7 +512,8 @@
               <tr v-for="(row, ri) in gameNotationRows" :key="'gn-'+ri" class="row-game-notation" :class="row.cls || ''">
                 <td class="col-sticky col-notation-label">
                   <span class="notation-icon">{{ row.icon }}</span>
-                  <span class="notation-name">{{ row.label }}</span>
+                  <span class="notation-name" v-if="!row.labelHtml">{{ row.label }}</span>
+                  <span class="notation-name" v-else v-html="row.labelHtml"></span>
                 </td>
                 <!-- Front 9 notation -->
                 <td v-for="h in frontHoles" :key="'gn-'+ri+'-'+h" class="col-notation-cell" :class="row.cells[h]?.cls || ''" v-html="row.cells[h]?.text || ''"></td>
@@ -1888,9 +1889,8 @@ const gameNotationRows = computed(() => {
         const frontEnd = ctx.holesMode === 9 ? to : 9
         const backStart = 10
 
-        // Medal colors for rank
-        const medals = ['#FFD700', '#C0C0C0', '#CD7F32']
-        const sorted = [...r.settlements].sort((a, b) => b.pts - a.pts)
+        const medalColors = ['#FFD700', '#C0C0C0', '#CD7F32']
+        const sorted531 = [...r.settlements].sort((a, b) => b.pts - a.pts)
 
         for (let pi = 0; pi < r.settlements.length; pi++) {
           const player = r.settlements[pi]
@@ -1912,19 +1912,20 @@ const gameNotationRows = computed(() => {
             else inPts += pts
           }
 
-          const totalPts = outPts + inPts
-          const rank = sorted.findIndex(s => s.id === player.id)
-          const medal = rank < 3 ? `<span style="color:${medals[rank]}">●</span> ` : ''
+          const totalPts = Math.round((outPts + inPts) * 100) / 100
+          const rank = sorted531.findIndex(s => s.id === player.id)
+          const dotColor = rank < 3 ? medalColors[rank] : '#888'
           const netStr = player.net > 0 ? `+$${player.net}` : player.net < 0 ? `-$${Math.abs(player.net)}` : 'even'
           const netColor = player.net > 0 ? '#4ade80' : player.net < 0 ? '#f87171' : '#d4af37'
 
           rows.push({
             icon: '5️⃣',
-            label: `${medal}${initials}`,
+            label: initials,
+            labelHtml: `<span style="color:${dotColor};margin-right:3px">●</span>${initials}`,
             cells,
-            outSummary: ctx.holesMode !== 9 ? `<span style="font-weight:700">${outPts}</span>` : '',
-            inSummary: ctx.holesMode !== 9 ? `<span style="font-weight:700">${inPts}</span>` : '',
-            totalSummary: `<span style="font-weight:700">${totalPts}</span> <span style="color:${netColor};font-size:10px">${netStr}</span>`,
+            outSummary: ctx.holesMode !== 9 ? `<span style="font-weight:700">${Math.round(outPts*100)/100}</span>` : '',
+            inSummary: ctx.holesMode !== 9 ? `<span style="font-weight:700">${Math.round(inPts*100)/100}</span>` : '',
+            totalSummary: `<span style="font-weight:700">${totalPts}pts</span> <span style="color:${netColor};font-size:10px">${netStr}</span>`,
             cls: 'row-531',
           })
         }
@@ -2429,17 +2430,21 @@ function gameSummaryHtml(game) {
       const played = (r.holeResults || []).filter(h => !h.incomplete).length
       const sorted = [...r.settlements].sort((a, b) => b.net - a.net)
 
-      const medals = ['🥇','🥈','🥉']
-      // Handle ties — same pts = same medal
-      const standStr = sorted.map((s, i) => {
-        const color = s.net > 0 ? '#4ade80' : s.net < 0 ? '#f87171' : '#d4af37'
-        // Find rank accounting for ties
+      const medalEmojis = ['🥇','🥈','🥉']
+      const standRows = sorted.map((s) => {
+        const netColor = s.net > 0 ? '#4ade80' : s.net < 0 ? '#f87171' : '#d4af37'
         const rank = sorted.findIndex(x => x.pts === s.pts)
-        const medal = rank < 3 ? medals[rank] + ' ' : ''
-        return `<span style="color:${color};font-weight:700">${medal}${s.name}: ${s.net > 0 ? '+$' : s.net < 0 ? '-$' : '$'}${Math.abs(s.net)} (${s.pts}pts)</span>`
-      }).join(' · ')
+        const medal = rank < 3 ? medalEmojis[rank] + ' ' : ''
+        const rawDollars = Math.round(s.pts * ppt * 100) / 100
+        const netStr = s.net > 0 ? `+$${s.net}` : s.net < 0 ? `-$${Math.abs(s.net)}` : 'even'
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0">`
+          + `<span>${medal}<span style="font-weight:700">${s.name}</span></span>`
+          + `<span><span style="color:#d4af37;font-weight:700">${s.pts}pts · $${rawDollars}</span>`
+          + ` <span style="color:${netColor};font-size:10px">(net ${netStr})</span></span>`
+          + `</div>`
+      }).join('')
 
-      return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} 5-3-1</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppt}/pt${played > 0 ? ' · thru ' + played : ''}</span><div style="font-size:11px;margin-top:3px">${standStr || 'No complete holes yet'}</div></div>`
+      return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} 5-3-1</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppt}/pt${played > 0 ? ' · thru ' + played : ''}</span><div style="font-size:11px;margin-top:4px">${standRows || 'No complete holes yet'}</div></div>`
     }
 
     // Default fallback
