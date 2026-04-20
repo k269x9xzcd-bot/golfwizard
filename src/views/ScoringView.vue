@@ -641,7 +641,7 @@
           <div v-if="!nassauGameForAloha.config?.aloha?.status && nassauLosingTeam(nassauGameForAloha) !== null && (myNassauTeam(nassauGameForAloha) === null || nassauLosingTeam(nassauGameForAloha) === myNassauTeam(nassauGameForAloha))"
                class="aloha-banner aloha-call">
             <span class="aloha-icon">🌺</span>
-            <div class="aloha-text"><strong>{{ nassauLosingTeam(nassauGameForAloha) === myNassauTeam(nassauGameForAloha) ? "You're down" : "Aloha available" }}</strong> — call to go double or nothing on hole 18</div>
+            <div class="aloha-text"><strong>{{ alohaLosingTeamNames(nassauGameForAloha) }}</strong> can call Aloha — double or nothing on hole 18</div>
             <button class="aloha-btn" @click="openAlohaCallModal(nassauGameForAloha)">Call Aloha</button>
           </div>
           <div v-else-if="nassauGameForAloha.config?.aloha?.status === 'pending' && (myNassauTeam(nassauGameForAloha) === null || myNassauTeam(nassauGameForAloha) !== nassauGameForAloha.config.aloha.calledBy)"
@@ -1653,6 +1653,16 @@ function defaultAlohaAmount(game) {
   } catch { return 0 }
 }
 
+function alohaLosingTeamNames(game) {
+  const loser = nassauLosingTeam(game)
+  if (!loser) return ''
+  const ids = loser === 't1' ? (game.config?.team1 || []) : (game.config?.team2 || [])
+  return ids.map(id => {
+    const m = roundsStore.activeMembers.find(x => x.id === id)
+    return m?.short_name || m?.name || '?'
+  }).join(' + ')
+}
+
 function myNassauTeam(game) {
   const myId = roundsStore.activeMembers.find(m => m.profile_id === authStore.user?.id)?.id
   if (!myId) return null
@@ -1990,13 +2000,29 @@ function gameSummaryHtml(game) {
         oHtml += ` · <span style="color:#4ade80;font-weight:700">${oWinner} $${Math.abs(s.overall)}</span>`
       }
 
+      // Aloha line
+      let alohaLine = ''
+      if (cfg.aloha?.status === 'accepted') {
+        if (r.aloha) {
+          const alohaWinner = r.aloha.winner === 't1' ? t1n : t2n
+          alohaLine = `<div style="font-size:11px;margin-top:2px">🌺 Aloha: <span style="color:#4ade80;font-weight:700">${alohaWinner} +$${r.aloha.amount}</span></div>`
+        } else {
+          alohaLine = `<div style="font-size:11px;margin-top:2px;opacity:.6">🌺 Aloha: $${cfg.aloha.amount} pending hole 18 result</div>`
+        }
+      } else if (cfg.aloha?.status === 'pending') {
+        alohaLine = `<div style="font-size:11px;margin-top:2px;opacity:.7">🌺 Aloha called — $${cfg.aloha.amount} pending acceptance</div>`
+      } else if (cfg.aloha?.status === 'declined') {
+        alohaLine = `<div style="font-size:11px;margin-top:2px;opacity:.4">🌺 Aloha declined</div>`
+      }
+
       let totLine = ''
       const netOwed = s.total
       if (netOwed !== 0) {
         const payer = netOwed < 0 ? t1n : t2n
         const payee = netOwed < 0 ? t2n : t1n
+        const nassauOnly = Math.abs(s.total - (s.aloha ?? 0))
         const grossTotal = Math.abs(s.front) + Math.abs(s.back) + Math.abs(s.overall)
-        const grossNote = grossTotal > Math.abs(netOwed) ? ` <span style="font-size:10px;opacity:.5">(gross: $${grossTotal})</span>` : ''
+        const grossNote = grossTotal > nassauOnly ? ` <span style="font-size:10px;opacity:.5">(gross: $${grossTotal})</span>` : ''
         totLine = `<div style="font-size:12px;font-weight:700;margin-top:5px;padding:5px 8px;background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);border-radius:8px;color:#4ade80">💰 ${payer} owe ${payee} $${Math.abs(netOwed)}${grossNote}</div>`
       } else if (Math.abs(s.front) + Math.abs(s.back) + Math.abs(s.overall) > 0) {
         totLine = `<div style="font-size:11px;margin-top:4px;opacity:.5">All square · $${Math.abs(s.front) + Math.abs(s.back) + Math.abs(s.overall)} action</div>`
@@ -2007,7 +2033,7 @@ function gameSummaryHtml(game) {
       const oAmt = cfg.overall ?? 20
       const pressInfo = cfg.pressAt ? ` · press@${cfg.pressAt}` : ''
       const nassauLabel = cfg._sideMatch ? '1v1 Nassau' : 'Nassau'
-      return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} ${nassauLabel}</span><span class="muted" style="font-size:10px;margin-left:4px">${t1n} vs ${t2n} · $${fAmt}/$${bAmt}/$${oAmt}${pressInfo}</span><div style="font-size:11px;margin-top:3px;display:flex;flex-direction:column;gap:2px"><div>${fHtml}</div><div>${bHtml}</div><div>${oHtml}</div></div>${totLine}</div>`
+      return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} ${nassauLabel}</span><span class="muted" style="font-size:10px;margin-left:4px">${t1n} vs ${t2n} · $${fAmt}/$${bAmt}/$${oAmt}${pressInfo}</span><div style="font-size:11px;margin-top:3px;display:flex;flex-direction:column;gap:2px"><div>${fHtml}</div><div>${bHtml}</div><div>${oHtml}</div>${alohaLine}</div>${totLine}</div>`
     }
 
     // ── Skins ──

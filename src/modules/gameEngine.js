@@ -336,18 +336,31 @@ export function computeNassau(ctx, config) {
   const t1Name = t1.map(m => m.short_name).join('+')
   const t2Name = t2.map(m => m.short_name).join('+')
 
+  // Aloha: side bet on hole 18 winner
+  let aloha = null
+  const alohaCfg = config.aloha
+  if (alohaCfg?.status === 'accepted' && alohaCfg?.amount != null) {
+    const h18 = backSeg.holeResults.find(r => r.hole === 18)
+    if (h18 && h18.winner !== null) {
+      const t1Delta = h18.winner === 't1' ? alohaCfg.amount : -alohaCfg.amount
+      aloha = { winner: h18.winner, amount: alohaCfg.amount, t1Delta }
+    }
+  }
+  const alohaDelta = aloha?.t1Delta ?? 0
+
   const settlement = {
     t1Name, t2Name,
     front: frontSeg.t1Wins + frontSeg.pressWins,
     back: backSeg.t1Wins + backSeg.pressWins,
     overall: overallT1Wins,
-    total: t1Total,
+    aloha: alohaDelta,
+    total: t1Total + alohaDelta,
     // positive = t1 wins that amount from t2
   }
 
   return {
     frontSeg, backSeg, overallUp, overallT1Wins, settlement,
-    t1, t2, t1Name, t2Name,
+    t1, t2, t1Name, t2Name, aloha,
   }
 }
 
