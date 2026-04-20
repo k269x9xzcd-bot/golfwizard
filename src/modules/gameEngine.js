@@ -1285,7 +1285,7 @@ export function computeSixes(ctx, config) {
 
 // ─────────────────────────────────────────────────────────────────
 // ── 5-3-1 (Nines) ──────────────────────────────────────────────
-// Best gets 5, second 3, third 1, worst 0. 9 pts per hole.
+// Best gets 5, second gets 3, last gets 1. 9 pts per hole total.
 // ─────────────────────────────────────────────────────────────────
 export function computeFiveThreeOne(ctx, config) {
   const {

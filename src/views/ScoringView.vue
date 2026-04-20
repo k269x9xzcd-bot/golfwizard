@@ -1878,6 +1878,58 @@ const gameNotationRows = computed(() => {
         })
       } catch(e) { /* skip */ }
     }
+
+    // ── 5-3-1 — one row per player showing pts per hole ──
+    if (t === 'fivethreeone') {
+      try {
+        const r = computeFiveThreeOne(ctx, game.config)
+        if (!r) continue
+        const { from, to } = { from: 1, to: ctx.holesMode === 9 ? 9 : 18 }
+        const frontEnd = ctx.holesMode === 9 ? to : 9
+        const backStart = 10
+
+        // Medal colors for rank
+        const medals = ['#FFD700', '#C0C0C0', '#CD7F32']
+        const sorted = [...r.settlements].sort((a, b) => b.pts - a.pts)
+
+        for (let pi = 0; pi < r.settlements.length; pi++) {
+          const player = r.settlements[pi]
+          const m = ctx.members.find(x => x.id === player.id)
+          const initials = memberInitials(m)
+          const cells = {}
+          let outPts = 0, inPts = 0
+
+          for (let h = from; h <= to; h++) {
+            const hr = r.holeResults.find(x => x.hole === h)
+            if (!hr || hr.incomplete) { cells[h] = { text: '', cls: '' }; continue }
+            const pts = hr.holePts?.[player.id]
+            if (pts == null) { cells[h] = { text: '', cls: '' }; continue }
+            const isTop = pts === 5
+            const isBot = pts === 1
+            const cls = isTop ? 'nota-t1' : isBot ? 'nota-t2' : 'nota-halved'
+            cells[h] = { text: String(pts % 1 === 0 ? pts : pts.toFixed(1)), cls }
+            if (h <= frontEnd) outPts += pts
+            else inPts += pts
+          }
+
+          const totalPts = outPts + inPts
+          const rank = sorted.findIndex(s => s.id === player.id)
+          const medal = rank < 3 ? `<span style="color:${medals[rank]}">●</span> ` : ''
+          const netStr = player.net > 0 ? `+$${player.net}` : player.net < 0 ? `-$${Math.abs(player.net)}` : 'even'
+          const netColor = player.net > 0 ? '#4ade80' : player.net < 0 ? '#f87171' : '#d4af37'
+
+          rows.push({
+            icon: '5️⃣',
+            label: `${medal}${initials}`,
+            cells,
+            outSummary: ctx.holesMode !== 9 ? `<span style="font-weight:700">${outPts}</span>` : '',
+            inSummary: ctx.holesMode !== 9 ? `<span style="font-weight:700">${inPts}</span>` : '',
+            totalSummary: `<span style="font-weight:700">${totalPts}</span> <span style="color:${netColor};font-size:10px">${netStr}</span>`,
+            cls: 'row-531',
+          })
+        }
+      } catch(e) { /* skip */ }
+    }
   }
 
   return rows
@@ -2377,9 +2429,14 @@ function gameSummaryHtml(game) {
       const played = (r.holeResults || []).filter(h => !h.incomplete).length
       const sorted = [...r.settlements].sort((a, b) => b.net - a.net)
 
-      const standStr = sorted.map(s => {
+      const medals = ['🥇','🥈','🥉']
+      // Handle ties — same pts = same medal
+      const standStr = sorted.map((s, i) => {
         const color = s.net > 0 ? '#4ade80' : s.net < 0 ? '#f87171' : '#d4af37'
-        return `<span style="color:${color};font-weight:700">${s.name}: ${s.net > 0 ? '+$' : s.net < 0 ? '-$' : '$'}${Math.abs(s.net)} (${s.pts}pts)</span>`
+        // Find rank accounting for ties
+        const rank = sorted.findIndex(x => x.pts === s.pts)
+        const medal = rank < 3 ? medals[rank] + ' ' : ''
+        return `<span style="color:${color};font-weight:700">${medal}${s.name}: ${s.net > 0 ? '+$' : s.net < 0 ? '-$' : '$'}${Math.abs(s.net)} (${s.pts}pts)</span>`
       }).join(' · ')
 
       return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} 5-3-1</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppt}/pt${played > 0 ? ' · thru ' + played : ''}</span><div style="font-size:11px;margin-top:3px">${standStr || 'No complete holes yet'}</div></div>`
@@ -4049,6 +4106,9 @@ function formatDate(dateStr) {
   font-size: 14px;
   padding: 5px 6px;
 }
+.row-531 .col-notation-cell { font-size: 11px; font-weight: 700; text-align: center; }
+.row-531 .col-notation-sub, .row-531 .col-notation-total { font-size: 11px; text-align: center; }
+
 .scoring-view.is-landscape .col-notation-cell {
   font-size: 13px;
   min-width: 30px;
