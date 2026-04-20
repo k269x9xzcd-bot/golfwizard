@@ -629,14 +629,7 @@
         </div>
 
 
-                <!-- Aloha debug — remove after testing -->
-        <div v-if="activeHole > 0" style="font-size:10px;color:yellow;padding:4px;background:rgba(0,0,0,.5);border-radius:4px;margin-bottom:4px;position:sticky;top:0;z-index:99">
-          hole={{ activeHole }} game={{ nassauGameForAloha ? nassauGameForAloha.type : 'null' }}
-          losing={{ nassauGameForAloha ? nassauLosingTeam(nassauGameForAloha) : 'n/a' }}
-          myTeam={{ nassauGameForAloha ? myNassauTeam(nassauGameForAloha) : 'n/a' }}
-        </div>
-
-        <!-- Aloha banner / button — hole 18 only -->
+                <!-- Aloha banner / button — hole 18 only -->
         <template v-if="nassauGameForAloha">
           <div v-if="!nassauGameForAloha.config?.aloha?.status && nassauLosingTeam(nassauGameForAloha) !== null && (myNassauTeam(nassauGameForAloha) === null || nassauLosingTeam(nassauGameForAloha) === myNassauTeam(nassauGameForAloha))"
                class="aloha-banner aloha-call">
@@ -1626,7 +1619,6 @@ const nassauGameForAloha = computed(() => {
   const isComplete = roundsStore.activeRound?.is_complete
   const games = roundsStore.activeGames || []
   const nassau = games.find(g => g.type?.toLowerCase() === 'nassau') ?? null
-  console.log('[ALOHA DEBUG]', { hole, holeType: typeof hole, isComplete, gamesCount: games.length, nassauFound: !!nassau })
   if (hole !== 18) return null
   // keep showing if aloha is active/pending even after round complete
   if (isComplete && !nassau?.config?.aloha?.status) return null
