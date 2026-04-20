@@ -1352,22 +1352,25 @@ export function computeFiveThreeOne(ctx, config) {
   // Settlement: each player's points minus average, times ppt
   const totalPts = Object.values(totals).reduce((s, t) => s + t.pts, 0)
   const avgPts = totalPts / members.length
-  // "Pay up the ladder" settlement:
-  // Sort by pts desc. Each player pays the player above them
-  // the difference in pts × ppt. Zero-sum.
-  const ranked = members
-    .map(m => ({ id: m.id, name: m.short_name, pts: Math.round(totals[m.id].pts * 100) / 100 }))
-    .sort((a, b) => b.pts - a.pts)
+  // Standard settlement: everyone pays everyone directly based on point difference.
+  // Each pair (A, B): lower-pts player pays higher-pts player (ptsDiff × ppt).
+  const playerList = members.map(m => ({
+    id: m.id, name: m.short_name,
+    pts: Math.round(totals[m.id].pts * 100) / 100,
+  }))
 
   const netMap = {}
   for (const m of members) netMap[m.id] = 0
 
-  for (let i = ranked.length - 1; i > 0; i--) {
-    const lower = ranked[i]
-    const upper = ranked[i - 1]
-    const diff = Math.round((upper.pts - lower.pts) * ppt * 100) / 100
-    netMap[lower.id] -= diff
-    netMap[upper.id] += diff
+  for (let i = 0; i < playerList.length; i++) {
+    for (let j = i + 1; j < playerList.length; j++) {
+      const a = playerList[i]
+      const b = playerList[j]
+      const diff = Math.round((a.pts - b.pts) * ppt * 100) / 100
+      // diff > 0: a wins from b; diff < 0: b wins from a
+      netMap[a.id] += diff
+      netMap[b.id] -= diff
+    }
   }
 
   const settlements = members.map(m => ({
