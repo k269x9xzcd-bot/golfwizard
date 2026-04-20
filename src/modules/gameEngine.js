@@ -1352,10 +1352,28 @@ export function computeFiveThreeOne(ctx, config) {
   // Settlement: each player's points minus average, times ppt
   const totalPts = Object.values(totals).reduce((s, t) => s + t.pts, 0)
   const avgPts = totalPts / members.length
+  // "Pay up the ladder" settlement:
+  // Sort by pts desc. Each player pays the player above them
+  // the difference in pts × ppt. Zero-sum.
+  const ranked = members
+    .map(m => ({ id: m.id, name: m.short_name, pts: Math.round(totals[m.id].pts * 100) / 100 }))
+    .sort((a, b) => b.pts - a.pts)
+
+  const netMap = {}
+  for (const m of members) netMap[m.id] = 0
+
+  for (let i = ranked.length - 1; i > 0; i--) {
+    const lower = ranked[i]
+    const upper = ranked[i - 1]
+    const diff = Math.round((upper.pts - lower.pts) * ppt * 100) / 100
+    netMap[lower.id] -= diff
+    netMap[upper.id] += diff
+  }
+
   const settlements = members.map(m => ({
     id: m.id, name: m.short_name,
     pts: Math.round(totals[m.id].pts * 100) / 100,
-    net: Math.round((totals[m.id].pts - avgPts) * ppt * 100) / 100,
+    net: Math.round(netMap[m.id] * 100) / 100,
   }))
 
   return { holeResults, totals, settlements, ppt }
