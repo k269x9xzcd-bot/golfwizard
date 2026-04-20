@@ -629,7 +629,58 @@
         </div>
 
 
-        <!-- Player Score Cards — inline +/- entry -->
+                <!-- Aloha debug — remove after testing -->
+        <div v-if="activeHole > 0" style="font-size:10px;color:yellow;padding:4px;background:rgba(0,0,0,.5);border-radius:4px;margin-bottom:4px;position:sticky;top:0;z-index:99">
+          hole={{ activeHole }} game={{ nassauGameForAloha ? nassauGameForAloha.type : 'null' }}
+          losing={{ nassauGameForAloha ? nassauLosingTeam(nassauGameForAloha) : 'n/a' }}
+          myTeam={{ nassauGameForAloha ? myNassauTeam(nassauGameForAloha) : 'n/a' }}
+        </div>
+
+        <!-- Aloha banner / button — hole 18 only -->
+        <template v-if="nassauGameForAloha">
+          <div v-if="!nassauGameForAloha.config?.aloha?.status && nassauLosingTeam(nassauGameForAloha) !== null && (myNassauTeam(nassauGameForAloha) === null || nassauLosingTeam(nassauGameForAloha) === myNassauTeam(nassauGameForAloha))"
+               class="aloha-banner aloha-call">
+            <span class="aloha-icon">🌺</span>
+            <div class="aloha-text"><strong>You're down</strong> — call Aloha to go double or nothing on hole 18</div>
+            <button class="aloha-btn" @click="openAlohaCallModal(nassauGameForAloha)">Call Aloha</button>
+          </div>
+          <div v-else-if="nassauGameForAloha.config?.aloha?.status === 'pending' && (myNassauTeam(nassauGameForAloha) === null || myNassauTeam(nassauGameForAloha) !== nassauGameForAloha.config.aloha.calledBy)"
+               class="aloha-banner aloha-pending">
+            <span class="aloha-icon">🌺</span>
+            <div class="aloha-text"><strong>Aloha called!</strong> ${{ nassauGameForAloha.config.aloha.amount }} on hole 18 — accept?</div>
+            <div class="aloha-respond">
+              <button class="aloha-btn aloha-accept" @click="respondAloha(nassauGameForAloha, true)">Accept</button>
+              <button class="aloha-btn aloha-decline" @click="respondAloha(nassauGameForAloha, false)">Decline</button>
+            </div>
+          </div>
+          <div v-else-if="nassauGameForAloha.config?.aloha?.status === 'accepted'"
+               class="aloha-banner aloha-active">
+            <span class="aloha-icon">🌺</span>
+            <div class="aloha-text"><strong>Aloha is on!</strong> ${{ nassauGameForAloha.config.aloha.amount }} rides on this hole.</div>
+          </div>
+          <div v-else-if="nassauGameForAloha.config?.aloha?.status === 'declined'"
+               class="aloha-banner aloha-declined">
+            <span class="aloha-icon">🌺</span>
+            <div class="aloha-text">Aloha declined.</div>
+          </div>
+        </template>
+
+        <!-- Aloha call modal -->
+        <div v-if="showAlohaModal" class="aloha-modal-backdrop" @click.self="showAlohaModal = false">
+          <div class="aloha-modal">
+            <div class="aloha-modal-title">🌺 Call Aloha</div>
+            <div class="aloha-modal-body">
+              <p>Double or nothing on hole 18. Set the amount:</p>
+              <input type="number" v-model.number="alohaCustomAmount" class="aloha-amount-input" min="1" />
+            </div>
+            <div class="aloha-modal-actions">
+              <button class="aloha-btn aloha-accept" @click="callAloha">Call Aloha</button>
+              <button class="aloha-btn aloha-decline" @click="showAlohaModal = false">Cancel</button>
+            </div>
+          </div>
+        </div>
+
+<!-- Player Score Cards — inline +/- entry -->
         <div class="hole-players-list">
           <div
             v-for="group in sortedPlayerGroups"
@@ -1563,6 +1614,73 @@ const pressHoles = computed(() => {
   }
   return set
 })
+
+
+// ── ALOHA (Nassau side bet on hole 18) ──────────────────────────────────────
+const showAlohaModal = ref(false)
+const alohaModalGame = ref(null)
+const alohaCustomAmount = ref(0)
+
+const nassauGameForAloha = computed(() => {
+  const hole = activeHole.value
+  const isComplete = roundsStore.activeRound?.is_complete
+  const games = roundsStore.activeGames || []
+  const nassau = games.find(g => g.type?.toLowerCase() === 'nassau') ?? null
+  console.log('[ALOHA DEBUG]', { hole, holeType: typeof hole, isComplete, gamesCount: games.length, nassauFound: !!nassau })
+  if (hole !== 18) return null
+  if (isComplete) return null
+  return nassau
+})
+
+function nassauLosingTeam(game) {
+  const ctx = buildCtx()
+  if (!ctx) return null
+  try {
+    const r = computeNassau(ctx, { ...game.config, aloha: null })
+    const total = r.settlement?.total ?? 0
+    if (total === 0) return null
+    return total > 0 ? 't2' : 't1'
+  } catch { return null }
+}
+
+function defaultAlohaAmount(game) {
+  const ctx = buildCtx()
+  if (!ctx) return 0
+  try {
+    const r = computeNassau(ctx, { ...game.config, aloha: null })
+    return Math.abs(r.settlement?.total ?? 0) * 2
+  } catch { return 0 }
+}
+
+function myNassauTeam(game) {
+  const myId = roundsStore.activeMembers.find(m => m.profile_id === authStore.user?.id)?.id
+  if (!myId) return null
+  if ((game.config?.team1 || []).includes(myId)) return 't1'
+  if ((game.config?.team2 || []).includes(myId)) return 't2'
+  return null
+}
+
+function openAlohaCallModal(game) {
+  alohaModalGame.value = game
+  alohaCustomAmount.value = defaultAlohaAmount(game)
+  showAlohaModal.value = true
+}
+
+async function callAloha() {
+  const game = alohaModalGame.value
+  if (!game) return
+  const loser = nassauLosingTeam(game)
+  if (!loser) return
+  const newConfig = { ...game.config, aloha: { status: 'pending', calledBy: loser, amount: alohaCustomAmount.value } }
+  await roundsStore.updateGameConfig(game.id, newConfig)
+  showAlohaModal.value = false
+}
+
+async function respondAloha(game, accept) {
+  const newConfig = { ...game.config, aloha: { ...game.config.aloha, status: accept ? 'accepted' : 'declined' } }
+  await roundsStore.updateGameConfig(game.id, newConfig)
+}
+// ────────────────────────────────────────────────────────────────────────────
 
 const gameNotationRows = computed(() => {
   const rows = []
@@ -3367,6 +3485,33 @@ function formatDate(dateStr) {
   padding: 4px;
 }
 .hole-notation-toggle.active { color: var(--gw-gold); }
+
+
+/* ── Aloha banner ─────────────────────────────────────────────────────────── */
+.aloha-banner {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; border-radius: 10px; margin-bottom: 10px;
+  font-size: 14px;
+}
+.aloha-banner.aloha-call { background: rgba(220,50,50,.15); border: 1px solid rgba(220,50,50,.4); }
+.aloha-banner.aloha-pending { background: rgba(212,175,55,.15); border: 1px solid rgba(212,175,55,.4); }
+.aloha-banner.aloha-active { background: rgba(50,200,100,.15); border: 1px solid rgba(50,200,100,.4); }
+.aloha-banner.aloha-declined { background: rgba(100,100,100,.15); border: 1px solid rgba(100,100,100,.3); }
+.aloha-icon { font-size: 20px; flex-shrink: 0; }
+.aloha-text { flex: 1; color: #e8e0c8; }
+.aloha-respond { display: flex; gap: 8px; }
+.aloha-btn { padding: 6px 14px; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; }
+.aloha-btn { background: rgba(212,175,55,.2); color: #d4af37; }
+.aloha-btn.aloha-accept { background: rgba(50,200,100,.25); color: #50c864; }
+.aloha-btn.aloha-decline { background: rgba(200,50,50,.2); color: #e05555; }
+.aloha-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 200; display: flex; align-items: center; justify-content: center; }
+.aloha-modal { background: #1a1a2e; border-radius: 16px; padding: 24px; width: 300px; border: 1px solid rgba(212,175,55,.3); }
+.aloha-modal-title { font-size: 18px; font-weight: 700; color: #d4af37; margin-bottom: 12px; }
+.aloha-modal-body p { color: #c0b090; font-size: 14px; margin-bottom: 10px; }
+.aloha-amount-input { width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(212,175,55,.3); background: rgba(255,255,255,.05); color: #e8e0c8; font-size: 18px; text-align: center; margin-bottom: 16px; }
+.aloha-modal-actions { display: flex; gap: 10px; }
+.aloha-modal-actions .aloha-btn { flex: 1; padding: 10px; }
+/* ──────────────────────────────────────────────────────────────────────────── */
 
 .hole-players-list {
   display: flex;
