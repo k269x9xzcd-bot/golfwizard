@@ -398,10 +398,10 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
           const medal = rank < 3 ? medalEmojis[rank] + ' ' : ''
           const rawDollars = Math.round(s.pts * ppt * 100) / 100
           const netStr = s.net > 0 ? `+$${s.net}` : s.net < 0 ? `-$${Math.abs(s.net)}` : 'even'
-          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0">`
-            + `<span>${medal}<span style="font-weight:700">${s.name}</span></span>`
-            + `<span><span style="color:#d4af37;font-weight:700">${s.pts}pts · $${rawDollars}</span>`
-            + ` <span style="color:${netColor};font-size:10px">(net ${netStr})</span></span>`
+          return `<div style="display:flex;align-items:center;gap:6px;padding:2px 0">`
+            + `<span style="min-width:60px">${medal}<span style="font-weight:700">${s.name}</span></span>`
+            + `<span style="color:#d4af37;font-weight:700">${s.pts}pts · $${rawDollars}</span>`
+            + `<span style="color:${netColor};font-size:10px">(net ${netStr})</span>`
             + `</div>`
         }).join('')
         return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} 5-3-1</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppt}/pt${played > 0 ? ' · thru ' + played : ''}</span><div style="font-size:11px;margin-top:4px">${standRows || 'No complete holes yet'}</div></div>`

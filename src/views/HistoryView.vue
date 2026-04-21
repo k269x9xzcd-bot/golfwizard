@@ -155,11 +155,11 @@
 
               <!-- Round actions -->
               <div class="round-actions">
-                <button class="round-action-btn round-action-view" @click.stop="viewScorecard(round)">
-                  👁 View
+                <button class="round-action-btn round-action-view" @click.stop.prevent="viewScorecard(round)" :disabled="loadingRoundId === round.id">
+                  {{ loadingRoundId === round.id ? '⏳' : '👁 View' }}
                 </button>
-                <button class="round-action-btn round-action-edit" @click.stop="reopenRound(round)">
-                  ✏️ Edit
+                <button class="round-action-btn round-action-edit" @click.stop.prevent="reopenRound(round)" :disabled="loadingRoundId === round.id">
+                  {{ loadingRoundId === round.id ? '⏳' : '✏️ Edit' }}
                 </button>
                 <button class="round-action-btn round-action-share" @click.stop="doShareRecap(round)" :disabled="sharingId === round.id">
                   {{ sharingId === round.id ? '⏳' : '↑ Share' }}
@@ -232,6 +232,7 @@ onMounted(async () => {
 const expandedIds = ref(new Set())
 const settlementsCache = reactive({})
 const settlementLoading = reactive({})
+const loadingRoundId = ref(null)
 
 async function toggleRound(id) {
   if (expandedIds.value.has(id)) expandedIds.value.delete(id)
@@ -244,10 +245,7 @@ async function toggleRound(id) {
       let data = null
       // 1) Try saved snapshot first (fast, no engine run)
       try {
-        const saved = await Promise.race([
-          roundsStore.fetchSettlements(id),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('settlement fetch timeout')), 4000)),
-        ])
+        const saved = await roundsStore.fetchSettlements(id)
         if (saved) data = saved
       } catch { /* fall through to compute */ }
       // 2) Otherwise compute from stored scores on demand
@@ -315,22 +313,30 @@ async function doDelete() {
 }
 
 async function reopenRound(round) {
+  if (loadingRoundId.value) return
+  loadingRoundId.value = round.id
   try {
     await roundsStore.loadRound(round.id)
     router.push('/scoring')
   } catch (e) {
     console.error('[history] reopenRound failed:', e)
     alert('Could not open round: ' + (e?.message || 'unknown error'))
+  } finally {
+    loadingRoundId.value = null
   }
 }
 
 async function viewScorecard(round) {
+  if (loadingRoundId.value) return
+  loadingRoundId.value = round.id
   try {
     await roundsStore.loadRound(round.id)
     router.push({ path: '/scoring', query: { viewOnly: 'true' } })
   } catch (e) {
     console.error('[history] viewScorecard failed:', e)
     alert('Could not open scorecard: ' + (e?.message || 'unknown error'))
+  } finally {
+    loadingRoundId.value = null
   }
 }
 
