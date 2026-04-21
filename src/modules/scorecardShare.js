@@ -1,109 +1,65 @@
 /**
  * scorecardShare.js
- * Captures the live scorecard DOM and shares via iOS share sheet.
+ * Renders ScorecardCapture.vue off-screen, captures it with html2canvas,
+ * and shares via iOS share sheet (or downloads on desktop).
  *
- * For ScoringView: targets #gw-capture-target (.scorecard-outer).
- * Forces landscape CSS (.is-landscape on the scoring-view root) before capture
- * so the screenshot matches the landscape layout shown in the example.
- * Captures the full scrollable table width (reads from .scorecard-scroll).
- *
- * For HistoryView: renders a hidden ScorecardGrid component, captures it
- * landscape, and attaches a plain-text game results + settlement summary.
+ * No DOM surgery. No sticky hacks. No overflow unlocking.
+ * The capture component is a pure, print-optimized Vue component with
+ * fixed 940px width and no interactive layout constraints.
  */
+
+import { createApp, defineComponent, h } from 'vue'
+import ScorecardCapture from '../components/ScorecardCapture.vue'
 
 /**
- * Core capture — handles full-width expansion, landscape mode toggle,
- * capture header reveal, and settle-box inclusion.
+ * Mount ScorecardCapture off-screen, take a screenshot, unmount.
  *
- * @param {HTMLElement} el            - element to capture (.scorecard-outer)
- * @param {string}      filename      - output filename
- * @param {string}      text          - share message text
- * @param {object}      opts
- * @param {boolean}     opts.landscape     - force .is-landscape before capture
- * @param {string}      opts.landscapeRoot - CSS selector for element to add .is-landscape to
- *                                           (defaults to .scoring-view for ScoringView,
- *                                            use '#gw-history-capture-target' wrapper for History)
+ * @param {object} captureProps - props to pass to ScorecardCapture
+ * @param {string} filename
+ * @param {string} text         - share sheet message body
  */
-async function captureElement(el, filename, text, opts = {}) {
+async function captureComponent(captureProps, filename, text) {
   const html2canvas = (await import('html2canvas')).default
 
-  // --- 1. Force landscape layout if requested ---
-  // For ScoringView: add .is-landscape to .scoring-view (triggers CSS layout)
-  // For HistoryView: the hidden grid is already full-width; just widen el itself
-  const landscapeRootSel = opts.landscapeRoot || '.scoring-view'
-  const scoringRoot = opts.landscape
-    ? document.querySelector(landscapeRootSel)
-    : null
-  if (scoringRoot) scoringRoot.classList.add('is-landscape')
+  // ── Mount off-screen container ────────────────────────────────
+  const container = document.createElement('div')
+  container.style.cssText = [
+    'position:fixed',
+    'top:-9999px',
+    'left:-9999px',
+    'width:940px',
+    'background:#faf7f0',
+    'pointer-events:none',
+    'z-index:-1',
+  ].join(';')
+  document.body.appendChild(container)
 
-  // --- 2. Unlock overflow so the full table is visible ---
-  const prevOverflow   = el.style.overflow
-  const prevMaxHeight  = el.style.maxHeight
-  const prevBorderRadius = el.style.borderRadius
-  el.style.overflow    = 'visible'
-  el.style.maxHeight   = 'none'
-  el.style.borderRadius = '0'
+  // Mount a minimal wrapper app that renders ScorecardCapture with our props
+  const WrapperApp = defineComponent({
+    render() {
+      return h(ScorecardCapture, captureProps)
+    },
+  })
+  const app = createApp(WrapperApp)
+  app.mount(container)
 
-  // Also unlock the inner scroll container so html2canvas sees everything
-  const scrollEl = el.querySelector('.scorecard-scroll')
-  const prevScrollOverflow = scrollEl ? scrollEl.style.overflow : null
-  if (scrollEl) scrollEl.style.overflow = 'visible'
+  // Wait one tick for Vue to finish rendering
+  await new Promise(resolve => setTimeout(resolve, 80))
 
-  // --- 3. Reveal the capture header (course + branding) ---
-  el.classList.add('gw-capturing')
-
-  // --- 4. Optionally wrap settle-box in the same capture ---
-  const settleBox = el.nextElementSibling?.classList.contains('settle-box')
-    ? el.nextElementSibling : null
-
-  let wrapper = null
-  let captureTarget = el
-
-  if (settleBox) {
-    wrapper = document.createElement('div')
-    wrapper.style.cssText = 'background:#faf7f0;border-radius:12px;overflow:hidden;display:inline-block;'
-    el.parentNode.insertBefore(wrapper, el)
-    wrapper.appendChild(el)
-    wrapper.appendChild(settleBox)
-    captureTarget = wrapper
-  }
-
-  // --- 5. Disable position:sticky — html2canvas mis-renders sticky columns
-  //        when the element is off-screen or inside a clipped container.
-  //        Convert all sticky cells to position:static before capture and restore after.
-  const stickyEls = Array.from(captureTarget.querySelectorAll('.col-sticky'))
-  const stickyPrev = stickyEls.map(s => ({ el: s, pos: s.style.position, zIndex: s.style.zIndex, left: s.style.left }))
-  stickyEls.forEach(s => { s.style.position = 'static'; s.style.zIndex = ''; s.style.left = '' })
-
-  // --- 6. Measure full scrollable width AND height ---
-  const tableEl = el.querySelector('.scorecard-grid')
-  const captureWidth = tableEl
-    ? tableEl.scrollWidth + 32
-    : captureTarget.scrollWidth
-
-  // Force height to full scroll height so html2canvas doesn't clip at the
-  // visible viewport boundary (the is-landscape max-height clamps offsetHeight).
-  const prevHeight = el.style.height
-  const prevScrollHeight = scrollEl ? scrollEl.style.height : null
-  el.style.height = 'auto'
-  if (scrollEl) {
-    scrollEl.style.height = 'auto'
-    scrollEl.style.maxHeight = 'none'
-  }
-  // Also remove the CSS max-height from the landscape class by temporarily
-  // removing is-landscape from the scorecard-outer's ancestor before measuring.
-  const captureHeight = captureTarget.scrollHeight
+  const captureEl = container.firstElementChild
+  const captureWidth  = captureEl ? captureEl.scrollWidth  : 940
+  const captureHeight = captureEl ? captureEl.scrollHeight : 600
 
   try {
-    const canvas = await html2canvas(captureTarget, {
+    const canvas = await html2canvas(container, {
       backgroundColor: '#faf7f0',
       scale: 2,
       useCORS: true,
       logging: false,
       width: captureWidth,
       height: captureHeight,
-      windowWidth: captureWidth + 100,
-      windowHeight: captureHeight + 100,
+      windowWidth: captureWidth + 20,
+      windowHeight: captureHeight + 20,
     })
 
     const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
@@ -118,62 +74,14 @@ async function captureElement(el, filename, text, opts = {}) {
       URL.revokeObjectURL(url)
     }
   } finally {
-    // Restore sticky positioning
-    stickyPrev.forEach(({ el: s, pos, zIndex, left }) => {
-      s.style.position = pos
-      s.style.zIndex = zIndex
-      s.style.left = left
-    })
-    el.style.overflow      = prevOverflow
-    el.style.maxHeight     = prevMaxHeight
-    el.style.borderRadius  = prevBorderRadius
-    el.style.height        = prevHeight
-    if (scrollEl) {
-      scrollEl.style.overflow  = prevScrollOverflow
-      scrollEl.style.height    = prevScrollHeight
-      scrollEl.style.maxHeight = ''
-    }
-    el.classList.remove('gw-capturing')
-    if (scoringRoot) scoringRoot.classList.remove('is-landscape')
-
-    if (wrapper) {
-      wrapper.parentNode.insertBefore(el, wrapper)
-      if (settleBox) wrapper.parentNode.insertBefore(settleBox, wrapper)
-      wrapper.parentNode.removeChild(wrapper)
-    }
+    app.unmount()
+    document.body.removeChild(container)
   }
 }
 
 /**
- * Share just the scorecard image (from ScoringView).
- */
-export async function shareScorecard(round) {
-  const el = document.getElementById('gw-capture-target')
-  if (!el) throw new Error('Scorecard element not found')
-  const filename = `${(round.course_name || 'scorecard').replace(/\s+/g, '-')}-${round.date || 'today'}.png`
-  await captureElement(el, filename, `${round.course_name} scorecard`, { landscape: true })
-}
-
-/**
- * Share scorecard + settle-box (from ScoringView).
- * @param {object} round      - active round
- * @param {Array}  gameRows   - result of buildGameLines() from ScoringView
- * @param {object} settlement - liveSettlements.value
- */
-export async function shareRecap(round, gameRows, settlement) {
-  const el = document.getElementById('gw-capture-target')
-  if (!el) throw new Error('Scorecard element not found')
-  const filename = `${(round.course_name || 'recap').replace(/\s+/g, '-')}-${round.date || 'today'}-recap.png`
-  const gamesSummary = buildGamesSummaryText(gameRows, settlement)
-  const header = `GolfWizard Recap \u00b7 ${round.course_name} \u00b7 ${round.date || ''}`
-  const text = gamesSummary ? `${header}\n\n${gamesSummary}` : header
-  await captureElement(el, filename, text, { landscape: true })
-}
-
-/**
  * Build a plain-text games + settlement summary for the share message body.
- * This appears in the iOS share sheet text field so recipients get the data
- * even if they can't view the image.
+ * Appears in the iOS share sheet text field.
  */
 function buildGamesSummaryText(gameRows, settlement) {
   const lines = []
@@ -214,25 +122,77 @@ function buildGamesSummaryText(gameRows, settlement) {
 }
 
 /**
- * Share a recap from the History view.
- * Captures the hidden ScorecardGrid (#gw-history-capture-{roundId}) in landscape,
- * and attaches a plain-text game results + settlement summary.
- *
- * @param {object} round      - round object
- * @param {Array}  gameRows   - result of gameRecapRows(round)
- * @param {object} settlement - settlementsCache[round.id]
+ * Build the props object for ScorecardCapture from ScoringView context.
+ * Called by both shareScorecard and shareRecap.
  */
-export async function shareHistoryRecap(round, gameRows, settlement) {
-  const captureId = `gw-history-capture-${round.id}`
-  const el = document.getElementById(captureId)
-  if (!el) throw new Error('History scorecard grid not found — is the round expanded?')
+function buildCaptureProps(round, members, scores, courseData, games, settlement, gameRows, notationRows) {
+  return {
+    round,
+    members,
+    scores,
+    course: courseData,
+    games,
+    settlement: settlement || null,
+    gameRows: gameRows || [],
+    notationRows: notationRows || [],
+  }
+}
+
+// ── Public API ────────────────────────────────────────────────
+
+/**
+ * Share just the scorecard image (no settlement).
+ *
+ * @param {object} round
+ * @param {Array}  members        - roundsStore.activeMembers
+ * @param {object} scores         - roundsStore.activeScores
+ * @param {object} courseData     - resolved course object
+ * @param {Array}  notationRows   - gameNotationRows computed value
+ */
+export async function shareScorecard(round, members, scores, courseData, notationRows) {
+  const filename = `${(round.course_name || 'scorecard').replace(/\s+/g, '-')}-${round.date || 'today'}.png`
+  const props = buildCaptureProps(round, members, scores, courseData, [], null, [], notationRows)
+  await captureComponent(props, filename, `${round.course_name} scorecard`)
+}
+
+/**
+ * Share scorecard + game summary + settlement.
+ *
+ * @param {object} round
+ * @param {Array}  members
+ * @param {object} scores
+ * @param {object} courseData
+ * @param {Array}  games          - roundsStore.activeGames
+ * @param {object} settlement     - liveSettlements.value
+ * @param {Array}  gameRows       - buildGameLines() result
+ * @param {Array}  notationRows   - gameNotationRows computed value
+ */
+export async function shareRecap(round, members, scores, courseData, games, settlement, gameRows, notationRows) {
   const filename = `${(round.course_name || 'recap').replace(/\s+/g, '-')}-${round.date || 'today'}-recap.png`
   const gamesSummary = buildGamesSummaryText(gameRows, settlement)
   const header = `GolfWizard Recap \u00b7 ${round.course_name} \u00b7 ${round.date || ''}`
   const text = gamesSummary ? `${header}\n\n${gamesSummary}` : header
-  // The hidden wrapper is already 900px wide (effectively landscape).
-  // We don't need landscape: true here — that flag only applies to ScoringView's
-  // .is-landscape CSS class which controls its own layout. The hidden grid
-  // renders full-width by virtue of the off-screen 900px container.
-  await captureElement(el, filename, text)
+  const props = buildCaptureProps(round, members, scores, courseData, games, settlement, gameRows, notationRows)
+  await captureComponent(props, filename, text)
+}
+
+/**
+ * Share a recap from the History view.
+ *
+ * @param {object} round
+ * @param {Array}  members
+ * @param {object} scores         - { [memberId]: { [hole]: score } }
+ * @param {object} courseData
+ * @param {Array}  games
+ * @param {object} settlement
+ * @param {Array}  gameRows
+ * @param {Array}  notationRows
+ */
+export async function shareHistoryRecap(round, members, scores, courseData, games, settlement, gameRows, notationRows) {
+  const filename = `${(round.course_name || 'recap').replace(/\s+/g, '-')}-${round.date || 'today'}-recap.png`
+  const gamesSummary = buildGamesSummaryText(gameRows, settlement)
+  const header = `GolfWizard Recap \u00b7 ${round.course_name} \u00b7 ${round.date || ''}`
+  const text = gamesSummary ? `${header}\n\n${gamesSummary}` : header
+  const props = buildCaptureProps(round, members, scores, courseData, games, settlement, gameRows, notationRows)
+  await captureComponent(props, filename, text)
 }

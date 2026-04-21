@@ -169,16 +169,6 @@
                 </button>
               </div>
 
-              <!-- Hidden scorecard grid rendered off-screen for sharing.
-                   html2canvas captures this element; it's never visible to the user. -->
-              <div style="position:absolute;left:-9999px;top:-9999px;width:900px;overflow:visible;">
-                <ScorecardGrid
-                  :round="round"
-                  :ctx="_buildCtxForRound(round)"
-                  :captureId="'gw-history-capture-' + round.id"
-                />
-              </div>
-
             </div>
           </transition>
         </div>
@@ -209,7 +199,7 @@ import { useCoursesStore } from '../stores/courses'
 import { useRouter, useRoute } from 'vue-router'
 import { computeAllSettlements } from '../modules/settlements'
 import { shareHistoryRecap } from '../modules/scorecardShare'
-import ScorecardGrid from '../components/ScorecardGrid.vue'
+// ScorecardGrid removed — share now uses ScorecardCapture component via scorecardShare.js
 import {
   computeNassau, computeSkins, computeMatch, computeBestBall, computeBestBallNet,
   computeVegas, computeDots, computeFidget, computeSnake, computeWolf,
@@ -280,9 +270,19 @@ async function doShareRecap(round) {
   if (sharingId.value) return
   sharingId.value = round.id
   try {
+    const ctx = _buildCtxForRound(round)
     const gameRows = gameRecapRows(round)
     const settlement = settlementsCache[round.id] || null
-    await shareHistoryRecap(round, gameRows, settlement)
+    await shareHistoryRecap(
+      round,
+      ctx?.members || round.round_members || [],
+      ctx?.scores || {},
+      ctx?.course || null,
+      round.game_configs || [],
+      settlement,
+      gameRows,
+      [], // notationRows not needed for history recap (no live game state)
+    )
   } catch (e) {
     console.error('[history] shareRecap failed:', e)
     alert('Share failed: ' + (e?.message || 'unknown error'))

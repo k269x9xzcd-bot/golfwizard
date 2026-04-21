@@ -2666,7 +2666,13 @@ async function doShareScorecard() {
   sharing.value = true
   showRoundMenu.value = false
   try {
-    await shareScorecard(roundsStore.activeRound)
+    await shareScorecard(
+      roundsStore.activeRound,
+      roundsStore.activeMembers,
+      roundsStore.activeScores,
+      courseData.value,
+      gameNotationRows.value,
+    )
   } catch (e) { console.error('Share scorecard failed:', e) }
   finally { sharing.value = false }
 }
@@ -2676,7 +2682,16 @@ async function doShareRecap() {
   sharing.value = true
   showRoundMenu.value = false
   try {
-    await shareRecap(roundsStore.activeRound, buildGameLines(), liveSettlements.value)
+    await shareRecap(
+      roundsStore.activeRound,
+      roundsStore.activeMembers,
+      roundsStore.activeScores,
+      courseData.value,
+      roundsStore.activeGames,
+      liveSettlements.value,
+      buildGameLines(),
+      gameNotationRows.value,
+    )
   } catch (e) { console.error('Share recap failed:', e) }
   finally { sharing.value = false }
 }
