@@ -91,19 +91,26 @@ export const useRoundsStore = defineStore('rounds', () => {
     _saveQueue(q)
   }
 
+  let _flushInFlight = false  // guard against concurrent flush calls
   async function _flushQueue() {
     const auth = useAuthStore()
     if (!auth.isAuthenticated) return
+    if (_flushInFlight) return  // already running — skip concurrent call
     const q = _loadQueue()
     if (!q.length) return
+    _flushInFlight = true
     const failed = []
     for (const entry of q) {
       try {
-        const { error } = await supabase.from('scores').upsert(entry, { onConflict: 'round_id,member_id,hole' })
+        const { error } = await Promise.race([
+          supabase.from('scores').upsert(entry, { onConflict: 'round_id,member_id,hole' }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('flush entry timeout')), 4000))
+        ])
         if (error) failed.push(entry)
       } catch { failed.push(entry) }
     }
     _saveQueue(failed)
+    _flushInFlight = false
   }
 
   // Flush whenever we come back online
@@ -779,7 +786,9 @@ export const useRoundsStore = defineStore('rounds', () => {
   function _buildSettlementCtx() {
     const round = activeRound.value
     if (!round) return null
-    const course = getCourse(round.course_name)
+    // Use frozen course snapshot first — handles custom + API courses correctly.
+    // Fallback to live builtin lookup for rounds created before snapshots existed.
+    const course = round.course_snapshot ?? getCourse(round.course_name)
     if (!course) return null
     return {
       course,
@@ -852,7 +861,7 @@ export const useRoundsStore = defineStore('rounds', () => {
         // Non-fatal — round is already marked complete
       }
 
-      // 3. Save individual ledger entries
+      // 3. Save individual ledger entries — upsert so iOS double-complete retries are safe
       if (settlementData.ledger?.length) {
         const rows = settlementData.ledger.map(l => ({
           round_id: roundId,
@@ -863,8 +872,8 @@ export const useRoundsStore = defineStore('rounds', () => {
         }))
         try {
           await _withTimeout(
-            supabase.from('ledger_entries').insert(rows),
-            5000, 'ledger_entries.insert'
+            supabase.from('ledger_entries').upsert(rows, { onConflict: 'round_id,from_member_id,to_member_id' }),
+            5000, 'ledger_entries.upsert'
           )
         } catch (e) {
           console.warn('Failed to save ledger entries:', e.message)
@@ -933,7 +942,7 @@ export const useRoundsStore = defineStore('rounds', () => {
       const key = `${s.member_id}_${s.hole}`
       activeScores.value[key] = s.strokes
     }
-    const { data: games } = await supabase.from('round_games').select('*').eq('round_id', round.id)
+    const { data: games } = await supabase.from('game_configs').select('*').eq('round_id', round.id)
     activeGames.value = (games ?? []).map(g => ({ ...g, config: typeof g.config === 'string' ? JSON.parse(g.config) : g.config }))
   }
 

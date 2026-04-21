@@ -218,7 +218,14 @@ function extractPlayerNets(type, result, config, members) {
     return []
   }
 
-  // ── Standings-based games: wolf, stableford, sixes, fiveThreeOne ──
+  // ── 5-3-1 — explicit handler (engine returns settlements[], not standings[]) ──
+  if (t === 'fivethreeone') {
+    return (result.settlements || [])
+      .filter(s => s && s.id)
+      .map(s => ({ id: s.id, name: s.name, net: s.net ?? 0 }))
+  }
+
+  // ── Standings-based games: wolf, stableford, sixes ──
   if (result.standings && Array.isArray(result.standings)) {
     return result.standings.map(s => ({
       id: s.id,
@@ -292,12 +299,14 @@ export function computeAllSettlements(ctx, games) {
  * Uses a greedy settle-up: pair largest debtor with largest creditor.
  */
 function buildLedger(playerTotals, members) {
+  // Round all totals to cents first, then work in integer cents to avoid
+  // floating-point residuals accumulating across multi-game rounds.
   const entries = Object.entries(playerTotals)
-    .map(([id, { name, total }]) => ({ id, name, total: Math.round(total * 100) / 100 }))
-    .filter(e => Math.abs(e.total) > 0.01)
+    .map(([id, { name, total }]) => ({ id, name, totalCents: Math.round(total * 100) }))
+    .filter(e => Math.abs(e.totalCents) > 0)
 
-  const debtors = entries.filter(e => e.total < 0).map(e => ({ ...e, owed: -e.total }))
-  const creditors = entries.filter(e => e.total > 0).map(e => ({ ...e, owed: e.total }))
+  const debtors = entries.filter(e => e.totalCents < 0).map(e => ({ ...e, owed: -e.totalCents }))
+  const creditors = entries.filter(e => e.totalCents > 0).map(e => ({ ...e, owed: e.totalCents }))
 
   debtors.sort((a, b) => b.owed - a.owed)
   creditors.sort((a, b) => b.owed - a.owed)
@@ -307,21 +316,21 @@ function buildLedger(playerTotals, members) {
   while (di < debtors.length && ci < creditors.length) {
     const d = debtors[di]
     const c = creditors[ci]
-    const amount = Math.min(d.owed, c.owed)
-    if (amount > 0.01) {
+    const amountCents = Math.min(d.owed, c.owed)
+    if (amountCents > 0) {
       ledger.push({
         from_member_id: d.id,
         from_name: d.name,
         to_member_id: c.id,
         to_name: c.name,
-        amount: Math.round(amount * 100) / 100,
+        amount: amountCents / 100,  // back to dollars for display + DB
         note: 'Round settlement',
       })
     }
-    d.owed -= amount
-    c.owed -= amount
-    if (d.owed < 0.01) di++
-    if (c.owed < 0.01) ci++
+    d.owed -= amountCents
+    c.owed -= amountCents
+    if (d.owed <= 0) di++
+    if (c.owed <= 0) ci++
   }
 
   return ledger
