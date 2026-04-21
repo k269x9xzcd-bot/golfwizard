@@ -63,6 +63,9 @@
           <button v-if="isCaptain" class="round-menu-item" @click="showRoundMenu = false; openRetroScore()">
             📝 Enter Scores from Card
           </button>
+          <button v-if="isCaptain" class="round-menu-item" @click="showRoundMenu = false; openEditDate()">
+            📅 Edit Round Date
+          </button>
           <button class="round-menu-item" v-if="isCaptain && !roundsStore.activeRound?.is_complete" @click="showRoundMenu = false; finishRound()">
             ✅ Finish Round
           </button>
@@ -189,6 +192,25 @@
           <div class="delete-actions">
             <button class="btn-cancel" @click="confirmDeleteActive = false">Cancel</button>
             <button class="btn-delete-confirm" @click="deleteActiveRound">Delete</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Edit Round Date ───────────────────────────────────── -->
+      <div v-if="showEditDate" class="delete-overlay" @click="showEditDate = false">
+        <div class="delete-dialog" @click.stop>
+          <div class="delete-title">📅 Edit Round Date</div>
+          <div class="delete-msg" style="margin-bottom:12px">
+            <input
+              type="date"
+              v-model="editDateValue"
+              class="edit-input"
+              style="width:100%;font-size:16px;text-align:center"
+            />
+          </div>
+          <div class="delete-actions">
+            <button class="btn-cancel" @click="showEditDate = false">Cancel</button>
+            <button class="btn-delete-confirm" style="background:var(--gw-green-500,#1a7a55)" @click="saveEditDate">Save</button>
           </div>
         </div>
       </div>
@@ -861,6 +883,8 @@ const confirmDeleteActive = ref(false)
 const showGameEditor = ref(false)
 const showHcpEditor = ref(false)
 const showOppEditor = ref(false)
+const showEditDate = ref(false)
+const editDateValue = ref('')
 
 // ── View-only edit score dialog ───────────────────────────────────
 const editScoreDialog = ref(null) // { memberId, memberName, hole, current }
@@ -2665,6 +2689,21 @@ async function deleteActiveRound() {
     router.push('/')
   } catch (e) {
     console.error('Delete round error:', e)
+  }
+}
+
+function openEditDate() {
+  editDateValue.value = roundsStore.activeRound?.date || new Date().toISOString().slice(0, 10)
+  showEditDate.value = true
+}
+
+async function saveEditDate() {
+  if (!roundsStore.activeRound || !editDateValue.value) return
+  try {
+    await roundsStore.updateRoundDate(roundsStore.activeRound.id, editDateValue.value)
+    showEditDate.value = false
+  } catch (e) {
+    console.error('Edit date error:', e)
   }
 }
 

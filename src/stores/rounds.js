@@ -688,6 +688,25 @@ export const useRoundsStore = defineStore('rounds', () => {
     activeGames.value = activeGames.value.filter(g => g.id !== gameId)
   }
 
+  // ── Update round date ────────────────────────────────────────
+  async function updateRoundDate(roundId, newDate) {
+    const auth = useAuthStore()
+    const dateStr = typeof newDate === 'string' ? newDate : newDate.toISOString().slice(0, 10)
+
+    if (!auth.isAuthenticated || String(roundId).startsWith('guest_')) {
+      if (activeRound.value?.id === roundId) activeRound.value.date = dateStr
+      _persistGuest()
+      return
+    }
+
+    const { error } = await supabase.from('rounds').update({ date: dateStr }).eq('id', roundId)
+    if (error) throw error
+    if (activeRound.value?.id === roundId) activeRound.value.date = dateStr
+    // Also update in history list
+    const idx = rounds.value.findIndex(r => r.id === roundId)
+    if (idx !== -1) rounds.value[idx] = { ...rounds.value[idx], date: dateStr }
+  }
+
   // ── Join a round via room code ──────────────────────────────
   async function joinByRoomCode(code) {
     const auth = useAuthStore()
@@ -1000,6 +1019,7 @@ export const useRoundsStore = defineStore('rounds', () => {
     rounds, loading, activeRoundId, scoreSyncError,
     fetchRounds, createRound, loadRound, setScore,
     saveGameConfig, updateGameConfig, deleteGameConfig,
+    updateRoundDate,
     joinByRoomCode, completeRound, deleteRound, setActiveRound,
     fetchSettlements, fetchLedgerEntries,
     subscribeToRound, unsubscribe,
