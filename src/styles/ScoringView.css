@@ -1412,3 +1412,32 @@
   color: var(--gw-gold, #d4af37);
   font-weight: 900;
 }
+
+/* ── 5-3-1 notation rows ─────────────────────────────────────────────────── */
+.row-531 td { padding: 4px 2px; line-height: 1.3; }
+.row-531 .col-notation-cell { font-size: 11px; font-weight: 700; text-align: center; }
+.row-531 .col-notation-sub, .row-531 .col-notation-total { font-size: 11px; text-align: center; }
+
+/* ── Aloha banner ─────────────────────────────────────────────────────────── */
+.aloha-banner {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; border-radius: 10px; margin-bottom: 10px;
+  font-size: 14px;
+}
+.aloha-banner.aloha-call { background: rgba(220,50,50,.15); border: 1px solid rgba(220,50,50,.4); }
+.aloha-banner.aloha-pending { background: rgba(212,175,55,.15); border: 1px solid rgba(212,175,55,.4); }
+.aloha-banner.aloha-active { background: rgba(50,200,100,.15); border: 1px solid rgba(50,200,100,.4); }
+.aloha-banner.aloha-declined { background: rgba(100,100,100,.15); border: 1px solid rgba(100,100,100,.3); }
+.aloha-icon { font-size: 20px; flex-shrink: 0; }
+.aloha-text { flex: 1; color: #e8e0c8; }
+.aloha-respond { display: flex; gap: 8px; }
+.aloha-btn { padding: 6px 14px; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; background: rgba(212,175,55,.2); color: #d4af37; }
+.aloha-btn.aloha-accept { background: rgba(50,200,100,.25); color: #50c864; }
+.aloha-btn.aloha-decline { background: rgba(200,50,50,.2); color: #e05555; }
+.aloha-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 200; display: flex; align-items: center; justify-content: center; }
+.aloha-modal { background: #1a1a2e; border-radius: 16px; padding: 24px; width: 300px; border: 1px solid rgba(212,175,55,.3); }
+.aloha-modal-title { font-size: 18px; font-weight: 700; color: #d4af37; margin-bottom: 12px; }
+.aloha-modal-body p { color: #c0b090; font-size: 14px; margin-bottom: 10px; }
+.aloha-amount-input { width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(212,175,55,.3); background: rgba(255,255,255,.05); color: #e8e0c8; font-size: 18px; text-align: center; margin-bottom: 16px; }
+.aloha-modal-actions { display: flex; gap: 10px; }
+.aloha-modal-actions .aloha-btn { flex: 1; padding: 10px; }

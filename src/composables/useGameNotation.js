@@ -8,7 +8,7 @@ import { computed } from 'vue'
 import { useRoundsStore } from '../stores/rounds'
 import {
   computeNassau, computeSkins, computeMatch, computeSnake,
-  computeDots, computeFidget, computeBestBallNet,
+  computeDots, computeFidget, computeBestBallNet, computeFiveThreeOne,
 } from '../modules/gameEngine'
 
 export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pInit }) {
@@ -244,6 +244,54 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
             outSummary: '', inSummary: '',
             totalSummary: r.holderName ? `${r.holderName} holds` : '',
           })
+        } catch(e) { /* skip */ }
+      }
+
+      // -- 5-3-1 -- one row per player showing pts per hole --
+      if (t === 'fivethreeone') {
+        try {
+          const r = computeFiveThreeOne(ctx, game.config)
+          if (!r) continue
+          const to = ctx.holesMode === 9 ? 9 : 18
+          const frontEnd = ctx.holesMode === 9 ? to : 9
+          const medalColors = ['#FFD700', '#C0C0C0', '#CD7F32']
+          const sorted531 = [...r.settlements].sort((a, b) => b.pts - a.pts)
+
+          for (let pi = 0; pi < r.settlements.length; pi++) {
+            const player = r.settlements[pi]
+            const m = ctx.members.find(x => x.id === player.id)
+            const initials = m ? (m.short_name || m.guest_name || '?').slice(0,3) : '?'
+            const cells = {}
+            let outPts = 0, inPts = 0
+
+            for (let h = 1; h <= to; h++) {
+              const hr = r.holeResults.find(x => x.hole === h)
+              if (!hr || hr.incomplete) { cells[h] = { text: '', cls: '' }; continue }
+              const pts = hr.holePts?.[player.id]
+              if (pts == null) { cells[h] = { text: '', cls: '' }; continue }
+              const cls = pts === 5 ? 'nota-t1' : pts === 1 ? 'nota-t2' : 'nota-halved'
+              cells[h] = { text: String(pts % 1 === 0 ? pts : pts.toFixed(1)), cls }
+              if (h <= frontEnd) outPts += pts
+              else inPts += pts
+            }
+
+            const totalPts = Math.round((outPts + inPts) * 100) / 100
+            const rank = sorted531.findIndex(s => s.id === player.id)
+            const dotColor = rank < 3 ? medalColors[rank] : '#888'
+            const netStr = player.net > 0 ? `+$${player.net}` : player.net < 0 ? `-$${Math.abs(player.net)}` : 'even'
+            const netColor = player.net > 0 ? '#4ade80' : player.net < 0 ? '#f87171' : '#d4af37'
+
+            rows.push({
+              icon: '5️⃣',
+              label: initials,
+              labelHtml: `<span style="color:${dotColor};margin-right:3px">●</span>${initials}`,
+              cells,
+              outSummary: ctx.holesMode !== 9 ? `<span style="font-weight:700">${Math.round(outPts*100)/100}</span>` : '',
+              inSummary: ctx.holesMode !== 9 ? `<span style="font-weight:700">${Math.round(inPts*100)/100}</span>` : '',
+              totalSummary: `<span style="font-weight:700">${totalPts}pts</span> <span style="color:${netColor};font-size:10px">${netStr}</span>`,
+              cls: 'row-531',
+            })
+          }
         } catch(e) { /* skip */ }
       }
     }

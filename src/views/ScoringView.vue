@@ -463,7 +463,8 @@
               <tr v-for="(row, ri) in gameNotationRows" :key="'gn-'+ri" class="row-game-notation" :class="row.cls || ''">
                 <td class="col-sticky col-notation-label">
                   <span class="notation-icon">{{ row.icon }}</span>
-                  <span class="notation-name">{{ row.label }}</span>
+                  <span class="notation-name" v-if="!row.labelHtml">{{ row.label }}</span>
+                  <span class="notation-name" v-else v-html="row.labelHtml"></span>
                 </td>
                 <!-- Front 9 notation -->
                 <td v-for="h in frontHoles" :key="'gn-'+ri+'-'+h" class="col-notation-cell" :class="row.cells[h]?.cls || ''" v-html="row.cells[h]?.text || ''"></td>
@@ -579,6 +580,49 @@
           </span>
         </div>
 
+
+        <!-- Aloha banner / button — hole 18 only -->
+        <template v-if="nassauGameForAloha">
+          <div v-if="!nassauGameForAloha.config?.aloha?.status && nassauLosingTeam(nassauGameForAloha) !== null && (myNassauTeam(nassauGameForAloha) === null || nassauLosingTeam(nassauGameForAloha) === myNassauTeam(nassauGameForAloha))"
+               class="aloha-banner aloha-call">
+            <span class="aloha-icon">🌺</span>
+            <div class="aloha-text"><strong>{{ alohaLosingTeamNames(nassauGameForAloha) }}</strong> can call Aloha — double or nothing on hole 18</div>
+            <button class="aloha-btn" @click="openAlohaCallModal(nassauGameForAloha)">Call Aloha</button>
+          </div>
+          <div v-else-if="nassauGameForAloha.config?.aloha?.status === 'pending' && (myNassauTeam(nassauGameForAloha) === null || myNassauTeam(nassauGameForAloha) !== nassauGameForAloha.config.aloha.calledBy)"
+               class="aloha-banner aloha-pending">
+            <span class="aloha-icon">🌺</span>
+            <div class="aloha-text"><strong>Aloha called!</strong> ${{ nassauGameForAloha.config.aloha.amount }} on hole 18 — accept?</div>
+            <div class="aloha-respond">
+              <button class="aloha-btn aloha-accept" @click="respondAloha(nassauGameForAloha, true)">Accept</button>
+              <button class="aloha-btn aloha-decline" @click="respondAloha(nassauGameForAloha, false)">Decline</button>
+            </div>
+          </div>
+          <div v-else-if="nassauGameForAloha.config?.aloha?.status === 'accepted'"
+               class="aloha-banner aloha-active">
+            <span class="aloha-icon">🌺</span>
+            <div class="aloha-text"><strong>Aloha is on!</strong> ${{ nassauGameForAloha.config.aloha.amount }} rides on this hole.</div>
+          </div>
+          <div v-else-if="nassauGameForAloha.config?.aloha?.status === 'declined'"
+               class="aloha-banner aloha-declined">
+            <span class="aloha-icon">🌺</span>
+            <div class="aloha-text">Aloha declined.</div>
+          </div>
+        </template>
+        <!-- Aloha call modal -->
+        <div v-if="showAlohaModal" class="aloha-modal-backdrop" @click.self="showAlohaModal = false">
+          <div class="aloha-modal">
+            <div class="aloha-modal-title">🌺 Call Aloha</div>
+            <div class="aloha-modal-body">
+              <p>Double or nothing on hole 18. Set the amount:</p>
+              <input type="number" v-model.number="alohaCustomAmount" class="aloha-amount-input" min="1" />
+            </div>
+            <div class="aloha-modal-actions">
+              <button class="aloha-btn aloha-accept" @click="callAloha">Call Aloha</button>
+              <button class="aloha-btn aloha-decline" @click="showAlohaModal = false">Cancel</button>
+            </div>
+          </div>
+        </div>
 
         <!-- Player Score Cards — inline +/- entry -->
         <div class="hole-players-list">
@@ -744,6 +788,7 @@ import RetroScoreOverlay from '../components/RetroScoreOverlay.vue'
 import { useScorecardHelpers } from '../composables/useScorecardHelpers'
 import { useGameNotation } from '../composables/useGameNotation'
 import { useLiveSettlements } from '../composables/useLiveSettlements'
+import { computeNassau } from '../modules/gameEngine'
 
 const authStore = useAuthStore()
 const roundsStore = useRoundsStore()
@@ -860,6 +905,80 @@ async function saveEditScore() {
     editScoreToast.value = 'error'
     editScoreSaving.value = false
   }
+}
+
+// ── ALOHA (Nassau side bet on hole 18) ──────────────────────────────────────
+const showAlohaModal = ref(false)
+const alohaModalGame = ref(null)
+const alohaCustomAmount = ref(0)
+
+const nassauGameForAloha = computed(() => {
+  const hole = activeHole.value
+  const isComplete = roundsStore.activeRound?.is_complete
+  const games = roundsStore.activeGames || []
+  const nassau = games.find(g => g.type?.toLowerCase() === 'nassau') ?? null
+  if (hole !== 18) return null
+  if (isComplete && !nassau?.config?.aloha?.status) return null
+  return nassau
+})
+
+function nassauLosingTeam(game) {
+  const ctx = buildCtx()
+  if (!ctx) return null
+  try {
+    const r = computeNassau(ctx, { ...game.config, aloha: null })
+    const total = r.settlement?.total ?? 0
+    if (total === 0) return null
+    return total > 0 ? 't2' : 't1'
+  } catch { return null }
+}
+
+function defaultAlohaAmount(game) {
+  const ctx = buildCtx()
+  if (!ctx) return 0
+  try {
+    const r = computeNassau(ctx, { ...game.config, aloha: null })
+    return Math.abs(r.settlement?.total ?? 0) * 2
+  } catch { return 0 }
+}
+
+function alohaLosingTeamNames(game) {
+  const loser = nassauLosingTeam(game)
+  if (!loser) return ''
+  const ids = loser === 't1' ? (game.config?.team1 || []) : (game.config?.team2 || [])
+  return ids.map(id => {
+    const m = roundsStore.activeMembers.find(x => x.id === id)
+    return m?.short_name || m?.name || '?'
+  }).join(' + ')
+}
+
+function myNassauTeam(game) {
+  const myId = roundsStore.activeMembers.find(m => m.profile_id === authStore.user?.id)?.id
+  if (!myId) return null
+  if ((game.config?.team1 || []).includes(myId)) return 't1'
+  if ((game.config?.team2 || []).includes(myId)) return 't2'
+  return null
+}
+
+function openAlohaCallModal(game) {
+  alohaModalGame.value = game
+  alohaCustomAmount.value = defaultAlohaAmount(game)
+  showAlohaModal.value = true
+}
+
+async function callAloha() {
+  const game = alohaModalGame.value
+  if (!game) return
+  const loser = nassauLosingTeam(game)
+  if (!loser) return
+  const newConfig = { ...game.config, aloha: { status: 'pending', calledBy: loser, amount: alohaCustomAmount.value } }
+  await roundsStore.updateGameConfig(game.id, newConfig)
+  showAlohaModal.value = false
+}
+
+async function respondAloha(game, accept) {
+  const newConfig = { ...game.config, aloha: { ...game.config.aloha, status: accept ? 'accepted' : 'declined' } }
+  await roundsStore.updateGameConfig(game.id, newConfig)
 }
 
 function goBackToHistory() {
@@ -1226,7 +1345,13 @@ async function doShareScorecard() {
   sharing.value = true
   showRoundMenu.value = false
   try {
-    await shareScorecard(roundsStore.activeRound)
+    await shareScorecard(
+      roundsStore.activeRound,
+      roundsStore.activeMembers,
+      roundsStore.activeScores,
+      courseData.value,
+      gameNotationRows.value,
+    )
   } catch (e) { console.error('Share scorecard failed:', e) }
   finally { sharing.value = false }
 }
@@ -1236,7 +1361,16 @@ async function doShareRecap() {
   sharing.value = true
   showRoundMenu.value = false
   try {
-    await shareRecap(roundsStore.activeRound, buildGameLines(), liveSettlements.value)
+    await shareRecap(
+      roundsStore.activeRound,
+      roundsStore.activeMembers,
+      roundsStore.activeScores,
+      courseData.value,
+      roundsStore.activeGames,
+      liveSettlements.value,
+      buildGameLines(),
+      gameNotationRows.value,
+    )
   } catch (e) { console.error('Share recap failed:', e) }
   finally { sharing.value = false }
 }
