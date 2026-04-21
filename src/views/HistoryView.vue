@@ -8,7 +8,7 @@
       </div>
     </header>
 
-    <!-- Loading — only when we truly have nothing to show -->
+    <!-- Loading -- only when we truly have nothing to show -->
     <div v-if="roundsStore.loading && !roundsStore.rounds.length" class="loading-state">
       <div class="loading-spinner" />
       <div class="loading-text">Loading rounds…</div>
@@ -41,9 +41,9 @@
               <div class="round-course-name">{{ round.course_name }}</div>
               <div class="round-meta-row">
                 <span class="round-date">{{ formatDate(round.date) }}</span>
-                <span class="round-dot">·</span>
+                <span class="round-dot">*</span>
                 <span class="round-players">{{ playerCount(round) }} players</span>
-                <span v-if="round.format" class="round-dot">·</span>
+                <span v-if="round.format" class="round-dot">*</span>
                 <span v-if="round.format" class="round-format">{{ capitalize(round.format) }}</span>
               </div>
             </div>
@@ -52,7 +52,7 @@
               <div v-if="roundScoresStrip(round).length" class="round-scores-strip">
                 <div v-for="p in roundScoresStrip(round)" :key="p.id" class="mini-score">
                   <div class="mini-name">{{ p.name }}</div>
-                  <div class="mini-total" :class="{ 'mini-total--leader': p.isLeader }">{{ p.total ?? '—' }}</div>
+                  <div class="mini-total" :class="{ 'mini-total--leader': p.isLeader }">{{ p.total ?? '--' }}</div>
                 </div>
               </div>
               <div class="expand-arrow" :class="{ expanded: expandedIds.has(round.id) }">›</div>
@@ -79,13 +79,13 @@
                   class="scores-row"
                 >
                   <div class="score-player-col">{{ m.short_name || m.guest_name }}</div>
-                  <div class="score-num-col score-nine">{{ m.front9 || '—' }}</div>
-                  <div class="score-num-col score-nine">{{ m.back9 || '—' }}</div>
-                  <div class="score-num-col score-total-col score-total">{{ m.total || '—' }}</div>
+                  <div class="score-num-col score-nine">{{ m.front9 || '--' }}</div>
+                  <div class="score-num-col score-nine">{{ m.back9 || '--' }}</div>
+                  <div class="score-num-col score-total-col score-total">{{ m.total || '--' }}</div>
                 </div>
               </div>
 
-              <!-- Game Recap — per-game outcome -->
+              <!-- Game Recap -- per-game outcome -->
               <template v-if="round.game_configs?.length">
                 <div class="detail-section-label">Game Recap</div>
                 <div class="game-recap-list">
@@ -138,12 +138,12 @@
                         class="ledger-entry"
                       >
                         <span class="ledger-from">{{ entry.from_name }}</span>
-                        <span class="ledger-arrow">→</span>
+                        <span class="ledger-arrow">-></span>
                         <span class="ledger-to">{{ entry.to_name }}</span>
                         <span class="ledger-amount">${{ entry.amount }}</span>
                       </div>
                     </div>
-                    <div v-else class="settlement-even">All square — no payments needed</div>
+                    <div v-else class="settlement-even">All square -- no payments needed</div>
                   </template>
                   <!-- No settlement yet -->
                   <div v-else class="settlement-placeholder">
@@ -199,11 +199,12 @@ import { useCoursesStore } from '../stores/courses'
 import { useRouter, useRoute } from 'vue-router'
 import { computeAllSettlements } from '../modules/settlements'
 import { shareHistoryRecap } from '../modules/scorecardShare'
-// ScorecardGrid removed — share now uses ScorecardCapture component via scorecardShare.js
+// ScorecardGrid removed -- share now uses ScorecardCapture component via scorecardShare.js
 import {
   computeNassau, computeSkins, computeMatch, computeBestBall, computeBestBallNet,
   computeVegas, computeDots, computeFidget, computeSnake, computeWolf,
   computeHiLow, computeStableford, computeSixes, computeFiveThreeOne, computeHammer,
+  computeBbb, computeScotch6s, computeTeamDay,
 } from '../modules/gameEngine'
 import { COURSES as BUILTIN_COURSES } from '../modules/courses'
 
@@ -338,7 +339,7 @@ function formatMoney(val) {
   return '$' + Math.abs(Math.round(val * 100) / 100)
 }
 
-// ── Date helpers ─────────────────────────────────────────────
+// -- Date helpers ---------------------------------------------
 function formatDate(d) {
   if (!d) return ''
   const dt = new Date(d + 'T12:00:00')
@@ -355,7 +356,7 @@ function capitalize(s) {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
 }
 
-// ── Grouping ─────────────────────────────────────────────────
+// -- Grouping -------------------------------------------------
 const groupedRounds = computed(() => {
   const map = new Map()
   for (const r of roundsStore.rounds) {
@@ -366,7 +367,7 @@ const groupedRounds = computed(() => {
   return Array.from(map.entries()).map(([month, rounds]) => ({ month, rounds }))
 })
 
-// ── Member/score helpers ─────────────────────────────────────
+// -- Member/score helpers -------------------------------------
 function playerCount(round) {
   return round.round_members?.length ?? 0
 }
@@ -400,7 +401,7 @@ function getMembersWithScores(round) {
   })
 }
 
-// ── Game helpers ─────────────────────────────────────────────
+// -- Game helpers ---------------------------------------------
 const GAME_ICONS = {
   nassau: '💰', skins: '💎', match: '⚔️', matchplay: '⚔️', match1v1: '⚔️',
   bestball: '🎮', best_ball: '🎮', bbn: '🏌️',
@@ -417,7 +418,7 @@ const GAME_LABELS = {
 function gameIcon(type) { return GAME_ICONS[(type || '').toLowerCase()] || '🏌️' }
 function gameLabel(type) { return GAME_LABELS[(type || '').toLowerCase()] || type }
 
-// ── Card-header: all-players score strip ───────────────────
+// -- Card-header: all-players score strip -------------------
 function roundScoresStrip(round) {
   const rows = getMembersWithScores(round).filter(m => m.total)
   if (!rows.length) return []
@@ -430,7 +431,7 @@ function roundScoresStrip(round) {
   }))
 }
 
-// ── Game Recap: per-game outcome lines ─────────────────────
+// -- Game Recap: per-game outcome lines ---------------------
 // Uses the same engine the live scorecard uses so the recap reads identically.
 function resolveCourseForRound(round) {
   // Prefer frozen snapshot (immutable history), fall back to live.
@@ -497,15 +498,15 @@ function _recapOne(ctx, game) {
       const pts = cfg.points || 2
       const ppt = r.settlement?.ppt || cfg.ppt || 0
 
-      if (played === 0) { base.detail = `${t1n} vs ${t2n} — not started`; return base }
+      if (played === 0) { base.detail = `${t1n} vs ${t2n} -- not started`; return base }
       if (matchOver) {
         const win = up > 0 ? t1n : t2n
         const lose = up > 0 ? t2n : t1n
         base.winnerLine = _fmtWinnerValue(win, { pts: isTournament ? pts : null, dollars: ppt || null })
         base.detail = `${win} (${Math.abs(up)}&${remaining}) vs ${lose}`
       } else if (up === 0) {
-        base.detail = `${t1n} vs ${t2n} — AS thru ${played}`
-        if (isTournament) base.winnerLine = `halved · ${pts / 2}pt each`
+        base.detail = `${t1n} vs ${t2n} -- AS thru ${played}`
+        if (isTournament) base.winnerLine = `halved * ${pts / 2}pt each`
       } else {
         const leader = up > 0 ? t1n : t2n
         const trail = up > 0 ? t2n : t1n
@@ -527,15 +528,15 @@ function _recapOne(ctx, game) {
       const pts = cfg.points || 1
       const ppt = r.settlement?.ppt || cfg.ppt || 0
 
-      if (played === 0) { base.detail = `${p1n} vs ${p2n} — not started`; return base }
+      if (played === 0) { base.detail = `${p1n} vs ${p2n} -- not started`; return base }
       if (r.matchOver) {
         const win = up > 0 ? p1n : p2n
         const lose = up > 0 ? p2n : p1n
         base.winnerLine = _fmtWinnerValue(win, { pts: isTournament ? pts : null, dollars: Math.abs(p1Net) || ppt || null })
         base.detail = `${win} (${r.result}) vs ${lose}`
       } else if (up === 0) {
-        base.detail = `${p1n} vs ${p2n} — AS thru ${played}`
-        if (isTournament) base.winnerLine = `halved · ${pts / 2}pt each`
+        base.detail = `${p1n} vs ${p2n} -- AS thru ${played}`
+        if (isTournament) base.winnerLine = `halved * ${pts / 2}pt each`
       } else {
         const leader = up > 0 ? p1n : p2n
         const trail = up > 0 ? p2n : p1n
@@ -553,7 +554,7 @@ function _recapOne(ctx, game) {
       const t2n = s.t2Name || 'T2'
       const total = s.total || 0
       if (total === 0) {
-        base.detail = `${t1n} vs ${t2n} — all square`
+        base.detail = `${t1n} vs ${t2n} -- all square`
       } else {
         const winner = total > 0 ? t1n : t2n
         base.winnerLine = `${winner} +$${Math.abs(total)}`
@@ -561,7 +562,15 @@ function _recapOne(ctx, game) {
         if (s.front) parts.push(`F ${s.front > 0 ? '+' : '-'}$${Math.abs(s.front)}`)
         if (s.back) parts.push(`B ${s.back > 0 ? '+' : '-'}$${Math.abs(s.back)}`)
         if (s.overall) parts.push(`O ${s.overall > 0 ? '+' : '-'}$${Math.abs(s.overall)}`)
-        base.detail = parts.length ? parts.join(' · ') : `${t1n} vs ${t2n}`
+        if (r.alohaResult) {
+          const alohaWinner = r.alohaResult.t1Delta > 0 ? t1n : t2n
+          parts.push(`Aloha +$${r.alohaResult.amount} -> ${alohaWinner}`)
+        } else if (cfg.aloha?.status === 'accepted') {
+          parts.push('Aloha pending')
+        } else if (cfg.aloha?.status === 'pending') {
+          parts.push('Aloha offered')
+        }
+        base.detail = parts.length ? parts.join(' * ') : `${t1n} vs ${t2n}`
       }
       return base
     }
@@ -588,7 +597,7 @@ function _recapOne(ctx, game) {
         .filter(s => (s.net || 0) > 0)
         .sort((a, b) => (b.net || 0) - (a.net || 0))[0]
       if (top) base.winnerLine = `${top.name} +$${top.net}`
-      base.detail = (r.settlements || []).map(s => `${s.name}: ${s.myDots || 0}`).join(' · ')
+      base.detail = (r.settlements || []).map(s => `${s.name}: ${s.myDots || 0}`).join(' * ')
       return base
     }
 
@@ -602,13 +611,13 @@ function _recapOne(ctx, game) {
         base.winnerLine = null
         base.detail = `Fidget: ${names} (owes $${r.ppp} per player)`
       } else if (incomplete) {
-        // Round in progress — show who hasn't won yet
+        // Round in progress -- show who hasn't won yet
         const atRisk = (r.members || ctx.members).filter(m => !r.hasWon?.[m.id])
         base.detail = atRisk.length
           ? `At risk: ${atRisk.map(m => m.short_name || '?').join(', ')}`
           : 'Everyone has won a hole'
       } else {
-        base.detail = 'Everyone won at least one hole — no fidget'
+        base.detail = 'Everyone won at least one hole -- no fidget'
       }
       return base
     }
@@ -642,7 +651,138 @@ function _recapOne(ctx, game) {
       base.detail = sorted.map(s => {
         const netStr = s.net > 0 ? `+$${s.net}` : s.net < 0 ? `-$${Math.abs(s.net)}` : 'even'
         return `${s.name}: ${s.pts}pts ${netStr}`
-      }).join(' · ')
+      }).join(' * ')
+      return base
+    }
+
+    if (t === 'vegas') {
+      const r = computeVegas(ctx, cfg)
+      if (!r) return base
+      const t1n = r.t1Name || 'T1'
+      const t2n = r.t2Name || 'T2'
+      const net = r.settlement?.t1Net || 0
+      if (net === 0) {
+        base.detail = `${t1n} vs ${t2n} -- all square`
+      } else {
+        const winner = net > 0 ? t1n : t2n
+        base.winnerLine = `${winner} +$${Math.abs(net)}`
+        base.detail = `${t1n} vs ${t2n} (${r.t1Total > 0 ? '+' : ''}${r.t1Total} pts)`
+      }
+      return base
+    }
+
+    if (t === 'hilow') {
+      const r = computeHiLow(ctx, cfg)
+      if (!r) return base
+      const t1n = r.t1Name || 'T1'
+      const t2n = r.t2Name || 'T2'
+      const net = r.settlement?.t1Net || 0
+      const t1pts = r.t1Pts || 0
+      const t2pts = r.t2Pts || 0
+      if (net === 0) {
+        base.detail = `${t1n} vs ${t2n} -- all square (${t1pts}-${t2pts})`
+      } else {
+        const winner = net > 0 ? t1n : t2n
+        base.winnerLine = `${winner} +$${Math.abs(net)}`
+        base.detail = `${t1n} ${t1pts} -- ${t2n} ${t2pts}`
+      }
+      return base
+    }
+
+    if (t === 'stableford') {
+      const r = computeStableford(ctx, cfg)
+      if (!r) return base
+      const sorted = [...(r.settlements || [])].sort((a, b) => b.pts - a.pts)
+      const winner = sorted[0]
+      if (winner) {
+        const netStr = winner.net > 0 ? `+$${winner.net}` : winner.net < 0 ? `-$${Math.abs(winner.net)}` : 'even'
+        base.winnerLine = `${winner.name} ${winner.pts}pts (${netStr})`
+      }
+      base.detail = sorted.map(s => {
+        const netStr = s.net > 0 ? `+$${s.net}` : s.net < 0 ? `-$${Math.abs(s.net)}` : 'even'
+        return `${s.name}: ${s.pts}pts ${netStr}`
+      }).join(' * ')
+      return base
+    }
+
+    if (t === 'wolf') {
+      const r = computeWolf(ctx, cfg)
+      if (!r) return base
+      const sorted = [...(r.settlements || [])].sort((a, b) => b.net - a.net)
+      const winner = sorted[0]
+      if (winner && winner.net > 0) base.winnerLine = `${winner.name} +$${winner.net}`
+      base.detail = sorted.map(s => {
+        const netStr = s.net > 0 ? `+$${s.net}` : s.net < 0 ? `-$${Math.abs(s.net)}` : 'even'
+        return `${s.name}: ${netStr}`
+      }).join(' * ')
+      return base
+    }
+
+    if (t === 'hammer') {
+      const r = computeHammer(ctx, cfg)
+      if (!r) return base
+      const t1n = r.t1Name || 'T1'
+      const t2n = r.t2Name || 'T2'
+      const net = r.settlement?.t1Net || 0
+      if (net === 0) {
+        base.detail = `${t1n} vs ${t2n} -- all square`
+      } else {
+        const winner = net > 0 ? t1n : t2n
+        base.winnerLine = `${winner} +$${Math.abs(net)}`
+        base.detail = `${t1n} vs ${t2n}`
+      }
+      return base
+    }
+
+    if (t === 'sixes') {
+      const r = computeSixes(ctx, cfg)
+      if (!r) return base
+      const sorted = [...(r.settlements || [])].sort((a, b) => b.pts - a.pts)
+      const winner = sorted[0]
+      if (winner && winner.net > 0) {
+        base.winnerLine = `${winner.name} ${winner.pts}pts +$${winner.net}`
+      }
+      base.detail = sorted.map(s => `${s.name}: ${s.pts}pts`).join(' * ')
+      return base
+    }
+
+    if (t === 'bbb') {
+      const r = computeBbb(ctx, cfg)
+      if (!r) return base
+      const sorted = [...(r.standings || [])].sort((a, b) => b.pts - a.pts)
+      const winner = sorted[0]
+      if (winner && winner.net > 0) base.winnerLine = `${winner.name} ${winner.pts}pts +$${winner.net}`
+      base.detail = sorted.map(s => {
+        const netStr = s.net > 0 ? `+$${s.net}` : s.net < 0 ? `-$${Math.abs(s.net)}` : 'even'
+        return `${s.name}: ${s.pts}pts ${netStr}`
+      }).join(' * ')
+      return base
+    }
+
+    if (t === 'scotch6s') {
+      const r = computeScotch6s(ctx, cfg)
+      if (!r) return base
+      const t1n = r.t1n || 'T1'
+      const t2n = r.t2n || 'T2'
+      const diff = r.diff || 0
+      if (diff === 0) {
+        base.detail = `${t1n} vs ${t2n} -- all square`
+      } else {
+        const winner = diff > 0 ? t2n : t1n
+        base.winnerLine = `${winner} +$${Math.abs(diff)}`
+        base.detail = `${t1n} ${r.t1total}pts -- ${t2n} ${r.t2total}pts`
+      }
+      return base
+    }
+
+    if (t === 'teamday') {
+      const r = computeTeamDay(ctx, cfg)
+      if (!r) return base
+      const t1n = r.t1n || 'T1'
+      const t2n = r.t2n || 'T2'
+      const winAmt = Math.abs(r.standings?.[0]?.net || 0)
+      base.winnerLine = r.diff !== 0 ? `${r.status} (+$${winAmt})` : r.status
+      base.detail = `${t1n} ${r.t1agg} -- ${t2n} ${r.t2agg}`
       return base
     }
 
@@ -658,10 +798,10 @@ function _fmtWinnerValue(name, { pts, dollars }) {
   const parts = []
   if (pts != null) parts.push(`+${pts} pt${pts === 1 ? '' : 's'}`)
   if (dollars != null && dollars > 0) parts.push(`+$${dollars}`)
-  return parts.length ? `${name} ${parts.join(' · ')}` : name
+  return parts.length ? `${name} ${parts.join(' * ')}` : name
 }
 
-// ── Settlement: compute on demand when no snapshot is saved ───────
+// -- Settlement: compute on demand when no snapshot is saved -------
 function _computeSettlementFromRound(round) {
   const ctx = _buildCtxForRound(round)
   if (!ctx) return null
@@ -672,7 +812,7 @@ function _computeSettlementFromRound(round) {
 </script>
 
 <style scoped>
-/* ── Layout ─────────────────────────────────────────────── */
+/* -- Layout ----------------------------------------------- */
 .history-view {
   min-height: 100%;
   background: var(--gw-neutral-950);
@@ -702,7 +842,7 @@ function _computeSettlementFromRound(round) {
   padding: 4px 12px;
 }
 
-/* ── Loading ─────────────────────────────────────────────── */
+/* -- Loading ----------------------------------------------- */
 .loading-state {
   display: flex;
   flex-direction: column;
@@ -720,7 +860,7 @@ function _computeSettlementFromRound(round) {
 }
 .loading-text { font-size: 14px; color: var(--gw-text-muted); }
 
-/* ── Empty state ─────────────────────────────────────────── */
+/* -- Empty state ------------------------------------------- */
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -756,7 +896,7 @@ function _computeSettlementFromRound(round) {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* ── Rounds list ─────────────────────────────────────────── */
+/* -- Rounds list ------------------------------------------- */
 .rounds-list { padding: 12px 16px; }
 
 .month-label {
@@ -853,7 +993,7 @@ function _computeSettlementFromRound(round) {
 }
 .expand-arrow.expanded { transform: rotate(-90deg); }
 
-/* ── Round detail ────────────────────────────────────────── */
+/* -- Round detail ------------------------------------------ */
 .detail-divider {
   height: 1px;
   background: var(--gw-card-border);
@@ -1025,7 +1165,7 @@ function _computeSettlementFromRound(round) {
   border-radius: var(--gw-radius-sm, 8px);
 }
 
-/* ── Animations ──────────────────────────────────────────── */
+/* -- Animations -------------------------------------------- */
 @keyframes card-in {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -1112,7 +1252,7 @@ function _computeSettlementFromRound(round) {
   line-height: 1.4;
 }
 
-/* ── Leader chip on the round card header ──────────────── */
+/* -- Leader chip on the round card header ---------------- */
 .round-leader-chip {
   display: inline-flex;
   align-items: center;
@@ -1135,7 +1275,7 @@ function _computeSettlementFromRound(round) {
   font-size: 13px;
 }
 
-/* ── Game Recap rows ─────────────────────────────────── */
+/* -- Game Recap rows ----------------------------------- */
 .game-recap-list {
   display: flex;
   flex-direction: column;
