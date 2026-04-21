@@ -185,8 +185,8 @@
           <div v-if="ghinSearchResults.length" class="ghin-search-results">
             <div class="ghin-search-label">Select the correct golfer:</div>
             <div v-for="r in ghinSearchResults" :key="r.ghin_number" class="ghin-search-option" @click="applyGhinResult(r)">
-              <div class="ghin-search-name">{{ r.full_name }}</div>
-              <div class="ghin-search-meta">{{ r.club_name }} · HCP {{ r.handicap_index }} · #{{ r.ghin_number }}</div>
+              <div class="ghin-search-name">{{ r.full_name }} <span v-if="r._source === 'bb'" class="bb-badge">BB</span></div>
+              <div class="ghin-search-meta">{{ r.club_name }} · HCP {{ r.handicap_index ?? 'NH' }} · #{{ r.ghin_number }}</div>
             </div>
           </div>
           <div v-if="ghinSearchMsg" class="ghin-search-msg">{{ ghinSearchMsg }}</div>
@@ -413,6 +413,8 @@ async function add() {
     const fullName = last ? `${first} ${last}` : first
     await rosterStore.addPlayer({
       name: fullName,
+      first_name: first,
+      last_name: last || null,
       short_name: last || first.slice(0, 8),
       ghin_index: newGhin.value !== '' ? parseFloat(newGhin.value) : null,
       nickname: newNickname.value.trim() || null,
@@ -542,9 +544,15 @@ function startEdit(p) {
   ghinSearchMsg.value = ''
   editGhinPrefix.value = ''
   editTarget.value = p
-  const parts = p.name.trim().split(' ')
-  editFirst.value = parts[0] || ''
-  editLast.value = parts.slice(1).join(' ')
+  // Prefer stored first_name/last_name; fall back to splitting name for old rows
+  if (p.first_name) {
+    editFirst.value = p.first_name
+    editLast.value = p.last_name || ''
+  } else {
+    const parts = p.name.trim().split(' ')
+    editFirst.value = parts[0] || ''
+    editLast.value = parts.slice(1).join(' ')
+  }
   editGhin.value = p.ghin_index ?? ''
   editGhinNumber.value = p.ghin_number || ''
   editNickname.value = p.nickname || ''
@@ -556,11 +564,6 @@ function startEdit(p) {
 
 async function searchGhinForEdit() {
   if (ghinSearching.value) return
-  const profile = authStore.profile
-  if (!profile?.ghin_number || !profile?.ghin_password) {
-    ghinSearchMsg.value = 'Add your GHIN credentials in Profile first'
-    return
-  }
   ghinSearching.value = true
   ghinSearchResults.value = []
   ghinSearchMsg.value = ''
@@ -570,6 +573,68 @@ async function searchGhinForEdit() {
   const last = editLast.value.trim()
 
   try {
+    // ── Tier 1: BB member index (instant, no API) ──────────────
+    if (typedGhinNumber) {
+      // Look up by GHIN # directly in bb_member_index
+      const { data: bbRows } = await supabase
+        .from('bb_member_index')
+        .select('ghin_number, first_name, last_name, handicap_index')
+        .eq('ghin_number', typedGhinNumber)
+        .limit(1)
+      if (bbRows?.length) {
+        const bb = bbRows[0]
+        ghinSearchResults.value = [{
+          ghin_number: bb.ghin_number,
+          full_name: `${bb.first_name} ${bb.last_name}`,
+          handicap_index: bb.handicap_index,
+          club_name: 'Bonnie Briar Country Club',
+          _source: 'bb',
+        }]
+        ghinSearchMsg.value = '🏌️ Found in Bonnie Briar directory'
+        return
+      }
+    } else if (first && last) {
+      // Name search in bb_member_index — exact then prefix
+      const { data: bbExact } = await supabase
+        .from('bb_member_index')
+        .select('ghin_number, first_name, last_name, handicap_index')
+        .ilike('last_name', last)
+        .ilike('first_name', `${first}%`)
+        .order('last_name')
+        .limit(10)
+      if (bbExact?.length === 1) {
+        const bb = bbExact[0]
+        ghinSearchResults.value = [{
+          ghin_number: bb.ghin_number,
+          full_name: `${bb.first_name} ${bb.last_name}`,
+          handicap_index: bb.handicap_index,
+          club_name: 'Bonnie Briar Country Club',
+          _source: 'bb',
+        }]
+        ghinSearchMsg.value = '🏌️ Found in Bonnie Briar directory'
+        return
+      } else if (bbExact?.length > 1) {
+        ghinSearchResults.value = bbExact.map(bb => ({
+          ghin_number: bb.ghin_number,
+          full_name: `${bb.first_name} ${bb.last_name}`,
+          handicap_index: bb.handicap_index,
+          club_name: 'Bonnie Briar Country Club',
+          _source: 'bb',
+        }))
+        ghinSearchMsg.value = '🏌️ Multiple BB members found — select one'
+        return
+      }
+    }
+
+    // ── Tier 2: GHIN API fallback ──────────────────────────────
+    const profile = authStore.profile
+    if (!profile?.ghin_number || !profile?.ghin_password) {
+      ghinSearchMsg.value = first && last
+        ? 'Not found in BB directory. Add GHIN credentials in Profile to search the full GHIN database.'
+        : 'Enter a GHIN # or first + last name'
+      return
+    }
+
     // ── Path A: GHIN # typed → look up directly, no name needed ──
     if (typedGhinNumber) {
       const { data, error } = await supabase.functions.invoke('ghin-roster-sync', {
@@ -655,6 +720,8 @@ async function saveEdit() {
   try {
     await rosterStore.updatePlayer(playerId, {
       name: fullName,
+      first_name: editFirst.value.trim(),
+      last_name: editLast.value.trim() || null,
       short_name: editLast.value.trim() || editFirst.value.trim().slice(0, 8),
       ghin_index: editGhin.value !== '' ? parseFloat(editGhin.value) : null,
       ghin_number: newGhinNumber,
@@ -946,6 +1013,7 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 .ghin-search-option:active { background: rgba(96,165,250,.15); }
 .ghin-search-name { font-size: 14px; font-weight: 600; color: var(--gw-text); }
 .ghin-search-meta { font-size: 12px; color: rgba(240,237,224,.5); margin-top: 2px; }
+.bb-badge { display: inline-block; font-size: 10px; font-weight: 700; color: #1a1a1a; background: #4ade80; border-radius: 3px; padding: 1px 4px; margin-left: 6px; vertical-align: middle; }
 .ghin-search-msg { font-size: 12px; color: rgba(240,237,224,.5); padding: 4px 2px; }
 .edit-nickname-row { display: flex; align-items: center; gap: 10px; }
 .nick-toggle-label { display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
