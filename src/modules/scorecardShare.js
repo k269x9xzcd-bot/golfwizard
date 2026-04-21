@@ -75,11 +75,24 @@ async function captureElement(el, filename, text, opts = {}) {
   const stickyPrev = stickyEls.map(s => ({ el: s, pos: s.style.position, zIndex: s.style.zIndex, left: s.style.left }))
   stickyEls.forEach(s => { s.style.position = 'static'; s.style.zIndex = ''; s.style.left = '' })
 
-  // --- 6. Measure full scrollable width ---
+  // --- 6. Measure full scrollable width AND height ---
   const tableEl = el.querySelector('.scorecard-grid')
   const captureWidth = tableEl
     ? tableEl.scrollWidth + 32
     : captureTarget.scrollWidth
+
+  // Force height to full scroll height so html2canvas doesn't clip at the
+  // visible viewport boundary (the is-landscape max-height clamps offsetHeight).
+  const prevHeight = el.style.height
+  const prevScrollHeight = scrollEl ? scrollEl.style.height : null
+  el.style.height = 'auto'
+  if (scrollEl) {
+    scrollEl.style.height = 'auto'
+    scrollEl.style.maxHeight = 'none'
+  }
+  // Also remove the CSS max-height from the landscape class by temporarily
+  // removing is-landscape from the scorecard-outer's ancestor before measuring.
+  const captureHeight = captureTarget.scrollHeight
 
   try {
     const canvas = await html2canvas(captureTarget, {
@@ -88,7 +101,9 @@ async function captureElement(el, filename, text, opts = {}) {
       useCORS: true,
       logging: false,
       width: captureWidth,
+      height: captureHeight,
       windowWidth: captureWidth + 100,
+      windowHeight: captureHeight + 100,
     })
 
     const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
@@ -112,7 +127,12 @@ async function captureElement(el, filename, text, opts = {}) {
     el.style.overflow      = prevOverflow
     el.style.maxHeight     = prevMaxHeight
     el.style.borderRadius  = prevBorderRadius
-    if (scrollEl) scrollEl.style.overflow = prevScrollOverflow
+    el.style.height        = prevHeight
+    if (scrollEl) {
+      scrollEl.style.overflow  = prevScrollOverflow
+      scrollEl.style.height    = prevScrollHeight
+      scrollEl.style.maxHeight = ''
+    }
     el.classList.remove('gw-capturing')
     if (scoringRoot) scoringRoot.classList.remove('is-landscape')
 
