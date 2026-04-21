@@ -27,10 +27,11 @@ async function captureComponent(captureProps, filename, text) {
     'position:fixed',
     'top:-9999px',
     'left:-9999px',
-    'width:940px',
+    'width:960px',       // matches sc-wrap min-width in ScorecardCapture
     'background:#faf7f0',
     'pointer-events:none',
     'z-index:-1',
+    'overflow:visible',  // ensure scrollHeight is accurate
   ].join(';')
   document.body.appendChild(container)
 
@@ -43,23 +44,25 @@ async function captureComponent(captureProps, filename, text) {
   const app = createApp(WrapperApp)
   app.mount(container)
 
-  // Wait one tick for Vue to finish rendering
-  await new Promise(resolve => setTimeout(resolve, 80))
+  // Give Vue two frames to finish rendering + layout
+  await new Promise(resolve => setTimeout(resolve, 120))
 
   const captureEl = container.firstElementChild
-  const captureWidth  = captureEl ? captureEl.scrollWidth  : 940
+  const captureWidth  = captureEl ? captureEl.scrollWidth  : 960
   const captureHeight = captureEl ? captureEl.scrollHeight : 600
 
   try {
-    const canvas = await html2canvas(container, {
+    const canvas = await html2canvas(captureEl || container, {
       backgroundColor: '#faf7f0',
       scale: 2,
       useCORS: true,
       logging: false,
       width: captureWidth,
       height: captureHeight,
-      windowWidth: captureWidth + 20,
-      windowHeight: captureHeight + 20,
+      windowWidth: captureWidth,
+      windowHeight: captureHeight,
+      x: 0,
+      y: 0,
     })
 
     const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))

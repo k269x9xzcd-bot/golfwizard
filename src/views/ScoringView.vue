@@ -2615,42 +2615,38 @@ async function finishRound() {
 
 const sharing = ref(false)
 
+/**
+ * Returns structured game rows for ScorecardCapture.
+ * Shape: [{ icon, label, winnerLine, detail }]
+ * winnerLine = winner name + net (e.g. "Spieler +$30")
+ * detail     = all players' nets joined (e.g. "Spieler +$30 · Matt -$30")
+ */
 function buildGameLines() {
   if (!liveSettlements.value?.summary) return []
-  const lines = []
+  const rows = []
   for (const [gameId, s] of Object.entries(liveSettlements.value.summary)) {
     const game = roundsStore.activeGames.find(g => g.id === gameId)
     if (!game) continue
+    const icon = gameIcon(game.type)
     const label = gameLabel(game.type, game.config || {})
     if (s?.error) {
-      lines.push(`${label}: —`)
+      rows.push({ icon, label, winnerLine: null, detail: '—' })
       continue
     }
-    const nets = s?.nets || []
+    const nets = (s?.nets || []).filter(n => n.net !== 0).sort((a, b) => b.net - a.net)
     if (!nets.length) {
-      lines.push(`${label}: All square`)
+      rows.push({ icon, label, winnerLine: null, detail: 'All square' })
       continue
     }
-    // Build "Name: +$X" strings, sorted winners first
-    const parts = nets
-      .filter(n => n.net !== 0)
-      .sort((a, b) => b.net - a.net)
-      .map(n => {
-        const sign = n.net > 0 ? '+' : '-'
-        return `${n.name}: ${sign}$${Math.abs(n.net)}`
-      })
-    lines.push(`${label}: ${parts.length ? parts.join(' · ') : 'All square'}`)
+    const winner = nets[0]
+    const winnerLine = `${winner.name} +$${Math.abs(winner.net)}`
+    const detail = nets.map(n => {
+      const sign = n.net > 0 ? '+' : '-'
+      return `${n.name}: ${sign}$${Math.abs(n.net)}`
+    }).join(' · ')
+    rows.push({ icon, label, winnerLine, detail })
   }
-  // Also append ledger settle-up
-  const ledger = liveSettlements.value.ledger || []
-  if (ledger.length) {
-    lines.push('')
-    lines.push('Settle Up:')
-    for (const e of ledger) {
-      lines.push(`${e.from_name} → ${e.to_name}: $${e.amount}`)
-    }
-  }
-  return lines
+  return rows
 }
 
 function _shareCtx() {
