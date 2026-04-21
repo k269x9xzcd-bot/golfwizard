@@ -4111,6 +4111,7 @@ function formatDate(dateStr) {
   font-size: 14px;
   padding: 5px 6px;
 }
+.row-531 td { padding: 4px 2px; line-height: 1.3; }
 .row-531 .col-notation-cell { font-size: 11px; font-weight: 700; text-align: center; }
 .row-531 .col-notation-sub, .row-531 .col-notation-total { font-size: 11px; text-align: center; }
 

@@ -630,6 +630,22 @@ function _recapOne(ctx, game) {
       return base
     }
 
+    if (t === 'fivethreeone') {
+      const r = computeFiveThreeOne(ctx, cfg)
+      if (!r || !r.settlements) return base
+      const sorted = [...r.settlements].sort((a, b) => b.pts - a.pts)
+      const winner = sorted[0]
+      if (winner) {
+        const netStr = winner.net > 0 ? `+$${winner.net}` : winner.net < 0 ? `-$${Math.abs(winner.net)}` : 'even'
+        base.winnerLine = `${winner.name} ${winner.pts}pts (${netStr})`
+      }
+      base.detail = sorted.map(s => {
+        const netStr = s.net > 0 ? `+$${s.net}` : s.net < 0 ? `-$${Math.abs(s.net)}` : 'even'
+        return `${s.name}: ${s.pts}pts ${netStr}`
+      }).join(' · ')
+      return base
+    }
+
     // Fallback: just show the game label
     return base
   } catch (e) {
