@@ -372,12 +372,24 @@
               <!-- 5-3-1 -->
               <template v-else-if="isGameType(game, 'fivethreeone')">
                 <div v-if="fiveThreeOneResult(game)" class="individual-standings">
+                  <div class="fto-badges" v-if="game.config?.sweepBonus || game.config?.birdieBonus">
+                    <span v-if="game.config.sweepBonus" class="fto-badge">🧹 Sweep on</span>
+                    <span v-if="game.config.birdieBonus" class="fto-badge">🐦 Birdie bonus on</span>
+                  </div>
                   <div v-for="s in fiveThreeOneResult(game).settlements" :key="s.id" class="standing-row">
                     <span class="standing-name">{{ s.name }}</span>
                     <span class="standing-pts">{{ s.pts }} pts</span>
                     <span class="standing-value" :class="balanceClass(s.net)">
                       {{ formatBalance(s.net) }}
                     </span>
+                  </div>
+                  <!-- Per-hole sweep/birdie events -->
+                  <div class="fto-events" v-if="fiveThreeOneEvents(fiveThreeOneResult(game)).length">
+                    <div v-for="ev in fiveThreeOneEvents(fiveThreeOneResult(game))" :key="ev.hole" class="fto-event">
+                      <span class="fto-event-hole">H{{ ev.hole }}</span>
+                      <span class="fto-event-icon">{{ ev.icon }}</span>
+                      <span class="fto-event-name">{{ ev.name }}</span>
+                    </div>
                   </div>
                 </div>
               </template>
@@ -732,6 +744,24 @@ function sixesResult(game) {
 function fiveThreeOneResult(game) {
   if (!gameCtx.value || !gameCtx.value.course) return null
   return computeFiveThreeOne(gameCtx.value, game.config) ?? null
+}
+
+// Returns list of notable events (sweeps, birdie bonuses) from hole results
+function fiveThreeOneEvents(result) {
+  if (!result?.holeResults) return []
+  const events = []
+  for (const hr of result.holeResults) {
+    if (!hr || hr.incomplete) continue
+    if (hr.sweep) {
+      const m = gameCtx.value?.members?.find(m => m.id === hr.sweep)
+      if (m) events.push({ hole: hr.hole, icon: '🧹', name: `${m.short_name} swept` })
+    }
+    if (hr.birdieBonus) {
+      const m = gameCtx.value?.members?.find(m => m.id === hr.birdieBonus)
+      if (m) events.push({ hole: hr.hole, icon: '🐦', name: `${m.short_name} birdie +1` })
+    }
+  }
+  return events
 }
 
 // Generic per-player standings
@@ -1426,6 +1456,41 @@ function balanceClass(val) {
   padding-top: 6px;
   font-style: italic;
 }
+
+.fto-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.fto-badge {
+  font-size: 11px;
+  background: rgba(255,255,255,0.07);
+  border-radius: 10px;
+  padding: 2px 8px;
+  color: var(--gw-text-muted);
+}
+.fto-events {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 6px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  padding-top: 6px;
+}
+.fto-event {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--gw-text-muted);
+}
+.fto-event-hole {
+  font-family: var(--gw-font-mono);
+  min-width: 26px;
+  opacity: 0.6;
+}
+.fto-event-name { flex: 1; }
 
 /* ── Animations ──────────────────────────────────────────── */
 @keyframes card-in {

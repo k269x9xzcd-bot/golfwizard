@@ -562,6 +562,30 @@
               <input v-model.number="mainGame.config.ppt" type="number" min="1" class="config-input" placeholder="1" />
             </div>
           </div>
+          <div class="config-row config-row--toggles">
+            <div class="config-toggle-row">
+              <label class="toggle-label">
+                <input type="checkbox" v-model="mainGame.config.sweepBonus" />
+                <span>🧹 Sweep bonus</span>
+              </label>
+              <span class="toggle-desc">Win by 2+ net strokes → take all 9 pts</span>
+            </div>
+            <div v-if="mainGame.config.sweepBonus" class="config-field config-field--sub">
+              <label>Margin (strokes)</label>
+              <input v-model.number="mainGame.config.sweepMargin" type="number" min="1" max="5" class="config-input config-input--sm" />
+            </div>
+            <div class="config-toggle-row">
+              <label class="toggle-label">
+                <input type="checkbox" v-model="mainGame.config.birdieBonus" />
+                <span>🐦 Birdie bonus</span>
+              </label>
+              <span class="toggle-desc">Solo net birdie = +{{ mainGame.config.birdieBonusPts ?? 1 }} extra pt</span>
+            </div>
+            <div v-if="mainGame.config.birdieBonus" class="config-field config-field--sub">
+              <label>Bonus pts</label>
+              <input v-model.number="mainGame.config.birdieBonusPts" type="number" min="1" max="3" class="config-input config-input--sm" />
+            </div>
+          </div>
           <div class="config-note">Best net gets 5, second gets 3, third gets 1, worst gets 0. All {{ form.players.length }} players compete.</div>
         </div>
 
@@ -1219,7 +1243,7 @@ const GAME_DEFAULTS = {
   wolf:        { ppt: 5, wolfLoneMultiplier: 2, wolfTeeOrder: [], blindWolfEnabled: true, lastPlaceWolf: false, wolfChoices: {} },
   hammer:      { ppt: 1, team1: [], team2: [] },
   sixes:       { ppt: 1 },
-  fiveThreeOne:{ ppt: 1 },
+  fiveThreeOne:{ ppt: 1, sweepBonus: false, sweepMargin: 2, birdieBonus: false, birdieBonusPts: 1 },
   bestball:    { ppt: 5, ballsPerTeam: 1, team1: [], team2: [] },
   none:        {},
 }

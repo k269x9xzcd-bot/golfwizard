@@ -1289,8 +1289,12 @@ export function computeSixes(ctx, config) {
 // ─────────────────────────────────────────────────────────────────
 export function computeFiveThreeOne(ctx, config) {
   const {
-    ppt = 1,  // $ per point
+    ppt = 1,          // $ per point
     players: pids,
+    sweepBonus = false,   // if sole winner beats 2nd place by ≥ sweepMargin net strokes, wins all 9 pts
+    sweepMargin = 2,      // net strokes margin required to trigger sweep
+    birdieBonus = false,  // if exactly one player nets a birdie, they get +1 extra pt
+    birdieBonusPts = 1,   // extra points awarded for solo net birdie
   } = config
 
   const members = pids
@@ -1341,12 +1345,47 @@ export function computeFiveThreeOne(ctx, config) {
       for (const player of group) {
         const roundedPts = Math.round(avgPts * 100) / 100
         holePts[player.id] = roundedPts
-        totals[player.id].pts += roundedPts
       }
       slotIdx += group.length
     }
 
-    holeResults.push({ hole: h, scores, holePts })
+    // ── Sweep bonus ──────────────────────────────────────────────
+    // Sole winner beats 2nd place by ≥ sweepMargin: they take all 9 pts, others get 0.
+    let sweepWinnerId = null
+    if (sweepBonus && groups[0].length === 1) {
+      const best = scores[0].net
+      const second = scores[1].net  // scores is sorted ascending
+      if (second - best >= sweepMargin) {
+        sweepWinnerId = scores[0].id
+        for (const m of members) holePts[m.id] = 0
+        holePts[sweepWinnerId] = 9
+      }
+    }
+
+    // ── Birdie bonus ─────────────────────────────────────────────
+    // Exactly one player nets a birdie → +birdieBonusPts to that player.
+    let birdieBonusId = null
+    if (birdieBonus) {
+      const par = holePar(ctx.course, h)
+      // Low-man net — compare against par adjusted for the fact that the low-man
+      // gets no strokes.  A net score below par counts as a birdie.
+      const birdieScorers = scores.filter(s => s.net < par)
+      if (birdieScorers.length === 1) {
+        birdieBonusId = birdieScorers[0].id
+        holePts[birdieBonusId] = Math.round((holePts[birdieBonusId] + birdieBonusPts) * 100) / 100
+      }
+    }
+
+    // Accumulate
+    for (const m of members) {
+      totals[m.id].pts += holePts[m.id] ?? 0
+    }
+
+    holeResults.push({
+      hole: h, scores, holePts,
+      ...(sweepWinnerId ? { sweep: sweepWinnerId } : {}),
+      ...(birdieBonusId ? { birdieBonus: birdieBonusId } : {}),
+    })
   }
 
   // Settlement: each player's points minus average, times ppt
