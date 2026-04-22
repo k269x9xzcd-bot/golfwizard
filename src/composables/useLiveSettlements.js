@@ -392,19 +392,32 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         const played = (r.holeResults || []).filter(h => !h.incomplete).length
         const sorted = [...r.settlements].sort((a, b) => b.pts - a.pts)
         const medalEmojis = ['🥇','🥈','🥉']
+        // Build sweep/birdie tallies per player
+        const ftoTallies = {}
+        for (const hr of (r.holeResults || [])) {
+          if (hr.sweep) { ftoTallies[hr.sweep] = ftoTallies[hr.sweep] || { sweeps: 0, birdies: 0 }; ftoTallies[hr.sweep].sweeps++ }
+          if (hr.birdieBonus) { ftoTallies[hr.birdieBonus] = ftoTallies[hr.birdieBonus] || { sweeps: 0, birdies: 0 }; ftoTallies[hr.birdieBonus].birdies++ }
+        }
+        const hasSweep = r.hasSweep
+        const hasBirdie = r.hasBirdie
+        const badgeHtml = (hasSweep ? '<span style="font-size:10px;margin-left:6px;opacity:.8">🧹 Sweep on</span>' : '')
+                        + (hasBirdie ? '<span style="font-size:10px;margin-left:6px;opacity:.8">🐦 Birdie bonus on</span>' : '')
         const standRows = sorted.map((s) => {
           const netColor = s.net > 0 ? '#4ade80' : s.net < 0 ? '#f87171' : '#d4af37'
           const rank = sorted.findIndex(x => x.pts === s.pts)
           const medal = rank < 3 ? medalEmojis[rank] + ' ' : ''
           const rawDollars = Math.round(s.pts * ppt * 100) / 100
           const netStr = s.net > 0 ? `+$${s.net}` : s.net < 0 ? `-$${Math.abs(s.net)}` : 'even'
+          const t = ftoTallies[s.id]
+          const tallyHtml = t ? ((t.sweeps ? `<span style="font-size:10px;margin-left:4px">🧹×${t.sweeps}</span>` : '') + (t.birdies ? `<span style="font-size:10px;margin-left:4px">🐦×${t.birdies}</span>` : '')) : ''
           return `<div style="display:flex;align-items:center;gap:6px;padding:2px 0">`
             + `<span style="min-width:60px">${medal}<span style="font-weight:700">${s.name}</span></span>`
             + `<span style="color:#d4af37;font-weight:700">${s.pts}pts · $${rawDollars}</span>`
             + `<span style="color:${netColor};font-size:10px">(net ${netStr})</span>`
+            + tallyHtml
             + `</div>`
         }).join('')
-        return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} 5-3-1</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppt}/pt${played > 0 ? ' · thru ' + played : ''}</span><div style="font-size:11px;margin-top:4px">${standRows || 'No complete holes yet'}</div></div>`
+        return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} 5-3-1</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppt}/pt${played > 0 ? ' · thru ' + played : ''}</span>${badgeHtml}<div style="font-size:11px;margin-top:4px">${standRows || 'No complete holes yet'}</div></div>`
       }
 
 

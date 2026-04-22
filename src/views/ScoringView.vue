@@ -404,14 +404,11 @@
                 <!-- Front 9 yards -->
                 <td v-for="h in frontHoles" :key="'y'+h" class="col-yards-val">{{ yardsForHole(h) || '' }}</td>
                 <!-- OUT yards -->
-                <td v-if="hasBack9" class="col-subtotal"></td>
-                <!-- Back 9 yards -->
+                <td v-if="hasBack9" class="col-subtotal" style="font-weight:600;font-size:10px">{{ frontHoles.reduce((s,h) => s + (yardsForHole(h)||0), 0) || '' }}</td>
                 <td v-for="h in backHoles" :key="'y'+h" class="col-yards-val">{{ yardsForHole(h) || '' }}</td>
                 <!-- IN yards -->
-                <td v-if="hasBack9" class="col-subtotal"></td>
-                <!-- Total yards -->
-                <td class="col-total"></td>
-                <td class="col-total"></td>
+                <td v-if="hasBack9" class="col-subtotal" style="font-weight:600;font-size:10px">{{ backHoles.reduce((s,h) => s + (yardsForHole(h)||0), 0) || '' }}</td>
+                <td class="col-total" style="font-weight:700;font-size:10px">{{ visibleHoles.reduce((s,h) => s + (yardsForHole(h)||0), 0) || '' }}</td>
               </tr>
             </thead>
             <tbody>
@@ -483,7 +480,7 @@
                 <td v-if="hasBack9" class="col-subtotal col-notation-sub" v-html="row.inSummary || ''"></td>
                 <!-- Total notation -->
                 <td class="col-total col-notation-total" v-html="row.totalSummary || ''"></td>
-                <td class="col-total"></td>
+                <td class="col-total col-notation-total" v-html="row.netSummary || ''"></td>
               </tr>
             </tfoot>
           </table>

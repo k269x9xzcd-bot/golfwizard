@@ -245,7 +245,8 @@ async function toggleRound(id) {
       let data = null
       // 1) Try saved snapshot first (fast, no engine run)
       try {
-        const saved = await roundsStore.fetchSettlements(id)
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000))
+        const saved = await Promise.race([roundsStore.fetchSettlements(id), timeoutPromise])
         if (saved) data = saved
       } catch { /* fall through to compute */ }
       // 2) Otherwise compute from stored scores on demand

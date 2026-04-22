@@ -288,7 +288,8 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
               cells,
               outSummary: ctx.holesMode !== 9 ? `<span style="font-weight:700">${Math.round(outPts*100)/100}</span>` : '',
               inSummary: ctx.holesMode !== 9 ? `<span style="font-weight:700">${Math.round(inPts*100)/100}</span>` : '',
-              totalSummary: `<span style="font-weight:700">${totalPts}pts</span> <span style="color:${netColor};font-size:10px">${netStr}</span>`,
+              totalSummary: `<span style="font-weight:700">${totalPts}pts</span>`,
+              netSummary: `<span style="color:${netColor};font-size:11px;font-weight:700">${netStr}</span>`,
               cls: 'row-531',
             })
           }
