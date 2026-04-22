@@ -249,66 +249,45 @@ const multipleMatchQueue = ref([])
 
 async function syncAllGhin() {
   if (ghinSyncing.value) return
-  const profile = authStore.profile
-  if (!profile?.ghin_number || !profile?.ghin_password) {
-    syncMsg.value = '⚠ Add your GHIN credentials in Profile first'
-    syncMsgType.value = 'warn'
-    setTimeout(() => { syncMsg.value = '' }, 4000)
-    return
-  }
-
   ghinSyncing.value = true
   syncMsg.value = 'Syncing handicaps…'
   syncMsgType.value = 'info'
 
   try {
-    // Don't send players array — let edge function pull from DB by owner_id.
-    // This means the edge function handles all DB writes itself (ghin_index, club_name, etc.)
-    // and we just refresh the store after. Fixes: non-favorites not updating.
-    const invokePromise = supabase.functions.invoke('ghin-roster-sync', {
-      body: {
-        ghin_number: profile.ghin_number,
-        password: profile.ghin_password,
-        bulk: true,
-      }
-    })
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Sync timed out — try again')), 55000)
-    )
-    const { data, error } = await Promise.race([invokePromise, timeoutPromise])
+    // Pull latest handicaps from bb_member_index (updated nightly by bb-ghin-refresh cron)
+    // This is a pure DB read — instant, no GHIN API call needed.
+    const { data: bbMembers, error: bbErr } = await supabase
+      .from('bb_member_index')
+      .select('ghin_number, handicap_index, updated_at')
+      .not('ghin_number', 'is', null)
+    if (bbErr) throw bbErr
 
-    // Supabase invoke puts non-2xx in `error`, but the body is in data for edge functions.
-    // Check data.error first (our structured error from 503/400/etc), then fall back to error obj.
-    if (data?.error) throw new Error(data.error)
-    if (error) throw error
+    const bbMap = {}
+    for (const m of bbMembers || []) {
+      bbMap[m.ghin_number] = m
+    }
 
-    const results = data.results || []
     let updated = 0
     let notFound = 0
-    const multipleQueue = []
 
-    for (const r of results) {
-      if (r.status === 'updated') {
+    for (const player of rosterStore.players) {
+      if (!player.ghin_number) continue
+      const bb = bbMap[player.ghin_number]
+      if (bb?.handicap_index != null) {
+        await rosterStore.updatePlayer(player.id, {
+          ghin_index: bb.handicap_index,
+          ghin_synced_at: bb.updated_at,
+        })
         updated++
-      } else if (r.status === 'multiple_matches') {
-        multipleQueue.push(r)
-      } else if (r.status === 'not_found') {
+      } else {
         notFound++
       }
     }
 
-    // Refresh local store so UI reflects DB changes written by edge function
     await rosterStore.fetchPlayers()
 
-    // Show multiple-match queue one at a time
-    if (multipleQueue.length) {
-      multipleMatchQueue.value = multipleQueue
-      multipleMatchPlayer.value = multipleQueue[0]
-    }
-
     const parts = [`✓ ${updated} synced`]
-    if (notFound) parts.push(`${notFound} not found`)
-    if (multipleQueue.length) parts.push(`${multipleQueue.length} need review`)
+    if (notFound) parts.push(`${notFound} not in BB roster`)
     syncMsg.value = parts.join(', ')
     syncMsgType.value = 'success'
     setTimeout(() => { syncMsg.value = '' }, 4000)

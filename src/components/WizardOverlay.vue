@@ -922,7 +922,7 @@
 
       <!-- Nav -->
       <div class="wizard-nav">
-        <button v-if="step > 1" class="btn-ghost" @click="step--">← Back</button>
+        <button v-if="step > 1" class="btn-ghost" @click="goBack">← Back</button>
         <span v-else />
         <button v-if="step < totalSteps" class="btn-primary" :disabled="!canNext" @click="nextStep">Next →</button>
         <button v-else class="btn-primary" :disabled="!canFinish || creating" @click="create">
@@ -1460,6 +1460,12 @@ const canFinish = computed(() => {
   }
   return true
 })
+
+function goBack() {
+  step.value--
+  // Returning to step 3 (games) — always show the game grid so user can pick a different game
+  if (step.value === 3) showMainGrid.value = true
+}
 
 function nextStep() {
   if (step.value === 1 && canNext.value) step.value++

@@ -136,7 +136,7 @@ export const useRosterStore = defineStore('roster', () => {
     }
     const { data, error } = await supabase
       .from('roster_players')
-      .insert({ ...player, owner_id: auth.user.id })
+      .upsert({ ...player, owner_id: auth.user.id }, { onConflict: 'ghin_number', ignoreDuplicates: false })
       .select().single()
     if (error) throw error
     players.value.push(data)

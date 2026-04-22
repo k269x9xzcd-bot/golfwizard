@@ -844,8 +844,17 @@ export const useRoundsStore = defineStore('rounds', () => {
     }
 
     // ── AUTHENTICATED PATH ──────────────────────────────────
-    // 0. Flush any queued scores before marking complete
-    try { await _flushQueue() } catch (e) { console.warn('[rounds] flush before complete failed:', e.message) }
+    // 0. Flush queued scores — retry up to 3x before completing
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await _flushQueue()
+        const remaining = _loadQueue()
+        if (!remaining.length) break
+        if (attempt < 3) await new Promise(r => setTimeout(r, 1000 * attempt))
+      } catch (e) {
+        console.warn(`[rounds] flush attempt ${attempt} failed:`, e.message)
+      }
+    }
 
     // 1. Mark round complete — use raw fetch with timeout to avoid iOS hang
     const _withTimeout = (promise, ms, label) => Promise.race([
