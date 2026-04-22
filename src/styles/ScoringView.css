@@ -822,15 +822,44 @@
   color: rgba(240,237,224,.45);
   margin-top: 4px;
 }
-.gps-row { margin-top: 5px; }
-.gps-btn {
-  background: rgba(134,239,172,.15); border: 1px solid rgba(134,239,172,.4);
-  color: #86efac; font-size: 11px; padding: 3px 8px; border-radius: 12px;
-  cursor: pointer; white-space: nowrap;
+/* ── GPS centered display in hole banner ──────────────────────── */
+.gps-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  pointer-events: none;
 }
-.gps-btn:active { opacity: .7; }
-.gps-dist { color: #86efac; font-weight: 600; font-size: 13px; }
-.gps-locating { opacity: .6; }
+.gps-center-dist {
+  font-family: var(--gw-font-display, Georgia, serif);
+  font-size: 22px;
+  font-weight: 400;
+  color: #86efac;
+  line-height: 1;
+  text-shadow: 0 1px 8px rgba(134,239,172,.4);
+  white-space: nowrap;
+}
+.gps-locating { opacity: .5; }
+
+/* ── GPS toggle button in header ─────────────────────────────── */
+.btn-gps-toggle {
+  background: none;
+  border: none;
+  font-size: 20px;
+  padding: 4px 6px;
+  cursor: pointer;
+  border-radius: 8px;
+  opacity: 0.45;
+  transition: opacity .15s, background .15s;
+  -webkit-tap-highlight-color: transparent;
+  line-height: 1;
+}
+.btn-gps-toggle:active { opacity: .7; }
+.btn-gps-toggle.gps-toggle--active {
+  opacity: 1;
+  background: rgba(134,239,172,.15);
+}
 .offline-pending-banner {
   display: flex; align-items: center; gap: 6px;
   background: rgba(251,191,36,.12); border: 1px solid rgba(251,191,36,.3);

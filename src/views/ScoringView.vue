@@ -46,6 +46,13 @@
           </div>
         </div>
         <div class="header-right-actions">
+          <button
+            v-if="courseData?.greenCoords?.length"
+            class="btn-gps-toggle"
+            :class="{ 'gps-toggle--active': gpsEnabled }"
+            @click="toggleGps"
+            :title="gpsEnabled ? 'GPS On — tap to disable' : 'Enable GPS distance'"
+          >⛳</button>
           <router-link to="/library" class="btn-rules-sm">📖</router-link>
           <button class="btn-round-menu" @click.stop="showRoundMenu = !showRoundMenu">⚙️</button>
         </div>
@@ -571,16 +578,15 @@
             <div class="hole-big-number">Hole {{ activeHole }}</div>
             <div class="hole-course-meta">{{ roundsStore.activeRound.course_name }} · {{ roundsStore.activeRound.tee }}</div>
           </div>
+          <!-- GPS distance — centered in banner, only when GPS is enabled -->
+          <div v-if="gpsEnabled && greenCoordsForHole(activeHole)" class="gps-center">
+            <span v-if="gpsDistance !== null" class="gps-center-dist">🛰️ {{ gpsDistance }}y</span>
+            <span v-else class="gps-center-dist gps-locating">🛰️ …</span>
+          </div>
           <div class="hole-banner-right">
             <div class="hole-big-number">Par {{ parForHole(activeHole) }}</div>
             <div class="hole-course-meta">
               SI {{ siForHole(activeHole) }}<template v-if="yardsForHole(activeHole)"> · {{ yardsForHole(activeHole) }}y</template>
-            </div>
-            <!-- GPS: only show if course has green coords -->
-            <div v-if="greenCoordsForHole(activeHole)" class="gps-row">
-              <button v-if="!gpsActive" class="gps-btn" @click="startGpsWatch">🛰️ GPS</button>
-              <span v-else-if="gpsDistance !== null" class="gps-dist">🛰️ {{ gpsDistance }}y</span>
-              <span v-else class="gps-dist gps-locating">🛰️ …</span>
             </div>
           </div>
         </div>
@@ -855,6 +861,7 @@ const isViewOnly = computed(() => route.query.viewOnly === 'true')
 const gpsDistance = ref(null)   // yards, null = no fix yet
 const gpsWatchId = ref(null)
 const gpsActive = ref(false)    // true once user has tapped GPS button
+const gpsEnabled = ref(false)   // user toggled GPS on via flag button
 
 function haversineYards(lat1, lng1, lat2, lng2) {
   const R = 6371000 // metres
@@ -894,6 +901,18 @@ function stopGpsWatch() {
   }
   gpsDistance.value = null
   gpsActive.value = false
+}
+
+function toggleGps() {
+  if (gpsEnabled.value) {
+    // Turn off — stop watching and hide everything
+    gpsEnabled.value = false
+    stopGpsWatch()
+  } else {
+    // Turn on — enable display and immediately start watching
+    gpsEnabled.value = true
+    startGpsWatch()
+  }
 }
 
 // When hole changes while GPS is active, clear distance until next position update
