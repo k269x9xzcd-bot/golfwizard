@@ -1202,6 +1202,16 @@ function balanceClass(val) {
 .skins-count { font-size: 12px; color: var(--gw-text-muted); }
 
 /* Match Play */
+.match-dormie-badge {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #b45309;
+  background: rgba(180,83,9,0.1);
+  border-radius: 6px;
+  padding: 2px 8px;
+  margin-top: 4px;
+}
 .match-standings {
   display: flex;
   flex-direction: column;

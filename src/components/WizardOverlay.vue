@@ -1228,17 +1228,16 @@ const MAIN_GAMES = [
   { key: 'hammer',      icon: '🔨', label: 'Hammer' },
   { key: 'sixes',       icon: '🎲', label: 'Sixes' },
   { key: 'fiveThreeOne',icon: '5️⃣', label: '5-3-1' },
-  { key: 'bestball',    icon: '🏅', label: 'Best Ball' },
   { key: 'none',        icon: '📋', label: 'Scores Only' },
 ]
 
 // Default configs per game type
 const GAME_DEFAULTS = {
-  nassau:      { front: 10, back: 10, overall: 20, pressAt: 2, team1: [], team2: [] },
+  nassau:      { front: 10, back: 10, overall: 20, pressAt: 2, pressDecline: 'must', team1: [], team2: [] },
   vegas:       { ppt: 1, birdieFlip: true, scoring: 'net', team1: [], team2: [] },
-  match:       { ppt: 20, format: '2v2', player1: '', player2: '', team1: [], team2: [] },
-  skins:       { ppt: 5, carry: true },
-  hilow:       { ppt: 5, team1: [], team2: [] },
+  match:       { ppt: 20, format: '2v2', player1: '', player2: '', closeoutBonus: 0, team1: [], team2: [] },
+  skins:       { ppt: 5, carry: true, lastHoleTie: 'carry', back9Multiplier: false },
+  hilow:       { ppt: 5, aggregatePoint: true, birdieDouble: false, team1: [], team2: [] },
   stableford:  { ppt: 1 },
   wolf:        { ppt: 5, wolfLoneMultiplier: 2, wolfTeeOrder: [], blindWolfEnabled: true, lastPlaceWolf: false, wolfChoices: {} },
   hammer:      { ppt: 1, team1: [], team2: [] },

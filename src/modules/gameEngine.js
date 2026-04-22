@@ -128,6 +128,7 @@ export function computeSkins(ctx, config) {
     carry = true,              // carry pot on ties (true) or dead skins (false)
     payoutModel = 'pool',      // 'pool' = pot-based, 'perPlayer' = each player pays ppt per skin won by others
     lastHoleTie = 'carry',     // 'carry' = pot carries (dead), 'split' = tied players split pot on hole 18
+    back9Multiplier = false,   // holes 10-18 worth 2× skin value
     hcpMode = 'lowman',        // 'lowman' = low-man adjusted, 'course' = full course HCP
   } = config
   const members = pids
@@ -150,9 +151,10 @@ export function computeSkins(ctx, config) {
       net: netFn(m, h),
     }))
 
+    const holeVal = (back9Multiplier && h >= 10) ? ppt * 2 : ppt
     if (nets.some(n => n.net === null)) {
       holeResults.push({ hole: h, winner: null, pot: potValue, reason: 'incomplete' })
-      if (carry) { pot += ppt; potValue += ppt }
+      if (carry) { pot += holeVal; potValue += holeVal }
       continue
     }
 
@@ -162,7 +164,7 @@ export function computeSkins(ctx, config) {
     if (winners.length === 1) {
       holeResults.push({ hole: h, winner: winners[0].id, winnerName: winners[0].name, pot: potValue, net: min })
       pot = 0
-      potValue = ppt
+      potValue = (back9Multiplier && h >= 9 && h < to) ? ppt * 2 : ppt  // next hole value
     } else {
       // Tie
       if (h === to && lastHoleTie === 'split' && winners.length > 0) {
@@ -170,13 +172,13 @@ export function computeSkins(ctx, config) {
         holeResults.push({ hole: h, winner: null, pot: potValue, reason: 'split', tied: winners.map(w => w.id), splitAmount: potValue / winners.length })
       } else if (carry) {
         holeResults.push({ hole: h, winner: null, pot: potValue, reason: 'tie', tied: winners.map(w => w.id) })
-        pot += ppt
-        potValue += ppt
+        pot += holeVal
+        potValue += holeVal
       } else {
         // Dead skins — pot doesn't carry
-        holeResults.push({ hole: h, winner: null, pot: ppt, reason: 'dead', tied: winners.map(w => w.id) })
+        holeResults.push({ hole: h, winner: null, pot: holeVal, reason: 'dead', tied: winners.map(w => w.id) })
         pot = 0
-        potValue = ppt
+        potValue = (back9Multiplier && h >= 9 && h < to) ? ppt * 2 : ppt
       }
     }
   }
@@ -232,6 +234,7 @@ export function computeNassau(ctx, config) {
   const {
     front = 10, back = 10, overall = 20,
     pressAt = 2,
+    pressDecline = 'must',  // 'must' = losing team must accept press, 'can' = winning team can decline
     team1 = [], team2 = [],
     hcpPct = 0.9,  // 90% for best ball
     hcpMode = 'lowman',  // 'lowman' or 'course'
@@ -360,7 +363,7 @@ export function computeNassau(ctx, config) {
 
   return {
     frontSeg, backSeg, overallUp, overallT1Wins, settlement,
-    t1, t2, t1Name, t2Name, aloha,
+    t1, t2, t1Name, t2Name, aloha, pressDecline,
   }
 }
 
@@ -373,6 +376,7 @@ export function computeMatch(ctx, config) {
     ppt = 10,
     hcpMode = 'lowman',
     scoring = 'closeout',  // 'closeout' (default): stake paid once on win. 'nassau': per-hole value. 'skins': each won hole pays ppt
+    closeoutBonus = 0,     // $ bonus paid by loser if match ends early (closeout only)
   } = config
   const m1 = ctx.members.find(m => m.id === player1)
   const m2 = ctx.members.find(m => m.id === player2)
@@ -412,12 +416,15 @@ export function computeMatch(ctx, config) {
 
   // Match over when |up| > remaining
   const matchOver = Math.abs(finalUp) > holesRemaining
+  const isDormie = !matchOver && holesRemaining > 0 && Math.abs(finalUp) === holesRemaining
   const result = matchOver
     ? (finalUp > 0 ? `${finalUp}&${holesRemaining}` : `${-finalUp}&${holesRemaining}`)
-    : (finalUp > 0 ? `${finalUp} UP` : finalUp < 0 ? `${-finalUp} DOWN` : 'A/S')
+    : isDormie
+      ? (finalUp > 0 ? `${finalUp} UP (Dormie)` : `${-finalUp} DOWN (Dormie)`)
+      : (finalUp > 0 ? `${finalUp} UP` : finalUp < 0 ? `${-finalUp} DOWN` : 'A/S')
 
   // Settlement computation depends on scoring mode:
-  // - closeout: fixed stake paid by loser; halved = 0
+  // - closeout: fixed stake paid by loser; halved = 0 (+ optional closeoutBonus if match ended early)
   // - nassau: winner gets ppt × final up count
   // - skins: each won hole pays ppt (so p1Net = (p1HolesWon - p2HolesWon) × ppt)
   let p1Net = 0
@@ -427,15 +434,16 @@ export function computeMatch(ctx, config) {
     p1Net = (p1HolesWon - p2HolesWon) * ppt
   } else {
     // closeout (default)
-    p1Net = finalUp > 0 ? ppt : finalUp < 0 ? -ppt : 0
+    const bonus = matchOver && closeoutBonus > 0 ? closeoutBonus : 0
+    p1Net = finalUp > 0 ? (ppt + bonus) : finalUp < 0 ? -(ppt + bonus) : 0
   }
 
   return {
-    holeResults, finalUp, result, matchOver,
+    holeResults, finalUp, result, matchOver, isDormie,
     p1: { id: m1.id, name: m1.short_name },
     p2: { id: m2.id, name: m2.short_name },
     p1HolesWon, p2HolesWon,
-    settlement: { p1Name: m1.short_name, p2Name: m2.short_name, p1Net, ppt, scoring },
+    settlement: { p1Name: m1.short_name, p2Name: m2.short_name, p1Net, ppt, scoring, closeoutBonus },
   }
 }
 
@@ -838,6 +846,7 @@ export function computeHiLow(ctx, config) {
     ppt = 5,               // $ per point
     carryOnTie = true,     // carry points on tie to next hole
     birdieDouble = false,  // birdie on low ball doubles the point value for that hole
+    aggregatePoint = true, // include aggregate (3rd) point per hole
     hcpMode = 'lowman',
   } = config
 
@@ -895,15 +904,19 @@ export function computeHiLow(ctx, config) {
     else if (carryOnTie) { highCarry += 1 }
     else { highCarry = 0 }
 
-    // Aggregate point
+    // Aggregate point (optional)
     const t1Agg = t1Low + t1High
     const t2Agg = t2Low + t2High
     let aggWin = null
-    const aggPts = 1 + aggCarry
-    if (t1Agg < t2Agg) { aggWin = 't1'; t1Pts += aggPts; aggCarry = 0 }
-    else if (t2Agg < t1Agg) { aggWin = 't2'; t2Pts += aggPts; aggCarry = 0 }
-    else if (carryOnTie) { aggCarry += 1 }
-    else { aggCarry = 0 }
+    if (aggregatePoint) {
+      const aggPts = 1 + aggCarry
+      if (t1Agg < t2Agg) { aggWin = 't1'; t1Pts += aggPts; aggCarry = 0 }
+      else if (t2Agg < t1Agg) { aggWin = 't2'; t2Pts += aggPts; aggCarry = 0 }
+      else if (carryOnTie) { aggCarry += 1 }
+      else { aggCarry = 0 }
+    } else {
+      aggCarry = 0  // reset regardless when agg is off
+    }
 
     holeResults.push({
       hole: h, t1Low, t1High, t2Low, t2High, t1Agg, t2Agg,
