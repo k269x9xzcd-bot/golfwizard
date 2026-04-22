@@ -270,19 +270,23 @@ async function syncAllGhin() {
     let updated = 0
     let notFound = 0
 
+    const updatePromises = []
     for (const player of rosterStore.players) {
       if (!player.ghin_number) continue
       const bb = bbMap[player.ghin_number]
       if (bb?.handicap_index != null) {
-        await rosterStore.updatePlayer(player.id, {
-          ghin_index: bb.handicap_index,
-          ghin_synced_at: bb.updated_at,
-        })
+        updatePromises.push(
+          rosterStore.updatePlayer(player.id, {
+            ghin_index: bb.handicap_index,
+            ghin_synced_at: bb.updated_at,
+          })
+        )
         updated++
       } else {
         notFound++
       }
     }
+    await Promise.all(updatePromises)
 
     await rosterStore.fetchPlayers()
 
