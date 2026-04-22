@@ -501,7 +501,7 @@
         </div>
 
         <!-- Settle Up Panel -->
-        <div v-if="liveSettlements && roundsStore.activeGames.length > 0 && roundsStore.activeRound?.is_complete" class="settle-box">
+        <div v-if="liveSettlements && roundsStore.activeGames.length > 0 && (roundsStore.activeRound?.is_complete || roundCompletionInfo.allScored)" class="settle-box">
           <div class="settle-box-header">
             <div class="settle-box-label">💵 Settle Up</div>
             <img

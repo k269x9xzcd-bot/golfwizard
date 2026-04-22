@@ -782,7 +782,7 @@
 .settle-from { font-weight: 700; color: #f87171; }
 .settle-arrow { color: rgba(240,237,224,.3); }
 .settle-to { font-weight: 700; color: #4ade80; }
-.settle-pay { margin-left: auto; font-weight: 800; color: var(--gw-gold, #d4af37); }
+.settle-pay { font-weight: 800; color: var(--gw-gold, #d4af37); }
 .settle-even-msg { font-size: 12px; color: rgba(240,237,224,.4); text-align: center; padding: 4px 0; }
 
 /* Scorecard grid styles moved to style.css (shared with ScorecardGrid.vue) */
