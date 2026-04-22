@@ -23,6 +23,8 @@ export function useScorecardHelpers({ showFullHcp }) {
     const name = roundsStore.activeRound.course_name
     const snap = roundsStore.activeRound.course_snapshot
     if (snap && Array.isArray(snap.par) && snap.par.length) {
+      // greenCoords are never stored in the snapshot — pull from live COURSES as fallback
+      const liveGreenCoords = COURSES[name]?.greenCoords ?? snap.greenCoords ?? null
       return {
         name: snap.name || name,
         par: snap.par,
@@ -30,6 +32,7 @@ export function useScorecardHelpers({ showFullHcp }) {
         teesData: snap.teesData,
         tees: snap.teesData,
         defaultTee: snap.defaultTee,
+        greenCoords: liveGreenCoords,
         _fromSnapshot: true,
       }
     }
