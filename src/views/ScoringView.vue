@@ -575,7 +575,12 @@
             <div class="hole-big-number">Par {{ parForHole(activeHole) }}</div>
             <div class="hole-course-meta">
               SI {{ siForHole(activeHole) }}<template v-if="yardsForHole(activeHole)"> · {{ yardsForHole(activeHole) }}y</template>
-              <template v-if="gpsDistance !== null"> · <span class="gps-dist">📍 {{ gpsDistance }}y</span></template>
+            </div>
+            <!-- GPS: only show if course has green coords -->
+            <div v-if="greenCoordsForHole(activeHole)" class="gps-row">
+              <button v-if="!gpsActive" class="gps-btn" @click="startGpsWatch">📍 GPS</button>
+              <span v-else-if="gpsDistance !== null" class="gps-dist">📍 {{ gpsDistance }}y</span>
+              <span v-else class="gps-dist gps-locating">📍 …</span>
             </div>
           </div>
         </div>
@@ -846,8 +851,10 @@ function openRetroScore() {
 const isViewOnly = computed(() => route.query.viewOnly === 'true')
 
 // ── GPS distance to hole ─────────────────────────────────────────
-const gpsDistance = ref(null)   // yards, null = unavailable
+// Must be triggered by a user tap (iOS Safari blocks auto geolocation)
+const gpsDistance = ref(null)   // yards, null = no fix yet
 const gpsWatchId = ref(null)
+const gpsActive = ref(false)    // true once user has tapped GPS button
 
 function haversineYards(lat1, lng1, lat2, lng2) {
   const R = 6371000 // metres
@@ -862,7 +869,10 @@ function greenCoordsForHole(hole) {
 }
 
 function startGpsWatch() {
-  if (!navigator.geolocation || gpsWatchId.value !== null) return
+  if (!navigator.geolocation) return
+  gpsActive.value = true
+  // Already watching — distance updates via the existing callback
+  if (gpsWatchId.value !== null) return
   gpsWatchId.value = navigator.geolocation.watchPosition(
     (pos) => {
       const green = greenCoordsForHole(activeHole.value)
@@ -883,14 +893,12 @@ function stopGpsWatch() {
     gpsWatchId.value = null
   }
   gpsDistance.value = null
+  gpsActive.value = false
 }
 
-watch(() => activeHole.value, (hole) => {
-  if (hole > 0 && greenCoordsForHole(hole)) {
-    startGpsWatch()
-  } else {
-    stopGpsWatch()
-  }
+// When hole changes while GPS is active, clear distance until next position update
+watch(() => activeHole.value, () => {
+  if (gpsActive.value) gpsDistance.value = null
 })
 
 onUnmounted(() => stopGpsWatch())
