@@ -234,7 +234,6 @@ export function computeNassau(ctx, config) {
   const {
     front = 10, back = 10, overall = 20,
     pressAt = 2,
-    pressDecline = 'must',  // 'must' = losing team must accept press, 'can' = winning team can decline
     team1 = [], team2 = [],
     hcpPct = 0.9,  // 90% for best ball
     hcpMode = 'lowman',  // 'lowman' or 'course'
@@ -363,7 +362,7 @@ export function computeNassau(ctx, config) {
 
   return {
     frontSeg, backSeg, overallUp, overallT1Wins, settlement,
-    t1, t2, t1Name, t2Name, aloha, pressDecline,
+    t1, t2, t1Name, t2Name, aloha,
   }
 }
 

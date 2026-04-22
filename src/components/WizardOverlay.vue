@@ -1233,7 +1233,7 @@ const MAIN_GAMES = [
 
 // Default configs per game type
 const GAME_DEFAULTS = {
-  nassau:      { front: 10, back: 10, overall: 20, pressAt: 2, pressDecline: 'must', team1: [], team2: [] },
+  nassau:      { front: 10, back: 10, overall: 20, pressAt: 2, team1: [], team2: [] },
   vegas:       { ppt: 1, birdieFlip: true, scoring: 'net', team1: [], team2: [] },
   match:       { ppt: 20, format: '2v2', player1: '', player2: '', closeoutBonus: 0, team1: [], team2: [] },
   skins:       { ppt: 5, carry: true, lastHoleTie: 'carry', back9Multiplier: false },
