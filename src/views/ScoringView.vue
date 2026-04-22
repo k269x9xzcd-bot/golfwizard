@@ -560,6 +560,11 @@
            ═══════════════════════════════════════════════════════════ -->
       <div v-else class="hole-view" @touchstart="onTouchStart" @touchend="onTouchEnd">
 
+        <!-- Offline pending scores banner -->
+        <div v-if="pendingScores > 0" class="offline-pending-banner">
+          <span class="pending-dot"></span> {{ pendingScores }} score{{ pendingScores > 1 ? 's' : '' }} pending sync
+        </div>
+
         <!-- Hole Banner -->
         <div class="hole-banner">
           <div class="hole-banner-left">
@@ -568,7 +573,10 @@
           </div>
           <div class="hole-banner-right">
             <div class="hole-big-number">Par {{ parForHole(activeHole) }}</div>
-            <div class="hole-course-meta">SI {{ siForHole(activeHole) }}<template v-if="yardsForHole(activeHole)"> · {{ yardsForHole(activeHole) }}y</template></div>
+            <div class="hole-course-meta">
+              SI {{ siForHole(activeHole) }}<template v-if="yardsForHole(activeHole)"> · {{ yardsForHole(activeHole) }}y</template>
+              <template v-if="gpsDistance !== null"> · <span class="gps-dist">📍 {{ gpsDistance }}y</span></template>
+            </div>
           </div>
         </div>
 
@@ -836,6 +844,70 @@ function openRetroScore() {
 }
 // ── View-only mode (opened from history to review a completed round) ──
 const isViewOnly = computed(() => route.query.viewOnly === 'true')
+
+// ── GPS distance to hole ─────────────────────────────────────────
+const gpsDistance = ref(null)   // yards, null = unavailable
+const gpsWatchId = ref(null)
+
+function haversineYards(lat1, lng1, lat2, lng2) {
+  const R = 6371000 // metres
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLng = (lng2 - lng1) * Math.PI / 180
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2
+  return Math.round(2 * R * Math.asin(Math.sqrt(a)) * 1.09361)
+}
+
+function greenCoordsForHole(hole) {
+  return courseData.value?.greenCoords?.[hole - 1] ?? null
+}
+
+function startGpsWatch() {
+  if (!navigator.geolocation || gpsWatchId.value !== null) return
+  gpsWatchId.value = navigator.geolocation.watchPosition(
+    (pos) => {
+      const green = greenCoordsForHole(activeHole.value)
+      if (green) {
+        gpsDistance.value = haversineYards(pos.coords.latitude, pos.coords.longitude, green.lat, green.lng)
+      } else {
+        gpsDistance.value = null
+      }
+    },
+    () => { gpsDistance.value = null },
+    { enableHighAccuracy: true, maximumAge: 5000 }
+  )
+}
+
+function stopGpsWatch() {
+  if (gpsWatchId.value !== null) {
+    navigator.geolocation.clearWatch(gpsWatchId.value)
+    gpsWatchId.value = null
+  }
+  gpsDistance.value = null
+}
+
+watch(() => activeHole.value, (hole) => {
+  if (hole > 0 && greenCoordsForHole(hole)) {
+    startGpsWatch()
+  } else {
+    stopGpsWatch()
+  }
+})
+
+onUnmounted(() => stopGpsWatch())
+
+// ── Offline queue indicator ──────────────────────────────────────
+const pendingScores = ref(0)
+let _pendingInterval = null
+
+onMounted(() => {
+  _pendingInterval = setInterval(() => {
+    pendingScores.value = roundsStore.pendingQueueCount()
+  }, 2000)
+})
+
+onUnmounted(() => {
+  if (_pendingInterval) clearInterval(_pendingInterval)
+})
 
 // ── View state ──────────────────────────────────────────────────
 const activeHole = ref(0) // 0 = Card view, >0 = Hole entry

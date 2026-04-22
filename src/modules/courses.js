@@ -89,6 +89,27 @@ export const COURSES={
     par:[4,4,3,4,3,4,4,4,5,3,4,4,4,4,3,5,5,4],
     si:[4,12,18,10,14,2,16,6,8,13,3,9,1,11,17,7,5,15],
     tees:'Blue',
+    // Green center coordinates (surveyed) — used for GPS distance-to-hole
+    greenCoords:[
+      {lat:40.9575717,lng:-73.7667778}, // H1
+      {lat:40.9574444,lng:-73.7632222}, // H2
+      {lat:40.9562222,lng:-73.7627000}, // H3
+      {lat:40.9535556,lng:-73.7627000}, // H4
+      {lat:40.9541111,lng:-73.7632500}, // H5
+      {lat:40.9573056,lng:-73.7645056}, // H6
+      {lat:40.9552222,lng:-73.7640833}, // H7
+      {lat:40.9574167,lng:-73.7660278}, // H8
+      {lat:40.9551111,lng:-73.7706167}, // H9
+      {lat:40.9533611,lng:-73.7684000}, // H10
+      {lat:40.9563611,lng:-73.7660833}, // H11
+      {lat:40.9531111,lng:-73.7676667}, // H12
+      {lat:40.9498333,lng:-73.7665833}, // H13
+      {lat:40.9516667,lng:-73.7645667}, // H14
+      {lat:40.9522222,lng:-73.7632222}, // H15
+      {lat:40.9491667,lng:-73.7664444}, // H16
+      {lat:40.9530000,lng:-73.7688611}, // H17
+      {lat:40.9543889,lng:-73.7701083}, // H18
+    ],
     teesData:{
       'Blue':{rating:71.7,slope:140,yards:6385,
         siByHole:[4,12,18,10,14,2,16,6,8,13,3,9,1,11,17,7,5,15],
@@ -164,7 +185,8 @@ export const WOLF_HOLE_MODES=[{k:'normal',l:'🤝 Partner'},{k:'lone',l:'🐺 Lo
     rules:'Each hole: compare best net score from each team. Lower net wins the hole (+1). Equal = halved. Track running score per side (front/back) and overall. When one team is down by the press threshold, a new bet automatically starts from the next hole for the remaining holes on that side.',
     wagering:'Set $ for front, back, and overall separately. Press doubles the action on that side. Common: $10/$10/$20 with auto-press at 2 down.',
     hcpNote:'Low-man method: subtract the lowest handicap in the foursome from everyone. Strokes given on holes by stroke index.',
-    example:'Team A has net 4, net 5 on a par 5. Team B has net 5, net 6. Team A\'s best ball is 4, Team B\'s is 5. Team A wins the hole.'},
+    example:'Team A has net 4, net 5 on a par 5. Team B has net 5, net 6. Team A\'s best ball is 4, Team B\'s is 5. Team A wins the hole.',
+    sideBets:'Aloha: on hole 18, the losing team can call "Aloha" to double the overall bet for that hole only. The winning team must accept or concede the overall at current value. Only available to the team that is currently losing the overall. Tap the Aloha button on hole 18 to invoke it.'},
   match:{icon:'⚔️',name:'Match Play',role:'main',
     desc:'Head-to-head by hole. Lower net score wins the hole = 1 up. Match ends when lead exceeds remaining holes.',
     players:'1v1 or 2v2',
@@ -222,12 +244,13 @@ export const WOLF_HOLE_MODES=[{k:'normal',l:'🤝 Partner'},{k:'lone',l:'🐺 Lo
     hcpNote:'Low-man method: subtract the lowest handicap in the foursome.',
     example:'Your team wins 4 of 6 holes and ties 2. That\'s 4×4 + 2×3 = 22 pts for your pair in that 6-hole set.'},
   fiveThreeOne:{icon:'5️⃣',name:'5-3-1',role:'main',
-    desc:'Every hole awards 5 points to best net, 3 to second, 1 to third, 0 to worst. No ties — playoff rules apply.',
-    players:'4 players',
-    rules:'Each hole: rank all 4 players by net score. Best = 5 pts, second = 3, third = 1, worst = 0. If players tie, combine their point values and split equally (e.g., two players tie for best: (5+3)/2 = 4 each). Total points after 18 determines winner.',
-    wagering:'$ per point difference. Common: $1/pt.',
-    hcpNote:'Low-man method: subtract the lowest handicap in the foursome.',
-    example:'Hole 5: net scores are 3, 4, 4, 5. Player with 3 gets 5 pts. Two tied at 4 split 3+1 = 2 pts each. Player with 5 gets 0.'},
+    desc:'Every hole awards 5 points to best net, 3 to second, 1 to third, 0 to worst. Ties split the combined point values.',
+    players:'3–4 players',
+    rules:'Each hole: rank all players by net score. Best = 5 pts, second = 3, third = 1, worst = 0. Ties: combine the point values for tied positions and split equally (e.g., two players tie for 1st: (5+3)/2 = 4 each; three-way tie for 1st: (5+3+1)/3 = 3 each). Total points after 18 determines winner. Highest total wins; each player settles vs every other player on the difference.',
+    wagering:'$ per point difference, everyone-pays-everyone. Common: $1/pt. Example: A=42, B=38, C=34, D=22 → A collects from everyone, D pays everyone.',
+    hcpNote:'Low-man method: subtract the lowest handicap in the group from everyone. Strokes applied by stroke index.',
+    example:'Hole 5: net scores 3,4,4,5. Player with 3 gets 5pts. Tied-at-4 players split (3+1)/2 = 2pts each. Player with 5 gets 0.',
+    variations:'Sweep rule: if one player wins 3+ consecutive holes outright, they earn a sweep bonus (usually +3 pts). Birdie bonus: net birdie always earns +1 extra point regardless of rank. Ladder mode: points scale up by round (front 9: 5-3-1, back 9: 10-6-2). Discuss and agree before the round.'},
   bestball:{icon:'🏅',name:'Best Ball (Team)',role:'main',
     desc:'2v2 team game. Each hole: best ball from each team compared. Lower wins the hole.',
     players:'2v2 teams',
