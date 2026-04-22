@@ -384,9 +384,14 @@
                     <span v-if="game.config.sweepBonus" class="fto-badge">🧹 Sweep on</span>
                     <span v-if="game.config.birdieBonus" class="fto-badge">🐦 Birdie bonus on</span>
                   </div>
-                  <div v-for="s in fiveThreeOneResult(game).settlements" :key="s.id" class="standing-row">
+                  <div v-for="(s, idx) in [...fiveThreeOneResult(game).settlements].sort((a,b) => b.pts - a.pts)" :key="s.id" class="standing-row">
+                    <span class="standing-medal">{{ ['🥇','🥈','🥉'][idx] ?? '' }}</span>
                     <span class="standing-name">{{ s.name }}</span>
-                    <span class="standing-pts">{{ s.pts }} pts</span>
+                    <span class="standing-pts">{{ s.pts }}pts</span>
+                    <span class="fto-icons" v-if="game.config?.sweepBonus || game.config?.birdieBonus">
+                      <span v-if="game.config.sweepBonus && fiveThreeOneTallies(fiveThreeOneResult(game))[s.id]?.sweeps" class="fto-tally">🧹×{{ fiveThreeOneTallies(fiveThreeOneResult(game))[s.id].sweeps }}</span>
+                      <span v-if="game.config.birdieBonus && fiveThreeOneTallies(fiveThreeOneResult(game))[s.id]?.birdies" class="fto-tally">🐦×{{ fiveThreeOneTallies(fiveThreeOneResult(game))[s.id].birdies }}</span>
+                    </span>
                     <span class="standing-value" :class="balanceClass(s.net)">
                       {{ formatBalance(s.net) }}
                     </span>
@@ -801,6 +806,24 @@ function fiveThreeOneEvents(result) {
     }
   }
   return events
+}
+
+// Per-player sweep + birdie bonus counts keyed by player id
+function fiveThreeOneTallies(result) {
+  const tallies = {}
+  if (!result?.holeResults) return tallies
+  for (const hr of result.holeResults) {
+    if (!hr || hr.incomplete) continue
+    if (hr.sweep) {
+      tallies[hr.sweep] = tallies[hr.sweep] || { sweeps: 0, birdies: 0 }
+      tallies[hr.sweep].sweeps++
+    }
+    if (hr.birdieBonus) {
+      tallies[hr.birdieBonus] = tallies[hr.birdieBonus] || { sweeps: 0, birdies: 0 }
+      tallies[hr.birdieBonus].birdies++
+    }
+  }
+  return tallies
 }
 
 // Generic per-player standings
@@ -1527,6 +1550,23 @@ function balanceClass(val) {
   font-family: var(--gw-font-mono);
   font-size: 13px;
   font-weight: 700;
+}
+
+.standing-medal {
+  font-size: 14px;
+  min-width: 20px;
+}
+.fto-icons {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+.fto-tally {
+  font-size: 11px;
+  background: rgba(255,255,255,0.07);
+  border-radius: 8px;
+  padding: 1px 6px;
+  white-space: nowrap;
 }
 
 .fto-badges {
