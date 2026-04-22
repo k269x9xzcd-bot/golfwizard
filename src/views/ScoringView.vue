@@ -583,9 +583,6 @@
             <div class="gps-center-dist" :style="{ color: gpsAccuracyColor }">
               {{ gpsDistance !== null ? gpsDistance + 'y' : '…' }}
             </div>
-            <div class="gps-center-accuracy" :style="{ color: gpsAccuracyColor }">
-              {{ gpsAccuracyLabel }}
-            </div>
           </div>
           <div class="hole-banner-right">
             <div class="hole-big-number">Par {{ parForHole(activeHole) }}</div>
