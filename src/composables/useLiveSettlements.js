@@ -257,8 +257,8 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         if (!r) return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Hi-Low</span><span class="muted" style="font-size:11px">—</span></div>`
         const t1n = teamInitialsStr(cfg.team1 || []) || 'T1'
         const t2n = teamInitialsStr(cfg.team2 || []) || 'T2'
-        const diff = (r.team1Pts || 0) - (r.team2Pts || 0)
-        const status = diff === 0 ? 'All square' : (diff > 0 ? `${t1n} leads ${r.team1Pts}-${r.team2Pts}` : `${t2n} leads ${r.team2Pts}-${r.team1Pts}`)
+        const diff = (r.t1Pts || 0) - (r.t2Pts || 0)
+        const status = diff === 0 ? 'All square' : (diff > 0 ? `${t1n} leads ${r.t1Pts}-${r.t2Pts}` : `${t2n} leads ${r.t2Pts}-${r.t1Pts}`)
         let money = ''
         if (diff !== 0) {
           const loser = diff > 0 ? t2n : t1n

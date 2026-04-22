@@ -8,7 +8,9 @@ import { computed } from 'vue'
 import { useRoundsStore } from '../stores/rounds'
 import {
   computeNassau, computeSkins, computeMatch, computeSnake,
-  computeDots, computeFidget, computeBestBallNet, computeFiveThreeOne,
+  computeDots, computeFidget, computeBestBallNet, computeFiveThreeOne, computeNines,
+  computeVegas, computeHiLow, computeWolf, computeSixes, computeStableford, computeHammer,
+  holePar,
 } from '../modules/gameEngine'
 
 export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pInit }) {
@@ -247,7 +249,181 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
         } catch(e) { /* skip */ }
       }
 
-      // -- 5-3-1 -- one row per player showing pts per hole --
+
+      // ── VEGAS ──
+      if (t === 'vegas') {
+        try {
+          const r = computeVegas(ctx, game.config)
+          if (!r) continue
+          const cells = {}
+          const t1n = teamInitialsStr(game.config?.team1 || []) || 'T1'
+          const t2n = teamInitialsStr(game.config?.team2 || []) || 'T2'
+          let t1Run = 0
+          for (const hr of (r.holeResults || [])) {
+            if (hr.incomplete || hr.t1Num == null) continue
+            t1Run += hr.diff
+            const diff = hr.diff
+            const mult = hr.multiplier > 1 ? `×${hr.multiplier}` : ''
+            const flip = hr.t1Num !== hr.t2Num && (hr.multiplier > 1) ? '🔄' : ''
+            cells[hr.hole] = {
+              text: `${hr.t1Num}v${hr.t2Num}${flip}`,
+              cls: diff > 0 ? 'nota-t1' : diff < 0 ? 'nota-t2' : 'nota-halved',
+            }
+          }
+          const ppt = game.config?.ppt || 1
+          const net = t1Run * ppt
+          const summary = net === 0 ? 'AS' : `${net > 0 ? t1n : t2n} +$${Math.abs(net)}`
+          rows.push({ icon: '🎰', label: `${t1n}v${t2n}`, cells, outSummary: '', inSummary: '', totalSummary: summary })
+        } catch(e) { /* skip */ }
+      }
+
+      // ── HILOW ──
+      if (t === 'hilow') {
+        try {
+          const r = computeHiLow(ctx, game.config)
+          if (!r) continue
+          const cells = {}
+          const t1n = teamInitialsStr(game.config?.team1 || []) || 'T1'
+          const t2n = teamInitialsStr(game.config?.team2 || []) || 'T2'
+          for (const hr of (r.holeResults || [])) {
+            if (hr.incomplete) continue
+            const parts = []
+            if (hr.lowWin === 't1') parts.push(`<span class="nota-t1">L✓</span>`)
+            else if (hr.lowWin === 't2') parts.push(`<span class="nota-t2">L✓</span>`)
+            else parts.push('<span class="nota-halved">L=</span>')
+            if (hr.highWin === 't1') parts.push(`<span class="nota-t1">H✓</span>`)
+            else if (hr.highWin === 't2') parts.push(`<span class="nota-t2">H✓</span>`)
+            else parts.push('<span class="nota-halved">H=</span>')
+            if (hr.aggWin != null) {
+              if (hr.aggWin === 't1') parts.push(`<span class="nota-t1">A✓</span>`)
+              else if (hr.aggWin === 't2') parts.push(`<span class="nota-t2">A✓</span>`)
+              else parts.push('<span class="nota-halved">A=</span>')
+            }
+            cells[hr.hole] = { text: parts.join(''), cls: '' }
+          }
+          const ppt = game.config?.ppt || 5
+          const net = (r.t1Pts - r.t2Pts) * ppt
+          const summary = net === 0 ? 'AS' : `${net > 0 ? t1n : t2n} +$${Math.abs(net)}`
+          rows.push({ icon: '📊', label: `${t1n}v${t2n}`, cells, outSummary: `${r.t1Pts}`, inSummary: `${r.t2Pts}`, totalSummary: summary })
+        } catch(e) { /* skip */ }
+      }
+
+      // ── WOLF ──
+      if (t === 'wolf') {
+        try {
+          const r = computeWolf(ctx, game.config)
+          if (!r) continue
+          const cells = {}
+          for (const hr of (r.holeResults || [])) {
+            if (hr.incomplete) continue
+            const wInit = pInit(hr.wolf) || 'W'
+            const mode = hr.isBlind ? '🙈' : hr.isLone ? '🐺' : `+${pInit(hr.partner) || '?'}`
+            const result = hr.winner === 'wolf' ? '✓' : hr.winner === 'field' ? '✗' : '='
+            const cls = hr.winner === 'wolf' ? 'nota-t1' : hr.winner === 'field' ? 'nota-t2' : 'nota-halved'
+            cells[hr.hole] = { text: `${wInit}${mode}${result}`, cls }
+          }
+          const sorted = [...(r.settlements || [])].sort((a, b) => b.net - a.net)
+          const topNet = sorted[0]?.net || 0
+          const summary = topNet > 0 ? `${sorted[0].name} +$${topNet}` : 'AS'
+          rows.push({ icon: '🐺', label: 'Wolf', cells, outSummary: '', inSummary: '', totalSummary: summary })
+        } catch(e) { /* skip */ }
+      }
+
+      // ── SIXES ──
+      if (t === 'sixes') {
+        try {
+          const r = computeSixes(ctx, game.config)
+          if (!r) continue
+          const cells = {}
+          for (const seg of (r.segResults || [])) {
+            if (seg.skipped) continue
+            const aWon = seg.aWins > seg.bWins
+            const bWon = seg.bWins > seg.aWins
+            const aNms = seg.teamANames || 'A'
+            const bNms = seg.teamBNames || 'B'
+            for (const hd of (seg.holeDetails || [])) {
+              if (hd.incomplete) continue
+              const cls = hd.winner === 'a' ? 'nota-t1' : hd.winner === 'b' ? 'nota-t2' : 'nota-halved'
+              const sym = hd.winner === 'a' ? aNms.slice(0,2) : hd.winner === 'b' ? bNms.slice(0,2) : '='
+              cells[hd.hole] = { text: sym, cls }
+            }
+          }
+          const sorted = [...(r.settlements || [])].sort((a, b) => b.net - a.net)
+          const topNet = sorted[0]?.net || 0
+          const summary = topNet > 0 ? `${sorted[0].name} +$${topNet}` : 'AS'
+          rows.push({ icon: '🎲', label: 'Sixes', cells, outSummary: '', inSummary: '', totalSummary: summary })
+        } catch(e) { /* skip */ }
+      }
+
+      // ── STABLEFORD ──
+      if (t === 'stableford') {
+        try {
+          const r = computeStableford(ctx, game.config)
+          if (!r) continue
+          const to = ctx.holesMode === 9 ? 9 : 18
+          const frontEnd = to === 9 ? to : 9
+          const medalColors = ['#FFD700', '#C0C0C0', '#CD7F32']
+          const sorted = [...(r.settlements || [])].sort((a, b) => b.pts - a.pts)
+
+          for (const player of (r.settlements || [])) {
+            const m = ctx.members.find(x => x.id === player.id)
+            const initials = m ? (m.short_name || m.guest_name || '?').slice(0,3) : '?'
+            const holePoints = r.playerResults?.[player.id]?.holePoints || []
+            const cells = {}
+            let outPts = 0, inPts = 0
+            for (const hp of holePoints) {
+              if (hp.pts == null) { cells[hp.hole] = { text: '', cls: '' }; continue }
+              const cls = hp.pts >= 3 ? 'nota-t1' : hp.pts === 2 ? '' : hp.pts === 1 ? 'nota-halved' : 'nota-t2'
+              cells[hp.hole] = { text: hp.pts > 0 ? `+${hp.pts}` : `${hp.pts}`, cls }
+              if (hp.hole <= frontEnd) outPts += hp.pts
+              else inPts += hp.pts
+            }
+            const totalPts = outPts + inPts
+            const rank = sorted.findIndex(s => s.id === player.id)
+            const dotColor = rank < 3 ? medalColors[rank] : '#888'
+            const netStr = player.net > 0 ? `+$${player.net}` : player.net < 0 ? `-$${Math.abs(player.net)}` : 'even'
+            const netColor = player.net > 0 ? '#4ade80' : player.net < 0 ? '#f87171' : '#d4af37'
+            rows.push({
+              icon: '⭐', label: initials,
+              labelHtml: `<span style="color:${dotColor};margin-right:3px">●</span>${initials}`,
+              cells,
+              outSummary: ctx.holesMode !== 9 ? `${outPts}` : '',
+              inSummary: ctx.holesMode !== 9 ? `${inPts}` : '',
+              totalSummary: `<span style="font-weight:700">${totalPts}pts</span>`,
+              netSummary: `<span style="color:${netColor};font-size:11px;font-weight:700">${netStr}</span>`,
+              cls: 'row-531',
+            })
+          }
+        } catch(e) { /* skip */ }
+      }
+
+      // ── HAMMER ──
+      if (t === 'hammer') {
+        try {
+          const r = computeHammer(ctx, game.config)
+          if (!r) continue
+          const cells = {}
+          const t1n = teamInitialsStr(game.config?.team1 || []) || 'T1'
+          const t2n = teamInitialsStr(game.config?.team2 || []) || 'T2'
+          for (const hr of (r.holeResults || [])) {
+            if (hr.incomplete) continue
+            const val = hr.holeValue || game.config?.ppt || 1
+            const throws = hr.throws || 0
+            if (hr.conceded) {
+              const winInit = hr.concededBy === 't2' ? t1n : t2n
+              cells[hr.hole] = { text: `${winInit}$${val}🏳️`, cls: hr.concededBy === 't2' ? 'nota-t1' : 'nota-t2' }
+            } else if (hr.winner) {
+              const winInit = hr.winner === 't1' ? t1n : t2n
+              cells[hr.hole] = { text: `${winInit}$${val}${throws > 0 ? '🔨×' + throws : ''}`, cls: hr.winner === 't1' ? 'nota-t1' : 'nota-t2' }
+            }
+          }
+          const net = r.settlement?.t1Net || 0
+          const summary = net === 0 ? 'AS' : `${net > 0 ? t1n : t2n} +$${Math.abs(net)}`
+          rows.push({ icon: '🔨', label: `${t1n}v${t2n}`, cells, outSummary: '', inSummary: '', totalSummary: summary })
+        } catch(e) { /* skip */ }
+      }
+
+      // -- 5-3-1 / 9s -- one row per player showing pts per hole --
       if (t === 'fivethreeone' || t === 'nines') {
         try {
           const r = computeFiveThreeOne(ctx, game.config)

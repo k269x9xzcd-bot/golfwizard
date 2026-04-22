@@ -203,7 +203,7 @@ import { shareHistoryRecap } from '../modules/scorecardShare'
 import {
   computeNassau, computeSkins, computeMatch, computeBestBall, computeBestBallNet,
   computeVegas, computeDots, computeFidget, computeSnake, computeWolf,
-  computeHiLow, computeStableford, computeSixes, computeFiveThreeOne, computeHammer,
+  computeHiLow, computeStableford, computeSixes, computeFiveThreeOne, computeNines, computeHammer,
   computeBbb, computeScotch6s, computeTeamDay,
 } from '../modules/gameEngine'
 import { COURSES as BUILTIN_COURSES } from '../modules/courses'
@@ -647,8 +647,8 @@ function _recapOne(ctx, game) {
       return base
     }
 
-    if (t === 'fivethreeone') {
-      const r = computeFiveThreeOne(ctx, cfg)
+    if (t === 'fivethreeone' || t === 'nines') {
+      const r = t === 'nines' ? computeNines(ctx, cfg) : computeFiveThreeOne(ctx, cfg)
       if (!r || !r.settlements) return base
       const sorted = [...r.settlements].sort((a, b) => b.pts - a.pts)
       const winner = sorted[0]
