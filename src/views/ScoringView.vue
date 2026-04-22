@@ -580,8 +580,12 @@
           </div>
           <!-- GPS distance — centered in banner, only when GPS is enabled -->
           <div v-if="gpsEnabled && greenCoordsForHole(activeHole)" class="gps-center">
-            <span v-if="gpsDistance !== null" class="gps-center-dist">🛰️ {{ gpsDistance }}y</span>
-            <span v-else class="gps-center-dist gps-locating">🛰️ …</span>
+            <div class="gps-center-dist" :style="{ color: gpsAccuracyColor }">
+              {{ gpsDistance !== null ? gpsDistance + 'y' : '…' }}
+            </div>
+            <div class="gps-center-accuracy" :style="{ color: gpsAccuracyColor }">
+              {{ gpsAccuracyLabel }}
+            </div>
           </div>
           <div class="hole-banner-right">
             <div class="hole-big-number">Par {{ parForHole(activeHole) }}</div>
@@ -859,9 +863,30 @@ const isViewOnly = computed(() => route.query.viewOnly === 'true')
 // ── GPS distance to hole ─────────────────────────────────────────
 // Must be triggered by a user tap (iOS Safari blocks auto geolocation)
 const gpsDistance = ref(null)   // yards, null = no fix yet
+const gpsAccuracy = ref(null)   // metres, from GeolocationCoordinates.accuracy
 const gpsWatchId = ref(null)
 const gpsActive = ref(false)    // true once user has tapped GPS button
 const gpsEnabled = ref(false)   // user toggled GPS on via flag button
+
+// Color-code the yardage by GPS accuracy (metres)
+// red >15m, amber 8-15m, yellow-green 4-8m, bright green <4m
+const gpsAccuracyColor = computed(() => {
+  const a = gpsAccuracy.value
+  if (a === null) return 'rgba(240,237,224,0.4)'
+  if (a < 4)  return '#4ade80'   // bright green — excellent
+  if (a < 8)  return '#86efac'   // soft green — good
+  if (a < 15) return '#fbbf24'   // amber — fair
+  return '#f87171'               // red — poor
+})
+
+const gpsAccuracyLabel = computed(() => {
+  const a = gpsAccuracy.value
+  if (a === null) return 'locating…'
+  if (a < 4)  return `±${Math.round(a)}m`
+  if (a < 8)  return `±${Math.round(a)}m`
+  if (a < 15) return `±${Math.round(a)}m`
+  return `±${Math.round(a)}m`
+})
 
 function haversineYards(lat1, lng1, lat2, lng2) {
   const R = 6371000 // metres
@@ -882,6 +907,7 @@ function startGpsWatch() {
   if (gpsWatchId.value !== null) return
   gpsWatchId.value = navigator.geolocation.watchPosition(
     (pos) => {
+      gpsAccuracy.value = pos.coords.accuracy
       const green = greenCoordsForHole(activeHole.value)
       if (green) {
         gpsDistance.value = haversineYards(pos.coords.latitude, pos.coords.longitude, green.lat, green.lng)
@@ -889,7 +915,7 @@ function startGpsWatch() {
         gpsDistance.value = null
       }
     },
-    () => { gpsDistance.value = null },
+    () => { gpsDistance.value = null; gpsAccuracy.value = null },
     { enableHighAccuracy: true, maximumAge: 5000 }
   )
 }
@@ -900,6 +926,7 @@ function stopGpsWatch() {
     gpsWatchId.value = null
   }
   gpsDistance.value = null
+  gpsAccuracy.value = null
   gpsActive.value = false
 }
 
@@ -915,9 +942,12 @@ function toggleGps() {
   }
 }
 
-// When hole changes while GPS is active, clear distance until next position update
+// When hole changes while GPS is active, clear distance/accuracy until next position update
 watch(() => activeHole.value, () => {
-  if (gpsActive.value) gpsDistance.value = null
+  if (gpsActive.value) {
+    gpsDistance.value = null
+    gpsAccuracy.value = null
+  }
 })
 
 onUnmounted(() => stopGpsWatch())

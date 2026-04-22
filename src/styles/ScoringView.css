@@ -826,21 +826,29 @@
 .gps-center {
   position: absolute;
   left: 50%;
-  top: 50%;
+  top: 42%;
   transform: translate(-50%, -50%);
   text-align: center;
   pointer-events: none;
 }
 .gps-center-dist {
   font-family: var(--gw-font-display, Georgia, serif);
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 400;
-  color: #86efac;
   line-height: 1;
-  text-shadow: 0 1px 8px rgba(134,239,172,.4);
   white-space: nowrap;
+  transition: color 0.6s ease;
+  text-shadow: 0 1px 10px currentColor;
 }
-.gps-locating { opacity: .5; }
+.gps-center-accuracy {
+  font-size: 10px;
+  font-family: var(--gw-font-body, system-ui, sans-serif);
+  letter-spacing: 0.03em;
+  margin-top: 3px;
+  opacity: 0.75;
+  white-space: nowrap;
+  transition: color 0.6s ease;
+}
 
 /* ── GPS toggle button in header ─────────────────────────────── */
 .btn-gps-toggle {
