@@ -380,9 +380,9 @@
               <!-- 5-3-1 -->
               <template v-else-if="isGameType(game, 'fivethreeone')">
                 <div v-if="fiveThreeOneResult(game)" class="individual-standings">
-                  <div class="fto-badges" v-if="game.config?.sweepBonus || game.config?.birdieBonus">
-                    <span v-if="game.config.sweepBonus" class="fto-badge">🧹 Sweep on</span>
-                    <span v-if="game.config.birdieBonus" class="fto-badge">🐦 Birdie bonus on</span>
+                  <div class="fto-badges" v-if="fiveThreeOneResult(game)?.hasSweep || fiveThreeOneResult(game)?.hasBirdie">
+                    <span v-if="fiveThreeOneResult(game)?.hasSweep" class="fto-badge">🧹 Sweep on</span>
+                    <span v-if="fiveThreeOneResult(game)?.hasBirdie" class="fto-badge">🐦 Birdie bonus on</span>
                   </div>
                   <div v-for="(s, idx) in [...fiveThreeOneResult(game).settlements].sort((a,b) => b.pts - a.pts)" :key="s.id" class="standing-row">
                     <span class="standing-medal">{{ ['🥇','🥈','🥉'][idx] ?? '' }}</span>
@@ -391,9 +391,9 @@
                     <span class="standing-value" :class="balanceClass(s.net)">
                       {{ formatBalance(s.net) }}
                     </span>
-                    <span class="fto-icons" v-if="game.config?.sweepBonus || game.config?.birdieBonus">
-                      <span v-if="game.config.sweepBonus && fiveThreeOneTallies(fiveThreeOneResult(game))[s.id]?.sweeps" class="fto-tally">🧹×{{ fiveThreeOneTallies(fiveThreeOneResult(game))[s.id].sweeps }}</span>
-                      <span v-if="game.config.birdieBonus && fiveThreeOneTallies(fiveThreeOneResult(game))[s.id]?.birdies" class="fto-tally">🐦×{{ fiveThreeOneTallies(fiveThreeOneResult(game))[s.id].birdies }}</span>
+                    <span class="fto-icons" v-if="fiveThreeOneTallies(fiveThreeOneResult(game))[s.id]">
+                      <span v-if="fiveThreeOneTallies(fiveThreeOneResult(game))[s.id]?.sweeps" class="fto-tally">🧹×{{ fiveThreeOneTallies(fiveThreeOneResult(game))[s.id].sweeps }}</span>
+                      <span v-if="fiveThreeOneTallies(fiveThreeOneResult(game))[s.id]?.birdies" class="fto-tally">🐦×{{ fiveThreeOneTallies(fiveThreeOneResult(game))[s.id].birdies }}</span>
                     </span>
                   </div>
                   <!-- Pairwise settlement -->
@@ -790,19 +790,32 @@ function pairwiseLines(settlements) {
   return lines.sort((a, b) => b.amount - a.amount)
 }
 
+// Build a name lookup from hole result scores arrays (avoids gameCtx dependency)
+function _ftoNameMap(result) {
+  const map = {}
+  for (const hr of (result?.holeResults ?? [])) {
+    if (!hr?.scores) continue
+    for (const s of hr.scores) {
+      if (s.id && s.name) map[s.id] = s.name
+    }
+  }
+  return map
+}
+
 // Returns list of notable events (sweeps, birdie bonuses) from hole results
 function fiveThreeOneEvents(result) {
   if (!result?.holeResults) return []
+  const names = _ftoNameMap(result)
   const events = []
   for (const hr of result.holeResults) {
     if (!hr || hr.incomplete) continue
     if (hr.sweep) {
-      const m = gameCtx.value?.members?.find(m => m.id === hr.sweep)
-      if (m) events.push({ hole: hr.hole, icon: '🧹', name: `${m.short_name} swept` })
+      const name = names[hr.sweep] ?? hr.sweep
+      events.push({ hole: hr.hole, icon: '🧹', name: `${name} swept` })
     }
     if (hr.birdieBonus) {
-      const m = gameCtx.value?.members?.find(m => m.id === hr.birdieBonus)
-      if (m) events.push({ hole: hr.hole, icon: '🐦', name: `${m.short_name} birdie +1` })
+      const name = names[hr.birdieBonus] ?? hr.birdieBonus
+      events.push({ hole: hr.hole, icon: '🐦', name: `${name} birdie +1` })
     }
   }
   return events

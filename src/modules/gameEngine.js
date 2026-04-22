@@ -1418,7 +1418,10 @@ export function computeFiveThreeOne(ctx, config) {
     net: Math.round(netMap[m.id] * 100) / 100,
   }))
 
-  return { holeResults, totals, settlements, ppt }
+  const hasSweep = holeResults.some(h => h.sweep)
+  const hasBirdie = holeResults.some(h => h.birdieBonus)
+
+  return { holeResults, totals, settlements, ppt, hasSweep, hasBirdie }
 }
 
 // ─────────────────────────────────────────────────────────────────
