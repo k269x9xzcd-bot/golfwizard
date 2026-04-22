@@ -1227,22 +1227,22 @@ const MAIN_GAMES = [
   { key: 'wolf',        icon: '🐺', label: 'Wolf' },
   { key: 'hammer',      icon: '🔨', label: 'Hammer' },
   { key: 'sixes',       icon: '🎲', label: 'Sixes' },
-  { key: 'fiveThreeOne',icon: '5️⃣', label: '5-3-1' },
+  { key: 'nines',       icon: '9️⃣', label: '9s' },
   { key: 'none',        icon: '📋', label: 'Scores Only' },
 ]
 
 // Default configs per game type
 const GAME_DEFAULTS = {
   nassau:      { front: 10, back: 10, overall: 20, pressAt: 2, team1: [], team2: [] },
-  vegas:       { ppt: 1, birdieFlip: true, scoring: 'net', team1: [], team2: [] },
+  vegas:       { ppt: 1, birdieFlip: true, eagleFlip: true, doubleBirdie: false, penaltyThreshold: 0, scoring: 'net', team1: [], team2: [] },
   match:       { ppt: 20, format: '2v2', player1: '', player2: '', closeoutBonus: 0, team1: [], team2: [] },
   skins:       { ppt: 5, carry: true, lastHoleTie: 'carry', back9Multiplier: false },
   hilow:       { ppt: 5, aggregatePoint: true, birdieDouble: false, team1: [], team2: [] },
-  stableford:  { ppt: 1 },
-  wolf:        { ppt: 5, wolfLoneMultiplier: 2, wolfTeeOrder: [], blindWolfEnabled: true, lastPlaceWolf: false, wolfChoices: {} },
+  stableford:  { ppt: 1, variant: 'standard', pts: { eagle: 4, birdie: 3, par: 2, bogey: 1, double: 0 } },
+  wolf:        { ppt: 5, wolfLoneMultiplier: 4, blindWolfMultiplier: 8, wolfTeesFirst: true, wolfTeeOrder: [], blindWolfEnabled: true, wolfChoices: {} },
   hammer:      { ppt: 1, team1: [], team2: [] },
-  sixes:       { ppt: 1 },
-  fiveThreeOne:{ ppt: 1, sweepBonus: false, sweepMargin: 2, birdieBonus: false, birdieBonusPts: 1 },
+  sixes:       { ppt: 1, scoringModel: 'segment' },
+  nines:        { ppt: 1, sweepBonus: false, sweepMargin: 2, birdieBonus: false, birdieBonusPts: 1, birdieDouble: false },
   bestball:    { ppt: 5, ballsPerTeam: 1, team1: [], team2: [] },
   none:        {},
 }
@@ -1259,7 +1259,7 @@ function toggleGameInfo(key) {
 }
 function getGameDef(key) {
   // Map wizard keys to GAME_DEFS keys
-  const keyMap = { hilow: 'hilow', fiveThreeOne: 'fiveThreeOne', bestball: 'bestball', match1: 'match1v1', match2: 'match1v1' }
+  const keyMap = { hilow: 'hilow', nines: 'nines', fiveThreeOne: 'nines', bestball: 'bestball', match1: 'match1v1', match2: 'match1v1' }
   return GAME_DEFS[keyMap[key] || key] || null
 }
 

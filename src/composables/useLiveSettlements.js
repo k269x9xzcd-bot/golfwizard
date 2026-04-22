@@ -385,9 +385,9 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
       }
 
       // ── 5-3-1 ──
-      if (t === 'fivethreeone') {
+      if (t === 'fivethreeone' || t === 'nines') {
         const r = computeFiveThreeOne(ctx, cfg)
-        if (!r) return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} 5-3-1</span><span class="muted" style="font-size:11px"> Need 3+ players</span></div>`
+        if (!r) return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} ${t === 'nines' ? '9s' : '5-3-1'}</span><span class="muted" style="font-size:11px"> Need 3+ players</span></div>`
         const ppt = r.ppt || cfg.ppt || 1
         const played = (r.holeResults || []).filter(h => !h.incomplete).length
         const sorted = [...r.settlements].sort((a, b) => b.pts - a.pts)
@@ -417,7 +417,7 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
             + tallyHtml
             + `</div>`
         }).join('')
-        return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} 5-3-1</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppt}/pt${played > 0 ? ' · thru ' + played : ''}</span>${badgeHtml}<div style="font-size:11px;margin-top:4px">${standRows || 'No complete holes yet'}</div></div>`
+        return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} ${t === 'nines' ? '9s' : '5-3-1'}</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppt}/pt${played > 0 ? ' · thru ' + played : ''}</span>${badgeHtml}<div style="font-size:11px;margin-top:4px">${standRows || 'No complete holes yet'}</div></div>`
       }
 
 

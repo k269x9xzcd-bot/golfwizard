@@ -1018,8 +1018,9 @@ export function computeStableford(ctx, config) {
 export function computeWolf(ctx, config) {
   const {
     ppt = 5,
-    wolfLoneMultiplier = 2,
-    lastPlaceWolf = true,  // holes 17-18: last place in standings picks wolf
+    wolfLoneMultiplier = 4,      // lone wolf multiplier (default 4×)
+    blindWolfMultiplier = 8,     // blind wolf multiplier (default 8×)
+    wolfTeesFirst = true,        // wolf tees FIRST (true) or LAST (false)
     hcpMode = 'lowman',
     players: pids,
   } = config
@@ -1082,8 +1083,8 @@ export function computeWolf(ctx, config) {
       const others = members.filter(m => m.id !== wolf.id)
       const otherBest = Math.min(...others.map(m => nets[m.id]))
 
-      // Blind wolf uses 2× multiplier, lone wolf uses configurable multiplier
-      const mult = isBlind ? 2 : wolfLoneMultiplier
+      // Blind wolf uses blindWolfMultiplier, lone wolf uses wolfLoneMultiplier
+      const mult = isBlind ? blindWolfMultiplier : wolfLoneMultiplier
 
       let winner = null
       if (wolfNet < otherBest) {
@@ -1216,7 +1217,8 @@ export function computeHammer(ctx, config) {
 // ─────────────────────────────────────────────────────────────────
 export function computeSixes(ctx, config) {
   const {
-    ppt = 1,  // $ per point
+    ppt = 1,               // $ per point
+    scoringModel = 'segment', // 'segment': winner of most holes wins segment (6/3/0 pts); 'perhole': 4/2 win/loss, 3/3 tie
     players: pids,
   } = config
 
@@ -1269,9 +1271,23 @@ export function computeSixes(ctx, config) {
       holeDetails.push({ hole: h, aBest, bBest, winner })
     }
 
-    // Distribute points
-    const aPts = aWins
-    const bPts = bWins
+    // Distribute points based on scoring model
+    let aPts, bPts
+    if (scoringModel === 'segment') {
+      // Segment match: winner of most holes in segment wins 6 pts, loser 0, tie 3 each
+      if (aWins > bWins) { aPts = 6; bPts = 0 }
+      else if (bWins > aWins) { aPts = 0; bPts = 6 }
+      else { aPts = 3; bPts = 3 }
+    } else {
+      // Per-hole: 4 pts to winner, 2 to loser, 3/3 on tie
+      aPts = 0; bPts = 0
+      for (const hd of holeDetails) {
+        if (hd.incomplete) continue
+        if (hd.winner === 'a') { aPts += 4; bPts += 2 }
+        else if (hd.winner === 'b') { aPts += 2; bPts += 4 }
+        else { aPts += 3; bPts += 3 }
+      }
+    }
     for (const m of seg.teamA) totals[m.id].pts += aPts
     for (const m of seg.teamB) totals[m.id].pts += bPts
 
@@ -1279,7 +1295,7 @@ export function computeSixes(ctx, config) {
       ...seg,
       teamANames: seg.teamA.map(m => m.short_name).join('+'),
       teamBNames: seg.teamB.map(m => m.short_name).join('+'),
-      aWins, bWins, holeDetails,
+      aWins, bWins, aPts, bPts, holeDetails, scoringModel,
     })
   }
 
@@ -1299,7 +1315,7 @@ export function computeSixes(ctx, config) {
 // ── 5-3-1 (Nines) ──────────────────────────────────────────────
 // Best gets 5, second gets 3, last gets 1. 9 pts per hole total.
 // ─────────────────────────────────────────────────────────────────
-export function computeFiveThreeOne(ctx, config) {
+export function computeNines(ctx, config) {
   const {
     ppt = 1,          // $ per point
     players: pids,
@@ -1307,6 +1323,7 @@ export function computeFiveThreeOne(ctx, config) {
     sweepMargin = 2,      // net strokes margin required to trigger sweep
     birdieBonus = false,  // if exactly one player nets a birdie, they get +1 extra pt
     birdieBonusPts = 1,   // extra points awarded for solo net birdie
+    birdieDouble = false, // birdie on hole doubles that player's pts (5→10, 3→6, 1→2)
   } = config
 
   const members = pids
@@ -1748,3 +1765,6 @@ export function scoreToPar(score, par) {
   if (diff === 2) return 'double'
   return 'triple'
 }
+
+// Backward-compatibility alias
+export const computeFiveThreeOne = computeNines

@@ -378,7 +378,7 @@
               </template>
 
               <!-- 5-3-1 -->
-              <template v-else-if="isGameType(game, 'fivethreeone')">
+              <template v-else-if="isGameType(game, 'fivethreeone') || isGameType(game, 'nines')">
                 <div v-if="fiveThreeOneResult(game)" class="individual-standings">
                   <div class="fto-badges" v-if="fiveThreeOneResult(game)?.hasSweep || fiveThreeOneResult(game)?.hasBirdie">
                     <span v-if="fiveThreeOneResult(game)?.hasSweep" class="fto-badge">🧹 Sweep on</span>
@@ -566,19 +566,19 @@ function isGameType(game, type) {
 const GAME_ICONS = {
   nassau: '💰', skins: '💎', wolf: '🐺', vegas: '🎲', match: '⚔️', matchplay: '⚔️',
   bestball: '🤝', stableford: '📊', sixes: '🎯', snake: '🐍', dots: '●',
-  junk: '✨', fidget: '🎲', hilow: '📈', hammer: '🔨', teamday: '👥', fivethreeone: '5',
+  junk: '✨', fidget: '🎲', hilow: '📈', hammer: '🔨', teamday: '👥', fivethreeone: '5', nines: '9',
   bbn: '🏌️', match1v1: '1v1',
 }
 const GAME_LABELS = {
   nassau: 'Nassau', skins: 'Skins', wolf: 'Wolf', vegas: 'Vegas', match: 'Match Play', matchplay: 'Match Play',
   bestball: 'Best Ball', stableford: 'Stableford', sixes: 'Sixes', snake: 'Snake', dots: 'Dots',
-  junk: 'Junk', fidget: 'Fidget', hilow: 'Hi-Low', hammer: 'Hammer', teamday: 'Team Day', fivethreeone: '5-3-1',
+  junk: 'Junk', fidget: 'Fidget', hilow: 'Hi-Low', hammer: 'Hammer', teamday: 'Team Day', fivethreeone: '5-3-1', nines: '9s',
   bbn: 'Best Ball', match1v1: '1v1',
 }
 const GAME_STYLE = {
   nassau: 'gold', skins: 'green', wolf: 'purple', vegas: 'blue', match: 'red', matchplay: 'red',
   bestball: 'teal', stableford: 'green', sixes: 'orange', snake: 'purple', dots: 'orange',
-  fidget: 'blue', bbn: 'teal', match1v1: 'red', hilow: 'teal', hammer: 'red', fivethreeone: 'orange',
+  fidget: 'blue', bbn: 'teal', match1v1: 'red', hilow: 'teal', hammer: 'red', fivethreeone: 'orange', nines: 'orange',
 }
 
 function gameIcon(type) { return GAME_ICONS[type?.toLowerCase()] || '🏌️' }
@@ -763,7 +763,7 @@ function sixesResult(game) {
 }
 
 // 5-3-1
-function fiveThreeOneResult(game) {
+function fiveThreeOneResult(game) {  // also handles 'nines'
   if (!gameCtx.value || !gameCtx.value.course) return null
   return computeFiveThreeOne(gameCtx.value, game.config) ?? null
 }

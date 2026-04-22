@@ -414,7 +414,7 @@ const GAME_ICONS = {
   nassau: '💰', skins: '💎', match: '⚔️', matchplay: '⚔️', match1v1: '⚔️',
   bestball: '🎮', best_ball: '🎮', bbn: '🏌️',
   wolf: '🐺', vegas: '🎰', hilow: '📊', stableford: '⭐',
-  snake: '🐍', dots: '🎯', fidget: '😬', hammer: '🔨', sixes: '🎲', fivethreeone: '5️⃣',
+  snake: '🐍', dots: '🎯', fidget: '😬', hammer: '🔨', sixes: '🎲', fivethreeone: '5️⃣', nines: '9️⃣',
 }
 const GAME_LABELS = {
   nassau: 'Nassau', skins: 'Skins', match: 'Match', matchplay: 'Match Play', match1v1: '1v1 Match',

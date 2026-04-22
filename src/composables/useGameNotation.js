@@ -27,7 +27,7 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
   }
 
   function gameIcon(type) {
-    const icons = { nassau:'💰', skins:'💎', match:'⚔️', matchplay:'⚔️', bestball:'🤝', snake:'🐍', dots:'🎯', fidget:'😬', bbn:'🏌️', match1v1:'⚔️', vegas:'🎰', hilow:'📊', stableford:'⭐', wolf:'🐺', hammer:'🔨', sixes:'🎲', fivethreeone:'5️⃣' }
+    const icons = { nassau:'💰', skins:'💎', match:'⚔️', matchplay:'⚔️', bestball:'🤝', snake:'🐍', dots:'🎯', fidget:'😬', bbn:'🏌️', match1v1:'⚔️', vegas:'🎰', hilow:'📊', stableford:'⭐', wolf:'🐺', hammer:'🔨', sixes:'🎲', fivethreeone:'5️⃣', nines:'9️⃣' }
     return icons[type?.toLowerCase()] || '🎮'
   }
 
@@ -43,7 +43,7 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
       const p2 = config.player2 ? pInit(config.player2) : null
       if (p1 && p2) return `Match ${p1} v ${p2}`
     }
-    const labels = { nassau:'Nassau', skins:'Skins', match:'Match', matchplay:'Match Play', bestball:'Best Ball', snake:'Snake', dots:'Dots', fidget:'Fidget', bbn:'Best Ball', match1v1:'1v1', vegas:'Vegas', hilow:'Hi-Low', stableford:'Stableford', wolf:'Wolf', hammer:'Hammer', sixes:'Sixes', fivethreeone:'5-3-1' }
+    const labels = { nassau:'Nassau', skins:'Skins', match:'Match', matchplay:'Match Play', bestball:'Best Ball', snake:'Snake', dots:'Dots', fidget:'Fidget', bbn:'Best Ball', match1v1:'1v1', vegas:'Vegas', hilow:'Hi-Low', stableford:'Stableford', wolf:'Wolf', hammer:'Hammer', sixes:'Sixes', fivethreeone:'5-3-1', nines:'9s' }
     return labels[type?.toLowerCase()] || type
   }
 
@@ -248,7 +248,7 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
       }
 
       // -- 5-3-1 -- one row per player showing pts per hole --
-      if (t === 'fivethreeone') {
+      if (t === 'fivethreeone' || t === 'nines') {
         try {
           const r = computeFiveThreeOne(ctx, game.config)
           if (!r) continue

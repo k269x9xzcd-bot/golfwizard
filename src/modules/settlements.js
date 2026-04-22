@@ -8,7 +8,7 @@
 import {
   computeNassau, computeSkins, computeMatch, computeVegas,
   computeSnake, computeHiLow, computeStableford, computeWolf,
-  computeHammer, computeSixes, computeFiveThreeOne, computeDots,
+  computeHammer, computeSixes, computeNines, computeFiveThreeOne, computeDots,
   computeFidget, computeBestBallNet, computeBestBall,
   computeBbb, computeScotch6s, computeTeamDay,
 } from './gameEngine.js'
@@ -25,7 +25,8 @@ const ENGINE_MAP = {
   wolf: computeWolf,
   hammer: computeHammer,
   sixes: computeSixes,
-  fivethreeone: computeFiveThreeOne,
+  fivethreeone: computeNines,
+  nines: computeNines,
   dots: computeDots,
   fidget: computeFidget,
   bestball: computeBestBall,
