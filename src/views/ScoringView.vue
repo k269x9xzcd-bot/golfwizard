@@ -578,9 +578,9 @@
             </div>
             <!-- GPS: only show if course has green coords -->
             <div v-if="greenCoordsForHole(activeHole)" class="gps-row">
-              <button v-if="!gpsActive" class="gps-btn" @click="startGpsWatch">📍 GPS</button>
-              <span v-else-if="gpsDistance !== null" class="gps-dist">📍 {{ gpsDistance }}y</span>
-              <span v-else class="gps-dist gps-locating">📍 …</span>
+              <button v-if="!gpsActive" class="gps-btn" @click="startGpsWatch">🛰️ GPS</button>
+              <span v-else-if="gpsDistance !== null" class="gps-dist">🛰️ {{ gpsDistance }}y</span>
+              <span v-else class="gps-dist gps-locating">🛰️ …</span>
             </div>
           </div>
         </div>
