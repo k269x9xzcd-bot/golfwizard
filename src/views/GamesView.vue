@@ -366,6 +366,14 @@
                       {{ formatBalance(s.net) }}
                     </span>
                   </div>
+                  <div class="pairwise-settlement" v-if="pairwiseLines(sixesResult(game).settlements).length">
+                    <div v-for="line in pairwiseLines(sixesResult(game).settlements)" :key="line.from+line.to" class="pairwise-line">
+                      <span class="pw-from">{{ line.from }}</span>
+                      <span class="pw-arrow">→</span>
+                      <span class="pw-to">{{ line.to }}</span>
+                      <span class="pw-amount bal-winning">${{ line.amount }}</span>
+                    </div>
+                  </div>
                 </div>
               </template>
 
@@ -382,6 +390,15 @@
                     <span class="standing-value" :class="balanceClass(s.net)">
                       {{ formatBalance(s.net) }}
                     </span>
+                  </div>
+                  <!-- Pairwise settlement -->
+                  <div class="pairwise-settlement" v-if="pairwiseLines(fiveThreeOneResult(game).settlements).length">
+                    <div v-for="line in pairwiseLines(fiveThreeOneResult(game).settlements)" :key="line.from+line.to" class="pairwise-line">
+                      <span class="pw-from">{{ line.from }}</span>
+                      <span class="pw-arrow">→</span>
+                      <span class="pw-to">{{ line.to }}</span>
+                      <span class="pw-amount bal-winning">${{ line.amount }}</span>
+                    </div>
                   </div>
                   <!-- Per-hole sweep/birdie events -->
                   <div class="fto-events" v-if="fiveThreeOneEvents(fiveThreeOneResult(game)).length">
@@ -744,6 +761,28 @@ function sixesResult(game) {
 function fiveThreeOneResult(game) {
   if (!gameCtx.value || !gameCtx.value.course) return null
   return computeFiveThreeOne(gameCtx.value, game.config) ?? null
+}
+
+/**
+ * Build pairwise settlement lines from a settlements array:
+ * [{ id, name, pts, net }] → [{ from, to, amount }]
+ * "from pays to $amount" where amount > 0.
+ * Shows running settlement (partial rounds included).
+ */
+function pairwiseLines(settlements) {
+  if (!settlements?.length) return []
+  const lines = []
+  for (let i = 0; i < settlements.length; i++) {
+    for (let j = i + 1; j < settlements.length; j++) {
+      const a = settlements[i]
+      const b = settlements[j]
+      const diff = Math.round((a.net - b.net) * 100) / 100
+      if (diff === 0) continue
+      if (diff > 0) lines.push({ from: b.name, to: a.name, amount: diff })
+      else lines.push({ from: a.name, to: b.name, amount: -diff })
+    }
+  }
+  return lines.sort((a, b) => b.amount - a.amount)
 }
 
 // Returns list of notable events (sweeps, birdie bonuses) from hole results
@@ -1455,6 +1494,39 @@ function balanceClass(val) {
   color: var(--gw-text-muted);
   padding-top: 6px;
   font-style: italic;
+}
+
+.pairwise-settlement {
+  margin-top: 8px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pairwise-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.pw-from {
+  color: var(--gw-text-muted);
+  min-width: 48px;
+}
+.pw-arrow {
+  color: rgba(255,255,255,0.25);
+  font-size: 11px;
+}
+.pw-to {
+  flex: 1;
+  color: var(--gw-text);
+  font-weight: 600;
+}
+.pw-amount {
+  font-family: var(--gw-font-mono);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .fto-badges {
