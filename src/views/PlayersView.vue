@@ -225,16 +225,19 @@ const authStore = useAuthStore()
 // ── GHIN sync dot helpers ────────────────────────────────────────
 function ghinSyncStatus(p) {
   if (!p.ghin_synced_at) return 'dot-none'
-  const today = new Date().toDateString()
-  const syncDate = new Date(p.ghin_synced_at).toDateString()
-  return today === syncDate ? 'dot-blue' : 'dot-red'
+  const hoursAgo = (Date.now() - new Date(p.ghin_synced_at).getTime()) / (1000 * 60 * 60)
+  if (hoursAgo < 26) return 'dot-blue'
+  if (hoursAgo < 72) return 'dot-red'
+  return 'dot-none'
 }
 
 function ghinSyncTitle(p) {
   if (!p.ghin_synced_at) return 'Not synced'
-  const today = new Date().toDateString()
-  const syncDate = new Date(p.ghin_synced_at).toDateString()
-  return today === syncDate ? 'Synced today' : `Last synced ${new Date(p.ghin_synced_at).toLocaleDateString()}`
+  const hoursAgo = Math.round((Date.now() - new Date(p.ghin_synced_at).getTime()) / (1000 * 60 * 60))
+  if (hoursAgo < 2) return 'Synced just now'
+  if (hoursAgo < 26) return `Synced ${hoursAgo}h ago`
+  const days = Math.round(hoursAgo / 24)
+  return `Last synced ${days} day${days > 1 ? 's' : ''} ago`
 }
 
 // ── Sync All GHIN ────────────────────────────────────────────────

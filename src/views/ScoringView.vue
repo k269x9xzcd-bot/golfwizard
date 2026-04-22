@@ -66,8 +66,8 @@
           <button v-if="isCaptain" class="round-menu-item" @click="showRoundMenu = false; openRetroScore()">
             📝 Enter Scores from Card
           </button>
-          <button class="round-menu-item" v-if="isCaptain && !roundsStore.activeRound?.is_complete" @click="showRoundMenu = false; finishRound()">
-            ✅ Finish Round
+          <button class="round-menu-item" v-if="isCaptain && !roundsStore.activeRound?.is_complete" :disabled="finishing" @click="showRoundMenu = false; finishRound()">
+            {{ finishing ? '⏳ Finishing…' : '✅ Finish Round' }}
           </button>
           <button class="round-menu-item" @click="doShareScorecard" :disabled="sharing">
             {{ sharing ? '⏳ Sharing…' : '📸 Share Scorecard' }}
@@ -760,9 +760,12 @@
                 <span class="fr-net">NET {{ playerNetTotal(member.id) || '—' }}</span>
               </div>
             </div>
+            <div v-if="finishError" class="finish-error">{{ finishError }}</div>
             <div class="finish-review-actions">
-              <button class="btn-cancel" @click="showFinishReview = false">Back to Scoring</button>
-              <button class="finish-btn" @click="showFinishReview = false; finishRound()">Finish Round ✓</button>
+              <button class="btn-cancel" :disabled="finishing" @click="showFinishReview = false">Back to Scoring</button>
+              <button class="finish-btn" :disabled="finishing" @click="finishRound()">
+                {{ finishing ? 'Finishing…' : 'Finish Round ✓' }}
+              </button>
             </div>
           </div>
         </div>
@@ -1289,12 +1292,20 @@ const roundCompletionInfo = computed(() => {
   }
 })
 
+const finishing = ref(false)
+const finishError = ref(null)
+
 async function finishRound() {
-  if (!roundsStore.activeRound) return
+  if (!roundsStore.activeRound || finishing.value) return
+  finishing.value = true
+  finishError.value = null
   try {
     await roundsStore.completeRound(roundsStore.activeRound.id)
   } catch (e) {
     console.error('Finish round error:', e)
+    finishError.value = 'Could not finish round. Check your connection and try again.'
+  } finally {
+    finishing.value = false
   }
 }
 

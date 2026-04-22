@@ -1217,6 +1217,8 @@
 .finish-review-actions { display: flex; gap: 10px; }
 .finish-review-actions .btn-cancel { flex: 1; }
 .finish-review-actions .finish-btn { flex: 1; }
+.finish-error { color: #ef4444; font-size: 13px; text-align: center; margin-bottom: 10px; }
+.finish-btn:disabled, .finish-review-actions .btn-cancel:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ── Wolf partner pick panel on hole view ───────────────────── */
 .wolf-panel {
