@@ -388,12 +388,12 @@
                     <span class="standing-medal">{{ ['🥇','🥈','🥉'][idx] ?? '' }}</span>
                     <span class="standing-name">{{ s.name }}</span>
                     <span class="standing-pts">{{ s.pts }}pts</span>
+                    <span class="standing-value" :class="balanceClass(s.net)">
+                      {{ formatBalance(s.net) }}
+                    </span>
                     <span class="fto-icons" v-if="game.config?.sweepBonus || game.config?.birdieBonus">
                       <span v-if="game.config.sweepBonus && fiveThreeOneTallies(fiveThreeOneResult(game))[s.id]?.sweeps" class="fto-tally">🧹×{{ fiveThreeOneTallies(fiveThreeOneResult(game))[s.id].sweeps }}</span>
                       <span v-if="game.config.birdieBonus && fiveThreeOneTallies(fiveThreeOneResult(game))[s.id]?.birdies" class="fto-tally">🐦×{{ fiveThreeOneTallies(fiveThreeOneResult(game))[s.id].birdies }}</span>
-                    </span>
-                    <span class="standing-value" :class="balanceClass(s.net)">
-                      {{ formatBalance(s.net) }}
                     </span>
                   </div>
                   <!-- Pairwise settlement -->
@@ -1559,7 +1559,6 @@ function balanceClass(val) {
 .fto-icons {
   display: flex;
   gap: 4px;
-  flex: 1;
 }
 .fto-tally {
   font-size: 11px;

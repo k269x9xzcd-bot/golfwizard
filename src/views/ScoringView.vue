@@ -1427,6 +1427,10 @@ async function finishRound() {
   finishError.value = null
   try {
     await roundsStore.completeRound(roundsStore.activeRound.id)
+    showFinishReview.value = false
+    // Brief delay so Supabase scores flush before HistoryView fetches
+    await new Promise(r => setTimeout(r, 800))
+    router.push('/history')
   } catch (e) {
     console.error('Finish round error:', e)
     finishError.value = 'Could not finish round. Check your connection and try again.'

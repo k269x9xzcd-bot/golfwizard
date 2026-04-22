@@ -253,6 +253,7 @@ async function toggleRound(id) {
         try { data = _computeSettlementFromRound(round) } catch (e) { console.warn('compute settlement failed:', e) }
       }
       if (data) settlementsCache[id] = data
+      else settlementsCache[id] = null  // sentinel: prevents re-entry, shows "no settlement"
       settlementLoading[id] = false
     }
   }
