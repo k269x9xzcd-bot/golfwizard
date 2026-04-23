@@ -134,10 +134,21 @@ export const useRosterStore = defineStore('roster', () => {
       _saveLocal()
       return p
     }
-    const { data, error } = await supabase
-      .from('roster_players')
-      .upsert({ ...player, owner_id: auth.user.id }, { onConflict: 'ghin_number', ignoreDuplicates: false })
-      .select().single()
+    const row = { ...player, owner_id: auth.user.id }
+    let data, error
+    if (row.ghin_number) {
+      // Upsert on ghin_number only when a real GHIN exists (NULL cannot match a unique constraint)
+      ;({ data, error } = await supabase
+        .from('roster_players')
+        .upsert(row, { onConflict: 'ghin_number', ignoreDuplicates: false })
+        .select().single())
+    } else {
+      // Plain insert for players without a GHIN number
+      ;({ data, error } = await supabase
+        .from('roster_players')
+        .insert(row)
+        .select().single())
+    }
     if (error) throw error
     players.value.push(data)
     return data
