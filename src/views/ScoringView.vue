@@ -467,25 +467,31 @@
               </template>
             </tbody>
 
-            <!-- Game notation rows -->
+            <!-- Game notation rows: compact summary by default, tap to expand per-hole -->
             <tfoot v-if="gameNotationRows.length > 0 && showGameRows">
-              <tr v-for="(row, ri) in gameNotationRows" :key="'gn-'+ri" class="row-game-notation" :class="row.cls || ''">
+              <tr v-for="(row, ri) in gameNotationRows" :key="'gn-'+ri"
+                  class="row-game-notation" :class="[row.cls || '', { 'notation-row-expanded': expandedNotationRows.has(ri) }]"
+                  @click="toggleNotationRow(ri)">
                 <td class="col-sticky col-notation-label">
                   <span class="notation-icon">{{ row.icon }}</span>
                   <span class="notation-name" v-if="!row.labelHtml">{{ row.label }}</span>
                   <span class="notation-name" v-else v-html="row.labelHtml"></span>
+                  <span class="notation-expand-caret">{{ expandedNotationRows.has(ri) ? '▴' : '▾' }}</span>
                 </td>
-                <!-- Front 9 notation -->
-                <td v-for="h in frontHoles" :key="'gn-'+ri+'-'+h" class="col-notation-cell" :class="row.cells[h]?.cls || ''" v-html="row.cells[h]?.text || ''"></td>
-                <!-- OUT notation summary -->
-                <td v-if="hasBack9" class="col-subtotal col-notation-sub" v-html="row.outSummary || ''"></td>
-                <!-- Back 9 notation -->
-                <td v-for="h in backHoles" :key="'gn-'+ri+'-'+h" class="col-notation-cell" :class="row.cells[h]?.cls || ''" v-html="row.cells[h]?.text || ''"></td>
-                <!-- IN notation summary -->
-                <td v-if="hasBack9" class="col-subtotal col-notation-sub" v-html="row.inSummary || ''"></td>
-                <!-- Total notation -->
-                <td class="col-total col-notation-total" v-html="row.totalSummary || ''"></td>
-                <td class="col-total col-notation-total" v-html="row.netSummary || ''"></td>
+                <template v-if="!expandedNotationRows.has(ri)">
+                  <td :colspan="frontHoles.length + (hasBack9 ? backHoles.length + 2 : 0) + 2" class="col-notation-summary-collapsed">
+                    <span class="nota-summary-pill" v-html="row.totalSummary || '&mdash;'"></span>
+                    <span v-if="row.netSummary" class="nota-summary-net" v-html="row.netSummary"></span>
+                  </td>
+                </template>
+                <template v-else>
+                  <td v-for="h in frontHoles" :key="'gn-'+ri+'-'+h" class="col-notation-cell" :class="row.cells[h]?.cls || ''" v-html="row.cells[h]?.text || ''"></td>
+                  <td v-if="hasBack9" class="col-subtotal col-notation-sub" v-html="row.outSummary || ''"></td>
+                  <td v-for="h in backHoles" :key="'gn-'+ri+'-'+h" class="col-notation-cell" :class="row.cells[h]?.cls || ''" v-html="row.cells[h]?.text || ''"></td>
+                  <td v-if="hasBack9" class="col-subtotal col-notation-sub" v-html="row.inSummary || ''"></td>
+                  <td class="col-total col-notation-total" v-html="row.totalSummary || ''"></td>
+                  <td class="col-total col-notation-total" v-html="row.netSummary || ''"></td>
+                </template>
               </tr>
             </tfoot>
           </table>
@@ -1550,6 +1556,12 @@ async function saveOppEditor() {
 }
 const showNotations = ref(true)   // per-score-cell shapes (birdie circle, bogey box, etc.)
 const showGameRows = ref(true)    // game-outcome tfoot rows (Nassau status, match L/W/½, etc.)
+const expandedNotationRows = ref(new Set())
+function toggleNotationRow(ri) {
+  const s = new Set(expandedNotationRows.value)
+  s.has(ri) ? s.delete(ri) : s.add(ri)
+  expandedNotationRows.value = s
+}
 const showFinishReview = ref(false)
 
 // ── Landscape mode (glance-only scorecard) ──────────────────────
@@ -2000,21 +2012,21 @@ const sixesCurrentSeg = computed(() => {
   return h <= 6 ? 0 : h <= 12 ? 1 : 2
 })
 
-function sixesPlayerIds() {
+const sixesPlayerIds = computed(() => {
   const cfg = sixesGame.value?.config || {}
   const pids = cfg.players || roundsStore.activeMembers.map(m => m.id)
   return pids.slice(0, 4)
-}
+})
 
 const sixesTeamA = computed(() => {
-  const p = sixesPlayerIds()
+  const p = sixesPlayerIds.value
   if (p.length < 4) return p
   const seg = sixesCurrentSeg.value
   return seg === 0 ? [p[0], p[1]] : seg === 1 ? [p[0], p[2]] : [p[0], p[3]]
 })
 
 const sixesTeamB = computed(() => {
-  const p = sixesPlayerIds()
+  const p = sixesPlayerIds.value
   if (p.length < 4) return p
   const seg = sixesCurrentSeg.value
   return seg === 0 ? [p[2], p[3]] : seg === 1 ? [p[1], p[3]] : [p[1], p[2]]

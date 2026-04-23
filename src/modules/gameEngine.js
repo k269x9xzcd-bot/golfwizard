@@ -129,8 +129,11 @@ export function computeSkins(ctx, config) {
     carry = true,              // carry pot on ties (true) or dead skins (false)
     payoutModel = 'pool',      // 'pool' = pot-based, 'perPlayer' = each player pays ppt per skin won by others
     lastHoleTie = 'carry',     // 'carry' = pot carries (dead), 'split' = tied players split pot on hole 18
-    back9Multiplier = false,   // holes 10-18 worth 2× skin value
+    back9Multiplier = false,   // holes 10-18 worth 2x skin value
     hcpMode = 'lowman',        // 'lowman' = low-man adjusted, 'course' = full course HCP
+    teamMode = false,          // false = individual, true = 2v2 team skins (best ball per team)
+    team1 = [],                // team1 player IDs (when teamMode=true)
+    team2 = [],                // team2 player IDs (when teamMode=true)
   } = config
   const members = pids
     ? ctx.members.filter(m => pids.includes(m.id))
@@ -141,6 +144,90 @@ export function computeSkins(ctx, config) {
     ? (m, h) => memberNetOnHole(ctx, m, h)
     : (m, h) => memberNetOnHoleLowMan(ctx, m, h, members)
 
+  // ── TEAM MODE: 2v2 best-ball skins ──────────────────────────────
+  if (teamMode && team1.length && team2.length) {
+    const t1 = ctx.members.filter(m => team1.includes(m.id))
+    const t2 = ctx.members.filter(m => team2.includes(m.id))
+    const t1Name = t1.map(m => m.short_name).join('+')
+    const t2Name = t2.map(m => m.short_name).join('+')
+
+    function teamBestNet(teamMembers, h) {
+      const nets = teamMembers.map(m => netFn(m, h)).filter(n => n != null)
+      return nets.length ? Math.min(...nets) : null
+    }
+
+    const holeResults = []
+    let pot = 0
+    let potValue = ppt
+
+    for (let h = from; h <= to; h++) {
+      const holeVal = (back9Multiplier && h >= 10) ? ppt * 2 : ppt
+      const n1 = teamBestNet(t1, h)
+      const n2 = teamBestNet(t2, h)
+
+      if (n1 === null || n2 === null) {
+        holeResults.push({ hole: h, winner: null, pot: potValue, reason: 'incomplete' })
+        if (carry) { pot += holeVal; potValue += holeVal }
+        continue
+      }
+
+      if (n1 < n2) {
+        holeResults.push({ hole: h, winner: 't1', winnerName: t1Name, pot: potValue, n1, n2 })
+        pot = 0
+        potValue = (back9Multiplier && h >= 10 && h < to) ? ppt * 2 : ppt
+      } else if (n2 < n1) {
+        holeResults.push({ hole: h, winner: 't2', winnerName: t2Name, pot: potValue, n1, n2 })
+        pot = 0
+        potValue = (back9Multiplier && h >= 10 && h < to) ? ppt * 2 : ppt
+      } else {
+        // Tie
+        if (h === to && lastHoleTie === 'split') {
+          holeResults.push({ hole: h, winner: null, pot: potValue, reason: 'split', splitAmount: potValue / 2, n1, n2 })
+        } else if (carry) {
+          holeResults.push({ hole: h, winner: null, pot: potValue, reason: 'tie', n1, n2 })
+          pot += holeVal
+          potValue += holeVal
+        } else {
+          holeResults.push({ hole: h, winner: null, pot: holeVal, reason: 'dead', n1, n2 })
+          pot = 0
+          potValue = (back9Multiplier && h >= 10 && h < to) ? ppt * 2 : ppt
+        }
+      }
+    }
+
+    // Team totals
+    let t1Skins = 0, t1Winnings = 0, t2Skins = 0, t2Winnings = 0
+    for (const hr of holeResults) {
+      if (hr.winner === 't1') { t1Skins++; t1Winnings += hr.pot }
+      else if (hr.winner === 't2') { t2Skins++; t2Winnings += hr.pot }
+      else if (hr.reason === 'split') { t1Winnings += hr.splitAmount; t2Winnings += hr.splitAmount }
+    }
+    const totalSkins = t1Skins + t2Skins
+    const costPerTeam = totalSkins * ppt
+    const t1Net = t1Winnings - costPerTeam
+    // Pairwise: each player on losing team pays each player on winning team ppt per skin diff
+    const skinDiff = Math.abs(t1Skins - t2Skins)
+    const settlements = []
+    if (skinDiff > 0) {
+      const winners = t1Net > 0 ? t1 : t2
+      const losers = t1Net > 0 ? t2 : t1
+      const winName = t1Net > 0 ? t1Name : t2Name
+      const loseName = t1Net > 0 ? t2Name : t1Name
+      settlements.push({
+        fromName: loseName, toName: winName,
+        amount: Math.abs(t1Net),
+        skins: skinDiff,
+      })
+    }
+    return {
+      holeResults,
+      teamMode: true,
+      t1Name, t2Name, t1Skins, t2Skins, t1Net,
+      settlements, ppt, potValue,
+    }
+  }
+
+  // ── INDIVIDUAL MODE (default) ────────────────────────────────────
   const holeResults = []
   let pot = 0
   let potValue = ppt
@@ -165,18 +252,17 @@ export function computeSkins(ctx, config) {
     if (winners.length === 1) {
       holeResults.push({ hole: h, winner: winners[0].id, winnerName: winners[0].name, pot: potValue, net: min })
       pot = 0
-      potValue = (back9Multiplier && h >= 10 && h < to) ? ppt * 2 : ppt  // next hole value
+      potValue = (back9Multiplier && h >= 10 && h < to) ? ppt * 2 : ppt
     } else {
       // Tie
       if (h === to && lastHoleTie === 'split' && winners.length > 0) {
-        // Split pot among tied players on last hole
         holeResults.push({ hole: h, winner: null, pot: potValue, reason: 'split', tied: winners.map(w => w.id), splitAmount: potValue / winners.length })
       } else if (carry) {
         holeResults.push({ hole: h, winner: null, pot: potValue, reason: 'tie', tied: winners.map(w => w.id) })
         pot += holeVal
         potValue += holeVal
       } else {
-        // Dead skins — pot doesn't carry
+        // Dead skins
         holeResults.push({ hole: h, winner: null, pot: holeVal, reason: 'dead', tied: winners.map(w => w.id) })
         pot = 0
         potValue = (back9Multiplier && h >= 10 && h < to) ? ppt * 2 : ppt
@@ -200,7 +286,6 @@ export function computeSkins(ctx, config) {
 
   // Settlement
   if (payoutModel === 'perPlayer') {
-    // Each player pays ppt for every skin won by someone else
     const totalSkins = Object.values(totals).reduce((s, t) => s + t.skins, 0)
     const settlements = members.map(m => {
       const mySkins = totals[m.id].skins

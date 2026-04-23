@@ -419,7 +419,19 @@
               </select>
             </div>
           </div>
-          <div class="config-note">All {{ form.players.length }} players participate unless you restrict below</div>
+          <div class="config-row config-row--toggles">
+            <div class="config-toggle-row">
+              <label class="toggle-label">
+                <input type="checkbox" v-model="mainGame.config.teamMode" />
+                <span>👥 Team Skins (2v2)</span>
+              </label>
+              <span class="toggle-desc">Best ball per team per hole — teams share skins</span>
+            </div>
+          </div>
+          <div v-if="mainGame.config.teamMode">
+            <TeamPicker :players="form.players" v-model:team1="mainGame.config.team1" v-model:team2="mainGame.config.team2" />
+          </div>
+          <div class="config-note">{{ mainGame.config.teamMode ? '2v2 team skins — best ball per team wins the hole' : 'All ' + form.players.length + ' players participate' }}</div>
         </div>
 
         <!-- Best Ball config -->
@@ -472,7 +484,7 @@
             </div>
             <div class="config-toggle-row">
               <label class="toggle-label">
-                <input type="checkbox" v-model="mainGame.config.doubleBirdie" />
+                <input type="checkbox" v-model="mainGame.config.doubleBirdie" /><!-- Vegas: doubleBirdie (both teammates birdie) — distinct from birdieDouble used in HiLow/Hammer/Nines -->
                 <span>🐦🐦 Double birdie</span>
               </label>
               <span class="toggle-desc">Both teammates birdie = hole diff doubled</span>
@@ -1403,7 +1415,7 @@ const GAME_DEFAULTS = {
   nassau:      { front: 10, back: 10, overall: 20, pressAt: 2, team1: [], team2: [] },
   vegas:       { ppt: 1, birdieFlip: true, eagleFlip: true, doubleBirdie: false, penaltyThreshold: 0, scoring: 'net', team1: [], team2: [] },
   match:       { ppt: 20, format: '2v2', player1: '', player2: '', closeoutBonus: 0, team1: [], team2: [] },
-  skins:       { ppt: 5, carry: true, lastHoleTie: 'carry', back9Multiplier: false },
+  skins:       { ppt: 5, carry: true, lastHoleTie: 'carry', back9Multiplier: false, teamMode: false, team1: [], team2: [] },
   hilow:       { ppt: 5, aggregatePoint: true, birdieDouble: false, team1: [], team2: [] },
   stableford:  { ppt: 1, variant: 'standard', pts: { eagle: 4, birdie: 3, par: 2, bogey: 1, double: 0 } },
   wolf:        { ppt: 5, wolfLoneMultiplier: 4, blindWolfMultiplier: 8, wolfTeesFirst: true, wolfTeeOrder: [], blindWolfEnabled: true, wolfChoices: {} },

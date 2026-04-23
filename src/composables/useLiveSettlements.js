@@ -120,9 +120,23 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
       if (t === 'skins') {
         const r = computeSkins(ctx, cfg)
         if (!r || !r.holeResults) return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Skins</span> <span class="muted" style="font-size:11px">No scores yet</span></div>`
-
-        const won = r.holeResults.filter(s => s.winner) || []
         const ppt = r.ppt || cfg.ppt || 5
+
+        // Team skins display
+        if (r.teamMode) {
+          const t1n = r.t1Name || 'Team A'
+          const t2n = r.t2Name || 'Team B'
+          const scoreStr = `${t1n}: ${r.t1Skins} skins — ${t2n}: ${r.t2Skins} skins`
+          const net = r.t1Net || 0
+          const leader = net > 0 ? t1n : net < 0 ? t2n : null
+          const netStr = leader
+            ? `<div style="margin-top:3px;font-size:12px;font-weight:700;color:#4ade80">${leader} leads $${Math.abs(net)}</div>`
+            : '<div style="margin-top:3px;font-size:11px;color:#d4af37">All square</div>'
+          return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Skins (Team)</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppt}/skin</span><div style="font-size:11px;margin-top:3px">${scoreStr}</div>${netStr}</div>`
+        }
+
+        // Individual skins display
+        const won = r.holeResults.filter(s => s.winner) || []
         let holeStr = won.length > 0 ? won.map(s => `H${s.hole}→${s.winnerName || '?'}($${s.pot || ppt})`).join(', ') : 'No skins won yet'
 
         let carryStr = ''
@@ -452,7 +466,11 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
   }
 
   // Force gameSummaryHtml to be reactive by tracking scores inside a computed token
-  const _scoresTick = computed(() => JSON.stringify(roundsStore.activeScores))
+  // Lightweight reactive tick: count total scored holes rather than JSON.stringify entire scores array
+  const _scoresTick = computed(() => {
+    const scores = roundsStore.activeScores
+    return scores.length * 10000 + scores.filter(s => s.strokes != null).length
+  })
 
   function gameSummaryHtmlReactive(game) {
     // Access the tick to create reactive dependency on scores
