@@ -272,7 +272,7 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
       // ── Hammer ──
       if (t === 'hammer') {
         const r = computeHammer(ctx, cfg)
-        if (\!r) return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Hammer</span></div>`
+        if (!r) return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Hammer</span></div>`
         const t1n = teamInitialsStr(cfg.team1 || []) || 'T1'
         const t2n = teamInitialsStr(cfg.team2 || []) || 'T2'
         const ppt = cfg.ppt || 1
@@ -287,7 +287,7 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
               return `H${h.hole}: $${h.holeValue}(${h.throws}🔨)`
             }).join(' · ') + '</div>'
           : ''
-        const netStr = net \!== 0
+        const netStr = net !== 0
           ? `<div style="margin-top:4px;font-size:12px;font-weight:700;color:#4ade80">💰 ${net > 0 ? t2n : t1n} owe ${net > 0 ? t1n : t2n} $${Math.abs(net)}</div>`
           : '<div style="margin-top:4px;font-size:11px;color:#888">All square</div>'
         return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Hammer</span><span class="muted" style="font-size:10px;margin-left:4px">${t1n} vs ${t2n} · $${ppt}/hole</span>${varStr}${holeStr}${netStr}</div>`
@@ -358,7 +358,7 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
       // ── BBB ──
       if (t === 'bbb') {
         const r = computeBbb(ctx, cfg)
-        if (\!r) return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} BBB</span></div>`
+        if (!r) return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} BBB</span></div>`
         const ppt = r.ppt || cfg.ppt || 1
         const variant = cfg.doubleBongo ? ' (Double Bongo)' : ''
         const standingStr = (r.standings || []).slice().sort((a,b)=>b.pts-a.pts).map(s => `${s.name}: ${s.pts}pt`).join(' · ')

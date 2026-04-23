@@ -642,11 +642,11 @@
         </div>
 
 
-        <\!-- Hammer banner: shows on every hole when a hammer game is active -->
+        <!-- Hammer banner: shows on every hole when a hammer game is active -->
         <template v-if="hammerGame">
-          <div v-if="\!hammerHoleLog(activeHole).conceded && hammerHoleLog(activeHole).status \!== 'accepted'"
+          <div v-if="!hammerHoleLog(activeHole).conceded && hammerHoleLog(activeHole).status !== 'accepted'"
                class="aloha-banner aloha-call"
-               :class="{ 'hammer-inactive': \!canThrowHammer }">
+               :class="{ 'hammer-inactive': !canThrowHammer }">
             <span class="aloha-icon">🔨</span>
             <div class="aloha-text">
               <strong v-if="canThrowHammer">Throw the Hammer</strong>
@@ -656,10 +656,10 @@
             </div>
             <button v-if="canThrowHammer" class="aloha-btn" @click="throwHammer">Throw 🔨</button>
           </div>
-          <div v-else-if="hammerHoleLog(activeHole).status === 'pending' && \!canThrowHammer"
+          <div v-else-if="hammerHoleLog(activeHole).status === 'pending' && !canThrowHammer"
                class="aloha-banner aloha-pending">
             <span class="aloha-icon">🔨</span>
-            <div class="aloha-text"><strong>Hammer thrown\!</strong> Worth ${{ hammerHoleValue(activeHole) }} — accept or concede?</div>
+            <div class="aloha-text"><strong>Hammer thrown!</strong> Worth ${{ hammerHoleValue(activeHole) }} — accept or concede?</div>
             <div class="aloha-respond">
               <button class="aloha-btn aloha-accept" @click="respondHammer(true)">Accept</button>
               <button class="aloha-btn aloha-decline" @click="respondHammer(false)">Concede</button>
@@ -668,7 +668,7 @@
           <div v-else-if="hammerHoleLog(activeHole).status === 'accepted'"
                class="aloha-banner aloha-active">
             <span class="aloha-icon">🔨</span>
-            <div class="aloha-text"><strong>Hammer accepted\!</strong> Hole worth ${{ hammerHoleValue(activeHole) }}
+            <div class="aloha-text"><strong>Hammer accepted!</strong> Hole worth ${{ hammerHoleValue(activeHole) }}
               <span v-if="hammerGame.config.fuHammer && canThrowHammer"> — F-U available</span>
             </div>
             <button v-if="hammerGame.config.fuHammer && canThrowHammer" class="aloha-btn" @click="throwHammer">F-U 🔨</button>
@@ -799,7 +799,7 @@
           <button class="finish-btn finish-btn-lg" @click="showFinishReview = true">Review & Finish Round</button>
         </div>
 
-        <\!-- BBB Strip — BINGO/BANGO/BONGO sequential unlock -->
+        <!-- BBB Strip — BINGO/BANGO/BONGO sequential unlock -->
         <div v-if="bbbGame" class="bbb-strip">
           <div class="bbb-strip-header">
             <span class="bbb-strip-title">🏌️ BBB — Hole {{ activeHole }}</span>
@@ -810,7 +810,7 @@
             >Sweep ⚡</button>
           </div>
           <div class="bbb-row">
-            <\!-- BINGO: first on green -->
+            <!-- BINGO: first on green -->
             <div class="bbb-point" :class="{ assigned: bbbHoleAward(activeHole).bingo }">
               <div class="bbb-point-label">B1 BINGO</div>
               <div class="bbb-point-sub">First on green</div>
@@ -824,8 +824,8 @@
                 >{{ m.short_name || m.name }}</button>
               </div>
             </div>
-            <\!-- BANGO: closest once all on green -->
-            <div class="bbb-point" :class="{ assigned: bbbHoleAward(activeHole).bango, locked: \!bbbHoleAward(activeHole).bingo }">
+            <!-- BANGO: closest once all on green -->
+            <div class="bbb-point" :class="{ assigned: bbbHoleAward(activeHole).bango, locked: !bbbHoleAward(activeHole).bingo }">
               <div class="bbb-point-label">B2 BANGO</div>
               <div class="bbb-point-sub">Closest to pin</div>
               <div class="bbb-player-row">
@@ -834,13 +834,13 @@
                   :key="m.id"
                   class="bbb-player-btn"
                   :class="{ active: bbbHoleAward(activeHole).bango === m.id }"
-                  :disabled="\!bbbHoleAward(activeHole).bingo"
+                  :disabled="!bbbHoleAward(activeHole).bingo"
                   @click="setBbbPoint(activeHole, 'bango', m.id)"
                 >{{ m.short_name || m.name }}</button>
               </div>
             </div>
-            <\!-- BONGO: first to hole out -->
-            <div class="bbb-point" :class="{ assigned: bbbHoleAward(activeHole).bongo, locked: \!bbbHoleAward(activeHole).bango }">
+            <!-- BONGO: first to hole out -->
+            <div class="bbb-point" :class="{ assigned: bbbHoleAward(activeHole).bongo, locked: !bbbHoleAward(activeHole).bango }">
               <div class="bbb-point-label">B3 BONGO</div>
               <div class="bbb-point-sub">First to hole out</div>
               <div class="bbb-player-row">
@@ -849,7 +849,7 @@
                   :key="m.id"
                   class="bbb-player-btn"
                   :class="{ active: bbbHoleAward(activeHole).bongo === m.id }"
-                  :disabled="\!bbbHoleAward(activeHole).bango"
+                  :disabled="!bbbHoleAward(activeHole).bango"
                   @click="setBbbPoint(activeHole, 'bongo', m.id, true)"
                 >{{ m.short_name || m.name }}</button>
               </div>
@@ -857,12 +857,12 @@
           </div>
         </div>
 
-        <\!-- Junk Sheet button — only when dots/junk game is active -->
+        <!-- Junk Sheet button — only when dots/junk game is active -->
         <div v-if="dotsGame" class="junk-sheet-trigger">
           <button class="junk-sheet-btn" @click="openJunkSheet(activeHole)">🎯 Log Junk — H{{ activeHole }}</button>
         </div>
 
-        <\!-- Junk Sheet bottom sheet -->
+        <!-- Junk Sheet bottom sheet -->
         <div v-if="showJunkSheet" class="junk-sheet-backdrop" @click.self="showJunkSheet = false">
           <div class="junk-sheet">
             <div class="junk-sheet-header">
@@ -883,8 +883,8 @@
                     :key="m.id"
                     class="junk-player-btn"
                     :class="{ active: isJunkMarked(m.id, junkSheetHole, junkType.key), 'auto-marked': junkType.auto && isJunkMarked(m.id, junkSheetHole, junkType.key) }"
-                    :disabled="junkType.par3Only && parForHole(junkSheetHole) \!== 3"
-                    @click="\!junkType.auto && toggleJunk(m.id, junkSheetHole, junkType.key)"
+                    :disabled="junkType.par3Only && parForHole(junkSheetHole) !== 3"
+                    @click="!junkType.auto && toggleJunk(m.id, junkSheetHole, junkType.key)"
                   >{{ m.short_name || m.name }}</button>
                 </div>
               </div>
@@ -1248,7 +1248,7 @@ const hammerGame = computed(() => {
 
 function myHammerTeam(game) {
   const myId = roundsStore.activeMembers.find(m => m.profile_id === authStore.user?.id)?.id
-  if (\!myId) return null
+  if (!myId) return null
   if ((game.config?.team1 || []).includes(myId)) return 't1'
   if ((game.config?.team2 || []).includes(myId)) return 't2'
   return null
@@ -1261,7 +1261,7 @@ function hammerHoleLog(hole) {
 
 function hammerHoleValue(hole) {
   const game = hammerGame.value
-  if (\!game) return 0
+  if (!game) return 0
   const log = hammerHoleLog(hole)
   const ppt = game.config?.ppt || 1
   return ppt * Math.pow(2, log.throws)
@@ -1269,14 +1269,14 @@ function hammerHoleValue(hole) {
 
 const canThrowHammer = computed(() => {
   const game = hammerGame.value
-  if (\!game) return false
+  if (!game) return false
   const myTeam = myHammerTeam(game)
-  if (\!myTeam) return true // spectator: allow
+  if (!myTeam) return true // spectator: allow
   const log = hammerHoleLog(activeHole.value)
   if (log.conceded) return false
   if (log.status === 'pending') {
     // F-U: receiver can counter-hammer if fuHammer is on and they just received
-    return game.config?.fuHammer && log.holder \!== myTeam
+    return game.config?.fuHammer && log.holder !== myTeam
   }
   // Normal: either team can throw (any time) — holder alternates with each throw
   return log.holder === myTeam || log.throws === 0
@@ -1284,7 +1284,7 @@ const canThrowHammer = computed(() => {
 
 const hammerHolderName = computed(() => {
   const game = hammerGame.value
-  if (\!game) return ''
+  if (!game) return ''
   const log = hammerHoleLog(activeHole.value)
   const holderTeam = log.holder || 't1'
   const ids = holderTeam === 't1' ? (game.config?.team1 || []) : (game.config?.team2 || [])
@@ -1296,7 +1296,7 @@ const hammerHolderName = computed(() => {
 
 async function throwHammer() {
   const game = hammerGame.value
-  if (\!game) return
+  if (!game) return
   const hole = activeHole.value
   const log = hammerHoleLog(hole)
   const myTeam = myHammerTeam(game)
@@ -1317,7 +1317,7 @@ async function throwHammer() {
 
 async function respondHammer(accept) {
   const game = hammerGame.value
-  if (\!game) return
+  if (!game) return
   const hole = activeHole.value
   const log = hammerHoleLog(hole)
   if (accept) {
@@ -1348,7 +1348,7 @@ function bbbHoleAward(hole) {
 
 async function setBbbPoint(hole, point, memberId, checkBirdie = false) {
   const game = bbbGame.value
-  if (\!game) return
+  if (!game) return
   const awards = { ...(game.config?.awards || {}) }
   const current = { ...(awards[hole] || {}) }
   // Toggle: clicking same player clears the point
@@ -1363,7 +1363,7 @@ async function setBbbPoint(hole, point, memberId, checkBirdie = false) {
     if (point === 'bongo' && checkBirdie && game.config?.doubleBongo) {
       const gross = getScore(memberId, hole)
       const par = parForHole(hole)
-      current.bongoBirdied = gross \!= null && gross <= par - 1
+      current.bongoBirdied = gross != null && gross <= par - 1
     }
   }
   awards[hole] = current
@@ -1373,10 +1373,10 @@ async function setBbbPoint(hole, point, memberId, checkBirdie = false) {
 async function setBbbSweep(hole) {
   // Quick-assign all 3 points to first player who has bingo
   const game = bbbGame.value
-  if (\!game) return
+  if (!game) return
   const award = bbbHoleAward(hole)
   const sweeper = award.bingo
-  if (\!sweeper) return
+  if (!sweeper) return
   const awards = { ...(game.config?.awards || {}) }
   awards[hole] = { bingo: sweeper, bango: sweeper, bongo: sweeper }
   await roundsStore.updateGameConfig(game.id, { ...game.config, awards })
@@ -1409,7 +1409,7 @@ const AUTO_JUNK_TYPES = [
 
 const activeJunkTypes = computed(() => {
   const cfg = dotsGame.value?.config || {}
-  const auto = AUTO_JUNK_TYPES.filter(t => cfg[t.configKey] \!== false)
+  const auto = AUTO_JUNK_TYPES.filter(t => cfg[t.configKey] !== false)
   const manual = JUNK_TYPE_DEFS.filter(t => cfg[t.configKey])
   return [...auto, ...manual]
 })
@@ -1419,22 +1419,22 @@ function isJunkMarked(memberId, hole, type) {
   // For auto types (birdie/eagle), check from score
   if (type === 'birdie' || type === 'eagle') {
     const ctx = buildCtx()
-    if (\!ctx) return false
+    if (!ctx) return false
     const m = roundsStore.activeMembers.find(x => x.id === memberId)
-    if (\!m) return false
+    if (!m) return false
     const gross = getScore(memberId, hole)
-    if (\!gross) return false
+    if (!gross) return false
     const par2 = parForHole(hole)
-    if (type === 'eagle') return gross \!= null && gross <= par2 - 2
-    if (type === 'birdie') return gross \!= null && gross === par2 - 1
+    if (type === 'eagle') return gross != null && gross <= par2 - 2
+    if (type === 'birdie') return gross != null && gross === par2 - 1
     return false
   }
-  return \!\!manual[`${memberId}-${hole}-${type}`]
+  return !!manual[`${memberId}-${hole}-${type}`]
 }
 
 async function toggleJunk(memberId, hole, type) {
   const game = dotsGame.value
-  if (\!game) return
+  if (!game) return
   const manual = { ...(game.config?.manual || {}) }
   const key = `${memberId}-${hole}-${type}`
   if (manual[key]) {

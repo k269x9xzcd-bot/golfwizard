@@ -164,7 +164,7 @@ export function computeSkins(ctx, config) {
     if (winners.length === 1) {
       holeResults.push({ hole: h, winner: winners[0].id, winnerName: winners[0].name, pot: potValue, net: min })
       pot = 0
-      potValue = (back9Multiplier && h >= 9 && h < to) ? ppt * 2 : ppt  // next hole value
+      potValue = (back9Multiplier && h >= 10 && h < to) ? ppt * 2 : ppt  // next hole value
     } else {
       // Tie
       if (h === to && lastHoleTie === 'split' && winners.length > 0) {
@@ -178,7 +178,7 @@ export function computeSkins(ctx, config) {
         // Dead skins — pot doesn't carry
         holeResults.push({ hole: h, winner: null, pot: holeVal, reason: 'dead', tied: winners.map(w => w.id) })
         pot = 0
-        potValue = (back9Multiplier && h >= 9 && h < to) ? ppt * 2 : ppt
+        potValue = (back9Multiplier && h >= 10 && h < to) ? ppt * 2 : ppt
       }
     }
   }
@@ -1580,9 +1580,9 @@ export function computeBbb(ctx, config) {
 
   for (const holeKey of Object.keys(awards)) {
     const h = awards[holeKey]
-    if (h.bingo && pts[h.bingo] \!== undefined) pts[h.bingo]++
-    if (h.bango && pts[h.bango] \!== undefined) pts[h.bango]++
-    if (h.bongo && pts[h.bongo] \!== undefined) {
+    if (h.bingo && pts[h.bingo] !== undefined) pts[h.bingo]++
+    if (h.bango && pts[h.bango] !== undefined) pts[h.bango]++
+    if (h.bongo && pts[h.bongo] !== undefined) {
       const bongoPts = (doubleBongo && h.bongoBirdied) ? 2 : 1
       pts[h.bongo] += bongoPts
     }
@@ -1594,7 +1594,7 @@ export function computeBbb(ctx, config) {
   for (let i = 0; i < ids.length; i++) {
     for (let j = i + 1; j < ids.length; j++) {
       const diff = pts[ids[i]] - pts[ids[j]]
-      if (diff \!== 0) {
+      if (diff !== 0) {
         const winner = diff > 0 ? ids[i] : ids[j]
         const loser  = diff > 0 ? ids[j] : ids[i]
         const wm = members.find(m => m.id === winner)

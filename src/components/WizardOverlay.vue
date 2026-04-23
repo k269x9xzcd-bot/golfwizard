@@ -298,13 +298,13 @@
             v-for="g in MAIN_GAMES"
             :key="g.key"
             class="game-type-btn"
-            :class="{ selected: mainGame.type === g.key, 'game-type-btn--disabled': g.key === 'fiveThreeOne' && (props.lockedPlayers ?? form.players).length !== 3 }"
-            :disabled="g.key === 'fiveThreeOne' && (props.lockedPlayers ?? form.players).length !== 3"
-            :title="g.key === 'fiveThreeOne' && (props.lockedPlayers ?? form.players).length !== 3 ? '5-3-1 requires exactly 3 players' : ''"
+            :class="{ selected: mainGame.type === g.key, 'game-type-btn--disabled': g.key === 'nines' && (props.lockedPlayers ?? form.players).length !== 3 }"
+            :disabled="g.key === 'nines' && (props.lockedPlayers ?? form.players).length !== 3"
+            :title="g.key === 'nines' && (props.lockedPlayers ?? form.players).length !== 3 ? '9s requires exactly 3 players' : ''"
             @click="setMainGame(g.key)"
           >
             <span class="gtb-icon">{{ g.icon }}</span>
-            <span class="gtb-label">{{ g.label }}<span v-if="g.key === 'fiveThreeOne' && (props.lockedPlayers ?? form.players).length !== 3" style="font-size:9px;display:block;opacity:.6;">3 players only</span></span>
+            <span class="gtb-label">{{ g.label }}<span v-if="g.key === 'nines' && (props.lockedPlayers ?? form.players).length !== 3" style="font-size:9px;display:block;opacity:.6;">3 players only</span></span>
             <button class="btn-game-info btn-game-info-grid" @click.stop="toggleGameInfo(g.key)" title="How to play" v-if="g.key !== 'none'">ℹ️</button>
           </button>
         </div>
@@ -467,8 +467,21 @@
               <label>$ per point</label>
               <input v-model.number="mainGame.config.ppt" type="number" min="1" class="config-input" placeholder="1" />
             </div>
+            <div class="config-field">
+              <label>Variant</label>
+              <select v-model="mainGame.config.variant" class="config-select">
+                <option value="standard">Standard</option>
+                <option value="modified">Modified</option>
+              </select>
+            </div>
           </div>
-          <div class="config-note">Eagle +3, Birdie +2, Par +1, Bogey 0, Double −1. All {{ form.players.length }} players compete.</div>
+          <div class="stableford-pts-preview">
+            <div class="spp-row" v-for="item in stablefordPtsPreview" :key="item.label">
+              <span class="spp-label">{{ item.label }}</span>
+              <span class="spp-pts" :class="item.pts > 0 ? 'spp-plus' : item.pts < 0 ? 'spp-neg' : 'spp-zero'">{{ item.pts > 0 ? '+' : '' }}{{ item.pts }}</span>
+            </div>
+          </div>
+          <div class="config-note">All {{ form.players.length }} players compete. Settle pairwise on pt difference.</div>
         </div>
 
         <!-- Wolf config -->
@@ -481,9 +494,19 @@
             <div class="config-field">
               <label>Lone Wolf multiplier</label>
               <select v-model.number="mainGame.config.wolfLoneMultiplier" class="config-select">
-                <option :value="1">1×</option>
                 <option :value="2">2×</option>
                 <option :value="3">3×</option>
+                <option :value="4">4× (default)</option>
+                <option :value="5">5×</option>
+              </select>
+            </div>
+            <div class="config-field">
+              <label>Blind Wolf multiplier</label>
+              <select v-model.number="mainGame.config.blindWolfMultiplier" class="config-select">
+                <option :value="4">4×</option>
+                <option :value="6">6×</option>
+                <option :value="8">8× (default)</option>
+                <option :value="10">10×</option>
               </select>
             </div>
           </div>
@@ -522,11 +545,11 @@
           <div class="wolf-options">
             <label class="wolf-option-toggle" @click="mainGame.config.blindWolfEnabled = !mainGame.config.blindWolfEnabled">
               <span class="wolf-toggle" :class="{ on: mainGame.config.blindWolfEnabled !== false }"></span>
-              <span>🙈 Blind Wolf (declare before tee shots, 2× stakes)</span>
+              <span>🙈 Blind Wolf (declare before tee shots)</span>
             </label>
-            <label class="wolf-option-toggle" @click="mainGame.config.lastPlaceWolf = !mainGame.config.lastPlaceWolf">
-              <span class="wolf-toggle" :class="{ on: mainGame.config.lastPlaceWolf }"></span>
-              <span>📉 Last Place Wolf (holes 17-18: trailing player picks)</span>
+            <label class="wolf-option-toggle" @click="mainGame.config.wolfTeesFirst = !mainGame.config.wolfTeesFirst">
+              <span class="wolf-toggle" :class="{ on: mainGame.config.wolfTeesFirst !== false }"></span>
+              <span>🏌️ Wolf tees FIRST (watches others, picks after each shot)</span>
             </label>
           </div>
         </div>
@@ -556,12 +579,19 @@
               <label>$ per point</label>
               <input v-model.number="mainGame.config.ppt" type="number" min="1" class="config-input" placeholder="1" />
             </div>
+            <div class="config-field">
+              <label>Scoring model</label>
+              <select v-model="mainGame.config.scoringModel" class="config-select">
+                <option value="segment">Segment match (6/3/0 pts)</option>
+                <option value="perhole">Per hole (win 4, loss 2, tie 3)</option>
+              </select>
+            </div>
           </div>
-          <div class="config-note">Teams rotate every 6 holes. 6 pts per hole split among winners.</div>
+          <div class="config-note">Teams rotate every 6 holes. Segment: win most holes in set = 6pts. Per-hole: each hole pays 4/2.</div>
         </div>
 
-        <!-- 5-3-1 config -->
-        <div v-if="mainGame.type === 'fiveThreeOne'" class="game-config-card">
+        <!-- 9s config -->
+        <div v-if="mainGame.type === 'nines'" class="game-config-card">
           <div class="config-row">
             <div class="config-field">
               <label>$ per point</label>
@@ -592,7 +622,16 @@
               <input v-model.number="mainGame.config.birdieBonusPts" type="number" min="1" max="3" class="config-input config-input--sm" />
             </div>
           </div>
-          <div class="config-note">Best net gets 5, second gets 3, third gets 1, worst gets 0. All {{ form.players.length }} players compete.</div>
+          <div class="config-row config-row--toggles">
+            <div class="config-toggle-row">
+              <label class="toggle-label">
+                <input type="checkbox" v-model="mainGame.config.birdieDouble" />
+                <span>🔥 Birdie double</span>
+              </label>
+              <span class="toggle-desc">Net birdie doubles pts that hole (5→10, 3→6, 1→2)</span>
+            </div>
+          </div>
+          <div class="config-note">3 players. Best net = 5pts, second = 3pts, third = 1pt. Settle pairwise.</div>
         </div>
 
         <!-- No main game -->
@@ -714,7 +753,7 @@
             </div>
           </div>
 
-          <\!-- BBB (Bingo Bango Bongo) -->
+          <!-- BBB (Bingo Bango Bongo) -->
           <div class="side-game-row" :class="{ 'side-game-on': sideGames.bbb.enabled }">
             <div class="side-game-header" @click="toggleSideGame('bbb')">
               <span>🏌️ BBB (Bingo Bango Bongo)</span>
@@ -1310,6 +1349,23 @@ function getGameDef(key) {
   const keyMap = { hilow: 'hilow', nines: 'nines', fiveThreeOne: 'nines', bestball: 'bestball', match1: 'match1v1', match2: 'match1v1' }
   return GAME_DEFS[keyMap[key] || key] || null
 }
+
+const STABLEFORD_VARIANTS = {
+  standard: { eagle: 4, birdie: 3, par: 2, bogey: 1, double: 0 },
+  modified:  { eagle: 3, birdie: 2, par: 1, bogey: 0, double: -1 },
+}
+const stablefordPtsPreview = computed(() => {
+  const v = mainGame.config?.variant || 'standard'
+  const pts = STABLEFORD_VARIANTS[v] || STABLEFORD_VARIANTS.standard
+  return [
+    { label: 'Eagle+', pts: pts.eagle },
+    { label: 'Birdie', pts: pts.birdie },
+    { label: 'Par',    pts: pts.par },
+    { label: 'Bogey',  pts: pts.bogey },
+    { label: 'Dbl+',   pts: pts.double },
+  ]
+})
+
 
 const sideGames = ref({
   skins:  { enabled: false, ppt: 5, carry: true },
@@ -1932,6 +1988,7 @@ function buildGameConfigs() {
     games.push({ type: 'bbb', config: {
       ppt: sg.bbb.ppt,
       doubleBongo: sg.bbb.doubleBongo,
+      players: form.value.players.map(p => p.id),
     }})
   }
 
@@ -2440,4 +2497,23 @@ function reloadApp() {
   text-align: center;
   line-height: 1.4;
 }
+</style>
+<style scoped>
+/* ── Stableford pts preview ─────────────────── */
+.stableford-pts-preview {
+  display: flex; flex-direction: row; gap: 4px;
+  margin: 8px 0 4px;
+  background: rgba(255,255,255,.04);
+  border-radius: 10px; padding: 8px 10px;
+  flex-wrap: wrap;
+}
+.spp-row {
+  display: flex; flex-direction: column; align-items: center;
+  flex: 1; min-width: 36px;
+}
+.spp-label { font-size: 10px; color: var(--gw-text-muted); margin-bottom: 2px; }
+.spp-pts   { font-size: 15px; font-weight: 700; }
+.spp-plus  { color: #4ade80; }
+.spp-zero  { color: var(--gw-text-muted); }
+.spp-neg   { color: #f87171; }
 </style>

@@ -471,7 +471,6 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
           }
         } catch(e) { /* skip */ }
       }
-    }
 
       // ── BBB ──
       if (t === 'bbb') {
@@ -495,7 +494,7 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
           })
         } catch(e) { /* skip */ }
       }
-
+    }
     return rows
   })
 
