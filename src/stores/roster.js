@@ -136,6 +136,9 @@ export const useRosterStore = defineStore('roster', () => {
     }
     const row = { ...player, owner_id: auth.user.id }
     let data, error
+    // Note: ghin_number (7-digit USGA ID) is distinct from ghin_index (handicap float).
+    // PlayersView currently only sets ghin_index, so ghin_number is always undefined here
+    // and we always use insert. The upsert branch is reserved for GHIN-synced players.
     if (row.ghin_number) {
       // Upsert on ghin_number only when a real GHIN exists (NULL cannot match a unique constraint)
       ;({ data, error } = await supabase

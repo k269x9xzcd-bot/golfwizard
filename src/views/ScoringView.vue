@@ -1556,6 +1556,8 @@ async function saveOppEditor() {
 }
 const showNotations = ref(true)   // per-score-cell shapes (birdie circle, bogey box, etc.)
 const showGameRows = ref(true)    // game-outcome tfoot rows (Nassau status, match L/W/½, etc.)
+// IMPORTANT: always replace the Set (new Set()) rather than mutating in place;
+// Vue 3 ref does not track Set.add/delete mutations, only top-level assignment.
 const expandedNotationRows = ref(new Set())
 function toggleNotationRow(ri) {
   const s = new Set(expandedNotationRows.value)
