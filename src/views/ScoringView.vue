@@ -1874,6 +1874,9 @@ async function doSimulateFill() {
 }
 
 async function simulateFill() {
+  // Wipe stale hole-by-hole game state before generating fresh simulated choices
+  await clearGameState()
+
   const members = roundsStore.activeMembers
   const games = roundsStore.activeGames
   const course = courseData.value
@@ -1899,12 +1902,38 @@ async function simulateFill() {
   }
 }
 
-function resetScores() {
+// Per-game keys that hold hole-by-hole state (not setup config).
+// Cleared on reset and before simulate so stale state never bleeds through.
+const GAME_HOLE_STATE_KEYS = {
+  wolf:   ['wolfChoices'],
+  snake:  ['events'],
+  dots:   ['manual'],
+  bbb:    ['awards'],
+  hammer: ['hammerLog'],
+}
+
+async function clearGameState() {
+  const calls = []
+  for (const game of roundsStore.activeGames) {
+    const t = game.type?.toLowerCase()
+    const keys = GAME_HOLE_STATE_KEYS[t]
+    if (!keys) continue
+    const cfg = { ...game.config }
+    let changed = false
+    for (const k of keys) {
+      if (k in cfg) { delete cfg[k]; changed = true }
+    }
+    if (changed) calls.push(roundsStore.updateGameConfig(game.id, cfg))
+  }
+  await Promise.all(calls)
+}
+
+async function resetScores() {
   if (!confirm('Reset all scores? This cannot be undone.')) return
-  // Clear all scores from local reactive state
   for (const memberId of Object.keys(roundsStore.activeScores)) {
     roundsStore.activeScores[memberId] = {}
   }
+  await clearGameState()
 }
 
 
