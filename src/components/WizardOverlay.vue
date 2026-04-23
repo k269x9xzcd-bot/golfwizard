@@ -581,6 +581,8 @@
                 <option :value="5">5×</option>
               </select>
             </div>
+          </div>
+          <div class="config-row">
             <div class="config-field">
               <label>Blind Wolf multiplier</label>
               <select v-model.number="mainGame.config.blindWolfMultiplier" class="config-select">
