@@ -355,8 +355,20 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         if (!r) return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Wolf</span></div>`
         const ppt = cfg.ppt || 1
 
-        // Last name (last word) of a member's display name — compact for tight spaces
-        function lastN(m) { const d = memberDisplay(m); return d ? d.split(' ').slice(-1)[0] : '?' }
+        // 3-char last-name abbreviation for compact per-hole chips
+        function abbN(m) {
+          const d = memberDisplay(m)
+          if (!d || d === '?') return '?'
+          const last = d.split(' ').filter(Boolean).slice(-1)[0]
+          return last.length > 4 ? last.slice(0, 3) : last
+        }
+        // "F.LastName" for standings line
+        function initLastN(m) {
+          const d = memberDisplay(m)
+          if (!d || d === '?') return '?'
+          const parts = d.split(' ').filter(Boolean)
+          return parts.length === 1 ? parts[0] : `${parts[0][0]}.${parts[parts.length - 1]}`
+        }
 
         // Build wolf-team and field-team labels for a completed hole
         function holeTeams(hr) {
@@ -368,10 +380,10 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
             if (!hr.isLone && !hr.isBlind && m.id === hr.partner) return false
             return true
           })
-          const wolfLabel = hr.isBlind ? `🙈${lastN(wolfM)}`
-            : hr.isLone ? `🐺${lastN(wolfM)} Lone`
-            : `🐺${[wolfM, partnerM].filter(Boolean).map(lastN).join('+')}`
-          const fieldLabel = fieldMs.map(lastN).join('+')
+          const wolfLabel = hr.isBlind ? `🙈${abbN(wolfM)}`
+            : hr.isLone ? `🐺${abbN(wolfM)} Lone`
+            : `🐺${[wolfM, partnerM].filter(Boolean).map(abbN).join('+')}`
+          const fieldLabel = fieldMs.map(abbN).join('+')
           return { wolfLabel, fieldLabel }
         }
 
@@ -398,8 +410,13 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
           holesHtml = `<div style="margin-top:4px;max-height:90px;overflow-y:auto">${items}</div>`
         }
 
-        // Standings
-        const standings = r.settlements?.map(s => `${s.name}: <span style="color:${(s.net||0) > 0 ? '#4ade80' : (s.net||0) < 0 ? '#f87171' : '#d4af37'};font-weight:700">${(s.net||0) > 0 ? '+' : ''}$${Math.abs(s.net||0)}</span>`).join(' · ') || ''
+        // Standings — "F.LastName: ±$N" format
+        const standings = r.settlements?.map(s => {
+          const m = ctx.members.find(x => x.id === s.id)
+          const label = m ? initLastN(m) : (s.name || '?')
+          const color = (s.net||0) > 0 ? '#4ade80' : (s.net||0) < 0 ? '#f87171' : '#d4af37'
+          return `${label}: <span style="color:${color};font-weight:700">${(s.net||0) > 0 ? '+' : ''}$${Math.abs(s.net||0)}</span>`
+        }).join(' · ') || ''
 
         return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Wolf</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppt}/pt</span>${nextWolfHtml}${holesHtml}${standings ? `<div style="font-size:11px;margin-top:3px">${standings}</div>` : ''}</div>`
       }
