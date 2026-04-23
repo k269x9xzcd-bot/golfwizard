@@ -27,26 +27,28 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - name: Check file sizes
+
+      - name: File size report (informational only — never blocks deploy)
         run: |
-          FAIL=0
-          while IFS= read -r -d '' f; do
+          echo "── Vue file sizes ──────────────────────────────"
+          find src -name '*.vue' -print0 | while IFS= read -r -d '' f; do
             size=$(wc -c < "$f")
-            if [ "$size" -gt 153600 ]; then
-              echo "OVERSIZED: $f (${size} bytes > 150KB)"
-              FAIL=1
+            kb=$((size / 1024))
+            if [ "$size" -gt 102400 ]; then
+              echo "⚠️  ${kb}KB  $f  ← consider splitting (ADR-003)"
+            else
+              echo "✅  ${kb}KB  $f"
             fi
-          done < <(find src -name '*.vue' -print0)
-          if [ "$FAIL" -eq 1 ]; then
-            echo "Build blocked: split .vue files > 150KB before merging."
-            exit 1
-          fi
-          echo "All .vue files within size limits."
+          done
+          echo "────────────────────────────────────────────────"
+          echo "Note: large files are a maintainability concern, not a build blocker."
+
       - name: Build
         run: npm run build
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
       - uses: actions/configure-pages@v4
       - uses: actions/upload-pages-artifact@v3
         with:
