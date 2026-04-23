@@ -1015,7 +1015,7 @@ const {
 // ── Composable: live settlements ──────────────────────────────────
 const {
   liveSettlements, gameSummaryHtml,
-} = useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitialsStr, pInit, memberDisplay, visibleHoles })
+} = useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitialsStr, pInit, memberDisplay, visibleHoles, rosterPlayers: computed(() => rosterStore.players) })
 
 
 const showRetroScore = ref(false)
@@ -2031,10 +2031,17 @@ async function undoLastSnake() {
 // ── Wolf helpers ─────────────────────────────────────────────────
 const wolfGame = computed(() => roundsStore.activeGames.find(g => g.type?.toLowerCase() === 'wolf') || null)
 
-// "F.LastName" — prefers guest_name/name (full name) over the display nickname.
+// "F.LastName" — uses guest_name (non-profile) or roster lookup (profile-linked).
 function fLastName(m) {
   if (!m) return '?'
-  const full = (m.guest_name || m.name || '').trim()
+  let full = (m.guest_name || m.name || '').trim()
+  if (!full && m.profile_id) {
+    const rp = rosterStore.players?.find(p =>
+      (m.nickname && p.nickname === m.nickname) ||
+      (m.short_name && p.short_name === m.short_name)
+    )
+    full = (rp?.name || '').trim()
+  }
   const parts = full.split(/\s+/).filter(Boolean)
   const src = parts.length >= 2 ? parts : (memberDisplay(m) || '?').split(' ').filter(Boolean)
   if (!src.length || src[0] === '?') return '?'

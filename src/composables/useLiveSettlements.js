@@ -14,7 +14,7 @@ import {
   computeFiveThreeOne, computeDots, computeFidget, computeBestBallNet, computeBestBall, computeBbb,
 } from '../modules/gameEngine'
 
-export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitialsStr, pInit, memberDisplay, visibleHoles }) {
+export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitialsStr, pInit, memberDisplay, visibleHoles, rosterPlayers }) {
   const roundsStore = useRoundsStore()
 
   const liveSettlements = computed(() => {
@@ -355,12 +355,21 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         if (!r) return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Wolf</span></div>`
         const ppt = cfg.ppt || 1
 
-        // Use full name (guest_name or name field) for formatting; fall back to display name
+        // Resolve full name parts; for profile-linked members, look up roster by nickname
         function fullNameParts(m) {
           const full = (m?.guest_name || m?.name || '').trim()
           const parts = full.split(/\s+/).filter(Boolean)
           if (parts.length >= 2) return parts
-          // fallback: display name (nickname or guest_name)
+          // Profile-linked members have no guest_name — try roster lookup by nickname
+          if (m?.profile_id) {
+            const roster = typeof rosterPlayers === 'function' ? rosterPlayers() : rosterPlayers?.value
+            const rp = roster?.find(p =>
+              (m.nickname && p.nickname === m.nickname) ||
+              (m.short_name && p.short_name === m.short_name)
+            )
+            const rf = (rp?.name || '').trim()
+            if (rf) return rf.split(/\s+/).filter(Boolean)
+          }
           const d = memberDisplay(m)
           return (d && d !== '?') ? d.split(' ').filter(Boolean) : ['?']
         }
