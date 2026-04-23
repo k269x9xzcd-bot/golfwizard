@@ -258,10 +258,33 @@
         </div>
 
         <!-- Quick add guest -->
-        <div class="quick-add-row">
-          <input v-model="newName" class="wiz-input" placeholder="Add guest name…" @keydown.enter="quickAddPlayer" />
-          <input v-model="newHcp" class="wiz-input wiz-input-sm" placeholder="HCP" type="number" step="0.1" />
-          <button class="btn-ghost btn-sm" @click="quickAddPlayer">Add</button>
+        <div class="quick-add-section">
+          <div class="quick-add-name-row">
+            <input v-model="newFirst" class="wiz-input" placeholder="First name"
+              @keydown.enter="wizSearchPlayer" />
+            <input v-model="newLast" class="wiz-input" placeholder="Last name (required)"
+              @keydown.enter="wizSearchPlayer"
+              @blur="newLast.trim().length >= 2 && wizSearchPlayer()" />
+            <button class="btn-ghost btn-sm wiz-search-btn" @click="wizSearchPlayer" :disabled="wizSearching">
+              {{ wizSearching ? "…" : "🔍 Search" }}
+            </button>
+          </div>
+          <div v-if="wizSearchResults.length" class="wiz-search-results">
+            <div v-for="r in wizSearchResults" :key="r.ghin_number || r.full_name"
+                 class="wiz-search-option" @click="wizApplyResult(r)">
+              <div class="wiz-search-name">{{ r.full_name }}
+                <span v-if="r._source === 'bb'" class="bb-badge">BB</span>
+              </div>
+              <div class="wiz-search-meta">{{ r.club_name || "External" }} · idx {{ r.handicap_index ?? "NH" }}</div>
+            </div>
+          </div>
+          <div v-if="wizSearchMsg" class="wiz-search-msg" :class="{ 'wiz-search-msg--ok': wizSearchResults.length > 0 }">{{ wizSearchMsg }}</div>
+          <div class="quick-add-hcp-row">
+            <input v-model="newHcp" class="wiz-input" placeholder="Index (e.g. 9.1)" type="number" step="0.1" />
+            <span class="quick-add-or">or</span>
+            <input v-model="newStrokes" class="wiz-input" placeholder="Strokes (e.g. 11)" type="number" step="1" />
+            <button class="btn-primary btn-sm" @click="quickAddPlayer">Add</button>
+          </div>
         </div>
       </div>
 
@@ -1959,19 +1982,78 @@ function ghinDotTitle(syncedAt) {
   return `GHIN synced ${days} days ago`
 }
 
+// ── Wizard inline player search (step 2) ───────────────────────
+const newFirst = ref('')
+const newLast = ref('')
+const newStrokes = ref('')
+const wizSearching = ref(false)
+const wizSearchResults = ref([])
+const wizSearchMsg = ref('')
+
+async function wizSearchPlayer() {
+  const first = newFirst.value.trim()
+  const last = newLast.value.trim()
+  if (!last) { wizSearchMsg.value = 'Enter a last name to search'; return }
+  wizSearching.value = true
+  wizSearchResults.value = []
+  wizSearchMsg.value = ''
+  try {
+    const { supabase } = await import('../supabase')
+    const { data: bbRows } = await supabase
+      .from('bb_member_index')
+      .select('ghin_number, first_name, last_name, handicap_index')
+      .ilike('last_name', `%${last}%`)
+      .order('last_name').limit(15)
+    let filtered = bbRows || []
+    if (first && filtered.length > 0) {
+      const fl = first.toLowerCase()
+      const exact = filtered.filter(p => p.first_name?.toLowerCase().startsWith(fl))
+      if (exact.length > 0) filtered = exact
+    }
+    if (filtered.length > 0) {
+      wizSearchResults.value = filtered.map(bb => ({
+        ghin_number: bb.ghin_number,
+        full_name: `${bb.first_name} ${bb.last_name}`,
+        handicap_index: bb.handicap_index,
+        club_name: 'Bonnie Briar Country Club',
+        _source: 'bb',
+      }))
+      wizSearchMsg.value = `${filtered.length} match${filtered.length > 1 ? 'es' : ''} found — tap to select`
+    } else {
+      wizSearchMsg.value = 'No matches found — enter HCP manually below'
+    }
+  } catch(e) {
+    wizSearchMsg.value = 'Search unavailable — enter HCP manually below'
+  } finally {
+    wizSearching.value = false
+  }
+}
+
+function wizApplyResult(r) {
+  const parts = (r.full_name || '').trim().split(' ')
+  newFirst.value = parts[0] || ''
+  newLast.value = parts.slice(1).join(' ') || ''
+  newHcp.value = r.handicap_index != null ? String(r.handicap_index) : ''
+  wizSearchResults.value = []
+  wizSearchMsg.value = `✓ ${r.full_name} — tap Add to confirm`
+}
+
 function quickAddPlayer() {
-  if (!newName.value.trim()) return
+  const first = newFirst.value.trim()
+  const last = newLast.value.trim()
+  const fullName = [first, last].filter(Boolean).join(' ') || newName.value.trim()
+  if (!fullName) return
   form.value.players.push({
     id: `guest_${Date.now()}`,
-    name: newName.value.trim(),
-    shortName: newName.value.trim().split(' ')[0].slice(0, 8),
+    name: fullName,
+    shortName: last || first.slice(0, 8),
     ghinIndex: newHcp.value ? parseFloat(newHcp.value) : null,
-    nickname: null,
-    use_nickname: false,
-    profileId: null,
+    stroke_override: newStrokes.value ? parseInt(newStrokes.value) : null,
+    nickname: null, use_nickname: false, profileId: null,
   })
-  newName.value = ''
-  newHcp.value = ''
+  newFirst.value = ''; newLast.value = ''
+  newHcp.value = ''; newStrokes.value = ''; newName.value = ''
+  wizSearchResults.value = []; wizSearchMsg.value = ''
 }
 
 // ── Opponent group ───────────────────────────────────────────────
@@ -2658,4 +2740,21 @@ function reloadApp() {
   line-height: 1.35;
   margin-left: 20px;
 }
+
+/* ── Wizard inline player search ───────── */
+.quick-add-section { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.quick-add-name-row { display: flex; gap: 6px; align-items: stretch; }
+.quick-add-name-row .wiz-input { flex: 1; min-width: 0; }
+.wiz-search-btn { flex-shrink: 0; white-space: nowrap; }
+.quick-add-hcp-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.quick-add-hcp-row .wiz-input { flex: 1; min-width: 80px; }
+.quick-add-or { font-size: 11px; color: var(--gw-text-muted); white-space: nowrap; flex-shrink: 0; }
+.wiz-search-results { background: rgba(255,255,255,.04); border: 1px solid rgba(212,175,55,.15); border-radius: 10px; overflow: hidden; }
+.wiz-search-option { padding: 10px 12px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,.05); }
+.wiz-search-option:last-child { border-bottom: none; }
+.wiz-search-option:active { background: rgba(212,175,55,.1); }
+.wiz-search-name { font-size: 14px; font-weight: 600; color: var(--gw-text); }
+.wiz-search-meta { font-size: 11px; color: var(--gw-text-muted); margin-top: 1px; }
+.wiz-search-msg { font-size: 12px; color: var(--gw-text-muted); padding: 2px 0; }
+.wiz-search-msg--ok { color: #4ade80; }
 </style>
