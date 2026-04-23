@@ -2133,7 +2133,10 @@ const wolfOnThisHole = computed(() => {
 
 const wolfOnThisHoleName = computed(() => {
   if (!wolfOnThisHole.value) return '?'
-  const m = roundsStore.activeMembers.find(m => m.id === wolfOnThisHole.value)
+  const wolfId = wolfOnThisHole.value
+  // Try round_member id first; fall back to profile_id for rounds created before the ID-remap fix
+  const m = roundsStore.activeMembers.find(m => m.id === wolfId)
+    || roundsStore.activeMembers.find(m => m.profile_id && m.profile_id === wolfId)
   return memberDisplay(m)
 })
 
@@ -2144,7 +2147,8 @@ const wolfChoiceForHole = computed(() => {
 
 const wolfPickableMembers = computed(() => {
   if (!wolfOnThisHole.value) return []
-  return roundsStore.activeMembers.filter(m => m.id !== wolfOnThisHole.value)
+  const wolfId = wolfOnThisHole.value
+  return roundsStore.activeMembers.filter(m => m.id !== wolfId && m.profile_id !== wolfId)
 })
 
 

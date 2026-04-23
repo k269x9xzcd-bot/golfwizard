@@ -327,6 +327,14 @@
 
               <!-- Wolf -->
               <template v-else-if="isGameType(game, 'wolf')">
+                <!-- Current wolf indicator -->
+                <div class="wolf-status-row">
+                  <span class="wolf-status-label">H{{ wolfCurrentHole(game) }} Wolf:</span>
+                  <span class="wolf-status-name">{{ wolfCurrentName(game) }}</span>
+                  <span v-if="wolfChoiceLabel(game, wolfCurrentHole(game))" class="wolf-status-choice">{{ wolfChoiceLabel(game, wolfCurrentHole(game)) }}</span>
+                  <span v-else class="wolf-status-pending">picking…</span>
+                </div>
+                <!-- Per-player standings -->
                 <div v-if="wolfResult(game)" class="individual-standings">
                   <div v-for="s in wolfResult(game).settlements" :key="s.id" class="standing-row">
                     <span class="standing-name">{{ s.name }}</span>
@@ -334,7 +342,18 @@
                       {{ formatBalance(s.net) }}
                     </span>
                   </div>
-                  <div class="game-note">Wolf choices needed in scoring view</div>
+                </div>
+                <!-- Recent hole results -->
+                <div v-if="wolfResult(game)?.holeResults?.length" class="wolf-hole-results">
+                  <div
+                    v-for="hr in wolfResult(game).holeResults.filter(h => !h.incomplete).slice(-4)"
+                    :key="hr.hole"
+                    class="wolf-hole-chip"
+                    :class="hr.winner === 'wolf' ? 'chip-wolf' : hr.winner === 'field' ? 'chip-field' : 'chip-push'"
+                  >
+                    <span class="chip-hole">H{{ hr.hole }}</span>
+                    <span class="chip-result">{{ hr.isBlind ? '🙈' : hr.isLone ? '🐺' : `+${hr.partnerName?.slice(0,3) ?? '?'}` }}{{ hr.winner === 'wolf' ? '✓' : hr.winner === 'field' ? '✗' : '=' }}</span>
+                  </div>
                 </div>
               </template>
 
@@ -748,6 +767,46 @@ function stablefordSettlement(game, playerId) {
 function wolfResult(game) {
   if (!gameCtx.value || !gameCtx.value.course) return null
   return computeWolf(gameCtx.value, game.config) ?? null
+}
+
+function wolfCurrentHole(game) {
+  // The "active" hole is the next one not yet complete (holesPlayed + 1), min 1
+  const hp = holesPlayed.value
+  const mode = roundsStore.activeRound?.holes_mode || '18'
+  const from = mode === 'back9' ? 10 : 1
+  const to = mode === 'front9' ? 9 : 18
+  return Math.min(Math.max(from, hp + 1), to)
+}
+
+function wolfCurrentId(game) {
+  const members = roundsStore.activeMembers
+  if (!members.length) return null
+  const order = game.config?.wolfTeeOrder || []
+  const teeOrder = order.length >= members.length ? order : members.map(m => m.id)
+  const mode = roundsStore.activeRound?.holes_mode || '18'
+  const from = mode === 'back9' ? 10 : 1
+  const hole = wolfCurrentHole(game)
+  return teeOrder[(hole - from) % teeOrder.length] || null
+}
+
+function wolfCurrentName(game) {
+  const wolfId = wolfCurrentId(game)
+  if (!wolfId) return '?'
+  const members = roundsStore.activeMembers
+  const m = members.find(m => m.id === wolfId)
+    || members.find(m => m.profile_id && m.profile_id === wolfId)
+  return m?.short_name || m?.guest_name || '?'
+}
+
+function wolfChoiceLabel(game, hole) {
+  const choice = game.config?.wolfChoices?.[hole]
+  if (!choice) return null
+  if (choice.partner === 'lone') return '🐺 Lone'
+  if (choice.partner === 'blind') return '🙈 Blind'
+  const members = roundsStore.activeMembers
+  const partner = members.find(m => m.id === choice.partner)
+    || members.find(m => m.profile_id === choice.partner)
+  return partner ? `+${partner.short_name || partner.guest_name}` : '+?'
 }
 
 // Hammer
@@ -1541,6 +1600,44 @@ function balanceClass(val) {
   padding-top: 6px;
   font-style: italic;
 }
+
+/* ── Wolf card extras ─────────────────────────────────── */
+.wolf-status-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+.wolf-status-label { color: var(--gw-text-muted); font-size: 11px; }
+.wolf-status-name  { font-weight: 700; color: #c4b5fd; }
+.wolf-status-choice { font-size: 12px; background: rgba(139,92,246,.15); border-radius: 4px; padding: 1px 6px; }
+.wolf-status-pending { font-size: 11px; color: var(--gw-text-muted); font-style: italic; }
+
+.wolf-hole-results {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+}
+.wolf-hole-chip {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.chip-wolf  { background: rgba(34,197,94,.15);  color: #4ade80; }
+.chip-field { background: rgba(239,68,68,.15);   color: #f87171; }
+.chip-push  { background: rgba(255,255,255,.07); color: var(--gw-text-muted); }
+.chip-hole  { opacity: .65; }
+.chip-result { }
 
 .pairwise-settlement {
   margin-top: 8px;

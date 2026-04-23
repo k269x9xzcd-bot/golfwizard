@@ -641,8 +641,8 @@
                     v-for="(pid, oi) in [...mainGame.config.wolfTeeOrder.slice(1), mainGame.config.wolfTeeOrder[0]]"
                     :key="'ts-'+pid"
                     class="wolf-tee-shot-player"
-                    :class="{ 'wolf-tee-shot-wolf': oi === mainGame.config.wolfTeeOrder.length - 2 }"
-                  >{{ oi === mainGame.config.wolfTeeOrder.length - 2 ? '🐺 ' : '' }}{{ wolfPlayerName(pid) }}{{ oi < mainGame.config.wolfTeeOrder.length - 2 ? ' →' : '' }}</span>
+                    :class="{ 'wolf-tee-shot-wolf': oi === mainGame.config.wolfTeeOrder.length - 1 }"
+                  >{{ oi === mainGame.config.wolfTeeOrder.length - 1 ? '🐺 ' : '' }}{{ wolfPlayerName(pid) }}{{ oi < mainGame.config.wolfTeeOrder.length - 1 ? ' →' : '' }}</span>
                 </template>
               </div>
             </div>
