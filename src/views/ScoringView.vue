@@ -1154,10 +1154,6 @@ onUnmounted(() => {
   if (_pendingInterval) clearInterval(_pendingInterval)
 })
 
-onUnmounted(() => {
-  if (_pendingInterval) clearInterval(_pendingInterval)
-})
-
 // ── View state ──────────────────────────────────────────────────
 const activeHole = ref(0) // 0 = Card view, >0 = Hole entry
 const selectedGame = ref(null)

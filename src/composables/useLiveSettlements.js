@@ -477,9 +477,10 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
   // Lightweight reactive tick: count total scored holes rather than JSON.stringify entire scores array
   const _scoresTick = computed(() => {
     const scores = roundsStore.activeScores
-    return scores.length * 10000 + scores.filter(s => s.strokes != null).length
-  })
+    const allScores = Object.values(scores || {}).flatMap(h => Object.values(h || {}))
+    return allScores.length
 
+  })
   function gameSummaryHtmlReactive(game) {
     // Access the tick to create reactive dependency on scores
     void _scoresTick.value
