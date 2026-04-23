@@ -298,13 +298,13 @@
             v-for="g in MAIN_GAMES"
             :key="g.key"
             class="game-type-btn"
-            :class="{ selected: mainGame.type === g.key, 'game-type-btn--disabled': g.key === 'nines' && (props.lockedPlayers ?? form.players).length !== 3 }"
-            :disabled="g.key === 'nines' && (props.lockedPlayers ?? form.players).length !== 3"
-            :title="g.key === 'nines' && (props.lockedPlayers ?? form.players).length !== 3 ? '9s requires exactly 3 players' : ''"
+            :class="{ selected: mainGame.type === g.key, 'game-type-btn--disabled': g.key === 'fiveThreeOne' && (props.lockedPlayers ?? form.players).length !== 3 }"
+            :disabled="g.key === 'fiveThreeOne' && (props.lockedPlayers ?? form.players).length !== 3"
+            :title="g.key === 'fiveThreeOne' && (props.lockedPlayers ?? form.players).length !== 3 ? '5-3-1 requires exactly 3 players' : ''"
             @click="setMainGame(g.key)"
           >
             <span class="gtb-icon">{{ g.icon }}</span>
-            <span class="gtb-label">{{ g.label }}<span v-if="g.key === 'nines' && (props.lockedPlayers ?? form.players).length !== 3" style="font-size:9px;display:block;opacity:.6;">3 players only</span></span>
+            <span class="gtb-label">{{ g.label }}<span v-if="g.key === 'fiveThreeOne' && (props.lockedPlayers ?? form.players).length !== 3" style="font-size:9px;display:block;opacity:.6;">3 players only</span></span>
             <button class="btn-game-info btn-game-info-grid" @click.stop="toggleGameInfo(g.key)" title="How to play" v-if="g.key !== 'none'">ℹ️</button>
           </button>
         </div>
@@ -371,14 +371,14 @@
                 <label>Player 1</label>
                 <select v-model="mainGame.config.player1" class="config-select">
                   <option value="">— select —</option>
-                  <option v-for="p in form.players.filter(p => p.id !== mainGame.config.player2)" :key="p.id" :value="p.id">{{ wizDisplayName(p) }}</option>
+                  <option v-for="p in form.players" :key="p.id" :value="p.id">{{ wizDisplayName(p) }}</option>
                 </select>
               </div>
               <div class="config-field">
                 <label>Player 2</label>
                 <select v-model="mainGame.config.player2" class="config-select">
                   <option value="">— select —</option>
-                  <option v-for="p in form.players.filter(p => p.id !== mainGame.config.player1)" :key="p.id" :value="p.id">{{ wizDisplayName(p) }}</option>
+                  <option v-for="p in form.players" :key="p.id" :value="p.id">{{ wizDisplayName(p) }}</option>
                 </select>
               </div>
             </div>
@@ -484,7 +484,7 @@
             </div>
             <div class="config-toggle-row">
               <label class="toggle-label">
-                <input type="checkbox" v-model="mainGame.config.doubleBirdie" /><!-- Vegas: doubleBirdie (both teammates birdie) — distinct from birdieDouble used in HiLow/Hammer/Nines -->
+                <input type="checkbox" v-model="mainGame.config.doubleBirdie" />
                 <span>🐦🐦 Double birdie</span>
               </label>
               <span class="toggle-desc">Both teammates birdie = hole diff doubled</span>
@@ -550,19 +550,16 @@
             <div class="spp-row" v-for="item in stablefordPtsPreview" :key="item.label">
               <span class="spp-label">{{ item.label }}</span>
               <template v-if="mainGame.config.variant === 'modified'">
-                <input
-                  type="number" min="-5" max="10" step="1"
-                  class="spp-input"
+                <input type="number" min="-5" max="10" step="1" class="spp-input"
                   :value="mainGame.config.pts?.[item.key] ?? item.pts"
-                  @change="updateStablefordPts(item.key, $event.target.value)"
-                />
+                  @change="updateStablefordPts(item.key, $event.target.value)" />
               </template>
               <template v-else>
                 <span class="spp-pts" :class="item.pts > 0 ? 'spp-plus' : item.pts < 0 ? 'spp-neg' : 'spp-zero'">{{ item.pts > 0 ? '+' : '' }}{{ item.pts }}</span>
               </template>
             </div>
           </div>
-          </div>
+          <div class="config-note">All {{ form.players.length }} players compete. Settle pairwise on pt difference.</div>
         </div>
 
         <!-- Wolf config -->
@@ -631,8 +628,8 @@
               <span>🙈 Blind Wolf (declare before tee shots)</span>
             </label>
             <label class="wolf-option-toggle" @click="mainGame.config.wolfTeesFirst = !mainGame.config.wolfTeesFirst">
-              <span class="wolf-toggle" :class="{ on: mainGame.config.wolfTeesFirst !== false }"></span>
-              <span>🏌️ Wolf tees FIRST (watches others, picks after each shot)</span>
+              <span class="wolf-toggle" :class="{ on: mainGame.config.wolfTeesFirst }"></span>
+              <span>🏌️ Wolf Tees First (wolf hits before choosing partner)</span>
             </label>
           </div>
         </div>
@@ -664,7 +661,6 @@
               <span class="hammer-variant-info">Tied holes carry their full value to the next hole</span>
             </div>
           </div>
-          <div class="config-note">Throw the hammer to double the bet. Opponent must accept or concede.</div>
         </div>
 
         <!-- Sixes config -->
@@ -674,18 +670,18 @@
               <label>$ per point</label>
               <input v-model.number="mainGame.config.ppt" type="number" min="1" class="config-input" placeholder="1" />
             </div>
-            <div class="config-field">
-              <label>Scoring model</label>
-              <select v-model="mainGame.config.scoringModel" class="config-select">
-                <option value="segment">Segment match (6/3/0 pts)</option>
-                <option value="perhole">Per hole (win 4, loss 2, tie 3)</option>
-              </select>
-            </div>
           </div>
-          <div class="config-note">Teams rotate every 6 holes. Segment: win most holes in set = 6pts. Per-hole: each hole pays 4/2.</div>
+          <div class="config-field">
+            <label>Scoring model</label>
+            <select v-model="mainGame.config.scoringModel" class="config-select">
+              <option value="segment">Segment match (6/3/0 pts)</option>
+              <option value="perhole">Per hole (win 4, loss 2, tie 3)</option>
+            </select>
+          </div>
+          <div class="config-note">Teams rotate every 6 holes. 6 pts per hole split among winners.</div>
         </div>
 
-        <!-- 9s config -->
+        <!-- 5-3-1 config -->
         <div v-if="mainGame.type === 'nines'" class="game-config-card">
           <div class="config-row">
             <div class="config-field">
@@ -721,12 +717,12 @@
             <div class="config-toggle-row">
               <label class="toggle-label">
                 <input type="checkbox" v-model="mainGame.config.birdieDouble" />
-                <span>🔥 Birdie double</span>
+                <span>🐦 Birdie double</span>
               </label>
-              <span class="toggle-desc">Net birdie doubles pts that hole (5→10, 3→6, 1→2)</span>
+              <span class="toggle-desc">Net birdie on a hole awards a bonus point</span>
             </div>
           </div>
-          <div class="config-note">3 players. Best net = 5pts, second = 3pts, third = 1pt. Settle pairwise.</div>
+          <div class="config-note">Best net gets 5, second gets 3, third gets 1, worst gets 0. All {{ form.players.length }} players compete.</div>
         </div>
 
         <!-- No main game -->
@@ -780,24 +776,22 @@
               </div>
               <div class="config-row">
                 <div class="config-field">
-                  <label>Birdie scoring</label>
-                  <select v-model="sideGames.dots.netBirdie" class="config-select">
-                    <option :value="true">Net (handicap)</option>
-                    <option :value="false">Gross</option>
+                  <label>Net birdie</label>
+                  <select v-model="sideGames.dots.netBirdieEnabled" class="config-select">
+                    <option :value="false">Off</option>
+                    <option :value="true">On</option>
                   </select>
                 </div>
               </div>
               <div class="dots-options">
-                <strong style="font-size:11px;color:#a0908a;display:block;margin-bottom:4px">Big Three (on by default)</strong>
-                <label><input type="checkbox" v-model="sideGames.dots.birdieEnabled" /> Birdies (auto)</label>
-                <label><input type="checkbox" v-model="sideGames.dots.eagleEnabled" /> Eagles +2 (auto)</label>
-                <label><input type="checkbox" v-model="sideGames.dots.greenieEnabled" /> Greenies (manual, par 3)</label>
-                <label><input type="checkbox" v-model="sideGames.dots.sandieEnabled" /> Sandies (manual)</label>
-                <strong style="font-size:11px;color:#a0908a;display:block;margin:6px 0 4px">Optional</strong>
-                <label><input type="checkbox" v-model="sideGames.dots.barkieEnabled" /> Barkies (hit tree + make par)</label>
-                <label><input type="checkbox" v-model="sideGames.dots.arnieEnabled" /> Arnies (miss fairway + make par)</label>
-                <label><input type="checkbox" v-model="sideGames.dots.ferretEnabled" /> Ferrets (hole out from off green)</label>
-                <label><input type="checkbox" v-model="sideGames.dots.negativeEnabled" /> Negative (water/OB costs a dot)</label>
+                <label><input type="checkbox" v-model="sideGames.dots.birdieEnabled" /> Birdies</label>
+                <label><input type="checkbox" v-model="sideGames.dots.eagleEnabled" /> Eagles (+2)</label>
+                <label><input type="checkbox" v-model="sideGames.dots.greenieEnabled" /> Greenies</label>
+                <label><input type="checkbox" v-model="sideGames.dots.sandieEnabled" /> Sandies</label>
+                <label><input type="checkbox" v-model="sideGames.dots.barkieEnabled" /> Barkies</label>
+                <label><input type="checkbox" v-model="sideGames.dots.arnieEnabled" /> Arnies</label>
+                <label><input type="checkbox" v-model="sideGames.dots.ferretEnabled" /> Ferrets</label>
+                <label><input type="checkbox" v-model="sideGames.dots.negativeEnabled" /> Negatives</label>
               </div>
             </div>
           </div>
@@ -851,26 +845,31 @@
           <!-- BBB (Bingo Bango Bongo) -->
           <div class="side-game-row" :class="{ 'side-game-on': sideGames.bbb.enabled }">
             <div class="side-game-header" @click="toggleSideGame('bbb')">
-              <span>🏌️ BBB (Bingo Bango Bongo)</span>
+              <span>🎯 BBB (Bingo Bango Bongo)</span>
               <span class="side-header-actions">
                 <button class="btn-game-info btn-game-info-sm" @click.stop="toggleGameInfo('bbb')" title="How to play">ℹ️</button>
                 <span class="side-toggle">{{ sideGames.bbb.enabled ? '▲' : '▼' }}</span>
               </span>
             </div>
             <div v-if="gameInfoKey === 'bbb'" class="game-info-popover game-info-inline">
-              <p class="game-info-desc">{{ getGameDef('bbb')?.desc }}</p>
-              <div class="game-info-section"><strong>Rules:</strong> {{ getGameDef('bbb')?.rules }}</div>
+              <p class="game-info-desc">3 pts per hole: first on green, closest to pin, first in hole</p>
               <button class="btn-close-info" @click="gameInfoKey = null">Got it</button>
             </div>
             <div v-if="sideGames.bbb.enabled" class="side-game-config">
               <div class="config-row">
                 <div class="config-field">
                   <label>$ per point</label>
-                  <input v-model.number="sideGames.bbb.ppt" type="number" class="config-input" placeholder="1" />
+                  <input v-model.number="sideGames.bbb.ppt" type="number" class="config-input" placeholder="2" />
                 </div>
               </div>
-              <div class="dots-options">
-                <label><input type="checkbox" v-model="sideGames.bbb.doubleBongo" /> Double Bongo (birdie on bongo hole = 2 pts)</label>
+              <div class="config-row config-row--toggles">
+                <div class="config-toggle-row">
+                  <label class="toggle-label">
+                    <input type="checkbox" v-model="sideGames.bbb.doubleBongo" />
+                    <span>🎯 Double Bongo</span>
+                  </label>
+                  <span class="toggle-desc">Bongo (first in hole) worth 2 pts if won after a bunker shot</span>
+                </div>
               </div>
             </div>
           </div>
@@ -1171,6 +1170,7 @@
         </div>
       </div>
     </div>
+  </div>
 </template>
 
 <script setup>
@@ -1408,23 +1408,23 @@ const MAIN_GAMES = [
   { key: 'wolf',        icon: '🐺', label: 'Wolf' },
   { key: 'hammer',      icon: '🔨', label: 'Hammer' },
   { key: 'sixes',       icon: '🎲', label: 'Sixes' },
-  { key: 'nines',       icon: '9️⃣', label: '9s' },
+  { key: 'nines',        icon: '9️⃣', label: 'Nines (5-3-1)' },
   { key: 'none',        icon: '📋', label: 'Scores Only' },
 ]
 
 // Default configs per game type
 const GAME_DEFAULTS = {
   nassau:      { front: 10, back: 10, overall: 20, pressAt: 2, team1: [], team2: [] },
-  vegas:       { ppt: 1, birdieFlip: true, eagleFlip: true, doubleBirdie: false, penaltyThreshold: 0, scoring: 'net', team1: [], team2: [] },
-  match:       { ppt: 20, format: '2v2', player1: '', player2: '', closeoutBonus: 0, team1: [], team2: [] },
+  vegas:       { ppt: 1, birdieFlip: true, scoring: 'net', eagleFlip: false, doubleBirdie: false, penaltyThreshold: 0, team1: [], team2: [] },
+  match:       { ppt: 20, format: '2v2', player1: '', player2: '', team1: [], team2: [] },
   skins:       { ppt: 5, carry: true, lastHoleTie: 'carry', back9Multiplier: false, teamMode: false, team1: [], team2: [] },
-  hilow:       { ppt: 5, aggregatePoint: true, birdieDouble: false, team1: [], team2: [] },
-  stableford:  { ppt: 1, variant: 'standard', pts: { eagle: 4, birdie: 3, par: 2, bogey: 1, double: 0 } },
-  wolf:        { ppt: 5, wolfLoneMultiplier: 4, blindWolfMultiplier: 8, wolfTeesFirst: true, wolfTeeOrder: [], blindWolfEnabled: true, wolfChoices: {} },
-  hammer:      { ppt: 1, team1: [], team2: [], airHammer: false, fuHammer: false, birdieDouble: false, carryover: false },
+  hilow:       { ppt: 5, aggregatePoint: false, birdieDouble: false, team1: [], team2: [] },
+  stableford:  { ppt: 1, variant: 'standard', pts: {} },
+  wolf:        { ppt: 5, wolfLoneMultiplier: 4, blindWolfMultiplier: 8, wolfTeeOrder: [], blindWolfEnabled: true, wolfTeesFirst: true, wolfChoices: {} },
+  hammer:      { ppt: 1, airHammer: false, fuHammer: false, birdieDouble: false, carryover: false, team1: [], team2: [] },
   sixes:       { ppt: 1, scoringModel: 'segment' },
-  nines:        { ppt: 1, sweepBonus: false, sweepMargin: 2, birdieBonus: false, birdieBonusPts: 1, birdieDouble: false },
-  bestball:    { ppt: 5, ballsPerTeam: 1, team1: [], team2: [] },
+  nines:       { ppt: 1, sweepBonus: false, sweepMargin: 2, birdieBonus: false, birdieBonusPts: 1, birdieDouble: false },
+  bestball:    { ppt: 5, ballsPerTeam: 1, team1: [], team2: [], hidden: true },
   none:        {},
 }
 
@@ -1440,37 +1440,38 @@ function toggleGameInfo(key) {
 }
 function getGameDef(key) {
   // Map wizard keys to GAME_DEFS keys
-  const keyMap = { hilow: 'hilow', nines: 'nines', fiveThreeOne: 'nines', bestball: 'bestball', match1: 'match1v1', match2: 'match1v1' }
+  const keyMap = { hilow: 'hilow', nines: 'fiveThreeOne', bestball: 'bestball', match1: 'match1v1', match2: 'match1v1' }
   return GAME_DEFS[keyMap[key] || key] || null
 }
 
 const STABLEFORD_VARIANTS = {
-  standard: { eagle: 4, birdie: 3, par: 2, bogey: 1, double: 0 },
-  modified:  { eagle: 3, birdie: 2, par: 1, bogey: 0, double: -1 },
+  standard: { albatross: 5, eagle: 4, birdie: 3, par: 2, bogey: 1, double: 0, worse: 0 },
+  modified:  { albatross: 8, eagle: 5, birdie: 2, par: 0, bogey: -1, double: -3, worse: -5 },
 }
+
 const stablefordPtsPreview = computed(() => {
-  const v = mainGame.config?.variant || 'standard'
-  const pts = STABLEFORD_VARIANTS[v] || STABLEFORD_VARIANTS.standard
+  const variant = mainGame.value.config.variant || 'standard'
+  const base = STABLEFORD_VARIANTS[variant] || STABLEFORD_VARIANTS.standard
+  const custom = mainGame.value.config.pts || {}
   return [
-    { label: 'Eagle+', key: 'eagle', pts: pts.eagle },
-    { label: 'Birdie', key: 'birdie', pts: pts.birdie },
-    { label: 'Par',    key: 'par',    pts: pts.par },
-    { label: 'Bogey',  key: 'bogey',  pts: pts.bogey },
-    { label: 'Dbl+',   key: 'double', pts: pts.double },
+    { label: 'Albatross (−3)', key: 'albatross', pts: custom.albatross ?? base.albatross },
+    { label: 'Eagle (−2)',     key: 'eagle',     pts: custom.eagle     ?? base.eagle },
+    { label: 'Birdie (−1)',    key: 'birdie',    pts: custom.birdie    ?? base.birdie },
+    { label: 'Par',            key: 'par',       pts: custom.par       ?? base.par },
+    { label: 'Bogey (+1)',     key: 'bogey',     pts: custom.bogey     ?? base.bogey },
+    { label: 'Double (+2)',    key: 'double',    pts: custom.double    ?? base.double },
+    { label: 'Worse',          key: 'worse',     pts: custom.worse     ?? base.worse },
   ]
 })
 
-function updateStablefordPts(key, value) {
-  const v = parseInt(value)
-  if (isNaN(v)) return
-  if (!mainGame.config.pts) mainGame.config.pts = { eagle: 4, birdie: 3, par: 2, bogey: 1, double: 0 }
-  mainGame.config.pts[key] = v
+function updateStablefordPts(key, val) {
+  if (mainGame.value.config.pts == null) mainGame.value.config.pts = {}
+  mainGame.value.config.pts[key] = parseInt(val, 10)
 }
-
 
 const sideGames = ref({
   skins:  { enabled: false, ppt: 5, carry: true },
-  dots:   { enabled: false, ppt: 2, birdieEnabled: true, eagleEnabled: true, greenieEnabled: true, sandieEnabled: true, barkieEnabled: false, arnieEnabled: false, ferretEnabled: false, negativeEnabled: false, netBirdie: true },
+  dots:   { enabled: false, ppt: 2, birdieEnabled: true, eagleEnabled: true, greenieEnabled: true, sandieEnabled: true },
   snake:  { enabled: false, ppt: 5 },
   fidget: { enabled: false, ppp: 10 },
   match1: { enabled: false, player1: '', player2: '', ppt: 10, scoring: 'closeout', front: 10, back: 10, overall: 20, pressAt: 2 },
@@ -2037,11 +2038,6 @@ function buildGameConfigs() {
       eagleEnabled: sg.dots.eagleEnabled,
       greenieEnabled: sg.dots.greenieEnabled,
       sandieEnabled: sg.dots.sandieEnabled,
-      barkieEnabled: sg.dots.barkieEnabled,
-      arnieEnabled: sg.dots.arnieEnabled,
-      ferretEnabled: sg.dots.ferretEnabled,
-      negativeEnabled: sg.dots.negativeEnabled,
-      netBirdie: sg.dots.netBirdie,
     }})
   }
   if (sg.snake.enabled) {
@@ -2071,6 +2067,13 @@ function buildGameConfigs() {
   }
   const sm1 = buildSideMatch(sg.match1); if (sm1) games.push(sm1)
   const sm2 = buildSideMatch(sg.match2); if (sm2) games.push(sm2)
+  if (sideGames.value.bbb.enabled) {
+    games.push({ type: 'bbb', config: {
+      ppt: sg.bbb.ppt,
+      doubleBongo: sg.bbb.doubleBongo,
+      players: form.value.players.map(p => p.id),
+    }})
+  }
   // Best Ball trackers (only if enabled)
   if (sideGames.value.bbn.enabled) {
     for (const tracker of bbnTrackers.value) {
@@ -2083,14 +2086,6 @@ function buildGameConfigs() {
         },
       })
     }
-  }
-
-  if (sideGames.value.bbb.enabled) {
-    games.push({ type: 'bbb', config: {
-      ppt: sg.bbb.ppt,
-      doubleBongo: sg.bbb.doubleBongo,
-      players: form.value.players.map(p => p.id),
-    }})
   }
 
   return games
@@ -2374,7 +2369,7 @@ function reloadApp() {
   border: 1px solid rgba(255,255,255,.08);
 }
 .roster-option--dim { opacity: 0.35; pointer-events: none; }
-.wiz-input--sm { padding: 8px 12px; font-size: 16px; }
+.wiz-input--sm { padding: 8px 12px; font-size: 13px; }
 
 /* ── Wolf Tee Order ────────────────────────────────── */
 .wolf-tee-order-section { margin-top: 12px; padding: 12px; border-radius: 12px; background: rgba(96,165,250,.06); border: 1px solid rgba(96,165,250,.2); }
@@ -2599,31 +2594,68 @@ function reloadApp() {
   line-height: 1.4;
 }
 
-
-/* ── Stableford pts preview ─────────────────── */
+/* ── Stableford pts preview ─────────────────────────────── */
 .stableford-pts-preview {
-  display: flex; flex-direction: row; gap: 4px;
-  margin: 8px 0 4px;
-  background: rgba(255,255,255,.04);
-  border-radius: 10px; padding: 8px 10px;
-  flex-wrap: wrap;
+  margin: 8px 0 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.08);
+  overflow: hidden;
 }
 .spp-row {
-  display: flex; flex-direction: column; align-items: center;
-  flex: 1; min-width: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 12px;
+  border-bottom: 1px solid rgba(255,255,255,.05);
 }
-.spp-label { font-size: 10px; color: var(--gw-text-muted); margin-bottom: 2px; }
-.spp-pts   { font-size: 15px; font-weight: 700; }
-.spp-plus  { color: #4ade80; }
-.spp-zero  { color: var(--gw-text-muted); }
-.spp-neg   { color: #f87171; }
-
-/* ── Stableford editable pts ─────────────────── */
+.spp-row:last-child { border-bottom: none; }
+.spp-label { font-size: 12px; color: rgba(240,237,224,.7); }
+.spp-pts { font-size: 14px; font-weight: 800; min-width: 28px; text-align: right; }
+.spp-plus { color: #4ade80; }
+.spp-zero { color: rgba(240,237,224,.35); }
+.spp-neg  { color: #f87171; }
 .spp-input {
-  width: 44px; text-align: center; font-size: 15px; font-weight: 700;
-  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.2);
-  border-radius: 8px; color: inherit; padding: 4px 2px;
+  width: 56px;
+  padding: 4px 8px;
+  border-radius: 7px;
+  border: 1px solid rgba(255,255,255,.15);
+  background: rgba(255,255,255,.06);
+  color: var(--gw-text, #f0ede0);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  font-family: inherit;
+}
+
+/* ── Hammer variants ───────────────────────────────── */
+.hammer-variants {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.hammer-variant-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.08);
+}
+.hammer-variant-row label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gw-text, #f0ede0);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+}
+.hammer-variant-info {
+  font-size: 11px;
+  color: rgba(240,237,224,.45);
+  line-height: 1.35;
+  margin-left: 20px;
 }
 </style>
-
-
