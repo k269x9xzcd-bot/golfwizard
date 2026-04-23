@@ -691,6 +691,15 @@
           </div>
         </template>
         <!-- Player Score Cards — inline +/- entry -->
+        <!-- Voice score entry bar -->
+        <div v-if="voiceSupported && isCaptain" class="voice-entry-bar" :class="{ 'voice-active': voiceListening, 'voice-filling': voiceFilling }">
+          <button class="voice-mic-btn" @click="startVoiceEntry" :disabled="voiceListening">
+            <span class="voice-mic-icon" :class="{ pulsing: voiceListening }">🎙️</span>
+            <span class="voice-mic-label">{{ voiceListening ? voiceStatus : 'Hold score to speak, or tap mic' }}</span>
+          </button>
+          <span v-if="voiceFilling" class="voice-fill-indicator">Filling scores…</span>
+        </div>
+
         <div class="hole-players-list">
           <div
             v-for="group in sortedPlayerGroups"
@@ -1736,6 +1745,116 @@ function inlineDec(member) {
   } else if (existing > 1) {
     roundsStore.setScore(member.id, hole, existing - 1)
   }
+}
+
+
+// ── Voice score entry (Web Speech API) ────────────────────────
+const voiceSupported = ref(typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window))
+const voiceListening = ref(false)
+const voiceFilling = ref(false)
+const voiceStatus = ref('Listening…')
+let _voiceRecognition = null
+let _longPressTimer = null
+let _longPressMember = null
+
+function parseVoiceScore(transcript, par) {
+  const t = transcript.toLowerCase().trim()
+  // Golf terms
+  if (t.includes('ace') || t.includes('hole in one')) return 1
+  if (t.includes('eagle')) return Math.max(1, par - 2)
+  if (t.includes('birdie')) return Math.max(1, par - 1)
+  if (t.includes('par') && !t.includes('bogey')) return par
+  if (t.includes('double bogey') || t.includes('double')) return par + 2
+  if (t.includes('triple bogey') || t.includes('triple')) return par + 3
+  if (t.includes('bogey')) return par + 1
+  // Number words
+  const words = { one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9, ten:10, eleven:11, twelve:12 }
+  for (const [w, n] of Object.entries(words)) {
+    if (t.includes(w)) return n
+  }
+  // Digit
+  const m = t.match(/\b([1-9]|1[0-2])\b/)
+  if (m) return parseInt(m[1])
+  return null
+}
+
+function startVoiceEntry(startMemberId = null) {
+  if (!voiceSupported.value || !isCaptain.value) return
+  if (voiceListening.value) { stopVoiceEntry(); return }
+
+  const hole = activeHole.value
+  const par = parForHole(hole)
+  // Build fill queue: start from startMemberId if given, else top of list
+  const allMembers = sortedPlayerGroups.value.map(g => g.member)
+  const startIdx = startMemberId ? allMembers.findIndex(m => m.id === startMemberId) : 0
+  const fillQueue = allMembers.slice(Math.max(0, startIdx))
+  let queueIdx = 0
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+  const recog = new SpeechRecognition()
+  recog.lang = 'en-US'
+  recog.continuous = true
+  recog.interimResults = false
+  recog.maxAlternatives = 1
+
+  voiceListening.value = true
+  voiceStatus.value = 'Listening…'
+  _voiceRecognition = recog
+
+  recog.onresult = (e) => {
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const transcript = e.results[i][0].transcript
+      const score = parseVoiceScore(transcript, par)
+      if (score && queueIdx < fillQueue.length) {
+        const member = fillQueue[queueIdx]
+        roundsStore.setScore(member.id, hole, score)
+        voiceFilling.value = true
+        voiceStatus.value = `${member.short_name || member.guest_name}: ${score} ✓`
+        queueIdx++
+        if (queueIdx >= fillQueue.length) {
+          setTimeout(stopVoiceEntry, 800)
+        }
+      }
+    }
+  }
+
+  recog.onerror = (e) => {
+    if (e.error !== 'no-speech') voiceStatus.value = 'Try again'
+    stopVoiceEntry()
+  }
+
+  recog.onend = () => {
+    // Auto-restart if still listening and queue not done
+    if (voiceListening.value && queueIdx < fillQueue.length) {
+      try { recog.start() } catch { stopVoiceEntry() }
+    } else {
+      stopVoiceEntry()
+    }
+  }
+
+  try { recog.start() } catch { voiceListening.value = false }
+}
+
+function stopVoiceEntry() {
+  if (_voiceRecognition) { try { _voiceRecognition.stop() } catch {} ; _voiceRecognition = null }
+  voiceListening.value = false
+  setTimeout(() => { voiceFilling.value = false }, 1200)
+}
+
+function onScoreLongPressStart(member, e) {
+  if (!voiceSupported.value || !isCaptain.value) return
+  _longPressMember = member
+  _longPressTimer = setTimeout(() => {
+    if (_longPressMember) {
+      e.preventDefault && e.preventDefault()
+      startVoiceEntry(_longPressMember.id)
+    }
+  }, 500)
+}
+
+function onScoreLongPressEnd() {
+  clearTimeout(_longPressTimer)
+  _longPressMember = null
 }
 
 // saveScore removed — inline entry auto-saves
