@@ -714,6 +714,7 @@
                   <span class="phc-hcp-course" :class="teamTextClass(group.member)">{{ memberHandicapDisplay(group.member) }}</span>
                   <span v-if="lowManStrokes(group.member) !== null" class="phc-hcp-lowman">({{ lowManStrokes(group.member) }})</span>
                   <span v-if="strokeDotsOnHole(group.member, activeHole)" class="phc-stroke-dots">{{ '•'.repeat(strokeDotsOnHole(group.member, activeHole)) }}</span>
+                  <span v-if="wolfGame && wolfOnThisHole === group.member.id" class="phc-wolf-badge">🐺<span v-if="wolfChoiceForHole?.partner === 'lone'"> Lone</span><span v-else-if="wolfChoiceForHole?.partner === 'blind'"> 🙈</span><span v-else-if="wolfChoiceForHole?.partner" class="phc-wolf-partner"> +{{ memberName(wolfChoiceForHole.partner).split(' ')[0] }}</span></span>
                 </div>
               </div>
             </div>
@@ -766,14 +767,14 @@
         <div v-if="wolfGame" class="wolf-panel">
           <div class="wolf-header">
             <span class="wolf-label">🐺 Wolf — Hole {{ activeHole }}</span>
-            <span class="wolf-current">{{ wolfOnThisHoleName }} is Wolf</span>
+            <span class="wolf-current">{{ wolfOnThisHoleName }} is Wolf<span v-if="wolfGame?.config?.wolfTeesFirst === false" class="wolf-tee-badge"> tees last</span><span v-else class="wolf-tee-badge"> tees first</span></span>
           </div>
           <div v-if="wolfChoiceForHole" class="wolf-prompt">
             <template v-if="wolfChoiceForHole.partner === 'lone'">🐺 Lone Wolf — 1 vs {{ roundsStore.activeMembers.length - 1 }}</template>
-            <template v-else-if="wolfChoiceForHole.partner === 'blind'">🙈 Blind Wolf — declared before tee shots ({{ wolfGame?.config?.blindWolfMultiplier ?? 8 }}×)</template>
+            <template v-else-if="wolfChoiceForHole.partner === 'blind'">🙈 Blind Wolf — declared before anyone tees ({{ wolfGame?.config?.blindWolfMultiplier ?? 8 }}×) ({{ wolfGame?.config?.blindWolfMultiplier ?? 8 }}×)</template>
             <template v-else-if="wolfChoiceForHole.partner">🤝 Partner: {{ memberName(wolfChoiceForHole.partner) }}</template>
           </div>
-          <div v-else class="wolf-prompt">Tap a player to pick as partner, or go Lone / Blind Wolf</div>
+          <div v-else class="wolf-prompt">{{ wolfGame?.config?.wolfTeesFirst === false ? 'Wolf tees last — watch all shots, then pick' : 'Tap a player to pick as partner after their tee shot' }}</div>
           <div class="wolf-buttons">
             <button
               v-for="member in wolfPickableMembers"

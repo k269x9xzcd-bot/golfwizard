@@ -1144,6 +1144,7 @@ export function computeWolf(ctx, config) {
     wolfLoneMultiplier = 4,      // lone wolf multiplier (default 4×)
     blindWolfMultiplier = 8,     // blind wolf multiplier (default 8×)
     wolfTeesFirst = true,        // wolf tees FIRST (true) or LAST (false)
+    wolfTeeOrder = [],           // explicit tee order: array of member IDs
     hcpMode = 'lowman',
     players: pids,
   } = config
@@ -1153,6 +1154,14 @@ export function computeWolf(ctx, config) {
     : ctx.members
 
   if (members.length < 3) return null
+
+  // Build rotation using wolfTeeOrder if set, else member join order
+  const rotationIds = wolfTeeOrder.length >= members.length
+    ? wolfTeeOrder.slice(0, members.length)
+    : members.map(m => m.id)
+  const rotation = rotationIds.map(id => members.find(m => m.id === id)).filter(Boolean)
+  const orderedMembers = rotation.length >= members.length ? rotation : members
+
 
   const { from, to } = holeRange(ctx.holesMode)
   const n = members.length
@@ -1165,14 +1174,8 @@ export function computeWolf(ctx, config) {
   const wolfChoices = config.wolfChoices || {}
 
   for (let h = from; h <= to; h++) {
-    let wolfIdx = (h - from) % n
-    // Last-place wolf variant: on holes 17 & 18, the player in last picks wolf
-    if (lastPlaceWolf && (h === 17 || h === 18) && Object.keys(totals).some(id => totals[id].net !== 0)) {
-      const ranked = members.map(m => ({ id: m.id, net: totals[m.id].net })).sort((a, b) => a.net - b.net)
-      const lastIdx = members.findIndex(m => m.id === ranked[0].id)
-      if (lastIdx >= 0) wolfIdx = lastIdx
-    }
-    const wolf = members[wolfIdx]
+    const wolfIdx = (h - from) % orderedMembers.length
+    const wolf = orderedMembers[wolfIdx]
     const choice = wolfChoices[h]
     const isLone = choice?.partner === 'lone'
     const isBlind = choice?.partner === 'blind'
@@ -1194,7 +1197,8 @@ export function computeWolf(ctx, config) {
     if (!allScored || !choice) {
       holeResults.push({
         hole: h, wolf: wolf.id, wolfName: wolf.short_name,
-        partner: partnerId, isLone,
+        partner: partnerId, partnerName: partner?.short_name,
+        isLone: isLone || false, isBlind: isBlind || false, wolfTeesFirst,
         winner: null, incomplete: true,
       })
       continue
@@ -1259,7 +1263,7 @@ export function computeWolf(ctx, config) {
     id: m.id, name: m.short_name, net: totals[m.id].net,
   }))
 
-  return { holeResults, totals, settlements, ppt }
+  return { holeResults, totals, settlements, ppt, wolfTeesFirst, rotationOrder: orderedMembers.map(m => m.id) }
 }
 
 // ─────────────────────────────────────────────────────────────────

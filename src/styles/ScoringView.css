@@ -1658,3 +1658,18 @@
 }
 .voice-mic-label { font-size: 12px; color: rgba(240,237,224,.6); }
 .voice-fill-indicator { font-size: 11px; color: #4ade80; font-weight: 600; flex-shrink: 0; }
+
+/* ── Wolf player badge ────────────────────────────────────────── */
+.phc-wolf-badge {
+  display: inline-flex; align-items: center; gap: 2px;
+  font-size: 12px; font-weight: 700;
+  color: #a78bfa;
+  background: rgba(139,92,246,.15);
+  border-radius: 999px; padding: 1px 7px;
+  margin-left: 4px;
+}
+.phc-wolf-partner { color: #c4b5fd; font-size: 11px; }
+.wolf-tee-badge {
+  font-size: 10px; font-weight: 600; opacity: .6;
+  margin-left: 4px;
+}
