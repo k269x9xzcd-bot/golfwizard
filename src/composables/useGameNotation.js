@@ -314,15 +314,24 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
           const r = computeWolf(ctx, game.config)
           if (!r) continue
 
-          // Per-hole result cells — prefix 🐺 so wolf identity is always visible
+          // Per-hole result cells — wolf team vs field with result
           const cells = {}
           for (const hr of (r.holeResults || [])) {
             if (hr.incomplete) continue
             const wInit = pInit(hr.wolf) || 'W'
-            const mode = hr.isBlind ? '🙈' : hr.isLone ? '🐺' : `+${pInit(hr.partner) || '?'}`
-            const result = hr.winner === 'wolf' ? '✓' : hr.winner === 'field' ? '✗' : hr.winner === null ? '' : '='
             const cls = hr.winner === 'wolf' ? 'nota-t1' : hr.winner === 'field' ? 'nota-t2' : 'nota-halved'
-            cells[hr.hole] = { text: `🐺${wInit}${mode}${result}`, cls }
+            const result = hr.winner === 'wolf' ? '✓' : hr.winner === 'field' ? '✗' : '='
+            let text
+            if (hr.isBlind || hr.isLone) {
+              const modeStr = hr.isBlind ? '🙈' : 'Lone'
+              text = `🐺${wInit} ${modeStr}${result}`
+            } else {
+              const fieldMs = ctx.members.filter(m => m.id !== hr.wolf && m.id !== hr.partner)
+              const wolfStr = `${wInit}+${pInit(hr.partner)}`
+              const fieldStr = fieldMs.map(m => pInit(m.id)).join('+')
+              text = `🐺${wolfStr} vs ${fieldStr}${result}`
+            }
+            cells[hr.hole] = { text, cls }
           }
 
           // Wolf rotation row — shows who is wolf on each hole

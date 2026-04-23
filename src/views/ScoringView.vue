@@ -702,7 +702,7 @@
 
         <div class="hole-players-list">
           <div
-            v-for="group in sortedPlayerGroups"
+            v-for="group in holePlayerGroups"
             :key="group.member.id"
             class="player-hole-card"
             :class="[teamCardClass(group.member), { 'card-winner': isNetWinner(group.member.id, activeHole) }]"
@@ -780,7 +780,6 @@
               </div>
               <div class="wolf-vs-divider">vs</div>
               <div class="wolf-team wolf-team-b">
-                <span class="wolf-team-label">Field:</span>
                 <span class="wolf-team-names">{{ wolfTeamForHole.field.map(m => memberDisplay(m)).join(' + ') }}</span>
               </div>
             </div>
@@ -2187,6 +2186,37 @@ const wolfTeamForHole = computed(() => {
     wolfTeam: members.filter(m => m.id === wolfId || m.id === partnerId),
     field: members.filter(m => m.id !== wolfId && m.id !== partnerId),
   }
+})
+
+// Hole-view player order: rotates with wolf tee order when wolf game is active.
+// wolfTeesFirst=true (default) → wolf card first; false → wolf card last.
+const holePlayerGroups = computed(() => {
+  if (!wolfGame.value) return sortedPlayerGroups.value
+  const members = roundsStore.activeMembers
+  const n = members.length
+  if (!n) return sortedPlayerGroups.value
+
+  const configured = wolfGame.value.config?.wolfTeeOrder || []
+  const wolfTeesFirst = wolfGame.value.config?.wolfTeesFirst !== false
+
+  let orderedIds
+  if (configured.length >= n) {
+    orderedIds = configured.slice(0, n).map((rawId, i) => _resolveWolfId(rawId, i)).filter(Boolean)
+  } else {
+    orderedIds = members.map(m => m.id)
+  }
+  if (!orderedIds.length) return sortedPlayerGroups.value
+
+  const wolfIdx = (activeHole.value - 1) % orderedIds.length
+  const wolfId = orderedIds[wolfIdx]
+  const others = [
+    ...orderedIds.slice(wolfIdx + 1),
+    ...orderedIds.slice(0, wolfIdx),
+  ]
+  const displayIds = wolfTeesFirst ? [wolfId, ...others] : [...others, wolfId]
+
+  const groupMap = new Map(sortedPlayerGroups.value.map(g => [g.member.id, g]))
+  return displayIds.map(id => groupMap.get(id)).filter(Boolean)
 })
 
 const sixesGame = computed(() => roundsStore.activeGames.find(g => g.type?.toLowerCase() === 'sixes') || null)
