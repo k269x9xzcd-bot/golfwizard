@@ -798,6 +798,42 @@
           <div class="hole-finish-text">All {{ visibleHoles.length }} holes scored!</div>
           <button class="finish-btn finish-btn-lg" @click="showFinishReview = true">Review & Finish Round</button>
         </div>
+
+        <\!-- Junk Sheet button — only when dots/junk game is active -->
+        <div v-if="dotsGame" class="junk-sheet-trigger">
+          <button class="junk-sheet-btn" @click="openJunkSheet(activeHole)">🎯 Log Junk — H{{ activeHole }}</button>
+        </div>
+
+        <\!-- Junk Sheet bottom sheet -->
+        <div v-if="showJunkSheet" class="junk-sheet-backdrop" @click.self="showJunkSheet = false">
+          <div class="junk-sheet">
+            <div class="junk-sheet-header">
+              <span>🎯 Junk — Hole {{ junkSheetHole }}</span>
+              <button class="junk-sheet-close" @click="showJunkSheet = false">Done</button>
+            </div>
+            <div class="junk-sheet-body">
+              <div v-for="junkType in activeJunkTypes" :key="junkType.key" class="junk-row">
+                <div class="junk-row-label">
+                  <span class="junk-type-icon">{{ junkType.icon }}</span>
+                  <span>{{ junkType.label }}</span>
+                  <span v-if="junkType.par3Only" class="junk-par3-badge">par 3</span>
+                  <span v-if="junkType.auto" class="junk-auto-badge">auto</span>
+                </div>
+                <div class="junk-player-buttons">
+                  <button
+                    v-for="m in junkSheetMembers"
+                    :key="m.id"
+                    class="junk-player-btn"
+                    :class="{ active: isJunkMarked(m.id, junkSheetHole, junkType.key), 'auto-marked': junkType.auto && isJunkMarked(m.id, junkSheetHole, junkType.key) }"
+                    :disabled="junkType.par3Only && parForHole(junkSheetHole) \!== 3"
+                    @click="\!junkType.auto && toggleJunk(m.id, junkSheetHole, junkType.key)"
+                  >{{ m.short_name || m.name }}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div v-else-if="!isViewOnly && activeHole === visibleHoles[visibleHoles.length - 1] && !roundCompletionInfo.allScored && roundCompletionInfo.scoredCount > 0 && !roundsStore.activeRound?.is_complete" class="hole-finish-banner hole-finish-partial">
           <div class="hole-finish-text">{{ roundCompletionInfo.missingHoles.length }} holes still need scores</div>
           <button class="finish-btn finish-btn-review" @click="activeHole = roundCompletionInfo.missingHoles[0]">Go to H{{ roundCompletionInfo.missingHoles[0] }}</button>
@@ -1237,6 +1273,75 @@ async function respondHammer(accept) {
     const hammerLog = { ...(game.config?.hammerLog || {}), [hole]: newLog }
     await roundsStore.updateGameConfig(game.id, { ...game.config, hammerLog })
   }
+}
+
+
+// ── DOTS / JUNK SHEET ─────────────────────────────────────────────
+const dotsGame = computed(() => {
+  const games = roundsStore.activeGames || []
+  return games.find(g => g.type?.toLowerCase() === 'dots') ?? null
+})
+
+const showJunkSheet = ref(false)
+const junkSheetHole = ref(1)
+
+const junkSheetMembers = computed(() => roundsStore.activeMembers || [])
+
+const JUNK_TYPE_DEFS = [
+  { key: 'greenie', label: 'Greenie', icon: '🌳', par3Only: true, auto: false, configKey: 'greenieEnabled' },
+  { key: 'sandy',   label: 'Sandy',   icon: '🏖️', par3Only: false, auto: false, configKey: 'sandieEnabled' },
+  { key: 'barkie',  label: 'Barkie',  icon: '🪵', par3Only: false, auto: false, configKey: 'barkieEnabled' },
+  { key: 'arnie',   label: 'Arnie',   icon: '🌳', par3Only: false, auto: false, configKey: 'arnieEnabled' },
+  { key: 'ferret',  label: 'Ferret',  icon: '🐰', par3Only: false, auto: false, configKey: 'ferretEnabled' },
+  { key: 'negative',label: 'OB/Water',icon: '💧', par3Only: false, auto: false, configKey: 'negativeEnabled' },
+]
+
+const AUTO_JUNK_TYPES = [
+  { key: 'birdie', label: 'Birdie', icon: '🐦', par3Only: false, auto: true, configKey: 'birdieEnabled' },
+  { key: 'eagle',  label: 'Eagle',  icon: '🦅', par3Only: false, auto: true, configKey: 'eagleEnabled' },
+]
+
+const activeJunkTypes = computed(() => {
+  const cfg = dotsGame.value?.config || {}
+  const auto = AUTO_JUNK_TYPES.filter(t => cfg[t.configKey] \!== false)
+  const manual = JUNK_TYPE_DEFS.filter(t => cfg[t.configKey])
+  return [...auto, ...manual]
+})
+
+function isJunkMarked(memberId, hole, type) {
+  const manual = dotsGame.value?.config?.manual || {}
+  // For auto types (birdie/eagle), check from score
+  if (type === 'birdie' || type === 'eagle') {
+    const ctx = buildCtx()
+    if (\!ctx) return false
+    const m = roundsStore.activeMembers.find(x => x.id === memberId)
+    if (\!m) return false
+    const gross = getScore(memberId, hole)
+    if (\!gross) return false
+    const par2 = parForHole(hole)
+    if (type === 'eagle') return gross \!= null && gross <= par2 - 2
+    if (type === 'birdie') return gross \!= null && gross === par2 - 1
+    return false
+  }
+  return \!\!manual[`${memberId}-${hole}-${type}`]
+}
+
+async function toggleJunk(memberId, hole, type) {
+  const game = dotsGame.value
+  if (\!game) return
+  const manual = { ...(game.config?.manual || {}) }
+  const key = `${memberId}-${hole}-${type}`
+  if (manual[key]) {
+    delete manual[key]
+  } else {
+    manual[key] = true
+  }
+  await roundsStore.updateGameConfig(game.id, { ...game.config, manual })
+}
+
+function openJunkSheet(hole) {
+  junkSheetHole.value = hole
+  showJunkSheet.value = true
 }
 
 function goBackToHistory() {

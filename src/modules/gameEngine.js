@@ -552,7 +552,12 @@ export function computeDots(ctx, config) {
     birdieEnabled = true,
     eagleEnabled = true,
     chipinEnabled = false,
-    // manual dot overrides: { [memberId+'-'+hole+'-'+type]: true }
+    barkieEnabled = false,  // hit a tree AND make par
+    arnieEnabled = false,   // miss fairway AND make par
+    ferretEnabled = false,  // hole out from off green
+    negativeEnabled = false,// water/OB costs a dot
+    netBirdie = true,       // true=net birdie/eagle, false=gross
+    // manual: { [memberId+'-'+hole+'-'+type]: true|false }
     manual = {},
   } = config
   const members = ctx.members
@@ -568,22 +573,24 @@ export function computeDots(ctx, config) {
       const gross = getScore(ctx, m.id, h)
       const hcp = memberHandicap(m, ctx.course, ctx.tee)
       const si = holeSI(ctx.course, h, ctx.tee)
-      const net = gross != null ? gross - strokesOnHole(hcp, si) : null
+      const strokes = strokesOnHole(hcp, si)
+      const net = gross != null ? gross - strokes : null
+      const scoreVsPar = netBirdie ? net : gross  // which score to use for birdie/eagle
 
       if (net === null) continue
 
-      // Birdie/Eagle based on net vs par
-      if (eagleEnabled && net <= par - 2) {
+      // Birdie/Eagle
+      if (eagleEnabled && scoreVsPar != null && scoreVsPar <= par - 2) {
         dots[m.id].dots += 2
         dots[m.id].amount += ppt * 2
-        dots[m.id].breakdown.push({ hole: h, type: 'Eagle', pts: 2 })
-      } else if (birdieEnabled && net === par - 1) {
+        dots[m.id].breakdown.push({ hole: h, type: netBirdie ? 'Eagle (net)' : 'Eagle', pts: 2 })
+      } else if (birdieEnabled && scoreVsPar != null && scoreVsPar === par - 1) {
         dots[m.id].dots += 1
         dots[m.id].amount += ppt
-        dots[m.id].breakdown.push({ hole: h, type: 'Birdie', pts: 1 })
+        dots[m.id].breakdown.push({ hole: h, type: netBirdie ? 'Birdie (net)' : 'Birdie', pts: 1 })
       }
 
-      // Greenie: closest to pin on par 3 (marked manually)
+      // Greenie: par 3, closest to pin (manual)
       const greenKey = `${m.id}-${h}-greenie`
       if (greenieEnabled && par === 3 && manual[greenKey]) {
         dots[m.id].dots += 1
@@ -591,7 +598,7 @@ export function computeDots(ctx, config) {
         dots[m.id].breakdown.push({ hole: h, type: 'Greenie', pts: 1 })
       }
 
-      // Sandy: up-and-down from bunker (marked manually)
+      // Sandy: up-and-down from bunker (manual)
       const sandKey = `${m.id}-${h}-sandy`
       if (sandieEnabled && manual[sandKey]) {
         dots[m.id].dots += 1
@@ -599,12 +606,44 @@ export function computeDots(ctx, config) {
         dots[m.id].breakdown.push({ hole: h, type: 'Sandy', pts: 1 })
       }
 
-      // Chip-in (marked manually)
+      // Chip-in (manual)
       const chipKey = `${m.id}-${h}-chipin`
       if (chipinEnabled && manual[chipKey]) {
         dots[m.id].dots += 1
         dots[m.id].amount += ppt
         dots[m.id].breakdown.push({ hole: h, type: 'Chip-in', pts: 1 })
+      }
+
+      // Barkie: hit tree + make par (manual)
+      const barkKey = `${m.id}-${h}-barkie`
+      if (barkieEnabled && manual[barkKey]) {
+        dots[m.id].dots += 1
+        dots[m.id].amount += ppt
+        dots[m.id].breakdown.push({ hole: h, type: 'Barkie', pts: 1 })
+      }
+
+      // Arnie: miss fairway + make par (manual)
+      const arnieKey = `${m.id}-${h}-arnie`
+      if (arnieEnabled && manual[arnieKey]) {
+        dots[m.id].dots += 1
+        dots[m.id].amount += ppt
+        dots[m.id].breakdown.push({ hole: h, type: 'Arnie', pts: 1 })
+      }
+
+      // Ferret: hole out from off green (manual)
+      const ferretKey = `${m.id}-${h}-ferret`
+      if (ferretEnabled && manual[ferretKey]) {
+        dots[m.id].dots += 1
+        dots[m.id].amount += ppt
+        dots[m.id].breakdown.push({ hole: h, type: 'Ferret', pts: 1 })
+      }
+
+      // Negative: water/OB costs a dot (manual)
+      const negKey = `${m.id}-${h}-negative`
+      if (negativeEnabled && manual[negKey]) {
+        dots[m.id].dots -= 1
+        dots[m.id].amount -= ppt
+        dots[m.id].breakdown.push({ hole: h, type: 'OB/Water', pts: -1 })
       }
     }
   }

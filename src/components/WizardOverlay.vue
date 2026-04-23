@@ -644,11 +644,26 @@
                   <input v-model.number="sideGames.dots.ppt" type="number" class="config-input" placeholder="2" />
                 </div>
               </div>
+              <div class="config-row">
+                <div class="config-field">
+                  <label>Birdie scoring</label>
+                  <select v-model="sideGames.dots.netBirdie" class="config-select">
+                    <option :value="true">Net (handicap)</option>
+                    <option :value="false">Gross</option>
+                  </select>
+                </div>
+              </div>
               <div class="dots-options">
-                <label><input type="checkbox" v-model="sideGames.dots.birdieEnabled" /> Birdies</label>
-                <label><input type="checkbox" v-model="sideGames.dots.eagleEnabled" /> Eagles (+2)</label>
-                <label><input type="checkbox" v-model="sideGames.dots.greenieEnabled" /> Greenies</label>
-                <label><input type="checkbox" v-model="sideGames.dots.sandieEnabled" /> Sandies</label>
+                <strong style="font-size:11px;color:#a0908a;display:block;margin-bottom:4px">Big Three (on by default)</strong>
+                <label><input type="checkbox" v-model="sideGames.dots.birdieEnabled" /> Birdies (auto)</label>
+                <label><input type="checkbox" v-model="sideGames.dots.eagleEnabled" /> Eagles +2 (auto)</label>
+                <label><input type="checkbox" v-model="sideGames.dots.greenieEnabled" /> Greenies (manual, par 3)</label>
+                <label><input type="checkbox" v-model="sideGames.dots.sandieEnabled" /> Sandies (manual)</label>
+                <strong style="font-size:11px;color:#a0908a;display:block;margin:6px 0 4px">Optional</strong>
+                <label><input type="checkbox" v-model="sideGames.dots.barkieEnabled" /> Barkies (hit tree + make par)</label>
+                <label><input type="checkbox" v-model="sideGames.dots.arnieEnabled" /> Arnies (miss fairway + make par)</label>
+                <label><input type="checkbox" v-model="sideGames.dots.ferretEnabled" /> Ferrets (hole out from off green)</label>
+                <label><input type="checkbox" v-model="sideGames.dots.negativeEnabled" /> Negative (water/OB costs a dot)</label>
               </div>
             </div>
           </div>
@@ -1271,7 +1286,7 @@ function getGameDef(key) {
 
 const sideGames = ref({
   skins:  { enabled: false, ppt: 5, carry: true },
-  dots:   { enabled: false, ppt: 2, birdieEnabled: true, eagleEnabled: true, greenieEnabled: true, sandieEnabled: true },
+  dots:   { enabled: false, ppt: 2, birdieEnabled: true, eagleEnabled: true, greenieEnabled: true, sandieEnabled: true, barkieEnabled: false, arnieEnabled: false, ferretEnabled: false, negativeEnabled: false, netBirdie: true },
   snake:  { enabled: false, ppt: 5 },
   fidget: { enabled: false, ppp: 10 },
   match1: { enabled: false, player1: '', player2: '', ppt: 10, scoring: 'closeout', front: 10, back: 10, overall: 20, pressAt: 2 },
@@ -1837,6 +1852,11 @@ function buildGameConfigs() {
       eagleEnabled: sg.dots.eagleEnabled,
       greenieEnabled: sg.dots.greenieEnabled,
       sandieEnabled: sg.dots.sandieEnabled,
+      barkieEnabled: sg.dots.barkieEnabled,
+      arnieEnabled: sg.dots.arnieEnabled,
+      ferretEnabled: sg.dots.ferretEnabled,
+      negativeEnabled: sg.dots.negativeEnabled,
+      netBirdie: sg.dots.netBirdie,
     }})
   }
   if (sg.snake.enabled) {

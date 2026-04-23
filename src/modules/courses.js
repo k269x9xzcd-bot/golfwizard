@@ -269,12 +269,13 @@ export const WOLF_HOLE_MODES=[{k:'normal',l:'🤝 Partner'},{k:'lone',l:'🐺 Lo
 
   // ── SIDE GAMES ──
   dots:{icon:'🎯',name:'Dots / Junk',role:'side',
-    desc:'Bonus bets for special achievements: birdies, greenies (closest on par 3), sandies (up-and-down from bunker), and more.',
+    desc:'Bonus bets for special achievements: birdies, greenies, sandies, and optional junk (Barkie, Arnie, Ferret, negative). Big Three on by default: Birdie (auto), Greenie (manual, par 3), Sandy (manual).',
     players:'All players',
-    rules:'Track specific events during the round. Each event earns a "dot." Common dots: Birdie (net birdie), Greenie (closest to pin on par 3 and make par or better), Sandy (up-and-down from bunker), Eagle (net eagle, worth 2 dots). At the end, each player pays the difference in dots to each other player.',
-    wagering:'$ per dot. Each player settles with every other player based on dot differential. Common: $2/dot.',
-    hcpNote:'Birdies/eagles are based on net score. Greenies/sandies are gross achievements.',
-    example:'You finish with 5 dots, your buddy has 2. He pays you (5-2) × $2 = $6.'},
+    rules:'Each event earns a dot. Big Three: Birdie (net or gross, auto), Greenie (closest on par 3 + make par, manual), Sandy (up-and-down from bunker, manual). Eagle = 2 dots. Optional: Barkie (hit tree + make par), Arnie (miss fairway + make par), Ferret (hole out from off green), Negative (water/OB costs a dot). Net vs gross birdie is configurable. A Junk Sheet slides up after each hole to mark manual dots. At end, each player pays dot differential to every other player.',
+    wagering:'$ per dot. Pairwise settlement at end of round. Common: $2/dot.',
+    hcpNote:'Net birdie toggle: on = handicap strokes applied (default). Off = gross score used for birdies/eagles.',
+    notation:'Per-hole dots shown in corner of score cell for each player.',
+    example:'You get a net birdie (1 dot) + sandy (1 dot) = 2 dots. Buddy gets a greenie (1 dot). You win 1 dot net × $2 = $2 from him.'},
   snake:{icon:'🐍',name:'Snake',role:'side',
     desc:'Three-putt tracker. Whoever 3-putts last is "holding the snake" and pays everyone at the end.',
     players:'All players',

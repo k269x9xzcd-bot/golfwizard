@@ -186,7 +186,7 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
           for (const [mid, data] of Object.entries(r.dots || {})) {
             for (const bd of (data.breakdown || [])) {
               if (!holeMarks[bd.hole]) holeMarks[bd.hole] = []
-              const sym = bd.type === 'Eagle' ? '★' : bd.type === 'Birdie' ? '●' : bd.type === 'Greenie' ? 'G' : bd.type === 'Sandy' ? 'S' : bd.type === 'Chip-in' ? 'C' : '?'
+              const sym = bd.pts < 0 ? '−' : bd.type.startsWith('Eagle') ? '★★' : bd.type.startsWith('Birdie') ? '●' : bd.type === 'Greenie' ? 'G' : bd.type === 'Sandy' ? 'S' : bd.type === 'Chip-in' ? 'C' : bd.type === 'Barkie' ? 'B' : bd.type === 'Arnie' ? 'A' : bd.type === 'Ferret' ? 'F' : '◦'
               holeMarks[bd.hole].push(`<span class="nota-dot-who">${pInit(mid)}</span>${sym}`)
             }
           }
