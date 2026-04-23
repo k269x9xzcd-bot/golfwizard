@@ -702,10 +702,10 @@
               <div class="phc-initials" :class="teamBadgeClass(group.member)">
                 <span class="phc-init-chars">{{ playerInitials(group.member) }}</span>
                 <span v-if="memberHandicapDisplay(group.member) !== ''" class="phc-init-hcp">{{ memberHandicapDisplay(group.member) }}</span>
+                <span v-if="lowManStrokes(group.member) !== null" class="phc-init-lowman">({{ lowManStrokes(group.member) }})</span>
               </div>
               <div class="phc-name-col">
                 <div class="phc-hcp-row">
-                  <span v-if="lowManStrokes(group.member) !== null" class="phc-hcp-lowman">({{ lowManStrokes(group.member) }})</span>
                   <span v-if="strokeDotsOnHole(group.member, activeHole)" class="phc-stroke-dots">{{ '•'.repeat(strokeDotsOnHole(group.member, activeHole)) }}</span>
                   <span v-if="wolfGame && wolfOnThisHole === group.member.id" class="phc-wolf-badge">🐺<span v-if="wolfChoiceForHole?.partner === 'lone'"> Lone</span><span v-else-if="wolfChoiceForHole?.partner === 'blind'"> 🙈</span><span v-else-if="wolfChoiceForHole?.partner" class="phc-wolf-partner"> +{{ fLastName(roundsStore.activeMembers.find(m => m.id === wolfChoiceForHole.partner)) }}</span></span>
                 </div>
@@ -2031,10 +2031,10 @@ async function undoLastSnake() {
 // ── Wolf helpers ─────────────────────────────────────────────────
 const wolfGame = computed(() => roundsStore.activeGames.find(g => g.type?.toLowerCase() === 'wolf') || null)
 
-// "F.LastName" using the full name field; falls back to display name for guests/single-name members.
+// "F.LastName" — prefers guest_name/name (full name) over the display nickname.
 function fLastName(m) {
   if (!m) return '?'
-  const full = (m.name || '').trim()
+  const full = (m.guest_name || m.name || '').trim()
   const parts = full.split(/\s+/).filter(Boolean)
   const src = parts.length >= 2 ? parts : (memberDisplay(m) || '?').split(' ').filter(Boolean)
   if (!src.length || src[0] === '?') return '?'

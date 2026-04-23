@@ -355,9 +355,9 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         if (!r) return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Wolf</span></div>`
         const ppt = cfg.ppt || 1
 
-        // Use full name (m.name) for formatting; fall back to display name for guests/single-name members
+        // Use full name (guest_name or name field) for formatting; fall back to display name
         function fullNameParts(m) {
-          const full = (m?.name || '').trim()
+          const full = (m?.guest_name || m?.name || '').trim()
           const parts = full.split(/\s+/).filter(Boolean)
           if (parts.length >= 2) return parts
           // fallback: display name (nickname or guest_name)
