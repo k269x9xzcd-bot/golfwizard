@@ -1493,3 +1493,6 @@
 .aloha-amount-input { width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(212,175,55,.3); background: rgba(255,255,255,.05); color: #e8e0c8; font-size: 18px; text-align: center; margin-bottom: 16px; }
 .aloha-modal-actions { display: flex; gap: 10px; }
 .aloha-modal-actions .aloha-btn { flex: 1; padding: 10px; }
+
+/* Hammer live UI */
+.aloha-banner.hammer-inactive { opacity: 0.65; }

@@ -1142,11 +1142,17 @@ export function computeWolf(ctx, config) {
 // ─────────────────────────────────────────────────────────────────
 // ── HAMMER ──────────────────────────────────────────────────────
 // Teams throw hammer to double the bet per hole
+// airHammer: throw before tee shot; fuHammer: counter-hammer + retain;
+// birdieDouble: auto-double if winner birdied; carryover: tie carries value
 // ─────────────────────────────────────────────────────────────────
 export function computeHammer(ctx, config) {
   const {
     team1 = [], team2 = [],
-    ppt = 1,  // starting $ per hole
+    ppt = 1,
+    airHammer = false,
+    fuHammer = false,
+    birdieDouble = false,
+    carryover = false,
   } = config
 
   const t1 = ctx.members.filter(m => team1.includes(m.id))
@@ -1154,7 +1160,7 @@ export function computeHammer(ctx, config) {
   const allPlayers = [...t1, ...t2]
   const { from, to } = holeRange(ctx.holesMode)
 
-  // hammerLog: { [hole]: { throws: number, conceded: boolean } }
+  // hammerLog: { [hole]: { throws: number, conceded: boolean, concededBy: 't1'|'t2', holder: 't1'|'t2' } }
   const hammerLog = config.hammerLog || {}
 
   function bestNet(teamMembers, hole) {
@@ -1163,21 +1169,27 @@ export function computeHammer(ctx, config) {
     return Math.min(...nets)
   }
 
+  function bestGross(teamMembers, hole) {
+    const scores = teamMembers.map(m => getScore(ctx, m.id, hole)).filter(s => s != null)
+    if (!scores.length) return null
+    return Math.min(...scores)
+  }
+
   const holeResults = []
   let t1Total = 0
+  let carryAmt = 0
 
   for (let h = from; h <= to; h++) {
-    const log = hammerLog[h] || { throws: 0, conceded: false }
-    const mult = Math.pow(2, log.throws) // each throw doubles
-    const holeValue = ppt * mult
+    const log = hammerLog[h] || { throws: 0, conceded: false, holder: 't1' }
+    const mult = Math.pow(2, log.throws)
+    let holeValue = ppt * mult + carryAmt
 
     if (log.conceded) {
-      // Team conceded — other team wins hole value before last throw
-      const concededValue = ppt * Math.pow(2, Math.max(0, log.throws - 1))
-      // Convention: positive throws = t1 threw last (t2 conceded = t1 wins)
+      const concededValue = ppt * Math.pow(2, Math.max(0, log.throws - 1)) + carryAmt
       const t1Wins = log.concededBy === 't2' ? concededValue : -concededValue
       t1Total += t1Wins
-      holeResults.push({ hole: h, conceded: true, concededBy: log.concededBy, value: concededValue, t1Wins })
+      carryAmt = 0
+      holeResults.push({ hole: h, conceded: true, concededBy: log.concededBy, holeValue: concededValue, t1Wins })
       continue
     }
 
@@ -1189,20 +1201,36 @@ export function computeHammer(ctx, config) {
       continue
     }
 
+    let finalValue = holeValue
+    if (birdieDouble) {
+      const par1 = holePar(ctx.course, h)
+      const g1 = bestGross(t1, h)
+      const g2 = bestGross(t2, h)
+      if (n1 < n2 && g1 != null && g1 <= par1 - 1) finalValue *= 2
+      if (n2 < n1 && g2 != null && g2 <= par1 - 1) finalValue *= 2
+    }
+
     let winner = null
     let t1Wins = 0
-    if (n1 < n2) { winner = 't1'; t1Wins = holeValue }
-    else if (n2 < n1) { winner = 't2'; t1Wins = -holeValue }
-    // tie = push, no money changes
+    if (n1 < n2) { winner = 't1'; t1Wins = finalValue }
+    else if (n2 < n1) { winner = 't2'; t1Wins = -finalValue }
 
+    if (winner === null && carryover) {
+      carryAmt = finalValue
+      holeResults.push({ hole: h, winner: null, n1, n2, holeValue: finalValue, t1Wins: 0, throws: log.throws, carried: true })
+      continue
+    }
+
+    carryAmt = 0
     t1Total += t1Wins
-    holeResults.push({ hole: h, winner, n1, n2, holeValue, t1Wins, throws: log.throws })
+    holeResults.push({ hole: h, winner, n1, n2, holeValue: finalValue, t1Wins, throws: log.throws })
   }
 
   return {
     holeResults, t1Total,
     t1Name: t1.map(m => m.short_name).join('+'),
     t2Name: t2.map(m => m.short_name).join('+'),
+    airHammer, fuHammer, birdieDouble, carryover,
     settlement: {
       t1Net: t1Total, ppt,
       t1Name: t1.map(m => m.short_name).join('+'),
@@ -1210,8 +1238,6 @@ export function computeHammer(ctx, config) {
     },
   }
 }
-
-// ─────────────────────────────────────────────────────────────────
 // ── SIXES (Round Robin) ─────────────────────────────────────────
 // 4 players rotate teams every 6 holes (3 segments)
 // ─────────────────────────────────────────────────────────────────

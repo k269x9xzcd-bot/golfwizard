@@ -272,14 +272,27 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
       // ── Hammer ──
       if (t === 'hammer') {
         const r = computeHammer(ctx, cfg)
-        if (!r) return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Hammer</span></div>`
+        if (\!r) return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Hammer</span></div>`
         const t1n = teamInitialsStr(cfg.team1 || []) || 'T1'
         const t2n = teamInitialsStr(cfg.team2 || []) || 'T2'
-        const ppt = cfg.ppt || 5
-        const net = (r.team1Total || 0) - (r.team2Total || 0)
-        const netStr = net !== 0 ? `<div style="margin-top:4px;font-size:12px;font-weight:700;color:#4ade80">💰 ${net < 0 ? t1n : t2n} owe ${net > 0 ? t1n : t2n} $${Math.abs(net)}</div>` : ''
-        return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Hammer</span><span class="muted" style="font-size:10px;margin-left:4px">${t1n} vs ${t2n} · $${ppt}/hole</span>${netStr}</div>`
+        const ppt = cfg.ppt || 1
+        const net = r.t1Total || 0
+        const variants = [cfg.airHammer && 'Air', cfg.fuHammer && 'F-U', cfg.birdieDouble && 'Birdie×2', cfg.carryover && 'Carry'].filter(Boolean).join(', ')
+        const varStr = variants ? `<span class="muted" style="font-size:10px;margin-left:4px">(${variants})</span>` : ''
+        const throwHoles = (r.holeResults || []).filter(h => h.throws > 0 || h.conceded)
+        const holeStr = throwHoles.length
+          ? '<div style="margin-top:4px;font-size:11px;color:#a0908a">' +
+            throwHoles.map(h => {
+              if (h.conceded) return `H${h.hole}: conceded($${h.holeValue})`
+              return `H${h.hole}: $${h.holeValue}(${h.throws}🔨)`
+            }).join(' · ') + '</div>'
+          : ''
+        const netStr = net \!== 0
+          ? `<div style="margin-top:4px;font-size:12px;font-weight:700;color:#4ade80">💰 ${net > 0 ? t2n : t1n} owe ${net > 0 ? t1n : t2n} $${Math.abs(net)}</div>`
+          : '<div style="margin-top:4px;font-size:11px;color:#888">All square</div>'
+        return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Hammer</span><span class="muted" style="font-size:10px;margin-left:4px">${t1n} vs ${t2n} · $${ppt}/hole</span>${varStr}${holeStr}${netStr}</div>`
       }
+
 
       // ── Fidget ──
       if (t === 'fidget') {

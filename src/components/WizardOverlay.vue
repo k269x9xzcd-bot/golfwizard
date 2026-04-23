@@ -540,6 +540,12 @@
             </div>
           </div>
           <TeamPicker :players="form.players" v-model:team1="mainGame.config.team1" v-model:team2="mainGame.config.team2" />
+          <div class="dots-options">
+            <label><input type="checkbox" v-model="mainGame.config.airHammer" /> Air Hammer (throw before tee shot)</label>
+            <label><input type="checkbox" v-model="mainGame.config.fuHammer" /> F-U Hammer (counter + retain)</label>
+            <label><input type="checkbox" v-model="mainGame.config.birdieDouble" /> Birdie Double (auto-double if winner birdied)</label>
+            <label><input type="checkbox" v-model="mainGame.config.carryover" /> Carryover on tie</label>
+          </div>
           <div class="config-note">Throw the hammer to double the bet. Opponent must accept or concede.</div>
         </div>
 
@@ -1240,7 +1246,7 @@ const GAME_DEFAULTS = {
   hilow:       { ppt: 5, aggregatePoint: true, birdieDouble: false, team1: [], team2: [] },
   stableford:  { ppt: 1, variant: 'standard', pts: { eagle: 4, birdie: 3, par: 2, bogey: 1, double: 0 } },
   wolf:        { ppt: 5, wolfLoneMultiplier: 4, blindWolfMultiplier: 8, wolfTeesFirst: true, wolfTeeOrder: [], blindWolfEnabled: true, wolfChoices: {} },
-  hammer:      { ppt: 1, team1: [], team2: [] },
+  hammer:      { ppt: 1, team1: [], team2: [], airHammer: false, fuHammer: false, birdieDouble: false, carryover: false },
   sixes:       { ppt: 1, scoringModel: 'segment' },
   nines:        { ppt: 1, sweepBonus: false, sweepMargin: 2, birdieBonus: false, birdieBonusPts: 1, birdieDouble: false },
   bestball:    { ppt: 5, ballsPerTeam: 1, team1: [], team2: [] },

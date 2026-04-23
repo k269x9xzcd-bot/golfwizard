@@ -641,6 +641,44 @@
           </div>
         </div>
 
+
+        <\!-- Hammer banner: shows on every hole when a hammer game is active -->
+        <template v-if="hammerGame">
+          <div v-if="\!hammerHoleLog(activeHole).conceded && hammerHoleLog(activeHole).status \!== 'accepted'"
+               class="aloha-banner aloha-call"
+               :class="{ 'hammer-inactive': \!canThrowHammer }">
+            <span class="aloha-icon">🔨</span>
+            <div class="aloha-text">
+              <strong v-if="canThrowHammer">Throw the Hammer</strong>
+              <strong v-else>{{ hammerHolderName }} holds the hammer</strong>
+              &mdash; ${{ hammerHoleValue(activeHole) }} on this hole
+              <span v-if="hammerHoleLog(activeHole).throws > 0"> ({{ hammerHoleLog(activeHole).throws }}x thrown)</span>
+            </div>
+            <button v-if="canThrowHammer" class="aloha-btn" @click="throwHammer">Throw 🔨</button>
+          </div>
+          <div v-else-if="hammerHoleLog(activeHole).status === 'pending' && \!canThrowHammer"
+               class="aloha-banner aloha-pending">
+            <span class="aloha-icon">🔨</span>
+            <div class="aloha-text"><strong>Hammer thrown\!</strong> Worth ${{ hammerHoleValue(activeHole) }} — accept or concede?</div>
+            <div class="aloha-respond">
+              <button class="aloha-btn aloha-accept" @click="respondHammer(true)">Accept</button>
+              <button class="aloha-btn aloha-decline" @click="respondHammer(false)">Concede</button>
+            </div>
+          </div>
+          <div v-else-if="hammerHoleLog(activeHole).status === 'accepted'"
+               class="aloha-banner aloha-active">
+            <span class="aloha-icon">🔨</span>
+            <div class="aloha-text"><strong>Hammer accepted\!</strong> Hole worth ${{ hammerHoleValue(activeHole) }}
+              <span v-if="hammerGame.config.fuHammer && canThrowHammer"> — F-U available</span>
+            </div>
+            <button v-if="hammerGame.config.fuHammer && canThrowHammer" class="aloha-btn" @click="throwHammer">F-U 🔨</button>
+          </div>
+          <div v-else-if="hammerHoleLog(activeHole).conceded"
+               class="aloha-banner aloha-declined">
+            <span class="aloha-icon">🔨</span>
+            <div class="aloha-text">Hole conceded at ${{ hammerHoleLog(activeHole).holeValue ?? hammerHoleValue(activeHole) }}.</div>
+          </div>
+        </template>
         <!-- Player Score Cards — inline +/- entry -->
         <div class="hole-players-list">
           <div
@@ -808,7 +846,7 @@ import RetroScoreOverlay from '../components/RetroScoreOverlay.vue'
 import { useScorecardHelpers } from '../composables/useScorecardHelpers'
 import { useGameNotation } from '../composables/useGameNotation'
 import { useLiveSettlements } from '../composables/useLiveSettlements'
-import { computeNassau } from '../modules/gameEngine'
+import { computeNassau, computeHammer } from '../modules/gameEngine'
 
 const authStore = useAuthStore()
 const roundsStore = useRoundsStore()
@@ -1105,6 +1143,100 @@ async function callAloha() {
 async function respondAloha(game, accept) {
   const newConfig = { ...game.config, aloha: { ...game.config.aloha, status: accept ? 'accepted' : 'declined' } }
   await roundsStore.updateGameConfig(game.id, newConfig)
+}
+
+
+// ── HAMMER live UI ─────────────────────────────────────────────────────
+const hammerGame = computed(() => {
+  const games = roundsStore.activeGames || []
+  return games.find(g => g.type?.toLowerCase() === 'hammer') ?? null
+})
+
+function myHammerTeam(game) {
+  const myId = roundsStore.activeMembers.find(m => m.profile_id === authStore.user?.id)?.id
+  if (\!myId) return null
+  if ((game.config?.team1 || []).includes(myId)) return 't1'
+  if ((game.config?.team2 || []).includes(myId)) return 't2'
+  return null
+}
+
+function hammerHoleLog(hole) {
+  const log = hammerGame.value?.config?.hammerLog?.[hole] || {}
+  return { throws: 0, conceded: false, holder: 't1', status: null, ...log }
+}
+
+function hammerHoleValue(hole) {
+  const game = hammerGame.value
+  if (\!game) return 0
+  const log = hammerHoleLog(hole)
+  const ppt = game.config?.ppt || 1
+  return ppt * Math.pow(2, log.throws)
+}
+
+const canThrowHammer = computed(() => {
+  const game = hammerGame.value
+  if (\!game) return false
+  const myTeam = myHammerTeam(game)
+  if (\!myTeam) return true // spectator: allow
+  const log = hammerHoleLog(activeHole.value)
+  if (log.conceded) return false
+  if (log.status === 'pending') {
+    // F-U: receiver can counter-hammer if fuHammer is on and they just received
+    return game.config?.fuHammer && log.holder \!== myTeam
+  }
+  // Normal: either team can throw (any time) — holder alternates with each throw
+  return log.holder === myTeam || log.throws === 0
+})
+
+const hammerHolderName = computed(() => {
+  const game = hammerGame.value
+  if (\!game) return ''
+  const log = hammerHoleLog(activeHole.value)
+  const holderTeam = log.holder || 't1'
+  const ids = holderTeam === 't1' ? (game.config?.team1 || []) : (game.config?.team2 || [])
+  return ids.map(id => {
+    const m = roundsStore.activeMembers.find(x => x.id === id)
+    return m?.short_name || '?'
+  }).join('+')
+})
+
+async function throwHammer() {
+  const game = hammerGame.value
+  if (\!game) return
+  const hole = activeHole.value
+  const log = hammerHoleLog(hole)
+  const myTeam = myHammerTeam(game)
+  const newHolder = myTeam === 't1' ? 't2' : 't1' // throw passes hammer to other team
+  const newLog = {
+    ...log,
+    throws: log.throws + 1,
+    status: 'pending',
+    holder: newHolder,
+  }
+  if (game.config?.fuHammer && log.status === 'accepted') {
+    // F-U: counter-hammer, retain
+    newLog.holder = myTeam
+  }
+  const hammerLog = { ...(game.config?.hammerLog || {}), [hole]: newLog }
+  await roundsStore.updateGameConfig(game.id, { ...game.config, hammerLog })
+}
+
+async function respondHammer(accept) {
+  const game = hammerGame.value
+  if (\!game) return
+  const hole = activeHole.value
+  const log = hammerHoleLog(hole)
+  if (accept) {
+    const newLog = { ...log, status: 'accepted' }
+    const hammerLog = { ...(game.config?.hammerLog || {}), [hole]: newLog }
+    await roundsStore.updateGameConfig(game.id, { ...game.config, hammerLog })
+  } else {
+    // Concede — mark conceded, record who conceded
+    const myTeam = myHammerTeam(game)
+    const newLog = { ...log, conceded: true, concededBy: myTeam, status: 'conceded' }
+    const hammerLog = { ...(game.config?.hammerLog || {}), [hole]: newLog }
+    await roundsStore.updateGameConfig(game.id, { ...game.config, hammerLog })
+  }
 }
 
 function goBackToHistory() {
