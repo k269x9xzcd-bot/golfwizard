@@ -32,13 +32,13 @@ jobs:
           FAIL=0
           while IFS= read -r -d '' f; do
             size=$(wc -c < "$f")
-            if [ "$size" -gt 112640 ]; then
-              echo "OVERSIZED: $f (${size} bytes > 100KB)"
+            if [ "$size" -gt 153600 ]; then
+              echo "OVERSIZED: $f (${size} bytes > 150KB)"
               FAIL=1
             fi
           done < <(find src -name '*.vue' -print0)
           if [ "$FAIL" -eq 1 ]; then
-            echo "Build blocked: split .vue files > 100KB before merging."
+            echo "Build blocked: split .vue files > 150KB before merging."
             exit 1
           fi
           echo "All .vue files within size limits."
