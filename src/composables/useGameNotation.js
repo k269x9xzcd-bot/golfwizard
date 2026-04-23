@@ -9,7 +9,7 @@ import { useRoundsStore } from '../stores/rounds'
 import {
   computeNassau, computeSkins, computeMatch, computeSnake,
   computeDots, computeFidget, computeBestBallNet, computeFiveThreeOne, computeNines,
-  computeVegas, computeHiLow, computeWolf, computeSixes, computeStableford, computeHammer, computeBbb,
+  computeVegas, computeHiLow, computeSixes, computeStableford, computeHammer, computeBbb,
   holePar,
 } from '../modules/gameEngine'
 
@@ -308,50 +308,10 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
         } catch(e) { /* skip */ }
       }
 
-      // ── WOLF ──
+      // ── WOLF — omitted from scorecard grid; live game status covers per-hole detail ──
       if (t === 'wolf') {
         try {
-          const r = computeWolf(ctx, game.config)
-          if (!r) continue
-
-          // Per-hole result cells — wolf team vs field with result
-          const cells = {}
-          for (const hr of (r.holeResults || [])) {
-            if (hr.incomplete) continue
-            const wInit = pInit(hr.wolf) || 'W'
-            const cls = hr.winner === 'wolf' ? 'nota-t1' : hr.winner === 'field' ? 'nota-t2' : 'nota-halved'
-            const result = hr.winner === 'wolf' ? '✓' : hr.winner === 'field' ? '✗' : '='
-            let text
-            if (hr.isBlind || hr.isLone) {
-              const modeStr = hr.isBlind ? '🙈' : 'Lone'
-              text = `🐺${wInit} ${modeStr}${result}`
-            } else {
-              const fieldMs = ctx.members.filter(m => m.id !== hr.wolf && m.id !== hr.partner)
-              const wolfStr = `${wInit}+${pInit(hr.partner)}`
-              const fieldStr = fieldMs.map(m => pInit(m.id)).join('+')
-              text = `🐺${wolfStr} vs ${fieldStr}${result}`
-            }
-            cells[hr.hole] = { text, cls }
-          }
-
-          // Wolf rotation row — shows who is wolf on each hole
-          const rotOrder = r.rotationOrder || []
-          if (rotOrder.length) {
-            const mode = ctx.holesMode
-            const from = mode === 'back9' ? 10 : 1
-            const to = mode === 'front9' ? 9 : 18
-            const rotCells = {}
-            for (let h = from; h <= to; h++) {
-              const wolfId = rotOrder[(h - from) % rotOrder.length]
-              rotCells[h] = { text: pInit(wolfId) || '?', cls: 'nota-wolf-rot' }
-            }
-            rows.push({ icon: '', label: 'Wolf⟳', cells: rotCells, outSummary: '', inSummary: '', totalSummary: '' })
-          }
-
-          const sorted = [...(r.settlements || [])].sort((a, b) => b.net - a.net)
-          const topNet = sorted[0]?.net || 0
-          const summary = topNet > 0 ? `${sorted[0].name} +$${topNet}` : 'AS'
-          rows.push({ icon: '🐺', label: 'Wolf', cells, outSummary: '', inSummary: '', totalSummary: summary })
+          // no scorecard rows for wolf
         } catch(e) { /* skip */ }
       }
 
