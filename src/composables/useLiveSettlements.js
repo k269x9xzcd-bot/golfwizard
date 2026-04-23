@@ -14,6 +14,27 @@ import {
   computeFiveThreeOne, computeDots, computeFidget, computeBestBallNet, computeBestBall, computeBbb,
 } from '../modules/gameEngine'
 
+// Generates unique short labels for a set of members.
+// Starts with last name; bumps collisions → "F.LastName" → "Fi.LastName".
+function makeUniqueLabels(members, partsOf) {
+  const pm = new Map(members.map(m => [m.id, partsOf(m)]))
+  const L = new Map(members.map(m => {
+    const p = pm.get(m.id)
+    return [m.id, p.length >= 2 ? p[p.length - 1] : (p[0] || '?')]
+  }))
+  for (const fmt of [
+    p => p.length >= 2 ? `${p[0][0]}.${p[p.length - 1]}` : null,
+    p => p.length >= 2 ? `${p[0].slice(0, 2)}.${p[p.length - 1]}` : null,
+  ]) {
+    const counts = {}
+    for (const v of L.values()) counts[v] = (counts[v] || 0) + 1
+    for (const [id, v] of L) {
+      if (counts[v] > 1) { const n = fmt(pm.get(id)); if (n) L.set(id, n) }
+    }
+  }
+  return L
+}
+
 export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitialsStr, pInit, memberDisplay, visibleHoles, rosterPlayers }) {
   const roundsStore = useRoundsStore()
 
@@ -373,13 +394,10 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
           const d = memberDisplay(m)
           return (d && d !== '?') ? d.split(' ').filter(Boolean) : ['?']
         }
-        // Full last name (or whole name if single-word); initials fallback handled by CSS truncation
-        function lastN(m) {
-          const parts = fullNameParts(m)
-          return parts.length >= 2 ? parts[parts.length - 1] : (parts[0] || '?')
-        }
-        function abbN(m) { return lastN(m) }
-        function initLastN(m) { return lastN(m) }
+        // Unique labels for all round members (last name, bumped to F.LastName on collision)
+        const memberLabels = makeUniqueLabels(ctx.members, fullNameParts)
+        function abbN(m) { return memberLabels.get(m?.id) || '?' }
+        function initLastN(m) { return memberLabels.get(m?.id) || '?' }
 
         // Build wolf-team and field-team labels for a completed hole
         function holeTeams(hr) {
