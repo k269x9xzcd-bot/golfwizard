@@ -462,10 +462,17 @@ body {
   box-sizing: border-box;
   max-height: 88dvh;
   overflow-y: auto;
+  overflow-x: hidden;
   position: relative;
   flex-shrink: 0;
   margin-bottom: 12px;
   animation: modal-up 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Wizard uses internal scroll on .wizard-step — disable outer scroll */
+.wizard-modal.modal {
+  overflow-y: visible;
+  overflow: visible;
 }
 
 @media (min-width: 600px) {
@@ -663,13 +670,12 @@ body {
 }
 
 /* ── Wizard modal ──────────────────────────────────────────── */
-.wizard-overlay { align-items: flex-end; }
+.wizard-overlay { justify-content: center; padding: 20px 12px; }
 
 .wizard-modal {
-  border-radius: var(--gw-radius-xl) var(--gw-radius-xl) 0 0;
-  max-height: 92dvh;
-  /* svh = small viewport height (excludes keyboard on iOS Safari) */
-  max-height: 92svh;
+  border-radius: var(--gw-radius-xl);
+  max-height: 88dvh;
+  max-height: 88svh;
   display: flex;
   flex-direction: column;
   padding: 0;
