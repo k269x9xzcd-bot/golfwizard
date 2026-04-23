@@ -68,8 +68,8 @@ export function courseHandicap(ghinIndex, course, tee) {
  * memberHandicap: get a member's round handicap (pre-computed or derived)
  */
 export function memberHandicap(member, course, tee) {
-  if (member.round_hcp != null) return member.round_hcp
   if (member.stroke_override != null) return member.stroke_override
+  if (member.round_hcp != null) return member.round_hcp
   return courseHandicap(member.ghin_index ?? 0, course, tee)
 }
 
