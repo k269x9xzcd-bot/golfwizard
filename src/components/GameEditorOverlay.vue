@@ -111,7 +111,7 @@ async function addNewGame(type) {
       config = { team1: memberIds.slice(0, half), team2: memberIds.slice(half), ppt: 1 }
       break
     }
-    case 'wolf': config = { ppt: 5 }; break
+    case 'wolf': config = { ppt: 1, wolfLoneMultiplier: 4, blindWolfMultiplier: 8, wolfTeeOrder: [], blindWolfEnabled: true, wolfTeesFirst: true, wolfChoices: {}, tieRule: 'push' }; break
   }
   await roundsStore.saveGameConfig({
     round_id: roundsStore.activeRound?.id,

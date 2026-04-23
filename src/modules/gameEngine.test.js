@@ -546,6 +546,106 @@ describe('computeWolf', () => {
     const sum = result.settlements.reduce((s, x) => s + x.net, 0)
     expect(Math.abs(sum)).toBeLessThan(0.01)
   })
+
+  it('defaults ppt to 1 when not provided', () => {
+    const scores = {}
+    for (const id of ['a', 'b', 'c', 'd']) {
+      scores[id] = {}
+      for (let h = 1; h <= 18; h++) scores[id][h] = id === 'a' ? 3 : 4
+    }
+    const ctx = fourPlayerCtx(scores)
+    // a goes lone wolf on h1 and wins (net 3 vs everyone else's 4)
+    const result = computeWolf(ctx, {
+      players: ['a', 'b', 'c', 'd'],
+      wolfTeeOrder: ['a', 'b', 'c', 'd'],
+      wolfChoices: { 1: { partner: 'lone' } },
+    })
+    expect(result.ppt).toBe(1)
+    // lone wolf win: ppt * loneMultiplier (4) * 3 opponents = 1*4*3 = 12
+    expect(result.settlements.find(s => s.id === 'a').net).toBe(12)
+  })
+
+  it('tieRule=push: tied hole moves no money (default)', () => {
+    const scores = {}
+    for (const id of ['a', 'b', 'c', 'd']) {
+      scores[id] = {}
+      for (let h = 1; h <= 18; h++) scores[id][h] = 4
+    }
+    const ctx = fourPlayerCtx(scores)
+    const result = computeWolf(ctx, {
+      ppt: 1,
+      players: ['a', 'b', 'c', 'd'],
+      wolfTeeOrder: ['a', 'b', 'c', 'd'],
+      wolfChoices: { 1: { partner: 'b' } },
+      tieRule: 'push',
+    })
+    expect(result.settlements.find(s => s.id === 'a').net).toBe(0)
+    expect(result.settlements.find(s => s.id === 'c').net).toBe(0)
+  })
+
+  it('tieRule=wolfLoses: wolf team loses on tied partner hole', () => {
+    const scores = {}
+    for (const id of ['a', 'b', 'c', 'd']) {
+      scores[id] = {}
+      for (let h = 1; h <= 18; h++) scores[id][h] = 4
+    }
+    const ctx = fourPlayerCtx(scores)
+    const result = computeWolf(ctx, {
+      ppt: 1,
+      players: ['a', 'b', 'c', 'd'],
+      wolfTeeOrder: ['a', 'b', 'c', 'd'],
+      wolfChoices: { 1: { partner: 'b' } },
+      tieRule: 'wolfLoses',
+    })
+    // wolf team (a+b) each pay $1 to each of 2 opponents = -$2 each
+    expect(result.settlements.find(s => s.id === 'a').net).toBe(-2)
+    expect(result.settlements.find(s => s.id === 'b').net).toBe(-2)
+    expect(result.settlements.find(s => s.id === 'c').net).toBe(2)
+    expect(result.settlements.find(s => s.id === 'd').net).toBe(2)
+  })
+
+  it('tieRule=wolfLoses: lone wolf loses on tie', () => {
+    const scores = {}
+    for (const id of ['a', 'b', 'c', 'd']) {
+      scores[id] = {}
+      for (let h = 1; h <= 18; h++) scores[id][h] = 4
+    }
+    const ctx = fourPlayerCtx(scores)
+    const result = computeWolf(ctx, {
+      ppt: 1,
+      players: ['a', 'b', 'c', 'd'],
+      wolfTeeOrder: ['a', 'b', 'c', 'd'],
+      wolfChoices: { 1: { partner: 'lone' } },
+      tieRule: 'wolfLoses',
+    })
+    // lone wolf loses: ppt * loneMultiplier (4) * 3 opponents = -12
+    expect(result.settlements.find(s => s.id === 'a').net).toBe(-12)
+    expect(result.settlements.find(s => s.id === 'b').net).toBe(4)
+    expect(result.settlements.find(s => s.id === 'c').net).toBe(4)
+    expect(result.settlements.find(s => s.id === 'd').net).toBe(4)
+  })
+
+  it('tieRule=carryOver: settlements still sum to zero', () => {
+    const scores = {}
+    for (const id of ['a', 'b', 'c', 'd']) {
+      scores[id] = {}
+      for (let h = 1; h <= 18; h++) scores[id][h] = 4
+    }
+    scores['a'][2] = 3 // b is wolf h2, a (non-wolf) scores 3
+    const ctx = fourPlayerCtx(scores)
+    const result = computeWolf(ctx, {
+      ppt: 1,
+      players: ['a', 'b', 'c', 'd'],
+      wolfTeeOrder: ['a', 'b', 'c', 'd'],
+      wolfChoices: {
+        1: { partner: 'b' }, // a wolf, all tie -> carry
+        2: { partner: 'c' }, // b wolf with c; a scores 3, others 4 -> field wins (a+d better, no wait...)
+      },
+      tieRule: 'carryOver',
+    })
+    const sum = result.settlements.reduce((s, x) => s + x.net, 0)
+    expect(Math.abs(sum)).toBeLessThan(0.01)
+  })
 })
 
 // ─────────────────────────────────────────────────────────────────

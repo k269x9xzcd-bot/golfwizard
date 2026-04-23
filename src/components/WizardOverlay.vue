@@ -590,7 +590,7 @@
           <div class="config-row">
             <div class="config-field">
               <label>$ per point</label>
-              <input v-model.number="mainGame.config.ppt" type="number" min="1" class="config-input" placeholder="5" />
+              <input v-model.number="mainGame.config.ppt" type="number" min="1" class="config-input" placeholder="1" />
             </div>
             <div class="config-field">
               <label>Lone Wolf multiplier</label>
@@ -625,6 +625,26 @@
                 <button v-if="oi > 0" class="wolf-order-btn" @click="wolfMoveUp(oi)">↑</button>
                 <button v-if="oi < mainGame.config.wolfTeeOrder.length - 1" class="wolf-order-btn" @click="wolfMoveDown(oi)">↓</button>
               </div>
+              <!-- H1 tee-shot order preview — updates when wolfTeesFirst is toggled -->
+              <div class="wolf-tee-shot-order">
+                <span class="wolf-tee-shot-label">H1 tee:</span>
+                <template v-if="mainGame.config.wolfTeesFirst !== false">
+                  <span
+                    v-for="(pid, oi) in mainGame.config.wolfTeeOrder"
+                    :key="'ts-'+pid"
+                    class="wolf-tee-shot-player"
+                    :class="{ 'wolf-tee-shot-wolf': oi === 0 }"
+                  >{{ oi === 0 ? '🐺 ' : '' }}{{ wolfPlayerName(pid) }}{{ oi < mainGame.config.wolfTeeOrder.length - 1 ? ' →' : '' }}</span>
+                </template>
+                <template v-else>
+                  <span
+                    v-for="(pid, oi) in [...mainGame.config.wolfTeeOrder.slice(1), mainGame.config.wolfTeeOrder[0]]"
+                    :key="'ts-'+pid"
+                    class="wolf-tee-shot-player"
+                    :class="{ 'wolf-tee-shot-wolf': oi === mainGame.config.wolfTeeOrder.length - 2 }"
+                  >{{ oi === mainGame.config.wolfTeeOrder.length - 2 ? '🐺 ' : '' }}{{ wolfPlayerName(pid) }}{{ oi < mainGame.config.wolfTeeOrder.length - 2 ? ' →' : '' }}</span>
+                </template>
+              </div>
             </div>
             <div v-if="!mainGame.config.wolfTeeOrder || !mainGame.config.wolfTeeOrder.length" class="wolf-order-prompt">
               <div class="config-note">Tap each player in tee order (1st = Wolf on hole 1):</div>
@@ -654,6 +674,14 @@
               <span class="wolf-toggle" :class="{ on: mainGame.config.wolfTeesFirst }"></span>
               <span>🏌️ Wolf Tees First (wolf hits before choosing partner)</span>
             </label>
+            <div class="config-field" style="margin-top:8px">
+              <label>Tie rule</label>
+              <select v-model="mainGame.config.tieRule" class="config-select">
+                <option value="push">Push — ties = no money moves (default)</option>
+                <option value="wolfLoses">Wolf Loses — field wins on tie</option>
+                <option value="carryOver">Carry Over — pot doubles on next hole</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -1443,7 +1471,7 @@ const GAME_DEFAULTS = {
   skins:       { ppt: 5, carry: true, lastHoleTie: 'carry', back9Multiplier: false, teamMode: false, team1: [], team2: [] },
   hilow:       { ppt: 5, aggregatePoint: false, birdieDouble: false, team1: [], team2: [] },
   stableford:  { ppt: 1, variant: 'standard', pts: {} },
-  wolf:        { ppt: 5, wolfLoneMultiplier: 4, blindWolfMultiplier: 8, wolfTeeOrder: [], blindWolfEnabled: true, wolfTeesFirst: true, wolfChoices: {} },
+  wolf:        { ppt: 1, wolfLoneMultiplier: 4, blindWolfMultiplier: 8, wolfTeeOrder: [], blindWolfEnabled: true, wolfTeesFirst: true, wolfChoices: {}, tieRule: 'push' },
   hammer:      { ppt: 1, airHammer: false, fuHammer: false, birdieDouble: false, carryover: false, team1: [], team2: [] },
   sixes:       { ppt: 1, scoringModel: 'segment' },
   nines:       { ppt: 1, sweepBonus: false, sweepMargin: 2, birdieBonus: false, birdieBonusPts: 1, birdieDouble: false },
@@ -2467,6 +2495,15 @@ function reloadApp() {
   font-size: 9px; background: rgba(212,175,55,.15); border: 1px solid rgba(212,175,55,.3);
   border-radius: 5px; padding: 2px 7px; color: #d4af37; font-weight: 700;
 }
+.wolf-tee-shot-order {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
+  padding: 6px 10px; margin-top: 4px;
+  background: rgba(0,0,0,.15); border-radius: 8px;
+  font-size: 12px; color: rgba(240,237,224,.55);
+}
+.wolf-tee-shot-label { font-weight: 700; margin-right: 2px; }
+.wolf-tee-shot-player { white-space: nowrap; }
+.wolf-tee-shot-wolf { color: #60a5fa; font-weight: 800; }
 .wolf-order-btn {
   padding: 4px 8px; border-radius: 6px; background: rgba(255,255,255,.07);
   border: 1px solid rgba(255,255,255,.12); color: #f0ede0; cursor: pointer;

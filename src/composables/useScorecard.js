@@ -164,6 +164,18 @@ export function useScorecard(round, ctx) {
   // ── Sorted player groups ────────────────────────────────────────
   const sortedPlayerGroups = computed(() => {
     const members = ctx.value?.members || []
+    const games = round.value?.game_configs || []
+    const wolfGame = games.find(g => g.type === 'wolf')
+    const wolfOrder = wolfGame?.config?.wolfTeeOrder || []
+
+    // When wolf game is active with a full tee order, sort rows by rotation
+    if (wolfOrder.length >= members.length) {
+      return wolfOrder
+        .map(id => members.find(m => m.id === id))
+        .filter(Boolean)
+        .map(m => ({ member: m, team: 0 }))
+    }
+
     const t1 = members.filter(m => m.team === 1).map(m => ({ member: m, team: 1 }))
     const t2 = members.filter(m => m.team === 2).map(m => ({ member: m, team: 2 }))
     const noTeam = members.filter(m => !m.team || (m.team !== 1 && m.team !== 2)).map(m => ({ member: m, team: 0 }))

@@ -1140,12 +1140,13 @@ export function computeStableford(ctx, config) {
 // ─────────────────────────────────────────────────────────────────
 export function computeWolf(ctx, config) {
   const {
-    ppt = 5,
+    ppt = 1,
     wolfLoneMultiplier = 4,      // lone wolf multiplier (default 4×)
     blindWolfMultiplier = 8,     // blind wolf multiplier (default 8×)
     wolfTeesFirst = true,        // wolf tees FIRST (true) or LAST (false)
     wolfTeeOrder = [],           // explicit tee order: array of member IDs
     hcpMode = 'lowman',
+    tieRule = 'push',            // 'push' | 'wolfLoses' | 'carryOver'
     players: pids,
   } = config
 
@@ -1162,15 +1163,14 @@ export function computeWolf(ctx, config) {
   const rotation = rotationIds.map(id => members.find(m => m.id === id)).filter(Boolean)
   const orderedMembers = rotation.length >= members.length ? rotation : members
 
-
   const { from, to } = holeRange(ctx.holesMode)
   const n = members.length
   const holeResults = []
   const totals = {}
+  let carry = 0   // accumulated pot for tieRule='carryOver'
   for (const m of members) totals[m.id] = { name: m.short_name, net: 0 }
 
-  // wolfChoices: { [hole]: { partner: memberId | 'lone' } }
-  // Stored in config.wolfChoices or defaults to empty
+  // wolfChoices: { [hole]: { partner: memberId | 'lone' | 'blind' } }
   const wolfChoices = config.wolfChoices || {}
 
   for (let h = from; h <= to; h++) {
@@ -1209,26 +1209,38 @@ export function computeWolf(ctx, config) {
       const wolfNet = nets[wolf.id]
       const others = members.filter(m => m.id !== wolf.id)
       const otherBest = Math.min(...others.map(m => nets[m.id]))
-
-      // Blind wolf uses blindWolfMultiplier, lone wolf uses wolfLoneMultiplier
       const mult = isBlind ? blindWolfMultiplier : wolfLoneMultiplier
 
       let winner = null
       if (wolfNet < otherBest) {
         winner = 'wolf'
-        const winAmount = ppt * mult
+        const winAmount = ppt * mult + carry
+        carry = 0
         totals[wolf.id].net += winAmount * (n - 1)
         for (const o of others) totals[o.id].net -= winAmount
       } else if (otherBest < wolfNet) {
         winner = 'field'
-        const loseAmount = ppt * mult
+        const loseAmount = ppt * mult + carry
+        carry = 0
         totals[wolf.id].net -= loseAmount * (n - 1)
         for (const o of others) totals[o.id].net += loseAmount
+      } else {
+        // Tie
+        if (tieRule === 'wolfLoses') {
+          winner = 'field'
+          const loseAmount = ppt * mult + carry
+          carry = 0
+          totals[wolf.id].net -= loseAmount * (n - 1)
+          for (const o of others) totals[o.id].net += loseAmount
+        } else if (tieRule === 'carryOver') {
+          carry += ppt * mult
+        }
+        // push: no money moves
       }
 
       holeResults.push({
         hole: h, wolf: wolf.id, wolfName: wolf.short_name,
-        isLone: isLone, isBlind, winner,
+        isLone, isBlind, winner,
         wolfNet, otherBest, multiplier: mult,
       })
     } else {
@@ -1242,12 +1254,29 @@ export function computeWolf(ctx, config) {
       let winner = null
       if (wolfBest < otherBest) {
         winner = 'wolf'
-        for (const w of wolfTeam) totals[w.id].net += ppt * others.length
-        for (const o of others) totals[o.id].net -= ppt * wolfTeam.length
+        // Distribute any carry evenly per opponent won
+        const perOpp = ppt + carry / Math.max(others.length, 1)
+        carry = 0
+        for (const w of wolfTeam) totals[w.id].net += perOpp * others.length
+        for (const o of others) totals[o.id].net -= perOpp * wolfTeam.length
       } else if (otherBest < wolfBest) {
         winner = 'field'
-        for (const w of wolfTeam) totals[w.id].net -= ppt * others.length
-        for (const o of others) totals[o.id].net += ppt * wolfTeam.length
+        const perOpp = ppt + carry / Math.max(wolfTeam.length, 1)
+        carry = 0
+        for (const w of wolfTeam) totals[w.id].net -= perOpp * others.length
+        for (const o of others) totals[o.id].net += perOpp * wolfTeam.length
+      } else {
+        // Tie
+        if (tieRule === 'wolfLoses') {
+          winner = 'field'
+          const perOpp = ppt + carry / Math.max(wolfTeam.length, 1)
+          carry = 0
+          for (const w of wolfTeam) totals[w.id].net -= perOpp * others.length
+          for (const o of others) totals[o.id].net += perOpp * wolfTeam.length
+        } else if (tieRule === 'carryOver') {
+          carry += ppt
+        }
+        // push: no money moves
       }
 
       holeResults.push({
@@ -1263,7 +1292,7 @@ export function computeWolf(ctx, config) {
     id: m.id, name: m.short_name, net: totals[m.id].net,
   }))
 
-  return { holeResults, totals, settlements, ppt, wolfTeesFirst, rotationOrder: orderedMembers.map(m => m.id) }
+  return { holeResults, totals, settlements, ppt, wolfTeesFirst, tieRule, carry, rotationOrder: orderedMembers.map(m => m.id) }
 }
 
 // ─────────────────────────────────────────────────────────────────

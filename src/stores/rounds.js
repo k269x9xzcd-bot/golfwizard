@@ -293,14 +293,27 @@ export const useRoundsStore = defineStore('rounds', () => {
         use_nickname: p.use_nickname ?? false,
       }))
 
-      const gameConfigs = games.map((g, i) => ({
-        id: `gg_${i}_${Date.now()}`,
-        round_id: roundId,
-        type: g.type,
-        config: g.config,
-        sort_order: i,
-        created_by: null,
-      }))
+      // Map wizard player IDs → guest member IDs for config remapping
+      const guestIdMap = {}
+      players.forEach((p, i) => { if (p.id) guestIdMap[p.id] = members[i].id })
+
+      const gameConfigs = games.map((g, i) => {
+        const config = { ...g.config }
+        if (Array.isArray(config.team1)) config.team1 = config.team1.map(id => guestIdMap[id] || id)
+        if (Array.isArray(config.team2)) config.team2 = config.team2.map(id => guestIdMap[id] || id)
+        if (config.player1) config.player1 = guestIdMap[config.player1] || config.player1
+        if (config.player2) config.player2 = guestIdMap[config.player2] || config.player2
+        if (Array.isArray(config.players)) config.players = config.players.map(id => guestIdMap[id] || id)
+        if (Array.isArray(config.wolfTeeOrder)) config.wolfTeeOrder = config.wolfTeeOrder.map(id => guestIdMap[id] || id)
+        return {
+          id: `gg_${i}_${Date.now()}`,
+          round_id: roundId,
+          type: g.type,
+          config,
+          sort_order: i,
+          created_by: null,
+        }
+      })
 
       activeRound.value = round
       activeMembers.value = members
@@ -473,6 +486,8 @@ export const useRoundsStore = defineStore('rounds', () => {
         if (config.player2) config.player2 = idMap[config.player2] || config.player2
         // Remap players array (fidget, etc.)
         if (Array.isArray(config.players)) config.players = config.players.map(id => idMap[id] || id)
+        // Remap wolf tee order from wizard profile IDs to round member IDs
+        if (Array.isArray(config.wolfTeeOrder)) config.wolfTeeOrder = config.wolfTeeOrder.map(id => idMap[id] || id)
         return {
           round_id: round.id,
           type: g.type,

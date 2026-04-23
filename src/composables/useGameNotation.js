@@ -313,15 +313,32 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
         try {
           const r = computeWolf(ctx, game.config)
           if (!r) continue
+
+          // Per-hole result cells — prefix 🐺 so wolf identity is always visible
           const cells = {}
           for (const hr of (r.holeResults || [])) {
             if (hr.incomplete) continue
             const wInit = pInit(hr.wolf) || 'W'
             const mode = hr.isBlind ? '🙈' : hr.isLone ? '🐺' : `+${pInit(hr.partner) || '?'}`
-            const result = hr.winner === 'wolf' ? '✓' : hr.winner === 'field' ? '✗' : '='
+            const result = hr.winner === 'wolf' ? '✓' : hr.winner === 'field' ? '✗' : hr.winner === null ? '' : '='
             const cls = hr.winner === 'wolf' ? 'nota-t1' : hr.winner === 'field' ? 'nota-t2' : 'nota-halved'
-            cells[hr.hole] = { text: `${wInit}${mode}${result}`, cls }
+            cells[hr.hole] = { text: `🐺${wInit}${mode}${result}`, cls }
           }
+
+          // Wolf rotation row — shows who is wolf on each hole
+          const rotOrder = r.rotationOrder || []
+          if (rotOrder.length) {
+            const mode = ctx.holesMode
+            const from = mode === 'back9' ? 10 : 1
+            const to = mode === 'front9' ? 9 : 18
+            const rotCells = {}
+            for (let h = from; h <= to; h++) {
+              const wolfId = rotOrder[(h - from) % rotOrder.length]
+              rotCells[h] = { text: pInit(wolfId) || '?', cls: 'nota-wolf-rot' }
+            }
+            rows.push({ icon: '', label: 'Wolf⟳', cells: rotCells, outSummary: '', inSummary: '', totalSummary: '' })
+          }
+
           const sorted = [...(r.settlements || [])].sort((a, b) => b.net - a.net)
           const topNet = sorted[0]?.net || 0
           const summary = topNet > 0 ? `${sorted[0].name} +$${topNet}` : 'AS'
