@@ -242,16 +242,24 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         if (!r) return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Vegas</span></div>`
         const t1n = teamInitialsStr(cfg.team1 || []) || 'T1'
         const t2n = teamInitialsStr(cfg.team2 || []) || 'T2'
-        const diff = r.runningTotal || 0
         const ppt = cfg.ppt || 1
-        const amt = Math.abs(diff) * ppt
-        let dollarLine = ''
-        if (diff !== 0) {
-          const loser = diff > 0 ? t2n : t1n
-          const winner = diff > 0 ? t1n : t2n
-          dollarLine = ` · <span style="color:#4ade80;font-weight:700">${loser} owe $${amt}</span>`
-        }
-        return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Vegas</span><span class="muted" style="font-size:10px;margin-left:4px">${t1n} vs ${t2n}${dollarLine}</span></div>`
+        const t1Total = r.t1Total || 0
+        const net = t1Total * ppt
+        const played = (r.holeResults || []).filter(h => !h.incomplete)
+        const last3 = played.slice(-3)
+        const holeStr = last3.length
+          ? last3.map(h => {
+              const col = h.diff > 0 ? '#4ade80' : h.diff < 0 ? '#f87171' : '#888'
+              const pts = h.diff > 0 ? `+${h.diff}` : `${h.diff}`
+              const flip = h.multiplier > 1 ? '🔄' : ''
+              return `H${h.hole}:${h.t1Num}v${h.t2Num}${flip}(<span style='color:${col}'>${pts}</span>)`
+            }).join(' · ')
+          : 'No scores yet'
+        let moneyLine = ''
+        if (net > 0) moneyLine = `<span style='color:#4ade80;font-weight:700'>${t1n} leads +$${net}</span>`
+        else if (net < 0) moneyLine = `<span style='color:#f87171;font-weight:700'>${t2n} leads +$${Math.abs(net)}</span>`
+        else if (played.length) moneyLine = `<span style='color:#d4af37'>All square</span>`
+        return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Vegas</span><span class="muted" style="font-size:10px;margin-left:4px">${t1n} vs ${t2n} · $${ppt}/pt</span><div style="font-size:11px;margin-top:3px;opacity:.8">${holeStr}</div>${moneyLine ? '<div style="font-size:12px;margin-top:3px">' + moneyLine + '</div>' : ''}</div>`
       }
 
       // ── Snake ──
