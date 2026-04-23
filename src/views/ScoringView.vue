@@ -769,32 +769,42 @@
             <span class="wolf-label">🐺 Wolf — Hole {{ activeHole }}</span>
             <span class="wolf-current">{{ wolfOnThisHoleName }} is Wolf<span v-if="wolfGame?.config?.wolfTeesFirst === false" class="wolf-tee-badge"> tees last</span><span v-else class="wolf-tee-badge"> tees first</span></span>
           </div>
-          <div v-if="wolfChoiceForHole" class="wolf-prompt">
-            <template v-if="wolfChoiceForHole.partner === 'lone'">🐺 Lone Wolf — 1 vs {{ roundsStore.activeMembers.length - 1 }}</template>
-            <template v-else-if="wolfChoiceForHole.partner === 'blind'">🙈 Blind Wolf — declared before anyone tees ({{ wolfGame?.config?.blindWolfMultiplier ?? 8 }}×) ({{ wolfGame?.config?.blindWolfMultiplier ?? 8 }}×)</template>
-            <template v-else-if="wolfChoiceForHole.partner">🤝 Partner: {{ memberName(wolfChoiceForHole.partner) }}</template>
-          </div>
-          <div v-else class="wolf-prompt">{{ wolfGame?.config?.wolfTeesFirst === false ? 'Wolf tees last — watch all shots, then pick' : 'Tap a player to pick as partner after their tee shot' }}</div>
-          <div class="wolf-buttons">
+
+          <!-- CHOSEN STATE: show teams + change button -->
+          <template v-if="wolfTeamForHole">
+            <div class="wolf-teams-display">
+              <div class="wolf-team wolf-team-a">
+                <span class="wolf-team-label">{{ wolfTeamForHole.mode === 'lone' ? '🐺 Lone' : wolfTeamForHole.mode === 'blind' ? '🙈 Blind' : '🤝 Wolf team' }}</span>
+                <span class="wolf-team-names">{{ wolfTeamForHole.wolfTeam.map(m => memberDisplay(m)).join(' + ') }}</span>
+                <span v-if="wolfTeamForHole.mode !== 'partner'" class="wolf-team-mult">{{ wolfTeamForHole.mode === 'blind' ? (wolfGame.config?.blindWolfMultiplier ?? 8) : (wolfGame.config?.wolfLoneMultiplier ?? 4) }}×</span>
+              </div>
+              <div class="wolf-vs-divider">vs</div>
+              <div class="wolf-team wolf-team-b">
+                <span class="wolf-team-label">Field</span>
+                <span class="wolf-team-names">{{ wolfTeamForHole.field.map(m => memberDisplay(m)).join(' + ') }}</span>
+              </div>
+            </div>
+            <button class="wolf-change-btn" @click="setWolfChoice(wolfChoiceForHole.partner)">✕ Clear choice</button>
+          </template>
+
+          <!-- PICKING STATE: show partner/lone/blind buttons -->
+          <template v-else>
+            <div class="wolf-prompt">{{ wolfGame?.config?.wolfTeesFirst === false ? 'Wolf tees last — watch all shots, then pick' : 'Tap a player to pick as partner after their tee shot' }}</div>
+            <div class="wolf-buttons">
+              <button
+                v-for="member in wolfPickableMembers"
+                :key="'wolf-pick-' + member.id"
+                class="wolf-pick-btn"
+                @click="setWolfChoice(member.id)"
+              >{{ memberDisplay(member) }}</button>
+            </div>
+            <button class="wolf-lone-btn" @click="setWolfChoice('lone')">🐺 Lone Wolf</button>
             <button
-              v-for="member in wolfPickableMembers"
-              :key="'wolf-pick-' + member.id"
-              class="wolf-pick-btn"
-              :class="{ active: wolfChoiceForHole?.partner === member.id }"
-              @click="setWolfChoice(member.id)"
-            >{{ memberDisplay(member) }}</button>
-          </div>
-          <button
-            class="wolf-lone-btn"
-            :class="{ active: wolfChoiceForHole?.partner === 'lone' }"
-            @click="setWolfChoice('lone')"
-          >🐺 Lone Wolf</button>
-          <button
-            v-if="wolfGame.config?.blindWolfEnabled !== false"
-            class="wolf-blind-btn"
-            :class="{ active: wolfChoiceForHole?.partner === 'blind' }"
-            @click="setWolfChoice('blind')"
-          >🙈 Blind Wolf ({{ wolfGame?.config?.blindWolfMultiplier ?? 8 }}× stakes)</button>
+              v-if="wolfGame.config?.blindWolfEnabled !== false"
+              class="wolf-blind-btn"
+              @click="setWolfChoice('blind')"
+            >🙈 Blind Wolf ({{ wolfGame?.config?.blindWolfMultiplier ?? 8 }}× stakes)</button>
+          </template>
         </div>
 
 
@@ -2120,23 +2130,37 @@ async function undoLastSnake() {
 // ── Wolf helpers ─────────────────────────────────────────────────
 const wolfGame = computed(() => roundsStore.activeGames.find(g => g.type?.toLowerCase() === 'wolf') || null)
 
+// Resolve a raw teeOrder entry (may be wizard ID, profile ID, or member ID)
+// to a validated activeMembers .id. Falls back to position if all lookups fail.
+function _resolveWolfId(rawId, positionIdx) {
+  const members = roundsStore.activeMembers
+  if (!members.length) return null
+  // 1. Direct round_member id
+  if (members.some(m => m.id === rawId)) return rawId
+  // 2. Profile id (old rounds before ID-remap fix)
+  const byProfile = members.find(m => m.profile_id && m.profile_id === rawId)
+  if (byProfile) return byProfile.id
+  // 3. Position fallback (wizard IDs that weren't remapped)
+  return members[positionIdx]?.id ?? null
+}
+
 const wolfOnThisHole = computed(() => {
   if (!wolfGame.value) return null
   const members = roundsStore.activeMembers
+  if (!members.length) return null
   const configured = wolfGame.value.config?.wolfTeeOrder || []
-  const teeOrder = configured.length ? configured : members.map(m => m.id)
-  if (!teeOrder.length) return null
-  const n = teeOrder.length
+  const n = members.length
   const wolfIdx = (activeHole.value - 1) % n
-  return teeOrder[wolfIdx]
+  if (configured.length >= n) {
+    return _resolveWolfId(configured[wolfIdx], wolfIdx)
+  }
+  // No tee order set — use member join order
+  return members[wolfIdx]?.id ?? null
 })
 
 const wolfOnThisHoleName = computed(() => {
   if (!wolfOnThisHole.value) return '?'
-  const wolfId = wolfOnThisHole.value
-  // Try round_member id first; fall back to profile_id for rounds created before the ID-remap fix
-  const m = roundsStore.activeMembers.find(m => m.id === wolfId)
-    || roundsStore.activeMembers.find(m => m.profile_id && m.profile_id === wolfId)
+  const m = roundsStore.activeMembers.find(m => m.id === wolfOnThisHole.value)
   return memberDisplay(m)
 })
 
@@ -2147,10 +2171,29 @@ const wolfChoiceForHole = computed(() => {
 
 const wolfPickableMembers = computed(() => {
   if (!wolfOnThisHole.value) return []
-  const wolfId = wolfOnThisHole.value
-  return roundsStore.activeMembers.filter(m => m.id !== wolfId && m.profile_id !== wolfId)
+  return roundsStore.activeMembers.filter(m => m.id !== wolfOnThisHole.value)
 })
 
+// Wolf team and field derived from current hole choice
+const wolfTeamForHole = computed(() => {
+  const choice = wolfChoiceForHole.value
+  const wolfId = wolfOnThisHole.value
+  if (!choice || !wolfId) return null
+  const members = roundsStore.activeMembers
+  if (choice.partner === 'lone' || choice.partner === 'blind') {
+    return {
+      mode: choice.partner,
+      wolfTeam: members.filter(m => m.id === wolfId),
+      field: members.filter(m => m.id !== wolfId),
+    }
+  }
+  const partnerId = choice.partner
+  return {
+    mode: 'partner',
+    wolfTeam: members.filter(m => m.id === wolfId || m.id === partnerId),
+    field: members.filter(m => m.id !== wolfId && m.id !== partnerId),
+  }
+})
 
 const sixesGame = computed(() => roundsStore.activeGames.find(g => g.type?.toLowerCase() === 'sixes') || null)
 

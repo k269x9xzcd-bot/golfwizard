@@ -465,13 +465,19 @@ export const useRoundsStore = defineStore('rounds', () => {
     }
 
     // Build a mapping from wizard player IDs → new Supabase member IDs
-    // Match by short_name since that's unique within a round
+    // Primary: match by short_name. Fallback: match by insertion position.
     const idMap = {}
     for (const p of players) {
       const shortName = p.shortName ?? p.name?.slice(0, 6)
       const match = insertedMembers.find(m => m.short_name === shortName)
       if (match && p.id) idMap[p.id] = match.id
     }
+    // Position-based fallback for any wizard player whose short_name didn't match
+    players.forEach((p, i) => {
+      if (p.id && !idMap[p.id] && insertedMembers[i]) {
+        idMap[p.id] = insertedMembers[i].id
+      }
+    })
 
     // Add games — remap team1/team2/player IDs from wizard IDs to real member IDs
     let insertedGames = []

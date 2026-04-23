@@ -354,8 +354,29 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         const r = computeWolf(ctx, cfg)
         if (!r) return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Wolf</span></div>`
         const ppt = cfg.ppt || 1
+
+        // Next incomplete hole = upcoming wolf
+        const nextIncomplete = r.holeResults.find(hr => hr.incomplete)
+        const nextWolfHtml = nextIncomplete
+          ? `<div style="font-size:11px;margin-top:3px;opacity:.85">🐺 H${nextIncomplete.hole}: <span style="font-weight:600">${nextIncomplete.wolfName}</span> is wolf</div>`
+          : ''
+
+        // Recent completed holes (last 3)
+        const completed = r.holeResults.filter(hr => !hr.incomplete)
+        const recent = completed.slice(-3)
+        const chipHtml = recent.map(hr => {
+          const color = hr.winner === 'wolf' ? '#4ade80' : hr.winner === null ? '#d4af37' : '#f87171'
+          const label = hr.winner === 'wolf'
+            ? `🐺 ${hr.isLone ? 'Lone' : hr.isBlind ? 'Blind' : hr.wolfName}`
+            : hr.winner === null ? 'Push' : 'Field'
+          return `<span style="display:inline-block;background:${color}22;border:1px solid ${color}44;color:${color};border-radius:4px;padding:1px 5px;font-size:10px;font-weight:600">H${hr.hole}: ${label}</span>`
+        }).join(' ')
+        const recentHtml = chipHtml ? `<div style="margin-top:3px;display:flex;gap:4px;flex-wrap:wrap">${chipHtml}</div>` : ''
+
+        // Standings
         const standings = r.settlements?.map(s => `${s.name}: <span style="color:${(s.net||0) > 0 ? '#4ade80' : (s.net||0) < 0 ? '#f87171' : '#d4af37'};font-weight:700">${(s.net||0) > 0 ? '+' : ''}$${Math.abs(s.net||0)}</span>`).join(' · ') || ''
-        return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Wolf</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppt}/pt</span>${standings ? `<div style="font-size:11px;margin-top:3px">${standings}</div>` : ''}</div>`
+
+        return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Wolf</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppt}/pt</span>${nextWolfHtml}${recentHtml}${standings ? `<div style="font-size:11px;margin-top:3px">${standings}</div>` : ''}</div>`
       }
 
       // ── Sixes ──
