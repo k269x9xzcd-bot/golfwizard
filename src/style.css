@@ -439,15 +439,13 @@ body {
   z-index: 200;
   display: flex;
   flex-direction: column;
-  align-items: stretch;
+  align-items: center;
   justify-content: flex-end;
-  padding: 0;
+  padding: 0 12px 0 12px;
 }
 
 @media (min-width: 600px) {
   .modal-overlay {
-    flex-direction: row;
-    align-items: center;
     justify-content: center;
     padding: var(--gw-space-6);
   }
@@ -456,25 +454,23 @@ body {
 .modal {
   background: var(--gw-neutral-800);
   border: 1px solid var(--gw-card-border);
-  border-radius: var(--gw-radius-xl) var(--gw-radius-xl) 0 0;
+  border-radius: var(--gw-radius-xl) var(--gw-radius-xl) var(--gw-radius-xl) var(--gw-radius-xl);
   padding: var(--gw-space-6) var(--gw-space-5);
   padding-bottom: calc(var(--gw-space-8) + env(safe-area-inset-bottom));
   width: 100%;
-  max-width: 100%;
+  max-width: 480px;
   box-sizing: border-box;
-  max-height: 90dvh;
+  max-height: 88dvh;
   overflow-y: auto;
   position: relative;
   flex-shrink: 0;
+  margin-bottom: 12px;
   animation: modal-up 0.25s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 @media (min-width: 600px) {
   .modal {
-    border-radius: var(--gw-radius-xl);
-    max-width: 480px;
-    width: 480px;
-    flex-shrink: 0;
+    margin-bottom: 0;
   }
 }
 
