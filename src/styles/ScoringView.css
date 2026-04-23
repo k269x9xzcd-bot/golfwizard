@@ -1515,3 +1515,19 @@
 .junk-player-btn.active { background: rgba(212,175,55,.25); color: #d4af37; border-color: rgba(212,175,55,.5); font-weight: 700; }
 .junk-player-btn.auto-marked { background: rgba(80,200,100,.2); color: #50c864; border-color: rgba(80,200,100,.4); }
 .junk-player-btn:disabled { opacity: 0.3; cursor: default; }
+
+/* BBB Strip */
+.bbb-strip { background: rgba(212,175,55,.06); border: 1px solid rgba(212,175,55,.2); border-radius: 12px; padding: 12px 14px; margin: 8px 0; }
+.bbb-strip-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.bbb-strip-title { font-size: 14px; font-weight: 700; color: #d4af37; }
+.bbb-sweep-btn { background: rgba(212,175,55,.25); color: #d4af37; border: 1px solid rgba(212,175,55,.4); border-radius: 10px; padding: 4px 12px; font-size: 12px; font-weight: 700; cursor: pointer; }
+.bbb-row { display: flex; gap: 8px; }
+.bbb-point { flex: 1; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 10px; padding: 8px; transition: background .15s; }
+.bbb-point.assigned { background: rgba(80,200,100,.1); border-color: rgba(80,200,100,.3); }
+.bbb-point.locked { opacity: 0.45; }
+.bbb-point-label { font-size: 11px; font-weight: 700; color: #d4af37; margin-bottom: 2px; }
+.bbb-point-sub { font-size: 10px; color: #a0908a; margin-bottom: 6px; }
+.bbb-player-row { display: flex; flex-wrap: wrap; gap: 4px; }
+.bbb-player-btn { background: rgba(255,255,255,.07); color: #c0b090; border: 1px solid rgba(255,255,255,.1); border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer; transition: all .15s; }
+.bbb-player-btn.active { background: rgba(80,200,100,.25); color: #50c864; border-color: rgba(80,200,100,.5); font-weight: 700; }
+.bbb-player-btn:disabled { opacity: 0.3; cursor: default; }

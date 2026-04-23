@@ -714,6 +714,33 @@
             </div>
           </div>
 
+          <\!-- BBB (Bingo Bango Bongo) -->
+          <div class="side-game-row" :class="{ 'side-game-on': sideGames.bbb.enabled }">
+            <div class="side-game-header" @click="toggleSideGame('bbb')">
+              <span>🏌️ BBB (Bingo Bango Bongo)</span>
+              <span class="side-header-actions">
+                <button class="btn-game-info btn-game-info-sm" @click.stop="toggleGameInfo('bbb')" title="How to play">ℹ️</button>
+                <span class="side-toggle">{{ sideGames.bbb.enabled ? '▲' : '▼' }}</span>
+              </span>
+            </div>
+            <div v-if="gameInfoKey === 'bbb'" class="game-info-popover game-info-inline">
+              <p class="game-info-desc">{{ getGameDef('bbb')?.desc }}</p>
+              <div class="game-info-section"><strong>Rules:</strong> {{ getGameDef('bbb')?.rules }}</div>
+              <button class="btn-close-info" @click="gameInfoKey = null">Got it</button>
+            </div>
+            <div v-if="sideGames.bbb.enabled" class="side-game-config">
+              <div class="config-row">
+                <div class="config-field">
+                  <label>$ per point</label>
+                  <input v-model.number="sideGames.bbb.ppt" type="number" class="config-input" placeholder="1" />
+                </div>
+              </div>
+              <div class="dots-options">
+                <label><input type="checkbox" v-model="sideGames.bbb.doubleBongo" /> Double Bongo (birdie on bongo hole = 2 pts)</label>
+              </div>
+            </div>
+          </div>
+
           <!-- 1v1 Side Match -->
           <div class="side-game-row" :class="{ 'side-game-on': sideGames.match1.enabled }">
             <div class="side-game-header" @click="toggleSideGame('match1')">
@@ -1292,6 +1319,7 @@ const sideGames = ref({
   match1: { enabled: false, player1: '', player2: '', ppt: 10, scoring: 'closeout', front: 10, back: 10, overall: 20, pressAt: 2 },
   match2: { enabled: false, player1: '', player2: '', ppt: 10, scoring: 'closeout', front: 10, back: 10, overall: 20, pressAt: 2 },
   bbn:    { enabled: false },
+  bbb:    { enabled: false, ppt: 1, doubleBongo: false },
 })
 
 // Best Ball trackers — multiple allowed (foursome-wide, not team-based)
@@ -1898,6 +1926,13 @@ function buildGameConfigs() {
         },
       })
     }
+  }
+
+  if (sideGames.value.bbb.enabled) {
+    games.push({ type: 'bbb', config: {
+      ppt: sg.bbb.ppt,
+      doubleBongo: sg.bbb.doubleBongo,
+    }})
   }
 
   return games

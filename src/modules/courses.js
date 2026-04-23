@@ -304,6 +304,14 @@ export const WOLF_HOLE_MODES=[{k:'normal',l:'🤝 Partner'},{k:'lone',l:'🐺 Lo
     wagering:'Usually bragging rights or comparison across foursomes. Can set $ per under/over par.',
     hcpNote:'Net uses full course handicap (GHIN → slope/rating). Gross uses raw scores.',
     example:'1 BB Net: four players make net 3, 4, 4, 5 on a par 4. Best ball = 3 (1 under). Track running total vs par.'},
+  bbb:{icon:'🏌️',name:'BBB (Bingo Bango Bongo)',role:'side',
+    desc:'Three points per hole: BINGO (first on green), BANGO (closest to pin once all on green), BONGO (first in hole). Gross game — handicap does not apply.',
+    players:'All players',
+    rules:'Each hole offers 3 pts. BINGO: first player to reach the green. BANGO: player closest to the pin once all players are on the green. BONGO: first player to hole out. A player can win all 3 (sweep). Double Bongo variant: if BONGO winner birdied, they earn 2 pts instead of 1. Pairwise settlement at end of round.',
+    wagering:'$ per point. Pairwise settlement. Common: $1-2/pt.',
+    hcpNote:'Inherently gross — no strokes applied. Levels the field through the unique scoring structure.',
+    notation:'B1=Bingo, B2=Bango, B3=Bongo icons shown in hole cells on scorecard.',
+    example:'Hole 5: Player A reaches green first (BINGO). Player C closest to pin (BANGO). Player B holes out first (BONGO). A:1pt, B:1pt, C:1pt.'},
 };
 
 /**

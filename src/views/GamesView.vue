@@ -567,18 +567,18 @@ const GAME_ICONS = {
   nassau: '💰', skins: '💎', wolf: '🐺', vegas: '🎲', match: '⚔️', matchplay: '⚔️',
   bestball: '🤝', stableford: '📊', sixes: '🎯', snake: '🐍', dots: '●',
   junk: '✨', fidget: '🎲', hilow: '📈', hammer: '🔨', teamday: '👥', fivethreeone: '5', nines: '9',
-  bbn: '🏌️', match1v1: '1v1',
+  bbn: '🏌️', match1v1: '1v1', bbb: '🏌️',
 }
 const GAME_LABELS = {
   nassau: 'Nassau', skins: 'Skins', wolf: 'Wolf', vegas: 'Vegas', match: 'Match Play', matchplay: 'Match Play',
   bestball: 'Best Ball', stableford: 'Stableford', sixes: 'Sixes', snake: 'Snake', dots: 'Dots',
   junk: 'Junk', fidget: 'Fidget', hilow: 'Hi-Low', hammer: 'Hammer', teamday: 'Team Day', fivethreeone: '5-3-1', nines: '9s',
-  bbn: 'Best Ball', match1v1: '1v1',
+  bbn: 'Best Ball', match1v1: '1v1', bbb: 'BBB',
 }
 const GAME_STYLE = {
   nassau: 'gold', skins: 'green', wolf: 'purple', vegas: 'blue', match: 'red', matchplay: 'red',
   bestball: 'teal', stableford: 'green', sixes: 'orange', snake: 'purple', dots: 'orange',
-  fidget: 'blue', bbn: 'teal', match1v1: 'red', hilow: 'teal', hammer: 'red', fivethreeone: 'orange', nines: 'orange',
+  fidget: 'blue', bbn: 'teal', match1v1: 'red', hilow: 'teal', hammer: 'red', fivethreeone: 'orange', nines: 'orange', bbb: 'gold',
 }
 
 function gameIcon(type) { return GAME_ICONS[type?.toLowerCase()] || '🏌️' }

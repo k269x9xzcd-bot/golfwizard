@@ -9,7 +9,7 @@ import { useRoundsStore } from '../stores/rounds'
 import {
   computeNassau, computeSkins, computeMatch, computeSnake,
   computeDots, computeFidget, computeBestBallNet, computeFiveThreeOne, computeNines,
-  computeVegas, computeHiLow, computeWolf, computeSixes, computeStableford, computeHammer,
+  computeVegas, computeHiLow, computeWolf, computeSixes, computeStableford, computeHammer, computeBbb,
   holePar,
 } from '../modules/gameEngine'
 
@@ -29,7 +29,7 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
   }
 
   function gameIcon(type) {
-    const icons = { nassau:'💰', skins:'💎', match:'⚔️', matchplay:'⚔️', bestball:'🤝', snake:'🐍', dots:'🎯', fidget:'😬', bbn:'🏌️', match1v1:'⚔️', vegas:'🎰', hilow:'📊', stableford:'⭐', wolf:'🐺', hammer:'🔨', sixes:'🎲', fivethreeone:'5️⃣', nines:'9️⃣' }
+    const icons = { nassau:'💰', skins:'💎', match:'⚔️', matchplay:'⚔️', bestball:'🤝', snake:'🐍', dots:'🎯', fidget:'😬', bbn:'🏌️', match1v1:'⚔️', vegas:'🎰', hilow:'📊', stableford:'⭐', wolf:'🐺', hammer:'🔨', sixes:'🎲', fivethreeone:'5️⃣', nines:'9️⃣', bbb:'🏌️' }
     return icons[type?.toLowerCase()] || '🎮'
   }
 
@@ -45,7 +45,7 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
       const p2 = config.player2 ? pInit(config.player2) : null
       if (p1 && p2) return `Match ${p1} v ${p2}`
     }
-    const labels = { nassau:'Nassau', skins:'Skins', match:'Match', matchplay:'Match Play', bestball:'Best Ball', snake:'Snake', dots:'Dots', fidget:'Fidget', bbn:'Best Ball', match1v1:'1v1', vegas:'Vegas', hilow:'Hi-Low', stableford:'Stableford', wolf:'Wolf', hammer:'Hammer', sixes:'Sixes', fivethreeone:'5-3-1', nines:'9s' }
+    const labels = { nassau:'Nassau', skins:'Skins', match:'Match', matchplay:'Match Play', bestball:'Best Ball', snake:'Snake', dots:'Dots', fidget:'Fidget', bbn:'Best Ball', match1v1:'1v1', vegas:'Vegas', hilow:'Hi-Low', stableford:'Stableford', wolf:'Wolf', hammer:'Hammer', sixes:'Sixes', fivethreeone:'5-3-1', nines:'9s', bbb:'BBB' }
     return labels[type?.toLowerCase()] || type
   }
 
@@ -472,6 +472,29 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
         } catch(e) { /* skip */ }
       }
     }
+
+      // ── BBB ──
+      if (t === 'bbb') {
+        try {
+          const r = computeBbb(ctx, game.config)
+          const cells = {}
+          for (const [holeKey, award] of Object.entries(r.awards || {})) {
+            const h = parseInt(holeKey)
+            const parts = []
+            if (award.bingo) parts.push(`<span class="nota-dot-who">${pInit(award.bingo)}</span>B1`)
+            if (award.bango) parts.push(`<span class="nota-dot-who">${pInit(award.bango)}</span>B2`)
+            if (award.bongo) parts.push(`<span class="nota-dot-who">${pInit(award.bongo)}</span>B3`)
+            if (parts.length) cells[h] = { text: parts.join(' '), cls: 'nota-bbb' }
+          }
+          const sorted = (r.standings || []).slice().sort((a, b) => b.pts - a.pts)
+          const summaryParts = sorted.filter(s => s.pts > 0).map(s => `${pInit(s.id)}:${s.pts}`)
+          rows.push({
+            icon: '🏌️', label: 'BBB', cells,
+            outSummary: '', inSummary: '',
+            totalSummary: summaryParts.join(' ') || '',
+          })
+        } catch(e) { /* skip */ }
+      }
 
     return rows
   })

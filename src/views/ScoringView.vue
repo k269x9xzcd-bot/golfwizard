@@ -799,6 +799,64 @@
           <button class="finish-btn finish-btn-lg" @click="showFinishReview = true">Review & Finish Round</button>
         </div>
 
+        <\!-- BBB Strip — BINGO/BANGO/BONGO sequential unlock -->
+        <div v-if="bbbGame" class="bbb-strip">
+          <div class="bbb-strip-header">
+            <span class="bbb-strip-title">🏌️ BBB — Hole {{ activeHole }}</span>
+            <button
+              v-if="bbbHoleAward(activeHole).bingo && bbbHoleAward(activeHole).bango && bbbHoleAward(activeHole).bongo"
+              class="bbb-sweep-btn"
+              @click="setBbbSweep(activeHole)"
+            >Sweep ⚡</button>
+          </div>
+          <div class="bbb-row">
+            <\!-- BINGO: first on green -->
+            <div class="bbb-point" :class="{ assigned: bbbHoleAward(activeHole).bingo }">
+              <div class="bbb-point-label">B1 BINGO</div>
+              <div class="bbb-point-sub">First on green</div>
+              <div class="bbb-player-row">
+                <button
+                  v-for="m in bbbMembers"
+                  :key="m.id"
+                  class="bbb-player-btn"
+                  :class="{ active: bbbHoleAward(activeHole).bingo === m.id }"
+                  @click="setBbbPoint(activeHole, 'bingo', m.id)"
+                >{{ m.short_name || m.name }}</button>
+              </div>
+            </div>
+            <\!-- BANGO: closest once all on green -->
+            <div class="bbb-point" :class="{ assigned: bbbHoleAward(activeHole).bango, locked: \!bbbHoleAward(activeHole).bingo }">
+              <div class="bbb-point-label">B2 BANGO</div>
+              <div class="bbb-point-sub">Closest to pin</div>
+              <div class="bbb-player-row">
+                <button
+                  v-for="m in bbbMembers"
+                  :key="m.id"
+                  class="bbb-player-btn"
+                  :class="{ active: bbbHoleAward(activeHole).bango === m.id }"
+                  :disabled="\!bbbHoleAward(activeHole).bingo"
+                  @click="setBbbPoint(activeHole, 'bango', m.id)"
+                >{{ m.short_name || m.name }}</button>
+              </div>
+            </div>
+            <\!-- BONGO: first to hole out -->
+            <div class="bbb-point" :class="{ assigned: bbbHoleAward(activeHole).bongo, locked: \!bbbHoleAward(activeHole).bango }">
+              <div class="bbb-point-label">B3 BONGO</div>
+              <div class="bbb-point-sub">First to hole out</div>
+              <div class="bbb-player-row">
+                <button
+                  v-for="m in bbbMembers"
+                  :key="m.id"
+                  class="bbb-player-btn"
+                  :class="{ active: bbbHoleAward(activeHole).bongo === m.id }"
+                  :disabled="\!bbbHoleAward(activeHole).bango"
+                  @click="setBbbPoint(activeHole, 'bongo', m.id, true)"
+                >{{ m.short_name || m.name }}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <\!-- Junk Sheet button — only when dots/junk game is active -->
         <div v-if="dotsGame" class="junk-sheet-trigger">
           <button class="junk-sheet-btn" @click="openJunkSheet(activeHole)">🎯 Log Junk — H{{ activeHole }}</button>
@@ -1275,6 +1333,54 @@ async function respondHammer(accept) {
   }
 }
 
+
+// ── BBB (Bingo Bango Bongo) STRIP ───────────────────────────────────────
+const bbbGame = computed(() => {
+  const games = roundsStore.activeGames || []
+  return games.find(g => g.type?.toLowerCase() === 'bbb') ?? null
+})
+
+const bbbMembers = computed(() => roundsStore.activeMembers || [])
+
+function bbbHoleAward(hole) {
+  return bbbGame.value?.config?.awards?.[hole] || {}
+}
+
+async function setBbbPoint(hole, point, memberId, checkBirdie = false) {
+  const game = bbbGame.value
+  if (\!game) return
+  const awards = { ...(game.config?.awards || {}) }
+  const current = { ...(awards[hole] || {}) }
+  // Toggle: clicking same player clears the point
+  if (current[point] === memberId) {
+    delete current[point]
+    // Also clear downstream points to preserve sequence
+    if (point === 'bingo') { delete current.bango; delete current.bongo }
+    if (point === 'bango') { delete current.bongo }
+  } else {
+    current[point] = memberId
+    // Double Bongo: flag if winner birdied
+    if (point === 'bongo' && checkBirdie && game.config?.doubleBongo) {
+      const gross = getScore(memberId, hole)
+      const par = parForHole(hole)
+      current.bongoBirdied = gross \!= null && gross <= par - 1
+    }
+  }
+  awards[hole] = current
+  await roundsStore.updateGameConfig(game.id, { ...game.config, awards })
+}
+
+async function setBbbSweep(hole) {
+  // Quick-assign all 3 points to first player who has bingo
+  const game = bbbGame.value
+  if (\!game) return
+  const award = bbbHoleAward(hole)
+  const sweeper = award.bingo
+  if (\!sweeper) return
+  const awards = { ...(game.config?.awards || {}) }
+  awards[hole] = { bingo: sweeper, bango: sweeper, bongo: sweeper }
+  await roundsStore.updateGameConfig(game.id, { ...game.config, awards })
+}
 
 // ── DOTS / JUNK SHEET ─────────────────────────────────────────────
 const dotsGame = computed(() => {

@@ -1569,28 +1569,32 @@ export function scorecardSummary(ctx) {
 // Settlement: pairwise — each player pays every player they trail.
 // ─────────────────────────────────────────────────────────────────
 export function computeBbb(ctx, config) {
-  const { ppt = 1, awards = {}, players: pids } = config
+  const { ppt = 1, awards = {}, players: pids, doubleBongo = false } = config
   const members = pids
     ? ctx.members.filter(m => pids.includes(m.id))
     : ctx.members
 
-  // Tally points
+  // Tally points — doubleBongo: bongo winner who birdied gets 2 pts
   const pts = {}
   for (const m of members) pts[m.id] = 0
+
   for (const holeKey of Object.keys(awards)) {
     const h = awards[holeKey]
-    if (h.bingo && pts[h.bingo] !== undefined) pts[h.bingo]++
-    if (h.bango && pts[h.bango] !== undefined) pts[h.bango]++
-    if (h.bongo && pts[h.bongo] !== undefined) pts[h.bongo]++
+    if (h.bingo && pts[h.bingo] \!== undefined) pts[h.bingo]++
+    if (h.bango && pts[h.bango] \!== undefined) pts[h.bango]++
+    if (h.bongo && pts[h.bongo] \!== undefined) {
+      const bongoPts = (doubleBongo && h.bongoBirdied) ? 2 : 1
+      pts[h.bongo] += bongoPts
+    }
   }
 
-  // Pairwise settlement (same model as Dots)
+  // Pairwise settlement
   const settlements = []
   const ids = members.map(m => m.id)
   for (let i = 0; i < ids.length; i++) {
     for (let j = i + 1; j < ids.length; j++) {
       const diff = pts[ids[i]] - pts[ids[j]]
-      if (diff !== 0) {
+      if (diff \!== 0) {
         const winner = diff > 0 ? ids[i] : ids[j]
         const loser  = diff > 0 ? ids[j] : ids[i]
         const wm = members.find(m => m.id === winner)
@@ -1600,7 +1604,6 @@ export function computeBbb(ctx, config) {
     }
   }
 
-  // Per-player net (for extractPlayerNets in settlements.js)
   const netMap = {}
   for (const m of members) netMap[m.id] = 0
   for (const s of settlements) {
@@ -1609,10 +1612,9 @@ export function computeBbb(ctx, config) {
   }
   const standings = members.map(m => ({ id: m.id, name: m.short_name, pts: pts[m.id], net: netMap[m.id] }))
 
-  return { pts, ppt, awards, settlements, standings }
+  return { pts, ppt, awards, settlements, standings, doubleBongo }
 }
 
-// ─────────────────────────────────────────────────────────────────
 // ── SCOTCH 6s ────────────────────────────────────────────────────
 // 2v2 team game. Per hole: low ball (2 pts), low total (2 pts),
 // prox on par 3 (1 pt, manual), birdie (1 pt, auto or manual).

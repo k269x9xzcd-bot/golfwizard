@@ -11,7 +11,7 @@ import { computeAllSettlements } from '../modules/settlements'
 import {
   computeNassau, computeSkins, computeMatch, computeVegas, computeSnake,
   computeHiLow, computeStableford, computeWolf, computeHammer, computeSixes,
-  computeFiveThreeOne, computeDots, computeFidget, computeBestBallNet, computeBestBall,
+  computeFiveThreeOne, computeDots, computeFidget, computeBestBallNet, computeBestBall, computeBbb,
 } from '../modules/gameEngine'
 
 export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitialsStr, pInit, memberDisplay, visibleHoles }) {
@@ -353,6 +353,17 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         const counts = r.settlements?.map(s => `${s.name}: ${s.myDots || 0}`).join(' · ') || '—'
         const dollarLine = r.settlements?.filter(s => (s.net||0) !== 0).map(s => `${s.name}${(s.net||0) > 0 ? '<span style="color:#4ade80"> +$' + s.net + '</span>' : '<span style="color:#f87171"> -$' + Math.abs(s.net) + '</span>'}`).join(' · ') || ''
         return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Dots</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppt}/dot</span><div style="font-size:11px;margin-top:3px;opacity:.8">${counts}</div>${dollarLine ? '<div style="font-size:11px;margin-top:2px">' + dollarLine + '</div>' : ''}</div>`
+      }
+
+      // ── BBB ──
+      if (t === 'bbb') {
+        const r = computeBbb(ctx, cfg)
+        if (\!r) return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} BBB</span></div>`
+        const ppt = r.ppt || cfg.ppt || 1
+        const variant = cfg.doubleBongo ? ' (Double Bongo)' : ''
+        const standingStr = (r.standings || []).slice().sort((a,b)=>b.pts-a.pts).map(s => `${s.name}: ${s.pts}pt`).join(' · ')
+        const dollarLine = (r.settlements || []).map(s => `${s.fromName} → ${s.toName} $${s.amount}`).join(' · ')
+        return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} BBB</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppt}/pt${variant}</span><div style="font-size:11px;margin-top:3px;opacity:.8">${standingStr}</div>${dollarLine ? '<div style="font-size:11px;margin-top:2px;color:#4ade80">' + dollarLine + '</div>' : ''}</div>`
       }
 
       // ── Best Ball ──
