@@ -661,10 +661,10 @@ body {
 }
 
 /* ── Wizard modal ──────────────────────────────────────────── */
-.wizard-overlay { align-items: flex-end; }
+.wizard-overlay { align-items: flex-end; padding: 0 0 env(safe-area-inset-bottom) 0; }
 
 .wizard-modal {
-  border-radius: var(--gw-radius-xl) var(--gw-radius-xl) 0 0;
+  border-radius: var(--gw-radius-xl);
   max-height: 92dvh;
   /* svh = small viewport height (excludes keyboard on iOS Safari) */
   max-height: 92svh;
