@@ -1609,3 +1609,18 @@
   text-align: center;
   padding: 2px 3px;
 }
+
+/* ── Offline / save-state UX additions ─────────────────────────────────── */
+.offline-banner--offline {
+  background: rgba(239,68,68,.12); border-color: rgba(239,68,68,.3); color: #f87171;
+}
+.pending-dot--offline { background: #f87171; }
+.pending-retry-btn {
+  margin-left: auto; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
+  border-radius: 6px; color: inherit; font-size: 11px; padding: 2px 8px; cursor: pointer;
+}
+.pending-retry-btn:active { opacity: .7; }
+.score-save-state {
+  font-size: 10px; color: #4ade80; text-align: center;
+  padding: 1px 0; opacity: .8; min-width: 40px;
+}

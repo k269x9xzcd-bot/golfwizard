@@ -720,6 +720,7 @@
                 </span>
               </div>
               <button class="score-tap score-tap-plus" @click="inlineInc(group.member)">+</button>
+            <div v-if="scoreSaveState[group.member.id + '-' + activeHole]" class="score-save-state">{{ scoreSaveState[group.member.id + '-' + activeHole] }}</div>
             </div>
             <div class="phc-net-col">
               <div class="phc-net-label">NET</div>
@@ -1110,14 +1111,38 @@ watch(() => activeHole.value, () => {
 
 onUnmounted(() => stopGpsWatch())
 
-// ── Offline queue indicator ──────────────────────────────────────
+// ── Offline / save state indicators ───────────────────────────────────
 const pendingScores = ref(0)
+const isOffline = ref(typeof navigator !== 'undefined' && !navigator.onLine)
+const scoreSaveState = ref({})
 let _pendingInterval = null
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('online',  () => { isOffline.value = false })
+  window.addEventListener('offline', () => { isOffline.value = true  })
+}
+
+function showSaveState(memberId, hole, state) {
+  const key = memberId + '-' + hole
+  scoreSaveState.value = { ...scoreSaveState.value, [key]: state }
+  if (state === 'saved ✓') setTimeout(() => {
+    const s = { ...scoreSaveState.value }; delete s[key]; scoreSaveState.value = s
+  }, 1500)
+}
+
+async function retryPendingScores() {
+  if (roundsStore.flushQueue) await roundsStore.flushQueue()
+  pendingScores.value = roundsStore.pendingQueueCount()
+}
 
 onMounted(() => {
   _pendingInterval = setInterval(() => {
     pendingScores.value = roundsStore.pendingQueueCount()
   }, 2000)
+})
+
+onUnmounted(() => {
+  if (_pendingInterval) clearInterval(_pendingInterval)
 })
 
 onUnmounted(() => {

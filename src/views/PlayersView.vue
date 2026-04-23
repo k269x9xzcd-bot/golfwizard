@@ -47,12 +47,33 @@
     <!-- Add form -->
     <div v-if="showAdd" class="add-form card">
       <div class="name-row">
-        <input v-model="newFirst" class="wiz-input" placeholder="First name" />
-        <input v-model="newLast" class="wiz-input" placeholder="Last name" />
+        <input v-model="newFirst" class="wiz-input" placeholder="First name"
+          @input="addGhinResults = []; addGhinMsg = ''"
+          @keydown.enter="addSearchGhin" />
+        <input v-model="newLast" class="wiz-input" placeholder="Last name"
+          @input="addGhinResults = []; addGhinMsg = ''"
+          @keydown.enter="addSearchGhin" />
       </div>
-      <input v-model="newGhin" class="wiz-input" placeholder="GHIN Index (e.g. 14.2)" type="number" step="0.1" />
+      <div class="add-ghin-search-row">
+        <input v-model="newGhin" class="wiz-input" placeholder="GHIN Index (e.g. 14.2)" type="number" step="0.1" />
+        <button class="ghin-lookup-btn" @click="addSearchGhin" :disabled="addGhinSearching" type="button">
+          {{ addGhinSearching ? "…" : "🔍 GHIN" }}
+        </button>
+      </div>
+      <!-- GHIN search results -->
+      <div v-if="addGhinResults.length" class="ghin-search-results">
+        <div class="ghin-search-label">Select the correct golfer:</div>
+        <div v-for="r in addGhinResults" :key="r.ghin_number" class="ghin-search-option" @click="applyAddGhinResult(r)">
+          <div class="ghin-search-name">{{ r.full_name }} <span v-if="r._source === 'bb'" class="bb-badge">BB</span></div>
+          <div class="ghin-search-meta">{{ r.club_name }} · HCP {{ r.handicap_index ?? 'NH' }} · #{{ r.ghin_number }}</div>
+        </div>
+      </div>
+      <div v-if="addGhinMsg" class="ghin-search-msg">{{ addGhinMsg }}</div>
       <input v-model="newNickname" class="wiz-input" placeholder="Nickname (optional)" />
       <input v-model="newEmail" class="wiz-input" placeholder="Email address" type="email" autocomplete="email" />
+      <div v-if="!newGhinNumber && newFirst && newLast" class="add-ghin-warning">
+        ⚠️ No GHIN linked — handicap won’t auto-update. Tap 🔍 GHIN to search.
+      </div>
       <div v-if="addError" class="edit-error">{{ addError }}</div>
       <button class="btn-primary btn-sm" :disabled="addingPlayer" @click="add">
         {{ addingPlayer ? 'Adding…' : 'Add Player' }}
@@ -371,6 +392,10 @@ const newEmail = ref('')
 const addError = ref('')
 const addingPlayer = ref(false)
 
+const addGhinSearching = ref(false)
+const addGhinResults = ref([])
+const addGhinMsg = ref('')
+const newGhinNumber = ref(null)  // set when user picks from GHIN search results
 const sortMode = ref('name')
 const sortLabel = computed(() => sortMode.value === 'name' ? 'A–Z' : 'Added')
 
@@ -389,6 +414,75 @@ function sortByLastName(arr) {
 const favoritePlayers = computed(() => sortByLastName(rosterStore.players.filter(p => p.is_favorite)))
 const otherPlayers = computed(() => sortByLastName(rosterStore.players.filter(p => !p.is_favorite)))
 
+
+async function addSearchGhin() {
+  const first = newFirst.value.trim()
+  const last = newLast.value.trim()
+  if (!first || !last) { addGhinMsg.value = 'Enter first and last name to search'; return }
+  addGhinSearching.value = true
+  addGhinResults.value = []
+  addGhinMsg.value = ''
+  try {
+    // Tier 1: BB member index
+    const { data: bbRows } = await supabase
+      .from('bb_member_index')
+      .select('ghin_number, first_name, last_name, handicap_index')
+      .ilike('last_name', last)
+      .ilike('first_name', `${first}%`)
+      .order('last_name').limit(8)
+    if (bbRows?.length) {
+      addGhinResults.value = bbRows.map(bb => ({
+        ghin_number: bb.ghin_number,
+        full_name: `${bb.first_name} ${bb.last_name}`,
+        handicap_index: bb.handicap_index,
+        club_name: 'Bonnie Briar Country Club',
+        _source: 'bb',
+      }))
+      addGhinMsg.value = '🏌️ Found in Bonnie Briar directory'
+      return
+    }
+    // Tier 2: GHIN API fallback
+    const profile = authStore.profile
+    if (!profile?.ghin_number || !profile?.ghin_password) {
+      addGhinMsg.value = 'Not found in BB directory. Add GHIN credentials in Profile to search the full GHIN database.'
+      return
+    }
+    const { data, error } = await supabase.functions.invoke('ghin-roster-sync', {
+      body: {
+        ghin_number: profile.ghin_number,
+        password: profile.ghin_password,
+        players: [{ id: 'lookup', name: `${first} ${last}`, first_name_prefix: first }],
+      }
+    })
+    if (error) throw error
+    const results = data?.results?.filter(r => r.status === 'updated') || []
+    if (results.length) {
+      addGhinResults.value = results.map(r => ({
+        ghin_number: r.ghin_number,
+        full_name: r.full_name,
+        handicap_index: r.handicap_index,
+        club_name: r.club_name || '',
+      }))
+    } else {
+      addGhinMsg.value = `No golfer found for "${first} ${last}" in GHIN database`
+    }
+  } catch(e) {
+    addGhinMsg.value = 'Search failed — check connection and try again'
+  } finally {
+    addGhinSearching.value = false
+  }
+}
+
+function applyAddGhinResult(r) {
+  const parts = (r.full_name || '').trim().split(' ')
+  newFirst.value = parts[0] || newFirst.value
+  newLast.value = parts.slice(1).join(' ') || newLast.value
+  newGhin.value = r.handicap_index != null ? String(r.handicap_index) : newGhin.value
+  newGhinNumber.value = r.ghin_number
+  addGhinResults.value = []
+  addGhinMsg.value = `✓ ${r.full_name} selected`
+}
+
 async function add() {
   const first = newFirst.value.trim()
   const last = newLast.value.trim()
@@ -403,12 +497,13 @@ async function add() {
       last_name: last || null,
       short_name: last || first.slice(0, 8),
       ghin_index: newGhin.value !== '' ? parseFloat(newGhin.value) : null,
+      ghin_number: newGhinNumber.value || null,
       nickname: newNickname.value.trim() || null,
       email: newEmail.value.trim() || null,
       use_nickname: false,
       is_favorite: true,
     })
-    newFirst.value = ''; newLast.value = ''; newGhin.value = ''; newNickname.value = ''; newEmail.value = ''
+    newFirst.value = ''; newLast.value = ''; newGhin.value = ''; newNickname.value = ''; newEmail.value = ''; newGhinNumber.value = null
     showAdd.value = false
     showToast(`${fullName} added`, 'gold')
   } catch (err) {
@@ -788,6 +883,12 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 }
 .name-row { display: flex; gap: 8px; }
 .name-row .wiz-input { flex: 1; }
+.add-ghin-search-row { display: flex; gap: 8px; }
+.add-ghin-search-row .wiz-input { flex: 1; min-width: 0; }
+.add-ghin-warning {
+  font-size: 11px; color: #d97706; background: rgba(217,119,6,.08);
+  border: 1px solid rgba(217,119,6,.25); border-radius: 8px; padding: 6px 10px;
+}
 
 .section-label {
   display: flex; align-items: center; justify-content: space-between;

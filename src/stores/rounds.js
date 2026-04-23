@@ -1031,6 +1031,7 @@ export const useRoundsStore = defineStore('rounds', () => {
     activeRound, activeMembers, activeScores, activeGames,
     rounds, loading, activeRoundId, scoreSyncError,
     pendingQueueCount,
+    flushQueue: _flushQueue,
     fetchRounds, createRound, loadRound, setScore,
     saveGameConfig, updateGameConfig, deleteGameConfig,
     updateRoundDate,
