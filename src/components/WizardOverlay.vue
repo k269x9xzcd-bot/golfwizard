@@ -2598,8 +2598,8 @@ function reloadApp() {
   text-align: center;
   line-height: 1.4;
 }
-</style>
-<style scoped>
+
+
 /* ── Stableford pts preview ─────────────────── */
 .stableford-pts-preview {
   display: flex; flex-direction: row; gap: 4px;
@@ -2617,8 +2617,7 @@ function reloadApp() {
 .spp-plus  { color: #4ade80; }
 .spp-zero  { color: var(--gw-text-muted); }
 .spp-neg   { color: #f87171; }
-</style>
-<style scoped>
+
 /* ── Stableford editable pts ─────────────────── */
 .spp-input {
   width: 44px; text-align: center; font-size: 15px; font-weight: 700;
@@ -2626,3 +2625,5 @@ function reloadApp() {
   border-radius: 8px; color: inherit; padding: 4px 2px;
 }
 </style>
+
+
