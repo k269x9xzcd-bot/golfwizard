@@ -699,13 +699,15 @@
             :class="[teamCardClass(group.member), { 'card-winner': isNetWinner(group.member.id, activeHole) }]"
           >
             <div class="phc-identity">
-              <div class="phc-initials" :class="teamBadgeClass(group.member)">{{ playerInitials(group.member) }}</div>
+              <div class="phc-initials" :class="teamBadgeClass(group.member)">
+                <span class="phc-init-chars">{{ playerInitials(group.member) }}</span>
+                <span v-if="memberHandicapDisplay(group.member) !== ''" class="phc-init-hcp">{{ memberHandicapDisplay(group.member) }}</span>
+              </div>
               <div class="phc-name-col">
                 <div class="phc-hcp-row">
-                  <span class="phc-hcp-course" :class="teamTextClass(group.member)">{{ memberHandicapDisplay(group.member) }}</span>
                   <span v-if="lowManStrokes(group.member) !== null" class="phc-hcp-lowman">({{ lowManStrokes(group.member) }})</span>
                   <span v-if="strokeDotsOnHole(group.member, activeHole)" class="phc-stroke-dots">{{ '•'.repeat(strokeDotsOnHole(group.member, activeHole)) }}</span>
-                  <span v-if="wolfGame && wolfOnThisHole === group.member.id" class="phc-wolf-badge">🐺<span v-if="wolfChoiceForHole?.partner === 'lone'"> Lone</span><span v-else-if="wolfChoiceForHole?.partner === 'blind'"> 🙈</span><span v-else-if="wolfChoiceForHole?.partner" class="phc-wolf-partner"> +{{ memberName(wolfChoiceForHole.partner).split(' ')[0] }}</span></span>
+                  <span v-if="wolfGame && wolfOnThisHole === group.member.id" class="phc-wolf-badge">🐺<span v-if="wolfChoiceForHole?.partner === 'lone'"> Lone</span><span v-else-if="wolfChoiceForHole?.partner === 'blind'"> 🙈</span><span v-else-if="wolfChoiceForHole?.partner" class="phc-wolf-partner"> +{{ fLastName(roundsStore.activeMembers.find(m => m.id === wolfChoiceForHole.partner)) }}</span></span>
                 </div>
               </div>
             </div>
@@ -765,9 +767,9 @@
           <template v-if="wolfTeamForHole">
             <div class="wolf-teams-compact">
               <span class="wolf-compact-mode">{{ wolfTeamForHole.mode === 'lone' ? '🐺' : wolfTeamForHole.mode === 'blind' ? '🙈' : '🤝' }}</span>
-              <span class="wolf-compact-wolfside">{{ wolfTeamForHole.wolfTeam.map(wolfCompactName).join('+') }}<span v-if="wolfTeamForHole.mode !== 'partner'" class="wolf-team-mult">&nbsp;{{ wolfTeamForHole.mode === 'blind' ? (wolfGame.config?.blindWolfMultiplier ?? 8) : (wolfGame.config?.wolfLoneMultiplier ?? 4) }}×</span></span>
+              <span class="wolf-compact-wolfside">{{ wolfTeamForHole.wolfTeam.map(fLastName).join('+') }}<span v-if="wolfTeamForHole.mode !== 'partner'" class="wolf-team-mult">&nbsp;{{ wolfTeamForHole.mode === 'blind' ? (wolfGame.config?.blindWolfMultiplier ?? 8) : (wolfGame.config?.wolfLoneMultiplier ?? 4) }}×</span></span>
               <span class="wolf-compact-vs">vs</span>
-              <span class="wolf-compact-fieldside">{{ wolfTeamForHole.field.map(wolfCompactName).join('+') }}</span>
+              <span class="wolf-compact-fieldside">{{ wolfTeamForHole.field.map(fLastName).join('+') }}</span>
             </div>
             <button class="wolf-change-btn" @click="setWolfChoice(wolfChoiceForHole.partner)">✕ Clear choice</button>
           </template>
@@ -2030,7 +2032,7 @@ async function undoLastSnake() {
 const wolfGame = computed(() => roundsStore.activeGames.find(g => g.type?.toLowerCase() === 'wolf') || null)
 
 // "F.LastName" for multi-word names; single-word names kept as-is.
-function wolfCompactName(m) {
+function fLastName(m) {
   const name = memberDisplay(m)
   if (!name || name === '?') return '?'
   const parts = name.split(' ').filter(Boolean)

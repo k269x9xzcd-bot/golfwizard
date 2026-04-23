@@ -405,9 +405,9 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
               : hr.winner === null
               ? `${wolfLabel} vs ${fieldLabel} <span style="color:#d4af37;font-weight:700">Push</span>`
               : `${wolfLabel} vs <span style="color:#f87171;font-weight:700">${fieldLabel}✓</span>`
-            return `<div style="border-left:2px solid ${color}55;padding-left:5px;margin-bottom:2px;font-size:10px">H${hr.hole}: ${resultStr}</div>`
+            return `<div style="border-left:2px solid ${color}55;padding-left:5px;margin-bottom:2px;font-size:13px">H${hr.hole}: ${resultStr}</div>`
           }).join('')
-          holesHtml = `<div style="margin-top:4px;max-height:90px;overflow-y:auto">${items}</div>`
+          holesHtml = `<div style="margin-top:4px;max-height:120px;overflow-y:auto">${items}</div>`
         }
 
         // Standings — "F.LastName: ±$N" format
