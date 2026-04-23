@@ -2374,7 +2374,7 @@ function reloadApp() {
   border: 1px solid rgba(255,255,255,.08);
 }
 .roster-option--dim { opacity: 0.35; pointer-events: none; }
-.wiz-input--sm { padding: 8px 12px; font-size: 13px; }
+.wiz-input--sm { padding: 8px 12px; font-size: 16px; }
 
 /* ── Wolf Tee Order ────────────────────────────────── */
 .wolf-tee-order-section { margin-top: 12px; padding: 12px; border-radius: 12px; background: rgba(96,165,250,.06); border: 1px solid rgba(96,165,250,.2); }

@@ -105,6 +105,7 @@ button, a, select, input, label, [role="button"], .pill, .tee-option-btn,
   touch-action: manipulation;
 }
 
+html { -webkit-text-size-adjust: 100%; }
 html, body {
   margin: 0;
   padding: 0;
@@ -1096,7 +1097,7 @@ body {
 .player-card.dragging { opacity:.5; background:rgba(212,175,55,.1); border-color:rgba(212,175,55,.4); }
 .player-card-field { display:flex; align-items:center; gap:5px; flex-shrink:0; }
 .player-card-label { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; color:var(--gw-text-muted,#7d9283); }
-.player-card-input { width:56px; padding:5px 8px; border-radius:8px; border:1px solid var(--gw-green-700,#114a35); background:rgba(255,255,255,.06); color:var(--gw-gold,#d4af37); font-family:var(--gw-font-mono,monospace); font-size:14px; font-weight:700; text-align:center; -webkit-appearance:none; }
+.player-card-input { width:56px; padding:5px 8px; border-radius:8px; border:1px solid var(--gw-green-700,#114a35); background:rgba(255,255,255,.06); color:var(--gw-gold,#d4af37); font-family:var(--gw-font-mono,monospace); font-size:16px; font-weight:700; text-align:center; -webkit-appearance:none; }
 .player-card-input:focus { outline:none; border-color:var(--gw-gold,#d4af37); }
 .player-card-input::placeholder { color:var(--gw-text-muted,#7d9283); font-weight:400; }
 
@@ -1277,7 +1278,7 @@ body {
   background: var(--gw-green-800);
   color: var(--gw-text);
   font-family: var(--gw-font-body);
-  font-size: 14px;
+  font-size: 16px;
   -webkit-appearance: none;
   appearance: none;
   cursor: pointer;
@@ -1291,6 +1292,7 @@ body {
 .config-select:focus {
   outline: none;
   border-color: var(--gw-gold);
+  box-shadow: 0 0 0 3px rgba(212,175,55,.15);
 }
 
 .config-note {
@@ -1316,16 +1318,21 @@ body {
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 15px;
   color: var(--gw-text);
   font-weight: 500;
 }
 
 .toggle-label input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
   accent-color: var(--gw-gold);
   cursor: pointer;
+}
+.toggle-label {
+  min-height: 44px;
+  padding: 4px 0;
 }
 
 .toggle-desc {
@@ -1340,7 +1347,7 @@ body {
 }
 
 .config-input--sm {
-  font-size: 14px;
+  font-size: 16px;
   padding: 6px 10px;
 }
 

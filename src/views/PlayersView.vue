@@ -200,7 +200,7 @@
           </div>
           <!-- First-name prefix hint for ambiguous names -->
           <div class="ghin-prefix-row">
-            <input v-model="editGhinPrefix" class="wiz-input ghin-prefix-input" placeholder="First name starts with… (e.g. Sh, Andy)" />
+            <input v-model="editGhinPrefix" class="wiz-input ghin-prefix-input" placeholder="Narrow by first name (e.g. “Br” for Brian)" />
           </div>
           <!-- In-app GHIN search results -->
           <div v-if="ghinSearchResults.length" class="ghin-search-results">
@@ -1058,6 +1058,7 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
   border: 1px solid rgba(255,255,255,.12); border-bottom: none;
   max-height: 92vh; overflow-y: auto; -webkit-overflow-scrolling: touch;
 }
+.edit-sheet input, .edit-sheet select { font-size: 16px !important; }
 .edit-header { display: flex; justify-content: space-between; align-items: center; }
 .edit-title { font-size: 17px; font-weight: 700; color: #f0ede0; }
 .close-btn { background: none; border: none; font-size: 18px; cursor: pointer; color: rgba(240,237,224,.5); }
@@ -1071,8 +1072,8 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 }
 .ghin-number-row { display: flex; align-items: center; gap: 8px; }
 .ghin-prefix-row { margin-top: -4px; }
-.ghin-prefix-input { font-size: 12px; color: rgba(240,237,224,.6); }
-.ghin-prefix-input::placeholder { font-size: 11px; opacity: 0.5; }
+.ghin-prefix-input { font-size: 16px; color: rgba(240,237,224,.6); }
+.ghin-prefix-input::placeholder { font-size: 14px; opacity: 0.5; }
 .edit-club-row { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: rgba(255,255,255,.04); border-radius: 8px; margin-bottom: 4px; }
 .edit-club-logo { height: 18px; width: 18px; object-fit: contain; flex-shrink: 0; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3)); }
 .edit-club-icon { font-size: 13px; }
@@ -1103,6 +1104,7 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 .ghin-search-meta { font-size: 12px; color: rgba(240,237,224,.5); margin-top: 2px; }
 .bb-badge { display: inline-block; font-size: 10px; font-weight: 700; color: #1a1a1a; background: #4ade80; border-radius: 3px; padding: 1px 4px; margin-left: 6px; vertical-align: middle; }
 .ghin-search-msg { font-size: 12px; color: rgba(240,237,224,.5); padding: 4px 2px; }
+.ghin-search-msg--error { color: #fbbf24; }
 .edit-nickname-row { display: flex; align-items: center; gap: 10px; }
 .nick-toggle-label { display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
 .nick-toggle-cb { width: 16px; height: 16px; accent-color: #22a06b; cursor: pointer; }
