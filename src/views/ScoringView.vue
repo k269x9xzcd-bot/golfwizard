@@ -1881,7 +1881,7 @@ async function simulateFill() {
   const tee = roundsStore.activeRound?.tee
   const holesMode = roundsStore.activeRound?.holes_mode || '18'
 
-  const { scores, gameConfigs } = simulateRound({ members, games, course, tee, holesMode })
+  const { scores, gameUpdates } = simulateRound({ members, games, course, tee, holesMode })
 
   // Apply all scores
   const scoreCalls = []
@@ -1892,9 +1892,11 @@ async function simulateFill() {
   }
   await Promise.all(scoreCalls)
 
-  // Apply game config updates (wolf choices, snake events, dots manual, hammer log)
-  for (const [gameId, newConfig] of Object.entries(gameConfigs)) {
-    await roundsStore.updateGameConfig(gameId, newConfig)
+  // Apply game config updates (wolf choices, snake events, dots manual, hammer log).
+  // Use gameUpdates array (not a dict) to preserve the original gameId type —
+  // Object.entries() stringifies numeric keys, breaking strict-equality lookups.
+  for (const { gameId, config } of gameUpdates) {
+    await roundsStore.updateGameConfig(gameId, config)
   }
 }
 

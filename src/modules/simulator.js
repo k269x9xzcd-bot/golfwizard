@@ -189,9 +189,10 @@ function simulateHammerLog(holesMode) {
  * @param {string} params.tee         - active tee name
  * @param {string} params.holesMode   - '18' | 'front9' | 'back9'
  *
- * @returns {{ scores: Object, gameConfigs: Object }}
+ * @returns {{ scores: Object, gameUpdates: Array }}
  *   scores      = { [memberId]: { [hole]: score } }
- *   gameConfigs = { [gameId]: updatedConfig }
+ *   gameUpdates = [{ gameId, config }] — gameId preserves original type (number or string)
+ *                 so updateGameConfig's strict-equality search always finds the game.
  */
 export function simulateRound({ members, games, course, tee, holesMode }) {
   const { from, to } = holeRange(holesMode)
@@ -208,7 +209,10 @@ export function simulateRound({ members, games, course, tee, holesMode }) {
   }
 
   // ── Game-specific choices ────────────────────────────────────────
-  const gameConfigs = {}
+  // Use an array (not a dict) so game.id is never stringified by object key coercion —
+  // Supabase integer IDs would become '42' as dict keys but updateGameConfig uses
+  // strict equality (42 !== '42'), causing the game lookup to silently fail.
+  const gameUpdates = []
 
   for (const game of games) {
     const t = game.type?.toLowerCase()
@@ -216,24 +220,18 @@ export function simulateRound({ members, games, course, tee, holesMode }) {
 
     if (t === 'wolf') {
       cfg.wolfChoices = simulateWolfChoices(members, cfg, holesMode)
-      gameConfigs[game.id] = cfg
-    }
-
-    if (t === 'snake') {
+      gameUpdates.push({ gameId: game.id, config: cfg })
+    } else if (t === 'snake') {
       cfg.events = simulateSnakeEvents(members, scores, course, tee, holesMode)
-      gameConfigs[game.id] = cfg
-    }
-
-    if (t === 'dots') {
+      gameUpdates.push({ gameId: game.id, config: cfg })
+    } else if (t === 'dots') {
       cfg.manual = simulateDotsManual(members, cfg, scores, course, tee, holesMode)
-      gameConfigs[game.id] = cfg
-    }
-
-    if (t === 'hammer') {
+      gameUpdates.push({ gameId: game.id, config: cfg })
+    } else if (t === 'hammer') {
       cfg.hammerLog = simulateHammerLog(holesMode)
-      gameConfigs[game.id] = cfg
+      gameUpdates.push({ gameId: game.id, config: cfg })
     }
   }
 
-  return { scores, gameConfigs }
+  return { scores, gameUpdates }
 }
