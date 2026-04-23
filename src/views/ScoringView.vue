@@ -2031,13 +2031,14 @@ async function undoLastSnake() {
 // ── Wolf helpers ─────────────────────────────────────────────────
 const wolfGame = computed(() => roundsStore.activeGames.find(g => g.type?.toLowerCase() === 'wolf') || null)
 
-// "F.LastName" for multi-word names; single-word names kept as-is.
+// "F.LastName" using the full name field; falls back to display name for guests/single-name members.
 function fLastName(m) {
-  const name = memberDisplay(m)
-  if (!name || name === '?') return '?'
-  const parts = name.split(' ').filter(Boolean)
-  if (parts.length === 1) return parts[0]
-  return `${parts[0][0]}.${parts[parts.length - 1]}`
+  if (!m) return '?'
+  const full = (m.name || '').trim()
+  const parts = full.split(/\s+/).filter(Boolean)
+  const src = parts.length >= 2 ? parts : (memberDisplay(m) || '?').split(' ').filter(Boolean)
+  if (!src.length || src[0] === '?') return '?'
+  return src.length === 1 ? src[0] : `${src[0][0]}.${src[src.length - 1]}`
 }
 
 // Resolve a raw teeOrder entry (may be wizard ID, profile ID, or member ID)

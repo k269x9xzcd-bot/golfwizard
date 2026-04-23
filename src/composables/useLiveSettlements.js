@@ -355,18 +355,24 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         if (!r) return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Wolf</span></div>`
         const ppt = cfg.ppt || 1
 
+        // Use full name (m.name) for formatting; fall back to display name for guests/single-name members
+        function fullNameParts(m) {
+          const full = (m?.name || '').trim()
+          const parts = full.split(/\s+/).filter(Boolean)
+          if (parts.length >= 2) return parts
+          // fallback: display name (nickname or guest_name)
+          const d = memberDisplay(m)
+          return (d && d !== '?') ? d.split(' ').filter(Boolean) : ['?']
+        }
         // 3-char last-name abbreviation for compact per-hole chips
         function abbN(m) {
-          const d = memberDisplay(m)
-          if (!d || d === '?') return '?'
-          const last = d.split(' ').filter(Boolean).slice(-1)[0]
+          const parts = fullNameParts(m)
+          const last = parts[parts.length - 1]
           return last.length > 4 ? last.slice(0, 3) : last
         }
         // "F.LastName" for standings line
         function initLastN(m) {
-          const d = memberDisplay(m)
-          if (!d || d === '?') return '?'
-          const parts = d.split(' ').filter(Boolean)
+          const parts = fullNameParts(m)
           return parts.length === 1 ? parts[0] : `${parts[0][0]}.${parts[parts.length - 1]}`
         }
 
