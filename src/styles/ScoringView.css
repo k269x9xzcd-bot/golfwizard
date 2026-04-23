@@ -899,6 +899,7 @@
   border-radius: 14px;
   border: 1px solid rgba(255,255,255,.08);
   background: rgba(255,255,255,.04);
+  grid-template-areas: "identity score net" "badge badge badge";
   transition: border-color .12s, background .12s;
   -webkit-tap-highlight-color: transparent;
 }
@@ -908,13 +909,18 @@
 
 .phc-left { display: flex; align-items: center; gap: 10px; }
 .phc-initials {
-  width: 38px; min-height: 42px; border-radius: 9px; padding: 4px 2px;
+  width: 38px; height: 42px; border-radius: 9px;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   font-weight: 900; flex-shrink: 0; line-height: 1.2; gap: 1px;
 }
 .phc-init-chars { font-size: 11px; }
 .phc-init-hcp { font-size: 13px; font-weight: 900; }
-.phc-init-lowman { font-size: 9px; font-weight: 700; color: rgba(96,165,250,.9); }
+.phc-init-lowman { font-size: 13px; font-weight: 500; color: rgba(96,165,250,.9); flex-shrink: 0; }
+.wolf-badge-row {
+  grid-area: badge;
+  padding: 3px 10px 0;
+  font-size: 11px; color: #60a5fa; font-weight: 600;
+}
 .badge-default { background: rgba(212,175,55,.2); color: #d4af37; }
 .badge-t1 { background: rgba(96,165,250,.2); color: #60a5fa; }
 .badge-t2 { background: rgba(248,113,113,.2); color: #f87171; }
@@ -1015,14 +1021,17 @@
 
 /* Redesigned player card layout — grid columns keep +/- aligned */
 .phc-identity {
+  grid-area: identity;
   display: flex; align-items: center; gap: 10px; min-width: 0; overflow: hidden;
 }
 .phc-name-col { display: flex; flex-direction: column; min-width: 0; }
 .phc-hcp-row { display: flex; align-items: center; gap: 4px; margin-top: 2px; flex-wrap: wrap; }
 .phc-score-entry {
+  grid-area: score;
   display: flex; align-items: center; gap: 10px; justify-content: center;
 }
 .phc-net-col {
+  grid-area: net;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
 }
 .phc-net-label { font-size: 9px; font-weight: 700; color: rgba(240,237,224,.35); text-transform: uppercase; letter-spacing: .5px; }

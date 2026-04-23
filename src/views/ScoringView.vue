@@ -702,12 +702,11 @@
               <div class="phc-initials" :class="teamBadgeClass(group.member)">
                 <span class="phc-init-chars">{{ playerInitials(group.member) }}</span>
                 <span v-if="memberHandicapDisplay(group.member) !== ''" class="phc-init-hcp">{{ memberHandicapDisplay(group.member) }}</span>
-                <span v-if="lowManStrokes(group.member) !== null" class="phc-init-lowman">({{ lowManStrokes(group.member) }})</span>
               </div>
+              <span v-if="lowManStrokes(group.member) !== null" class="phc-init-lowman">({{ lowManStrokes(group.member) }})</span>
               <div class="phc-name-col">
                 <div class="phc-hcp-row">
                   <span v-if="strokeDotsOnHole(group.member, activeHole)" class="phc-stroke-dots">{{ '•'.repeat(strokeDotsOnHole(group.member, activeHole)) }}</span>
-                  <span v-if="wolfGame && wolfOnThisHole === group.member.id" class="phc-wolf-badge">🐺<span v-if="wolfChoiceForHole?.partner === 'lone'"> Lone</span><span v-else-if="wolfChoiceForHole?.partner === 'blind'"> 🙈</span><span v-else-if="wolfChoiceForHole?.partner" class="phc-wolf-partner"> +{{ fLastName(roundsStore.activeMembers.find(m => m.id === wolfChoiceForHole.partner)) }}</span></span>
                 </div>
               </div>
             </div>
@@ -730,6 +729,11 @@
               <div class="phc-net-value" :class="getScore(group.member.id, activeHole) ? (showNotations ? scoreNotation(netScore(getScore(group.member.id, activeHole), memberEffectiveHcp(group.member), siForHole(activeHole)), parForHole(activeHole)) : '') : 'muted'">
                 {{ getScore(group.member.id, activeHole) ? netScore(getScore(group.member.id, activeHole), memberEffectiveHcp(group.member), siForHole(activeHole)) : '—' }}
               </div>
+            </div>
+            <div v-if="wolfGame && wolfOnThisHole === group.member.id && wolfChoiceForHole?.partner" class="wolf-badge-row">
+              <template v-if="wolfChoiceForHole.partner === 'lone'">🐺 Lone</template>
+              <template v-else-if="wolfChoiceForHole.partner === 'blind'">🙈 Blind</template>
+              <template v-else>🐺 +{{ fLastName(roundsStore.activeMembers.find(m => m.id === wolfChoiceForHole.partner)) }}</template>
             </div>
           </div>
         </div>
