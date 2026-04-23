@@ -373,17 +373,13 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
           const d = memberDisplay(m)
           return (d && d !== '?') ? d.split(' ').filter(Boolean) : ['?']
         }
-        // 3-char last-name abbreviation for compact per-hole chips
-        function abbN(m) {
+        // Full last name (or whole name if single-word); initials fallback handled by CSS truncation
+        function lastN(m) {
           const parts = fullNameParts(m)
-          const last = parts[parts.length - 1]
-          return last.length > 4 ? last.slice(0, 3) : last
+          return parts.length >= 2 ? parts[parts.length - 1] : (parts[0] || '?')
         }
-        // "F.LastName" for standings line
-        function initLastN(m) {
-          const parts = fullNameParts(m)
-          return parts.length === 1 ? parts[0] : `${parts[0][0]}.${parts[parts.length - 1]}`
-        }
+        function abbN(m) { return lastN(m) }
+        function initLastN(m) { return lastN(m) }
 
         // Build wolf-team and field-team labels for a completed hole
         function holeTeams(hr) {
