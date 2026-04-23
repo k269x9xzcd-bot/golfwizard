@@ -50,7 +50,7 @@
         <input v-model="newFirst" class="wiz-input" placeholder="First name"
           @input="addGhinResults = []; addGhinMsg = ''"
           @keydown.enter="addSearchGhin" />
-        <input v-model="newLast" class="wiz-input" placeholder="Last name"
+        <input v-model="newLast" class="wiz-input" placeholder="Last name (required)"
           @input="addGhinResults = []; addGhinMsg = ''"
           @keydown.enter="addSearchGhin" />
       </div>
@@ -418,30 +418,37 @@ const otherPlayers = computed(() => sortByLastName(rosterStore.players.filter(p 
 async function addSearchGhin() {
   const first = newFirst.value.trim()
   const last = newLast.value.trim()
-  if (!first || !last) { addGhinMsg.value = 'Enter first and last name to search'; return }
+  if (!last) { addGhinMsg.value = 'Enter at least a last name to search'; return }
   addGhinSearching.value = true
   addGhinResults.value = []
   addGhinMsg.value = ''
   try {
-    // Tier 1: BB member index
-    const { data: bbRows } = await supabase
+    // Tier 1: BB member index — search by last name, filter first name client-side
+    const query = supabase
       .from('bb_member_index')
       .select('ghin_number, first_name, last_name, handicap_index')
-      .ilike('last_name', last)
-      .ilike('first_name', `${first}%`)
-      .order('last_name').limit(8)
-    if (bbRows?.length) {
-      addGhinResults.value = bbRows.map(bb => ({
+      .ilike('last_name', `%${last}%`)
+      .order('last_name').limit(15)
+    const { data: bbRows } = await query
+    let filtered = bbRows || []
+    // If first name provided, filter client-side by prefix
+    if (first && filtered.length > 0) {
+      const firstLower = first.toLowerCase()
+      const exact = filtered.filter(p => p.first_name?.toLowerCase().startsWith(firstLower))
+      if (exact.length > 0) filtered = exact
+    }
+    if (filtered.length > 0) {
+      addGhinResults.value = filtered.map(bb => ({
         ghin_number: bb.ghin_number,
         full_name: `${bb.first_name} ${bb.last_name}`,
         handicap_index: bb.handicap_index,
         club_name: 'Bonnie Briar Country Club',
         _source: 'bb',
       }))
-      addGhinMsg.value = '🏌️ Found in Bonnie Briar directory'
+      addGhinMsg.value = `🏌️ ${filtered.length} match${filtered.length > 1 ? 'es' : ''} in Bonnie Briar directory`
       return
     }
-    // Tier 2: GHIN API fallback
+    // Tier 2: GHIN API fallback (requires credentials)
     const profile = authStore.profile
     if (!profile?.ghin_number || !profile?.ghin_password) {
       addGhinMsg.value = 'Not found in BB directory. Add GHIN credentials in Profile to search the full GHIN database.'
@@ -451,7 +458,7 @@ async function addSearchGhin() {
       body: {
         ghin_number: profile.ghin_number,
         password: profile.ghin_password,
-        players: [{ id: 'lookup', name: `${first} ${last}`, first_name_prefix: first }],
+        players: [{ id: 'lookup', name: `${first || ''} ${last}`.trim(), first_name_prefix: first || '' }],
       }
     })
     if (error) throw error
@@ -464,7 +471,7 @@ async function addSearchGhin() {
         club_name: r.club_name || '',
       }))
     } else {
-      addGhinMsg.value = `No golfer found for "${first} ${last}" in GHIN database`
+      addGhinMsg.value = `No golfer found for "${first ? first + ' ' : ''}${last}". Enter HCP manually or type their GHIN # directly.`
     }
   } catch(e) {
     addGhinMsg.value = 'Search failed — check connection and try again'
@@ -674,35 +681,29 @@ async function searchGhinForEdit() {
         ghinSearchMsg.value = '🏌️ Found in Bonnie Briar directory'
         return
       }
-    } else if (first && last) {
-      // Name search in bb_member_index — exact then prefix
-      const { data: bbExact } = await supabase
+    } else if (last) {
+      // Name search in bb_member_index — last name only, filter first name client-side
+      const { data: bbRows } = await supabase
         .from('bb_member_index')
         .select('ghin_number, first_name, last_name, handicap_index')
-        .ilike('last_name', last)
-        .ilike('first_name', `${first}%`)
+        .ilike('last_name', `%${last}%`)
         .order('last_name')
-        .limit(10)
-      if (bbExact?.length === 1) {
-        const bb = bbExact[0]
-        ghinSearchResults.value = [{
-          ghin_number: bb.ghin_number,
-          full_name: `${bb.first_name} ${bb.last_name}`,
-          handicap_index: bb.handicap_index,
-          club_name: 'Bonnie Briar Country Club',
-          _source: 'bb',
-        }]
-        ghinSearchMsg.value = '🏌️ Found in Bonnie Briar directory'
-        return
-      } else if (bbExact?.length > 1) {
-        ghinSearchResults.value = bbExact.map(bb => ({
+        .limit(15)
+      let filtered = bbRows || []
+      if (first && filtered.length > 0) {
+        const fl = first.toLowerCase()
+        const exact = filtered.filter(p => p.first_name?.toLowerCase().startsWith(fl))
+        if (exact.length > 0) filtered = exact
+      }
+      if (filtered.length > 0) {
+        ghinSearchResults.value = filtered.map(bb => ({
           ghin_number: bb.ghin_number,
           full_name: `${bb.first_name} ${bb.last_name}`,
           handicap_index: bb.handicap_index,
           club_name: 'Bonnie Briar Country Club',
           _source: 'bb',
         }))
-        ghinSearchMsg.value = '🏌️ Multiple BB members found — select one'
+        ghinSearchMsg.value = `🏌️ ${filtered.length} match${filtered.length > 1 ? 'es' : ''} in Bonnie Briar directory`
         return
       }
     }
