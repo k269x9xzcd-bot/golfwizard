@@ -123,24 +123,29 @@
 
       <div v-if="showHcpEditor" class="hcp-editor-overlay" @click.self="showHcpEditor = false">
         <div class="hcp-editor-modal">
-          <div class="hcp-editor-title">Edit Handicap Indexes</div>
-          <div class="hcp-editor-note">Changes apply to this round only and recalculate strokes immediately.</div>
+          <div class="hcp-editor-title">Edit Strokes / Handicap</div>
+          <div class="hcp-editor-note">Set strokes directly to override, or edit handicap index to recalculate.</div>
           <div v-for="m in roundsStore.activeMembers" :key="m.id" class="hcp-editor-row hcp-editor-row--expanded">
             <!-- Name + index + course HCP -->
             <div class="hcp-editor-top">
               <span class="hcp-editor-name">{{ m.short_name || m.guest_name }}</span>
               <div class="hcp-editor-right">
-                <span class="hcp-editor-coursehcp">
-                  Course HCP: {{ hcpEditorCourseHcp(m) }}
-                </span>
-                <input
-                  type="number"
-                  step="0.1"
-                  :class="['hcp-editor-input', { 'hcp-editor-input--modified': hcpEditorIsModified(m) }]"
-                  :value="m.ghin_index"
-                  @change="updateMemberHcp(m.id, $event.target.value)"
-                  placeholder="—"
-                />
+                <div class="hcp-dual-inputs">
+                  <div class="hcp-input-group">
+                    <span class="hcp-input-label">Strokes</span>
+                    <input type="number" min="0" max="54" step="1" class="hcp-editor-input"
+                      :value="m.stroke_override != null ? m.stroke_override : hcpEditorCourseHcp(m)"
+                      :class="{ 'hcp-editor-input--modified': m.stroke_override != null }"
+                      @change="updateMemberStrokes(m.id, $event.target.value)" />
+                  </div>
+                  <div class="hcp-input-group">
+                    <span class="hcp-input-label">Index</span>
+                    <input type="number" step="0.1" class="hcp-editor-input"
+                      :class="{ 'hcp-editor-input--modified': hcpEditorIsModified(m) }"
+                      :value="m.ghin_index"
+                      @change="updateMemberHcp(m.id, $event.target.value)" placeholder="—" />
+                  </div>
+                </div>
               </div>
             </div>
             <!-- Strokes per hole grid -->
@@ -719,16 +724,6 @@
           </div>
         </div>
 
-        <!-- Game Status on Hole View -->
-        <div v-if="roundsStore.activeGames.length > 0" class="hole-game-status">
-          <div class="hole-gs-header collapsible-header" @click="gamesExpanded = !gamesExpanded">
-            {{ gamesExpanded ? '▼' : '▶' }} GAME STATUS · THRU {{ lastScoredHole }}
-          </div>
-          <div v-show="gamesExpanded">
-            <div v-for="game in roundsStore.activeGames" :key="'hgs-'+game.id" class="hole-gs-summary" v-html="gameSummaryHtml(game)"></div>
-          </div>
-        </div>
-
         <!-- Snake 3-putt panel -->
         <div v-if="snakeGame" class="bonus-panel">
           <div class="bonus-header">
@@ -759,7 +754,7 @@
           </div>
           <div v-if="wolfChoiceForHole" class="wolf-prompt">
             <template v-if="wolfChoiceForHole.partner === 'lone'">🐺 Lone Wolf — 1 vs {{ roundsStore.activeMembers.length - 1 }}</template>
-            <template v-else-if="wolfChoiceForHole.partner === 'blind'">🙈 Blind Wolf — declared before tee shots (2×)</template>
+            <template v-else-if="wolfChoiceForHole.partner === 'blind'">🙈 Blind Wolf — declared before tee shots ({{ wolfGame?.config?.blindWolfMultiplier ?? 8 }}×)</template>
             <template v-else-if="wolfChoiceForHole.partner">🤝 Partner: {{ memberName(wolfChoiceForHole.partner) }}</template>
           </div>
           <div v-else class="wolf-prompt">Tap a player to pick as partner, or go Lone / Blind Wolf</div>
@@ -782,24 +777,29 @@
             class="wolf-blind-btn"
             :class="{ active: wolfChoiceForHole?.partner === 'blind' }"
             @click="setWolfChoice('blind')"
-          >🙈 Blind Wolf (2× stakes)</button>
+          >🙈 Blind Wolf ({{ wolfGame?.config?.blindWolfMultiplier ?? 8 }}× stakes)</button>
         </div>
 
-        <div class="hole-nav-buttons">
-          <button v-if="activeHole > visibleHoles[0]" class="hole-nav-btn hole-nav-prev" @click="activeHole = activeHole - 1">← H{{ activeHole - 1 }}</button>
-          <span v-else class="hole-nav-spacer"></span>
-          <span class="hole-nav-swipe-hint">swipe ← → to change holes</span>
-          <button v-if="activeHole < visibleHoles[visibleHoles.length - 1]" class="hole-nav-btn hole-nav-next" @click="activeHole = activeHole + 1">H{{ activeHole + 1 }} →</button>
-          <span v-else class="hole-nav-spacer"></span>
+
+        <!-- Sixes team rotation panel -->
+        <div v-if="sixesGame" class="bonus-panel sixes-rotation-panel">
+          <div class="bonus-header">
+            <span class="bonus-label">🎲 Sixes — {{ sixesSegmentLabel }}</span>
+          </div>
+          <div class="sixes-teams">
+            <div class="sixes-team-col">
+              <div class="sixes-team-label">Team A</div>
+              <div v-for="pid in sixesTeamA" :key="pid" class="sixes-player">{{ sixesMemberName(pid) }}</div>
+            </div>
+            <div class="sixes-vs">VS</div>
+            <div class="sixes-team-col">
+              <div class="sixes-team-label">Team B</div>
+              <div v-for="pid in sixesTeamB" :key="pid" class="sixes-player">{{ sixesMemberName(pid) }}</div>
+            </div>
+          </div>
+          <div style="font-size:11px;opacity:.5;margin-top:6px;text-align:center">Partners rotate every 6 holes — low-man handicap</div>
         </div>
 
-        <!-- Finish Round on last hole (hidden in viewOnly mode) -->
-        <div v-if="!isViewOnly && activeHole === visibleHoles[visibleHoles.length - 1] && roundCompletionInfo.allScored && !roundsStore.activeRound?.is_complete" class="hole-finish-banner">
-          <div class="hole-finish-text">All {{ visibleHoles.length }} holes scored!</div>
-          <button class="finish-btn finish-btn-lg" @click="showFinishReview = true">Review & Finish Round</button>
-        </div>
-
-        <!-- BBB Strip — BINGO/BANGO/BONGO sequential unlock -->
         <div v-if="bbbGame" class="bbb-strip">
           <div class="bbb-strip-header">
             <span class="bbb-strip-title">🏌️ BBB — Hole {{ activeHole }}</span>
@@ -892,6 +892,32 @@
           </div>
         </div>
 
+
+        <!-- Game Status on Hole View -->
+        <div v-if="roundsStore.activeGames.length > 0" class="hole-game-status">
+          <div class="hole-gs-header collapsible-header" @click="gamesExpanded = !gamesExpanded">
+            {{ gamesExpanded ? '▼' : '▶' }} GAME STATUS · THRU {{ lastScoredHole }}
+          </div>
+          <div v-show="gamesExpanded">
+            <div v-for="game in roundsStore.activeGames" :key="'hgs-'+game.id" class="hole-gs-summary" v-html="gameSummaryHtml(game)"></div>
+          </div>
+        </div>
+
+        <div class="hole-nav-buttons">
+          <button v-if="activeHole > visibleHoles[0]" class="hole-nav-btn hole-nav-prev" @click="activeHole = activeHole - 1">← H{{ activeHole - 1 }}</button>
+          <span v-else class="hole-nav-spacer"></span>
+          <span class="hole-nav-swipe-hint">swipe ← → to change holes</span>
+          <button v-if="activeHole < visibleHoles[visibleHoles.length - 1]" class="hole-nav-btn hole-nav-next" @click="activeHole = activeHole + 1">H{{ activeHole + 1 }} →</button>
+          <span v-else class="hole-nav-spacer"></span>
+        </div>
+
+        <!-- Finish Round on last hole (hidden in viewOnly mode) -->
+        <div v-if="!isViewOnly && activeHole === visibleHoles[visibleHoles.length - 1] && roundCompletionInfo.allScored && !roundsStore.activeRound?.is_complete" class="hole-finish-banner">
+          <div class="hole-finish-text">All {{ visibleHoles.length }} holes scored!</div>
+          <button class="finish-btn finish-btn-lg" @click="showFinishReview = true">Review & Finish Round</button>
+        </div>
+
+        <!-- BBB Strip — BINGO/BANGO/BONGO sequential unlock -->
         <div v-else-if="!isViewOnly && activeHole === visibleHoles[visibleHoles.length - 1] && !roundCompletionInfo.allScored && roundCompletionInfo.scoredCount > 0 && !roundsStore.activeRound?.is_complete" class="hole-finish-banner hole-finish-partial">
           <div class="hole-finish-text">{{ roundCompletionInfo.missingHoles.length }} holes still need scores</div>
           <button class="finish-btn finish-btn-review" @click="activeHole = roundCompletionInfo.missingHoles[0]">Go to H{{ roundCompletionInfo.missingHoles[0] }}</button>
@@ -1882,6 +1908,17 @@ async function updateMemberHcp(memberId, rawValue) {
   }
 }
 
+async function updateMemberStrokes(memberId, rawValue) {
+  const strokes = (rawValue === '' || rawValue == null) ? null : parseInt(rawValue)
+  const m = roundsStore.activeMembers.find(x => x.id === memberId)
+  if (!m) return
+  m.stroke_override = strokes
+  try {
+    const { supabase } = await import('../supabase')
+    await supabase.from('round_members').update({ stroke_override: strokes }).eq('id', memberId)
+  } catch (e) { console.warn('[ScoringView] updateMemberStrokes failed:', e) }
+}
+
 // ── HCP editor helpers ──────────────────────────────────────────
 function hcpEditorCourseHcp(member) {
   const course = courseData.value
@@ -1931,7 +1968,8 @@ const wolfGame = computed(() => roundsStore.activeGames.find(g => g.type?.toLowe
 const wolfOnThisHole = computed(() => {
   if (!wolfGame.value) return null
   const members = roundsStore.activeMembers
-  const teeOrder = wolfGame.value.config?.wolfTeeOrder || members.map(m => m.id)
+  const configured = wolfGame.value.config?.wolfTeeOrder || []
+  const teeOrder = configured.length ? configured : members.map(m => m.id)
   if (!teeOrder.length) return null
   const n = teeOrder.length
   const wolfIdx = (activeHole.value - 1) % n
@@ -1953,6 +1991,43 @@ const wolfPickableMembers = computed(() => {
   if (!wolfOnThisHole.value) return []
   return roundsStore.activeMembers.filter(m => m.id !== wolfOnThisHole.value)
 })
+
+
+const sixesGame = computed(() => roundsStore.activeGames.find(g => g.type?.toLowerCase() === 'sixes') || null)
+
+const sixesCurrentSeg = computed(() => {
+  const h = activeHole.value
+  return h <= 6 ? 0 : h <= 12 ? 1 : 2
+})
+
+function sixesPlayerIds() {
+  const cfg = sixesGame.value?.config || {}
+  const pids = cfg.players || roundsStore.activeMembers.map(m => m.id)
+  return pids.slice(0, 4)
+}
+
+const sixesTeamA = computed(() => {
+  const p = sixesPlayerIds()
+  if (p.length < 4) return p
+  const seg = sixesCurrentSeg.value
+  return seg === 0 ? [p[0], p[1]] : seg === 1 ? [p[0], p[2]] : [p[0], p[3]]
+})
+
+const sixesTeamB = computed(() => {
+  const p = sixesPlayerIds()
+  if (p.length < 4) return p
+  const seg = sixesCurrentSeg.value
+  return seg === 0 ? [p[2], p[3]] : seg === 1 ? [p[1], p[3]] : [p[1], p[2]]
+})
+
+const sixesSegmentLabel = computed(() => {
+  return ['Holes 1-6', 'Holes 7-12', 'Holes 13-18'][sixesCurrentSeg.value]
+})
+
+function sixesMemberName(pid) {
+  const m = roundsStore.activeMembers.find(m => m.id === pid)
+  return m ? memberDisplay(m) : '?'
+}
 
 function memberName(memberId) {
   const m = roundsStore.activeMembers.find(m => m.id === memberId)

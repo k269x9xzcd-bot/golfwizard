@@ -371,14 +371,14 @@
                 <label>Player 1</label>
                 <select v-model="mainGame.config.player1" class="config-select">
                   <option value="">— select —</option>
-                  <option v-for="p in form.players" :key="p.id" :value="p.id">{{ wizDisplayName(p) }}</option>
+                  <option v-for="p in form.players.filter(p => p.id !== mainGame.config.player2)" :key="p.id" :value="p.id">{{ wizDisplayName(p) }}</option>
                 </select>
               </div>
               <div class="config-field">
                 <label>Player 2</label>
                 <select v-model="mainGame.config.player2" class="config-select">
                   <option value="">— select —</option>
-                  <option v-for="p in form.players" :key="p.id" :value="p.id">{{ wizDisplayName(p) }}</option>
+                  <option v-for="p in form.players.filter(p => p.id !== mainGame.config.player1)" :key="p.id" :value="p.id">{{ wizDisplayName(p) }}</option>
                 </select>
               </div>
             </div>
@@ -400,6 +400,22 @@
               <select v-model="mainGame.config.carry" class="config-select">
                 <option :value="true">Yes</option>
                 <option :value="false">No</option>
+              </select>
+            </div>
+          </div>
+          <div class="config-row">
+            <div class="config-field">
+              <label>Carried skins at 18</label>
+              <select v-model="mainGame.config.lastHoleTie" class="config-select">
+                <option value="carry">Dead — nobody wins (default)</option>
+                <option value="split">Split among tied players</option>
+              </select>
+            </div>
+            <div class="config-field">
+              <label>Back 9 multiplier</label>
+              <select v-model="mainGame.config.back9Multiplier" class="config-select">
+                <option :value="false">Off</option>
+                <option :value="true">On (holes 10-18 worth 2×)</option>
               </select>
             </div>
           </div>
@@ -446,6 +462,33 @@
               </select>
             </div>
           </div>
+          <div class="config-row config-row--toggles">
+            <div class="config-toggle-row">
+              <label class="toggle-label">
+                <input type="checkbox" v-model="mainGame.config.eagleFlip" />
+                <span>🦅 Eagle flip</span>
+              </label>
+              <span class="toggle-desc">Eagle flips opponent number AND doubles the diff that hole</span>
+            </div>
+            <div class="config-toggle-row">
+              <label class="toggle-label">
+                <input type="checkbox" v-model="mainGame.config.doubleBirdie" />
+                <span>🐦🐦 Double birdie</span>
+              </label>
+              <span class="toggle-desc">Both teammates birdie = hole diff doubled</span>
+            </div>
+          </div>
+          <div class="config-row">
+            <div class="config-field">
+              <label>Penalty flip (10-Rule)</label>
+              <select v-model.number="mainGame.config.penaltyThreshold" class="config-select">
+                <option :value="0">Off</option>
+                <option :value="7">7+ score flips</option>
+                <option :value="10">10-Rule (10+ goes first)</option>
+              </select>
+            </div>
+          </div>
+          <div class="config-note" style="font-size:11px;opacity:.7;margin-bottom:4px">10-Rule: score of 10+ pairs high-first (7+10=107 not 710)</div>
           <TeamPicker :players="form.players" v-model:team1="mainGame.config.team1" v-model:team2="mainGame.config.team2" />
         </div>
 
@@ -455,6 +498,22 @@
             <div class="config-field">
               <label>$ per hole</label>
               <input v-model.number="mainGame.config.ppt" type="number" min="1" class="config-input" placeholder="5" />
+            </div>
+          </div>
+          <div class="config-row config-row--toggles">
+            <div class="config-toggle-row">
+              <label class="toggle-label">
+                <input type="checkbox" v-model="mainGame.config.aggregatePoint" />
+                <span>📊 Aggregate point</span>
+              </label>
+              <span class="toggle-desc">3rd point per hole: best combined score of both players</span>
+            </div>
+            <div class="config-toggle-row">
+              <label class="toggle-label">
+                <input type="checkbox" v-model="mainGame.config.birdieDouble" />
+                <span>🐦 Birdie double</span>
+              </label>
+              <span class="toggle-desc">Winning low ball that is a net birdie = double that point</span>
             </div>
           </div>
           <TeamPicker :players="form.players" v-model:team1="mainGame.config.team1" v-model:team2="mainGame.config.team2" />
@@ -478,10 +537,20 @@
           <div class="stableford-pts-preview">
             <div class="spp-row" v-for="item in stablefordPtsPreview" :key="item.label">
               <span class="spp-label">{{ item.label }}</span>
-              <span class="spp-pts" :class="item.pts > 0 ? 'spp-plus' : item.pts < 0 ? 'spp-neg' : 'spp-zero'">{{ item.pts > 0 ? '+' : '' }}{{ item.pts }}</span>
+              <template v-if="mainGame.config.variant === 'modified'">
+                <input
+                  type="number" min="-5" max="10" step="1"
+                  class="spp-input"
+                  :value="mainGame.config.pts?.[item.key] ?? item.pts"
+                  @change="updateStablefordPts(item.key, $event.target.value)"
+                />
+              </template>
+              <template v-else>
+                <span class="spp-pts" :class="item.pts > 0 ? 'spp-plus' : item.pts < 0 ? 'spp-neg' : 'spp-zero'">{{ item.pts > 0 ? '+' : '' }}{{ item.pts }}</span>
+              </template>
             </div>
           </div>
-          <div class="config-note">All {{ form.players.length }} players compete. Settle pairwise on pt difference.</div>
+          </div>
         </div>
 
         <!-- Wolf config -->
@@ -563,11 +632,23 @@
             </div>
           </div>
           <TeamPicker :players="form.players" v-model:team1="mainGame.config.team1" v-model:team2="mainGame.config.team2" />
-          <div class="dots-options">
-            <label><input type="checkbox" v-model="mainGame.config.airHammer" /> Air Hammer (throw before tee shot)</label>
-            <label><input type="checkbox" v-model="mainGame.config.fuHammer" /> F-U Hammer (counter + retain)</label>
-            <label><input type="checkbox" v-model="mainGame.config.birdieDouble" /> Birdie Double (auto-double if winner birdied)</label>
-            <label><input type="checkbox" v-model="mainGame.config.carryover" /> Carryover on tie</label>
+          <div class="hammer-variants">
+            <div class="hammer-variant-row">
+              <label><input type="checkbox" v-model="mainGame.config.airHammer" /> Air Hammer</label>
+              <span class="hammer-variant-info">Throw before tee shots — high-pressure opening move</span>
+            </div>
+            <div class="hammer-variant-row">
+              <label><input type="checkbox" v-model="mainGame.config.fuHammer" /> F-U Hammer</label>
+              <span class="hammer-variant-info">Counter-hammer when opponent throws — you re-double AND retain the hammer</span>
+            </div>
+            <div class="hammer-variant-row">
+              <label><input type="checkbox" v-model="mainGame.config.birdieDouble" /> Birdie Double</label>
+              <span class="hammer-variant-info">If the winning team has a birdie, the hole value auto-doubles after the result</span>
+            </div>
+            <div class="hammer-variant-row">
+              <label><input type="checkbox" v-model="mainGame.config.carryover" /> Carryover</label>
+              <span class="hammer-variant-info">Tied holes carry their full value to the next hole</span>
+            </div>
           </div>
           <div class="config-note">Throw the hammer to double the bet. Opponent must accept or concede.</div>
         </div>
@@ -793,7 +874,7 @@
                   <label>Player A</label>
                   <select v-model="sideGames.match1.player1" class="config-select">
                     <option value="">— select —</option>
-                    <option v-for="p in form.players" :key="p.id" :value="p.id">{{ wizDisplayName(p) }}</option>
+                    <option v-for="p in form.players.filter(p => p.id !== sideGames.match1.player2)" :key="p.id" :value="p.id">{{ wizDisplayName(p) }}</option>
                   </select>
                 </div>
                 <div class="sm-vs">vs</div>
@@ -801,7 +882,7 @@
                   <label>Player B</label>
                   <select v-model="sideGames.match1.player2" class="config-select">
                     <option value="">— select —</option>
-                    <option v-for="p in form.players" :key="p.id" :value="p.id">{{ wizDisplayName(p) }}</option>
+                    <option v-for="p in form.players.filter(p => p.id !== sideGames.match1.player1)" :key="p.id" :value="p.id">{{ wizDisplayName(p) }}</option>
                   </select>
                 </div>
               </div>
@@ -863,7 +944,7 @@
                   <label>Player A</label>
                   <select v-model="sideGames.match2.player1" class="config-select">
                     <option value="">— select —</option>
-                    <option v-for="p in form.players" :key="p.id" :value="p.id">{{ wizDisplayName(p) }}</option>
+                    <option v-for="p in form.players.filter(p => p.id !== sideGames.match2.player2)" :key="p.id" :value="p.id">{{ wizDisplayName(p) }}</option>
                   </select>
                 </div>
                 <div class="sm-vs">vs</div>
@@ -871,7 +952,7 @@
                   <label>Player B</label>
                   <select v-model="sideGames.match2.player2" class="config-select">
                     <option value="">— select —</option>
-                    <option v-for="p in form.players" :key="p.id" :value="p.id">{{ wizDisplayName(p) }}</option>
+                    <option v-for="p in form.players.filter(p => p.id !== sideGames.match2.player1)" :key="p.id" :value="p.id">{{ wizDisplayName(p) }}</option>
                   </select>
                 </div>
               </div>
@@ -1076,7 +1157,6 @@
         </div>
       </div>
     </div>
-  </div>
 </template>
 
 <script setup>
@@ -1358,13 +1438,20 @@ const stablefordPtsPreview = computed(() => {
   const v = mainGame.config?.variant || 'standard'
   const pts = STABLEFORD_VARIANTS[v] || STABLEFORD_VARIANTS.standard
   return [
-    { label: 'Eagle+', pts: pts.eagle },
-    { label: 'Birdie', pts: pts.birdie },
-    { label: 'Par',    pts: pts.par },
-    { label: 'Bogey',  pts: pts.bogey },
-    { label: 'Dbl+',   pts: pts.double },
+    { label: 'Eagle+', key: 'eagle', pts: pts.eagle },
+    { label: 'Birdie', key: 'birdie', pts: pts.birdie },
+    { label: 'Par',    key: 'par',    pts: pts.par },
+    { label: 'Bogey',  key: 'bogey',  pts: pts.bogey },
+    { label: 'Dbl+',   key: 'double', pts: pts.double },
   ]
 })
+
+function updateStablefordPts(key, value) {
+  const v = parseInt(value)
+  if (isNaN(v)) return
+  if (!mainGame.config.pts) mainGame.config.pts = { eagle: 4, birdie: 3, par: 2, bogey: 1, double: 0 }
+  mainGame.config.pts[key] = v
+}
 
 
 const sideGames = ref({
@@ -2516,4 +2603,12 @@ function reloadApp() {
 .spp-plus  { color: #4ade80; }
 .spp-zero  { color: var(--gw-text-muted); }
 .spp-neg   { color: #f87171; }
+</style>
+<style scoped>
+/* ── Stableford editable pts ─────────────────── */
+.spp-input {
+  width: 44px; text-align: center; font-size: 15px; font-weight: 700;
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.2);
+  border-radius: 8px; color: inherit; padding: 4px 2px;
+}
 </style>

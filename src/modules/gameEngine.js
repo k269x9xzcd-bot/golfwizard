@@ -69,6 +69,7 @@ export function courseHandicap(ghinIndex, course, tee) {
  */
 export function memberHandicap(member, course, tee) {
   if (member.round_hcp != null) return member.round_hcp
+  if (member.stroke_override != null) return member.stroke_override
   return courseHandicap(member.ghin_index ?? 0, course, tee)
 }
 
@@ -984,7 +985,8 @@ export function computeHiLow(ctx, config) {
 export function computeStableford(ctx, config) {
   const {
     ppt = 1,       // $ per point
-    variant = 'standard', // 'standard' or 'modified'
+    variant = 'standard', // 'standard', 'modified', or custom via pts
+    pts: customPts,        // optional custom pts map: { eagle, birdie, par, bogey, double }
     players: pids,
     teamMode = 'individual', // 'individual', 'aggregate' (sum team pts), 'bestball' (best per hole)
     team1 = [], team2 = [],
@@ -996,22 +998,19 @@ export function computeStableford(ctx, config) {
     : ctx.members
   const { from, to } = holeRange(ctx.holesMode)
 
+  // Point tables: custom overrides variant defaults
+  const STD_PTS  = { eagle: 4, birdie: 3, par: 2, bogey: 1, double: 0 }
+  const MOD_PTS  = { eagle: 5, birdie: 2, par: 0, bogey: -1, double: -3 }
+  const variantPts = variant === 'modified' ? MOD_PTS : STD_PTS
+  const ptsTable = customPts ? { ...variantPts, ...customPts } : variantPts
+
   function stablefordPoints(net, par) {
     const diff = net - par
-    if (variant === 'modified') {
-      // Modified (PGA) Stableford
-      if (diff <= -2) return 5  // eagle or better
-      if (diff === -1) return 2  // birdie
-      if (diff === 0) return 0   // par
-      if (diff === 1) return -1  // bogey
-      return -3                  // double bogey or worse
-    }
-    // Standard Stableford
-    if (diff <= -2) return 4   // eagle or better
-    if (diff === -1) return 3  // birdie
-    if (diff === 0) return 2   // par
-    if (diff === 1) return 1   // bogey
-    return 0                   // double bogey or worse
+    if (diff <= -2) return ptsTable.eagle  // eagle or better
+    if (diff === -1) return ptsTable.birdie // birdie
+    if (diff === 0)  return ptsTable.par    // par
+    if (diff === 1)  return ptsTable.bogey  // bogey
+    return ptsTable.double                  // double bogey or worse
   }
 
   const playerResults = {}

@@ -134,6 +134,7 @@ export function useScorecardHelpers({ showFullHcp }) {
   }
 
   function memberEffectiveHcp(member) {
+    if (member?.stroke_override != null) return member.stroke_override
     if (showFullHcp.value) return memberHandicapValue(member)
     const lm = lowManStrokes(member)
     return lm != null ? lm : memberHandicapValue(member)

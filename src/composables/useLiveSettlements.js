@@ -451,8 +451,17 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
     }
   }
 
+  // Force gameSummaryHtml to be reactive by tracking scores inside a computed token
+  const _scoresTick = computed(() => JSON.stringify(roundsStore.activeScores))
+
+  function gameSummaryHtmlReactive(game) {
+    // Access the tick to create reactive dependency on scores
+    void _scoresTick.value
+    return gameSummaryHtml(game)
+  }
+
   return {
     liveSettlements,
-    gameSummaryHtml,
+    gameSummaryHtml: gameSummaryHtmlReactive,
   }
 }

@@ -95,6 +95,7 @@ export function useScorecard(round, ctx) {
   }
 
   function memberEffectiveHcp(member) {
+    if (member?.stroke_override != null) return member.stroke_override
     const lm = lowManStrokes(member)
     return lm != null ? lm : memberHandicapValue(member)
   }
