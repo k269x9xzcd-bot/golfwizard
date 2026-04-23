@@ -1302,6 +1302,19 @@
 }
 .wolf-blind-btn.active { background: rgba(220,38,38,.2); border-color: #f87171; }
 
+.wolf-teams-display { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+.wolf-team { display: flex; align-items: baseline; gap: 5px; font-size: 13px; flex: 1; }
+.wolf-team-label { font-weight: 600; color: var(--gw-gold); white-space: nowrap; }
+.wolf-team-names { color: var(--gw-text); }
+.wolf-team-mult { font-size: 11px; color: #f87171; font-weight: 700; }
+.wolf-vs-divider { font-size: 11px; color: rgba(240,237,224,.35); font-style: italic; }
+.wolf-change-btn {
+  width: 100%; padding: 8px; border-radius: 8px; margin-top: 2px;
+  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
+  color: rgba(240,237,224,.6); font-size: 12px; cursor: pointer;
+}
+.wolf-change-btn:active { background: rgba(255,255,255,.1); }
+
 /* ═══════════════════════════════════════════════════════════════════
    LANDSCAPE GLANCE MODE — scorecard + live games fill the viewport
    Everything else is hidden. Portrait-only features like hole entry,

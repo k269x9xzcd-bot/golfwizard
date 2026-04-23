@@ -774,13 +774,13 @@
           <template v-if="wolfTeamForHole">
             <div class="wolf-teams-display">
               <div class="wolf-team wolf-team-a">
-                <span class="wolf-team-label">{{ wolfTeamForHole.mode === 'lone' ? '🐺 Lone' : wolfTeamForHole.mode === 'blind' ? '🙈 Blind' : '🤝 Wolf team' }}</span>
+                <span class="wolf-team-label">{{ wolfTeamForHole.mode === 'lone' ? '🐺 Lone' : wolfTeamForHole.mode === 'blind' ? '🙈 Blind' : '🤝 Wolf team' }}:</span>
                 <span class="wolf-team-names">{{ wolfTeamForHole.wolfTeam.map(m => memberDisplay(m)).join(' + ') }}</span>
                 <span v-if="wolfTeamForHole.mode !== 'partner'" class="wolf-team-mult">{{ wolfTeamForHole.mode === 'blind' ? (wolfGame.config?.blindWolfMultiplier ?? 8) : (wolfGame.config?.wolfLoneMultiplier ?? 4) }}×</span>
               </div>
               <div class="wolf-vs-divider">vs</div>
               <div class="wolf-team wolf-team-b">
-                <span class="wolf-team-label">Field</span>
+                <span class="wolf-team-label">Field:</span>
                 <span class="wolf-team-names">{{ wolfTeamForHole.field.map(m => memberDisplay(m)).join(' + ') }}</span>
               </div>
             </div>
@@ -994,6 +994,7 @@ import { useScorecardHelpers } from '../composables/useScorecardHelpers'
 import { useGameNotation } from '../composables/useGameNotation'
 import { useLiveSettlements } from '../composables/useLiveSettlements'
 import { computeNassau, computeHammer } from '../modules/gameEngine'
+import { simulateRound } from '../modules/simulator'
 
 const authStore = useAuthStore()
 const roundsStore = useRoundsStore()
@@ -1867,42 +1868,33 @@ function onScoreLongPressEnd() {
 // saveScore removed — inline entry auto-saves
 
 // ── Score Simulator ─────────────────────────────────────────────
-function doSimulateFill() {
+async function doSimulateFill() {
   showRoundMenu.value = false
-  if (!confirm('Simulate random scores for all players? This will overwrite any existing scores.')) return
-  simulateFill()
+  if (!confirm('Simulate random scores for all players? This will overwrite any existing scores and game choices.')) return
+  await simulateFill()
 }
 
-function simulateFill() {
+async function simulateFill() {
   const members = roundsStore.activeMembers
-  const holes = visibleHoles.value
-  // Weighted random score relative to par: heavy on bogey/par, some birdies/doubles
-  // Distribution: eagle(1%), birdie(12%), par(35%), bogey(30%), double(15%), triple+(7%)
-  const weights = [
-    { offset: -2, w: 1 },   // eagle
-    { offset: -1, w: 12 },  // birdie
-    { offset:  0, w: 35 },  // par
-    { offset:  1, w: 30 },  // bogey
-    { offset:  2, w: 15 },  // double
-    { offset:  3, w: 7 },   // triple
-  ]
-  const totalWeight = weights.reduce((s, x) => s + x.w, 0)
+  const games = roundsStore.activeGames
+  const course = courseData.value
+  const tee = roundsStore.activeRound?.tee
+  const holesMode = roundsStore.activeRound?.holes_mode || '18'
 
-  function randomOffset() {
-    let r = Math.random() * totalWeight
-    for (const { offset, w } of weights) {
-      r -= w
-      if (r <= 0) return offset
+  const { scores, gameConfigs } = simulateRound({ members, games, course, tee, holesMode })
+
+  // Apply all scores
+  const scoreCalls = []
+  for (const [memberId, holeMap] of Object.entries(scores)) {
+    for (const [hole, score] of Object.entries(holeMap)) {
+      scoreCalls.push(roundsStore.setScore(memberId, Number(hole), score))
     }
-    return 1
   }
+  await Promise.all(scoreCalls)
 
-  for (const m of members) {
-    for (const h of holes) {
-      const par = parForHole(h)
-      const score = Math.max(1, par + randomOffset())
-      roundsStore.setScore(m.id, h, score)
-    }
+  // Apply game config updates (wolf choices, snake events, dots manual, hammer log)
+  for (const [gameId, newConfig] of Object.entries(gameConfigs)) {
+    await roundsStore.updateGameConfig(gameId, newConfig)
   }
 }
 
