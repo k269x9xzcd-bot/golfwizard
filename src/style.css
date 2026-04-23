@@ -438,46 +438,37 @@ body {
   -webkit-backdrop-filter: blur(4px);
   z-index: 200;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  padding: 0 12px 0 12px;
+  align-items: flex-start;
+  padding: 0;
+  padding-top: 40px;
 }
 
 @media (min-width: 600px) {
   .modal-overlay {
-    justify-content: center;
+    align-items: center;
     padding: var(--gw-space-6);
+    padding-top: var(--gw-space-6);
   }
 }
 
 .modal {
   background: var(--gw-neutral-800);
   border: 1px solid var(--gw-card-border);
-  border-radius: var(--gw-radius-xl) var(--gw-radius-xl) var(--gw-radius-xl) var(--gw-radius-xl);
+  border-radius: var(--gw-radius-xl) var(--gw-radius-xl) 0 0;
   padding: var(--gw-space-6) var(--gw-space-5);
   padding-bottom: calc(var(--gw-space-8) + env(safe-area-inset-bottom));
   width: 100%;
-  max-width: 480px;
-  box-sizing: border-box;
-  max-height: 88dvh;
+  max-height: 90dvh;
   overflow-y: auto;
-  overflow-x: hidden;
   position: relative;
-  flex-shrink: 0;
-  margin-bottom: 12px;
   animation: modal-up 0.25s cubic-bezier(0.32, 0.72, 0, 1);
-}
-
-/* Wizard uses internal scroll on .wizard-step — disable outer scroll */
-.wizard-modal.modal {
-  overflow-y: visible;
-  overflow: visible;
 }
 
 @media (min-width: 600px) {
   .modal {
-    margin-bottom: 0;
+    border-radius: var(--gw-radius-xl);
+    max-width: 480px;
+    margin: auto;
   }
 }
 
@@ -670,12 +661,13 @@ body {
 }
 
 /* ── Wizard modal ──────────────────────────────────────────── */
-.wizard-overlay { justify-content: center; padding: 20px 12px; }
+.wizard-overlay { align-items: flex-end; }
 
 .wizard-modal {
-  border-radius: var(--gw-radius-xl);
-  max-height: 88dvh;
-  max-height: 88svh;
+  border-radius: var(--gw-radius-xl) var(--gw-radius-xl) 0 0;
+  max-height: 92dvh;
+  /* svh = small viewport height (excludes keyboard on iOS Safari) */
+  max-height: 92svh;
   display: flex;
   flex-direction: column;
   padding: 0;
