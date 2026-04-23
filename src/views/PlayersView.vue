@@ -765,9 +765,10 @@ async function searchGhinForEdit() {
       }]
     } else if (r.status === 'multiple_matches') {
       ghinSearchResults.value = r.matches ?? []
-      if (!ghinSearchResults.value.length) ghinSearchMsg.value = `No matches for "${prefix}" — try fewer letters`
+      if (ghinSearchResults.value.length) ghinSearchMsg.value = `Found ${ghinSearchResults.value.length} golfer${ghinSearchResults.value.length > 1 ? 's' : ''} named "${last}" — select one:`
+      if (!ghinSearchResults.value.length) ghinSearchMsg.value = `No GHIN record found for "${first} ${last}". Check spelling or enter their GHIN # directly.`
     } else {
-      ghinSearchMsg.value = `No match for "${prefix} ${last}" — try fewer letters in the prefix field`
+      ghinSearchMsg.value = `No GHIN record found for "${first} ${last}". Try clearing the prefix field, or enter their GHIN # directly.`
     }
   } catch (e) {
     ghinSearchMsg.value = e?.message || 'Search failed'
