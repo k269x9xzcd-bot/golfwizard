@@ -552,7 +552,11 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
 
       // ── 5-3-1 ──
       if (t === 'fivethreeone' || t === 'nines') {
-        const r = computeFiveThreeOne(ctx, cfg)
+        let r = computeFiveThreeOne(ctx, cfg)
+        // Fallback: if config.players is absent in a 4-player round, auto-select first 3 members
+        if (!r && !cfg.players && ctx.members.length > 3) {
+          r = computeFiveThreeOne(ctx, { ...cfg, players: ctx.members.slice(0, 3).map(m => m.id) })
+        }
         if (!r) return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} ${t === 'nines' ? '9s' : '5-3-1'}</span><span class="muted" style="font-size:11px"> Need 3+ players</span></div>`
         const ppt = r.ppt || cfg.ppt || 1
         const played = (r.holeResults || []).filter(h => !h.incomplete).length

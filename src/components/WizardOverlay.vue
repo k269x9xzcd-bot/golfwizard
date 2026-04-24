@@ -997,7 +997,7 @@
                       :disabled="!(sideGames.nines.players || []).includes(p.id) && (sideGames.nines.players || []).length >= 3"
                       @change="toggleNinesSidePlayer(p.id)"
                     />
-                    {{ p.short_name || p.full_name }}
+                    {{ p.shortName || p.short_name || p.name }}
                   </label>
                 </div>
                 <div v-if="(sideGames.nines.players || []).length !== 3" class="config-note config-note--warn">Select exactly 3 players.</div>
@@ -1650,6 +1650,13 @@ const sideGames = ref({
   match2: { enabled: false, player1: '', player2: '', ppt: 10, scoring: 'closeout', front: 10, back: 10, overall: 20, pressAt: 2 },
   bbn:    { enabled: false },
   bbb:    { enabled: false, ppt: 1, doubleBongo: false },
+})
+
+// When a 4th player is added and nines side game is enabled but has no player subset, auto-init
+watch(() => form.value.players.length, (newLen) => {
+  if (newLen > 3 && sideGames.value.nines.enabled && !sideGames.value.nines.players) {
+    sideGames.value.nines.players = form.value.players.slice(0, 3).map(p => p.id)
+  }
 })
 
 // Best Ball trackers — multiple allowed (foursome-wide, not team-based)
@@ -2385,9 +2392,16 @@ function buildGameConfigs() {
   // Main game
   if (mainGame.value.type !== 'none') {
     const cfg = { ...mainGame.value.config }
-    // nines: only persist players subset when exactly 3 selected and round has 4+ players
+    // nines: manage player subset for 4+ player rounds
     if (mainGame.value.type === 'nines') {
-      if (!cfg.players || cfg.players.length !== 3 || form.value.players.length <= 3) {
+      if (form.value.players.length > 3) {
+        // Always persist a 3-player subset; fall back to first 3 if picker wasn't used
+        if (!cfg.players || cfg.players.length !== 3) {
+          cfg.players = form.value.players.slice(0, 3).map(p => p.id)
+        } else {
+          cfg.players = [...cfg.players]
+        }
+      } else {
         delete cfg.players
       }
     }
@@ -2423,8 +2437,12 @@ function buildGameConfigs() {
       birdieBonusPts: sg.nines.birdieBonusPts ?? 1,
       birdieDouble: sg.nines.birdieDouble ?? false,
     }
-    if (form.value.players.length > 3 && (sg.nines.players || []).length === 3) {
-      ninesCfg.players = sg.nines.players
+    if (form.value.players.length > 3) {
+      // Always persist a 3-player subset; fall back to first 3 if picker wasn't used
+      const selected = sg.nines.players && sg.nines.players.length === 3
+        ? [...sg.nines.players]
+        : form.value.players.slice(0, 3).map(p => p.id)
+      ninesCfg.players = selected
     }
     games.push({ type: 'nines', config: ninesCfg })
   }

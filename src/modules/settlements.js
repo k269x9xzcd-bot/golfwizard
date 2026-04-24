@@ -278,8 +278,13 @@ export function computeAllSettlements(ctx, games) {
     if (!engineFn) continue
 
     try {
-      const result = engineFn(ctx, game.config || {})
-      const nets = extractPlayerNets(t, result, game.config || {}, ctx.members)
+      let cfg = game.config || {}
+      // Fallback: nines/fivethreeone with no player subset in a 4+ player round
+      if ((t === 'nines' || t === 'fivethreeone') && !cfg.players && ctx.members.length > 3) {
+        cfg = { ...cfg, players: ctx.members.slice(0, 3).map(m => m.id) }
+      }
+      const result = engineFn(ctx, cfg)
+      const nets = extractPlayerNets(t, result, cfg, ctx.members)
 
       summary[game.id] = {
         type: t,
