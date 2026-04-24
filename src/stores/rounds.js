@@ -141,13 +141,29 @@ export const useRoundsStore = defineStore('rounds', () => {
     _flushInFlight = true
     const failed = []
     for (const entry of q) {
+      let saved = false
+      // Try SJS first
       try {
         const { error } = await Promise.race([
           supabase.from('scores').upsert(entry, { onConflict: 'round_id,member_id,hole' }),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('flush entry timeout')), 4000))
+          new Promise((_, reject) => setTimeout(() => reject(new Error('flush SJS timeout')), 2000))
         ])
-        if (error) failed.push(entry)
-      } catch { failed.push(entry) }
+        if (!error) saved = true
+      } catch {}
+      // Raw fetch fallback if SJS failed/timed out
+      if (!saved) {
+        try {
+          await supaRawRequest(
+            'POST',
+            'scores?on_conflict=round_id,member_id,hole',
+            entry,
+            8000,
+            { Prefer: 'resolution=merge-duplicates,return=representation' },
+          )
+          saved = true
+        } catch {}
+      }
+      if (!saved) failed.push(entry)
     }
     _saveQueue(failed)
     _flushInFlight = false
@@ -665,24 +681,36 @@ export const useRoundsStore = defineStore('rounds', () => {
       entered_at: new Date().toISOString(),
     }
 
+    // Try SJS with short timeout; fall back to raw fetch to survive stuck iOS sockets
+    let sjsErr = null
     try {
-      const { error } = await supabase.from('scores').upsert(entry, { onConflict: 'round_id,member_id,hole' })
-      if (error) {
-        console.warn('Score save failed, queuing for retry:', error.message)
-        _enqueue(entry)
-        // RLS / auth errors won't be fixed by retrying — surface to UI
-        if (error.code === '42501' || error.message?.includes('row-level') || error.message?.includes('policy')) {
-          scoreSyncError.value = 'rls'
-        } else {
-          scoreSyncError.value = 'db'
-        }
-      } else {
-        scoreSyncError.value = null  // clear on success
-      }
+      const { error } = await Promise.race([
+        supabase.from('scores').upsert(entry, { onConflict: 'round_id,member_id,hole' }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('score SJS timeout')), 2000)),
+      ])
+      if (error) throw error
+      scoreSyncError.value = null
+      return  // success
     } catch (e) {
-      // Offline — queue silently, no error banner (expected)
-      console.warn('Score save offline, queued:', e.message)
+      sjsErr = e
+    }
+
+    // SJS failed or timed out — try raw fetch with fresh connection
+    try {
+      await supaRawRequest(
+        'POST',
+        'scores?on_conflict=round_id,member_id,hole',
+        entry,
+        8000,
+        { Prefer: 'resolution=merge-duplicates,return=representation' },
+      )
+      scoreSyncError.value = null
+    } catch (rawErr) {
+      console.warn('Score save failed (SJS + raw):', rawErr.message)
       _enqueue(entry)
+      const isAuthErr = sjsErr?.code === '42501' || rawErr.status === 401 || rawErr.status === 403
+        || sjsErr?.message?.includes('row-level') || sjsErr?.message?.includes('policy')
+      scoreSyncError.value = isAuthErr ? 'rls' : 'db'
     }
     // Non-blocking: never throw — the optimistic update already applied
   }
