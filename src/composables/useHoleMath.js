@@ -4,7 +4,7 @@
  */
 import {
   computeNassau, computeSkins, computeMatch, computeBestBall,
-  computeVegas, computeHiLow, computeWolf, computeHammer, computeFiveThreeOne,
+  computeVegas, computeHiLow, computeWolf, computeHammer, computeFiveThreeOne, computeSixes,
 } from '../modules/gameEngine'
 
 export function useHoleMath({ buildCtx, pInit, teamInitialsStr }) {
@@ -23,6 +23,7 @@ export function useHoleMath({ buildCtx, pInit, teamInitialsStr }) {
       if (t === 'hammer') return _hammer(ctx, cfg, hole)
       if (t === 'hilow') return _hilow(ctx, cfg, hole)
       if (t === 'fivethreeone' || t === 'nines') return _531(ctx, cfg, hole)
+      if (t === 'sixes') return _sixes(ctx, cfg, hole)
     } catch { /* silent */ }
     return []
   }
@@ -185,6 +186,25 @@ export function useHoleMath({ buildCtx, pInit, teamInitialsStr }) {
       lines.push(`Agg: ${t1n} ${hr.t1Agg} · ${t2n} ${hr.t2Agg} → ${aggStr}`)
     }
     return lines
+  }
+
+  function _sixes(ctx, cfg, hole) {
+    const r = computeSixes(ctx, cfg)
+    if (!r) return []
+    const seg = r.segResults.find(s => !s.skipped && hole >= s.from && hole <= s.to)
+    if (!seg) return []
+    const hd = seg.holeDetails.find(h => h.hole === hole)
+    if (!hd || hd.incomplete) return []
+    const aNms = seg.teamANames || 'A'
+    const bNms = seg.teamBNames || 'B'
+    const aRun = seg.holeDetails.filter(h => h.hole <= hole && h.winner === 'a').length
+    const bRun = seg.holeDetails.filter(h => h.hole <= hole && h.winner === 'b').length
+    const holeResult = hd.winner === 'a' ? `${aNms} wins` : hd.winner === 'b' ? `${bNms} wins` : 'Tied'
+    const runStr = aRun > bRun ? `${aNms} ${aRun}-${bRun}` : bRun > aRun ? `${bNms} ${bRun}-${aRun}` : `AS ${aRun}-${bRun}`
+    return [
+      `${aNms} best ${hd.aBest} · ${bNms} best ${hd.bBest}`,
+      `${holeResult} · ${seg.label}: ${runStr}`,
+    ]
   }
 
   function _531(ctx, cfg, hole) {

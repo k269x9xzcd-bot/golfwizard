@@ -385,24 +385,42 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
         try {
           const r = computeSixes(ctx, game.config)
           if (!r) continue
-          const cells = {}
+
+          // One row per 6-hole segment — shows pairing + per-hole hole-winner
           for (const seg of (r.segResults || [])) {
             if (seg.skipped) continue
-            const aWon = seg.aWins > seg.bWins
-            const bWon = seg.bWins > seg.aWins
             const aNms = seg.teamANames || 'A'
             const bNms = seg.teamBNames || 'B'
+            const cells = {}
             for (const hd of (seg.holeDetails || [])) {
-              if (hd.incomplete) continue
+              if (hd.incomplete) { cells[hd.hole] = { text: '', cls: '' }; continue }
               const cls = hd.winner === 'a' ? 'nota-t1' : hd.winner === 'b' ? 'nota-t2' : 'nota-halved'
               const sym = hd.winner === 'a' ? aNms.slice(0,2) : hd.winner === 'b' ? bNms.slice(0,2) : '='
               cells[hd.hole] = { text: sym, cls }
             }
+            const played = (seg.holeDetails || []).filter(hd => !hd.incomplete)
+            const segResult = played.length === 0 ? ''
+              : seg.aWins > seg.bWins ? `${aNms} ${seg.aWins}-${seg.bWins}`
+              : seg.bWins > seg.aWins ? `${bNms} ${seg.bWins}-${seg.aWins}`
+              : `AS ${seg.aWins}-${seg.bWins}`
+            const ptsStr = seg.aPts != null && played.length === (seg.to - seg.from + 1)
+              ? ` (${seg.aPts}/${seg.bPts}pts)` : ''
+            rows.push({
+              icon: '🎲',
+              label: `${aNms}v${bNms}`,
+              cells,
+              outSummary: '', inSummary: '',
+              totalSummary: segResult + ptsStr,
+              game,
+              cls: 'row-sixes-seg',
+            })
           }
+
+          // Settlement row
           const sorted = [...(r.settlements || [])].sort((a, b) => b.net - a.net)
           const topNet = sorted[0]?.net || 0
           const summary = topNet > 0 ? `${sorted[0].name} +$${topNet}` : 'AS'
-          rows.push({ icon: '🎲', label: 'Sixes', cells, outSummary: '', inSummary: '', totalSummary: summary, game })
+          rows.push({ icon: '', label: '💰 Total', cells: {}, outSummary: '', inSummary: '', totalSummary: summary, game })
         } catch(e) { /* skip */ }
       }
 
