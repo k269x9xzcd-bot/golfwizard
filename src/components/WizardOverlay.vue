@@ -931,6 +931,49 @@
             </div>
           </div>
 
+          <!-- 5-3-1 (Nines) as side game — hidden when it's already the main game -->
+          <div class="side-game-row" :class="{ 'side-game-on': sideGames.nines.enabled }" v-if="mainGame.type !== 'nines' && (props.lockedPlayers ?? form.players).length >= 3">
+            <div class="side-game-header" @click="toggleSideGame('nines')">
+              <span>9️⃣ 5-3-1 (Nines)</span>
+              <span class="side-header-actions">
+                <button class="btn-game-info btn-game-info-sm" @click.stop="toggleGameInfo('nines')" title="How to play">ℹ️</button>
+                <span class="side-toggle">{{ sideGames.nines.enabled ? '▲' : '▼' }}</span>
+              </span>
+            </div>
+            <div v-if="gameInfoKey === 'nines'" class="game-info-popover game-info-inline">
+              <p class="game-info-desc">Best net gets 5 pts, second 3, third 1, last 0. 9 pts per hole — everyone plays.</p>
+              <button class="btn-close-info" @click="gameInfoKey = null">Got it</button>
+            </div>
+            <div v-if="sideGames.nines.enabled" class="side-game-config">
+              <div class="config-field">
+                <label>$ per point</label>
+                <input v-model.number="sideGames.nines.ppt" type="number" class="config-input" placeholder="1" />
+              </div>
+              <!-- 3-player picker when round has 4+ players -->
+              <div v-if="form.players.length > 3" class="config-row config-row--players" style="margin-top:8px">
+                <label class="wiz-label">Pick 3 players for this game:</label>
+                <div class="nines-player-picker">
+                  <label
+                    v-for="p in form.players"
+                    :key="p.id"
+                    class="nines-player-option"
+                    :class="{ selected: (sideGames.nines.players || []).includes(p.id) }"
+                  >
+                    <input
+                      type="checkbox"
+                      :value="p.id"
+                      :checked="(sideGames.nines.players || []).includes(p.id)"
+                      :disabled="!(sideGames.nines.players || []).includes(p.id) && (sideGames.nines.players || []).length >= 3"
+                      @change="toggleNinesSidePlayer(p.id)"
+                    />
+                    {{ p.short_name || p.full_name }}
+                  </label>
+                </div>
+                <div v-if="(sideGames.nines.players || []).length !== 3" class="config-note config-note--warn">Select exactly 3 players.</div>
+              </div>
+            </div>
+          </div>
+
           <!-- BBB (Bingo Bango Bongo) -->
           <div class="side-game-row" :class="{ 'side-game-on': sideGames.bbb.enabled }">
             <div class="side-game-header" @click="toggleSideGame('bbb')">
@@ -1571,6 +1614,7 @@ const sideGames = ref({
   dots:   { enabled: false, ppt: 2, birdieEnabled: true, eagleEnabled: true, greenieEnabled: true, sandieEnabled: true },
   snake:  { enabled: false, ppt: 5 },
   fidget: { enabled: false, ppp: 10 },
+  nines:  { enabled: false, ppt: 1, sweepBonus: false, sweepMargin: 2, birdieBonus: false, birdieBonusPts: 1, birdieDouble: false, players: null },
   match1: { enabled: false, player1: '', player2: '', ppt: 10, scoring: 'closeout', front: 10, back: 10, overall: 20, pressAt: 2 },
   match2: { enabled: false, player1: '', player2: '', ppt: 10, scoring: 'closeout', front: 10, back: 10, overall: 20, pressAt: 2 },
   bbn:    { enabled: false },
@@ -1622,6 +1666,19 @@ function toggleNinesPlayer(id) {
 
 function toggleSideGame(key) {
   sideGames.value[key].enabled = !sideGames.value[key].enabled
+  // Init 3-player picker when enabling nines side game in a 4+ player round
+  if (key === 'nines' && sideGames.value.nines.enabled && form.value.players.length > 3 && !sideGames.value.nines.players) {
+    sideGames.value.nines.players = form.value.players.slice(0, 3).map(p => p.id)
+  }
+}
+
+function toggleNinesSidePlayer(id) {
+  const current = sideGames.value.nines.players || []
+  if (current.includes(id)) {
+    sideGames.value.nines.players = current.filter(x => x !== id)
+  } else if (current.length < 3) {
+    sideGames.value.nines.players = [...current, id]
+  }
 }
 
 // ── Form state ───────────────────────────────────────────────────
@@ -2326,6 +2383,20 @@ function buildGameConfigs() {
   if (sg.fidget.enabled) {
     games.push({ type: 'fidget', config: { ppp: sg.fidget.ppp } })
   }
+  if (sg.nines.enabled && mainGame.value.type !== 'nines') {
+    const ninesCfg = {
+      ppt: sg.nines.ppt ?? 1,
+      sweepBonus: sg.nines.sweepBonus ?? false,
+      sweepMargin: sg.nines.sweepMargin ?? 2,
+      birdieBonus: sg.nines.birdieBonus ?? false,
+      birdieBonusPts: sg.nines.birdieBonusPts ?? 1,
+      birdieDouble: sg.nines.birdieDouble ?? false,
+    }
+    if (form.value.players.length > 3 && (sg.nines.players || []).length === 3) {
+      ninesCfg.players = sg.nines.players
+    }
+    games.push({ type: 'nines', config: ninesCfg })
+  }
   // 1v1 Side Matches — route based on scoring mode
   // closeout/skins → type:match1v1 (uses computeMatch with scoring field)
   // nassau → type:nassau with single-player teams (reuses full Nassau engine)
@@ -2433,6 +2504,22 @@ function _loadEditGames() {
     sg.bbn.enabled = true
     bbnTrackers.value = bbnRows.map((g, i) => ({ id: i + 1, ballsToCount: g.config?.ballsToCount ?? 1, scoring: g.config?.scoring ?? 'net' }))
     bbnNextId = bbnRows.length + 1
+  }
+
+  // Nines as side game — any nines/fivethreeone row that isn't the main game
+  const ninesSideRow = games.find(g => (g.type === 'nines' || g.type === 'fivethreeone') && g !== mainRow)
+  if (ninesSideRow) {
+    sg.nines.enabled = true
+    sg.nines.ppt = ninesSideRow.config?.ppt ?? 1
+    sg.nines.sweepBonus = ninesSideRow.config?.sweepBonus ?? false
+    sg.nines.sweepMargin = ninesSideRow.config?.sweepMargin ?? 2
+    sg.nines.birdieBonus = ninesSideRow.config?.birdieBonus ?? false
+    sg.nines.birdieBonusPts = ninesSideRow.config?.birdieBonusPts ?? 1
+    sg.nines.birdieDouble = ninesSideRow.config?.birdieDouble ?? false
+    sg.nines.players = ninesSideRow.config?.players || null
+    if (form.value.players.length > 3 && !sg.nines.players) {
+      sg.nines.players = form.value.players.slice(0, 3).map(p => p.id)
+    }
   }
 }
 
