@@ -1597,6 +1597,15 @@ function toggleNotationRow(ri) {
   s.has(ri) ? s.delete(ri) : s.add(ri)
   expandedNotationRows.value = s
 }
+// Auto-expand 5-3-1 / nines rows — per-hole points are the whole game,
+// collapsing them to a single total defeats the purpose.
+watch(gameNotationRows, (rows) => {
+  const s = new Set(expandedNotationRows.value)
+  rows.forEach((row, ri) => {
+    if (row.cls === 'row-531') s.add(ri)
+  })
+  expandedNotationRows.value = s
+}, { immediate: true })
 const showFinishReview = ref(false)
 
 // ── Landscape mode (glance-only scorecard) ──────────────────────

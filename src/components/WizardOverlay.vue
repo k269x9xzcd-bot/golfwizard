@@ -132,20 +132,32 @@
 
       <!-- ── Step 2: Players ────────────────────────────────── -->
       <div v-if="step === 2" class="wizard-step wizard-step--players">
-        <input
-          v-model="playerSearch"
-          class="wiz-input"
-          placeholder="Search roster…"
-          @focus="scrollInputIntoView"
-        />
 
-        <!-- Selected players: compact horizontal chip strip -->
+        <!-- Search bar -->
+        <div class="ps-search-wrap">
+          <span class="ps-search-icon">{{ psSearching ? '⟳' : '⌕' }}</span>
+          <input
+            ref="psInputEl"
+            class="ps-search-input"
+            :value="psQuery"
+            placeholder="Search by name or GHIN #…"
+            inputmode="search"
+            autocomplete="off"
+            autocorrect="off"
+            spellcheck="false"
+            @input="psOnInput($event.target.value)"
+            @focus="scrollInputIntoView"
+          />
+          <button v-if="psQuery" class="ps-clear-btn" @click="psClear">✕</button>
+        </div>
+
+        <!-- Selected players: chip strip -->
         <div v-if="form.players.length" class="player-chip-strip">
           <div
             v-for="(p, i) in form.players"
             :key="p.id"
             class="player-chip"
-            :class="{ 'dragging': dragIdx === i }"
+            :class="{ dragging: dragIdx === i }"
             draggable="true"
             @dragstart="onDragStart(i)"
             @dragover.prevent="onDragOver(i)"
@@ -178,113 +190,106 @@
           </div>
         </div>
 
-        <!-- Roster list — fills remaining space -->
-        <div class="roster-list">
-          <!-- Favorites section -->
-          <template v-if="!playerSearch">
-            <template v-if="rosterFavorites.length">
-              <div class="section-label-sm">Favorites</div>
-              <div
-                v-for="p in rosterFavorites"
-                :key="p.id"
-                class="roster-option"
-                :class="{ selected: isPlayerAdded(p) }"
-                @click="togglePlayer(p)"
-              >
-                <div class="roster-info">
-                  <span class="roster-name">{{ p.name }}</span>
-                  <div class="roster-hcp-row">
-                    <span
-                      v-if="p.ghin_synced_at"
-                      class="ghin-dot"
-                      :class="ghinDotClass(p.ghin_synced_at)"
-                      :title="ghinDotTitle(p.ghin_synced_at)"
-                    />
-                    <span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span>
-                  </div>
-                </div>
-                <span class="roster-check">{{ isPlayerAdded(p) ? '✓' : '+' }}</span>
-              </div>
-            </template>
-            <template v-if="rosterOthers.length">
-              <div class="section-label-sm" style="margin-top:6px">All Players</div>
-              <div
-                v-for="p in rosterOthers"
-                :key="p.id"
-                class="roster-option"
-                :class="{ selected: isPlayerAdded(p) }"
-                @click="togglePlayer(p)"
-              >
-                <div class="roster-info">
-                  <span class="roster-name">{{ p.name }}</span>
-                  <div class="roster-hcp-row">
-                    <span
-                      v-if="p.ghin_synced_at"
-                      class="ghin-dot"
-                      :class="ghinDotClass(p.ghin_synced_at)"
-                      :title="ghinDotTitle(p.ghin_synced_at)"
-                    />
-                    <span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span>
-                  </div>
-                </div>
-                <span class="roster-check">{{ isPlayerAdded(p) ? '✓' : '+' }}</span>
-              </div>
-            </template>
-          </template>
-          <!-- Search results -->
-          <template v-else>
-            <div
-              v-for="p in filteredRoster"
-              :key="p.id"
-              class="roster-option"
-              :class="{ selected: isPlayerAdded(p) }"
-              @click="togglePlayer(p)"
-            >
-              <div class="roster-info">
-                <span class="roster-name">{{ p.name }}</span>
-                <div class="roster-hcp-row">
-                  <span
-                    v-if="p.ghin_synced_at"
-                    class="ghin-dot"
-                    :class="ghinDotClass(p.ghin_synced_at)"
-                    :title="ghinDotTitle(p.ghin_synced_at)"
-                  />
-                  <span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span>
-                </div>
-              </div>
-              <span class="roster-check">{{ isPlayerAdded(p) ? '✓' : '+' }}</span>
-            </div>
-          </template>
-        </div>
+        <!-- Results list -->
+        <div class="ps-results">
 
-        <!-- Quick add guest -->
-        <div class="quick-add-section">
-          <div class="quick-add-name-row">
-            <input v-model="newFirst" class="wiz-input" placeholder="First name"
-              @keydown.enter="wizSearchPlayer" />
-            <input v-model="newLast" class="wiz-input" placeholder="Last name (required)"
-              @keydown.enter="wizSearchPlayer"
-              @blur="newLast.trim().length >= 2 && wizSearchPlayer()" />
-            <button class="btn-ghost btn-sm wiz-search-btn" @click="wizSearchPlayer" :disabled="wizSearching">
-              {{ wizSearching ? "…" : "🔍 Search" }}
-            </button>
-          </div>
-          <div v-if="wizSearchResults.length" class="wiz-search-results">
-            <div v-for="r in wizSearchResults" :key="r.ghin_number || r.full_name"
-                 class="wiz-search-option" @click="wizApplyResult(r)">
-              <div class="wiz-search-name">{{ r.full_name }}
-                <span v-if="r._source === 'bb'" class="bb-badge">BB</span>
-              </div>
-              <div class="wiz-search-meta">{{ r.club_name || "External" }} · idx {{ r.handicap_index ?? "NH" }}</div>
+          <!-- Roster section -->
+          <template v-if="psResults.roster.length">
+            <div class="ps-section-label">
+              <span>{{ psQuery ? 'Your Roster' : 'Favorites' }}</span>
             </div>
+            <div
+              v-for="r in psResults.roster"
+              :key="r.id"
+              class="ps-row"
+              :class="{ 'ps-row--added': isPlayerAddedById(r.id) }"
+              @click="psAddResult(r)"
+            >
+              <div class="ps-row-info">
+                <span class="ps-row-name">{{ r.name }}</span>
+                <span class="ps-row-meta">
+                  <span
+                    v-if="r.ghinSyncedAt"
+                    class="ghin-dot"
+                    :class="ghinDotClass(r.ghinSyncedAt)"
+                    :title="ghinDotTitle(r.ghinSyncedAt)"
+                  />
+                  idx {{ r.ghinIndex ?? '—' }}
+                  <span v-if="r.isFavorite" class="ps-fav-star">★</span>
+                </span>
+              </div>
+              <span class="ps-row-action">{{ isPlayerAddedById(r.id) ? '✓' : '+' }}</span>
+            </div>
+          </template>
+
+          <!-- BB Members section -->
+          <template v-if="psResults.bb.length">
+            <div class="ps-section-label">
+              <span>Club Members</span>
+              <span class="ps-section-badge">BB</span>
+            </div>
+            <div
+              v-for="r in psResults.bb"
+              :key="r.id"
+              class="ps-row"
+              @click="psAddResult(r)"
+            >
+              <div class="ps-row-info">
+                <span class="ps-row-name">{{ r.name }}</span>
+                <span class="ps-row-meta">idx {{ r.ghinIndex ?? 'NH' }}</span>
+              </div>
+              <span class="ps-row-action">+</span>
+            </div>
+          </template>
+
+          <!-- GHIN lookup result -->
+          <template v-if="psResults.ghin.length">
+            <div class="ps-section-label">
+              <span>GHIN Lookup</span>
+              <span class="ps-section-badge">GHIN</span>
+            </div>
+            <div
+              v-for="r in psResults.ghin"
+              :key="r.id"
+              class="ps-row"
+              @click="psAddResult(r)"
+            >
+              <div class="ps-row-info">
+                <span class="ps-row-name">{{ r.name }}</span>
+                <span class="ps-row-meta">idx {{ r.ghinIndex ?? 'NH' }} · #{{ r.ghinNumber }}</span>
+              </div>
+              <span class="ps-row-action">+</span>
+            </div>
+          </template>
+
+          <!-- Searching indicator -->
+          <div v-if="psSearching && !psResults.bb.length && !psResults.ghin.length" class="ps-searching">
+            Searching…
           </div>
-          <div v-if="wizSearchMsg" class="wiz-search-msg" :class="{ 'wiz-search-msg--ok': wizSearchResults.length > 0 }">{{ wizSearchMsg }}</div>
-          <div class="quick-add-hcp-row">
-            <input v-model="newHcp" class="wiz-input" placeholder="Index (e.g. 9.1)" type="number" step="0.1" />
-            <span class="quick-add-or">or</span>
-            <input v-model="newStrokes" class="wiz-input" placeholder="Strokes (e.g. 11)" type="number" step="1" />
-            <button class="btn-primary btn-sm" @click="quickAddPlayer">Add</button>
+
+          <!-- Manual add fallback -->
+          <div class="ps-manual-section">
+            <div v-if="!psShowManual" class="ps-manual-trigger" @click="psShowManual = true">
+              Can't find them? Add manually
+            </div>
+            <template v-else>
+              <div class="ps-section-label"><span>Add Manually</span></div>
+              <div class="ps-manual-form">
+                <div class="ps-manual-name-row">
+                  <input v-model="psManualFirst" class="wiz-input" placeholder="First name" />
+                  <input v-model="psManualLast" class="wiz-input" placeholder="Last name" />
+                </div>
+                <div class="ps-manual-hcp-row">
+                  <input v-model="psManualHcp" class="wiz-input" placeholder="Index (e.g. 9.1)" type="number" step="0.1" />
+                  <span class="quick-add-or">or</span>
+                  <input v-model="psManualStrokes" class="wiz-input" placeholder="Strokes" type="number" step="1" />
+                  <input v-model="psManualGhin" class="wiz-input" placeholder="GHIN # (opt.)" type="text" inputmode="numeric" />
+                </div>
+                <button class="btn-primary btn-sm ps-manual-add-btn" @click="psAddManual">Add Player</button>
+              </div>
+            </template>
           </div>
+
         </div>
       </div>
 
@@ -1230,6 +1235,7 @@ import { useCoursesStore } from '../stores/courses'
 import { useRosterStore } from '../stores/roster'
 import { useRoundsStore } from '../stores/rounds'
 import { GAME_DEFS } from '../modules/courses'
+import { usePlayerSearch } from '../composables/usePlayerSearch'
 
 // ── TeamPicker component (inline) ────────────────────────────────
 // Old-version style: two-column side-by-side, tap player to assign to that team
@@ -1577,9 +1583,113 @@ const form = ref({
 })
 
 const courseSearch = ref('')
-const playerSearch = ref('')
+const playerSearch = ref('')  // kept for oppSearch compat
 const newName = ref('')
 const newHcp = ref('')
+
+// ── Unified player search (Step 2) ───────────────────────────────
+const psInputEl = ref(null)
+const psShowManual = ref(false)
+const psManualFirst = ref('')
+const psManualLast = ref('')
+const psManualHcp = ref('')
+const psManualStrokes = ref('')
+const psManualGhin = ref('')
+
+const _rosterRef = computed(() => rosterStore.players)
+const { query: psQuery, results: psResults, searching: psSearching, onQueryChange: psOnInput, clearSearch: psClearSearch } = usePlayerSearch(_rosterRef)
+
+function psClear() {
+  psClearSearch()
+  psShowManual.value = false
+}
+
+function isPlayerAddedById(id) {
+  return form.value.players.some(fp => fp.id === id)
+}
+
+async function psAddResult(r) {
+  // If already added, remove (toggle off)
+  if (isPlayerAddedById(r.id)) {
+    form.value.players = form.value.players.filter(fp => fp.id !== r.id)
+    return
+  }
+
+  // Build the player object for the form
+  const playerObj = {
+    id: r.id,
+    name: r.name,
+    shortName: r.shortName,
+    ghinIndex: r.ghinIndex,
+    ghinSyncedAt: r.ghinSyncedAt ?? null,
+    nickname: r.nickname ?? null,
+    use_nickname: r.useNickname ?? false,
+    profileId: r.profileId ?? null,
+    email: r.email ?? null,
+  }
+
+  form.value.players.push(playerObj)
+  psClearSearch()
+
+  // Auto-save BB/GHIN results to roster so they appear next time
+  if (r.source === 'bb' || r.source === 'ghin') {
+    try {
+      await rosterStore.addPlayer({
+        name: r.name,
+        short_name: r.shortName,
+        ghin_index: r.ghinIndex,
+        ghin_number: r.ghinNumber ?? null,
+        is_favorite: false,
+      })
+    } catch { /* silent — already in roster or offline */ }
+  }
+}
+
+async function psAddManual() {
+  const first = psManualFirst.value.trim()
+  const last = psManualLast.value.trim()
+  const fullName = [first, last].filter(Boolean).join(' ')
+  if (!fullName) return
+
+  const ghinIndex = psManualHcp.value ? parseFloat(psManualHcp.value) : null
+  const strokeOverride = psManualStrokes.value ? parseInt(psManualStrokes.value) : null
+  const ghinNumber = psManualGhin.value.trim() || null
+
+  const tempId = `guest_${Date.now()}`
+  form.value.players.push({
+    id: tempId,
+    name: fullName,
+    shortName: last || first.slice(0, 8),
+    ghinIndex,
+    stroke_override: strokeOverride,
+    ghinSyncedAt: null,
+    nickname: null,
+    use_nickname: false,
+    profileId: null,
+    email: null,
+  })
+
+  // Save to roster
+  try {
+    const saved = await rosterStore.addPlayer({
+      name: fullName,
+      short_name: last || first.slice(0, 8),
+      ghin_index: ghinIndex,
+      ghin_number: ghinNumber,
+      is_favorite: false,
+    })
+    // Remap the temp ID to the real roster ID
+    const idx = form.value.players.findIndex(p => p.id === tempId)
+    if (idx >= 0 && saved?.id) form.value.players[idx].id = saved.id
+  } catch { /* offline or dupe — keep temp id */ }
+
+  psManualFirst.value = ''
+  psManualLast.value = ''
+  psManualHcp.value = ''
+  psManualStrokes.value = ''
+  psManualGhin.value = ''
+  psShowManual.value = false
+}
 const apiResults = ref([])
 const apiSearching = ref(false)
 
@@ -2778,20 +2888,72 @@ function reloadApp() {
   margin-left: 20px;
 }
 
-/* ── Wizard inline player search ───────── */
-.quick-add-section { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
-.quick-add-name-row { display: flex; gap: 6px; align-items: stretch; }
-.quick-add-name-row .wiz-input { flex: 1; min-width: 0; }
-.wiz-search-btn { flex-shrink: 0; white-space: nowrap; }
-.quick-add-hcp-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-.quick-add-hcp-row .wiz-input { flex: 1; min-width: 80px; }
+/* ── Player Search (Step 2 unified flow) ─ */
+.ps-search-wrap {
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 12px;
+  padding: 0 12px;
+  margin-bottom: 8px;
+}
+.ps-search-icon { font-size: 18px; color: var(--gw-text-muted); flex-shrink: 0; user-select: none; }
+.ps-search-input {
+  flex: 1; background: none; border: none; outline: none;
+  color: var(--gw-text); font-size: 16px; padding: 12px 0;
+  min-width: 0;
+}
+.ps-search-input::placeholder { color: var(--gw-text-muted); }
+.ps-clear-btn {
+  background: none; border: none; color: var(--gw-text-muted);
+  font-size: 16px; padding: 4px; cursor: pointer; flex-shrink: 0;
+  min-width: 32px; min-height: 32px; display: flex; align-items: center; justify-content: center;
+}
+.ps-results { display: flex; flex-direction: column; overflow-y: auto; flex: 1; }
+.ps-section-label {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--gw-text-muted); padding: 10px 4px 4px;
+}
+.ps-section-badge {
+  background: rgba(212,175,55,.18); color: #d4af37;
+  font-size: 9px; font-weight: 700; letter-spacing: .04em;
+  padding: 2px 5px; border-radius: 4px;
+}
+.ps-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 11px 12px; border-radius: 10px; cursor: pointer;
+  border-bottom: 1px solid rgba(255,255,255,.04);
+  min-height: 52px; -webkit-tap-highlight-color: transparent;
+  transition: background .12s;
+}
+.ps-row:active { background: rgba(255,255,255,.06); }
+.ps-row--added { background: rgba(34,160,107,.12); }
+.ps-row-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ps-row-name { font-size: 15px; font-weight: 600; color: var(--gw-text); }
+.ps-row-meta {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 12px; color: var(--gw-text-muted);
+}
+.ps-fav-star { color: #d4af37; font-size: 11px; }
+.ps-row-action {
+  font-size: 20px; font-weight: 300; color: var(--gw-green-400);
+  min-width: 28px; text-align: center; flex-shrink: 0;
+}
+.ps-row--added .ps-row-action { color: #4ade80; font-weight: 600; font-size: 16px; }
+.ps-searching { text-align: center; color: var(--gw-text-muted); font-size: 13px; padding: 16px; }
+.ps-manual-section { margin-top: 8px; padding-top: 4px; border-top: 1px solid rgba(255,255,255,.06); }
+.ps-manual-trigger {
+  text-align: center; font-size: 13px; color: var(--gw-text-muted);
+  padding: 14px; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.ps-manual-trigger:active { color: var(--gw-text); }
+.ps-manual-form { display: flex; flex-direction: column; gap: 8px; padding: 4px 0 8px; }
+.ps-manual-name-row { display: flex; gap: 6px; }
+.ps-manual-name-row .wiz-input { flex: 1; min-width: 0; }
+.ps-manual-hcp-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.ps-manual-hcp-row .wiz-input { flex: 1; min-width: 72px; }
+.ps-manual-add-btn { align-self: flex-end; }
+/* keep quick-add-or for manual form */
 .quick-add-or { font-size: 11px; color: var(--gw-text-muted); white-space: nowrap; flex-shrink: 0; }
-.wiz-search-results { background: rgba(255,255,255,.04); border: 1px solid rgba(212,175,55,.15); border-radius: 10px; overflow: hidden; }
-.wiz-search-option { padding: 10px 12px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,.05); }
-.wiz-search-option:last-child { border-bottom: none; }
-.wiz-search-option:active { background: rgba(212,175,55,.1); }
-.wiz-search-name { font-size: 14px; font-weight: 600; color: var(--gw-text); }
-.wiz-search-meta { font-size: 11px; color: var(--gw-text-muted); margin-top: 1px; }
-.wiz-search-msg { font-size: 12px; color: var(--gw-text-muted); padding: 2px 0; }
-.wiz-search-msg--ok { color: #4ade80; }
 </style>
