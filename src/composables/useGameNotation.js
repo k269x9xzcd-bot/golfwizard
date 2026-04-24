@@ -281,28 +281,30 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
           const cfg = game.config || {}
           const t1n = teamInitialsStr(cfg.team1 || []) || 'T1'
           const ppt = cfg.ppt || 1
+          const fmtAmt = (n) => n >= 0 ? `$${n}` : `($${Math.abs(n)})`
           const holeCells = {}, runCells = {}
           let running = 0
           for (const hr of (r.holeResults || [])) {
             if (hr.incomplete || hr.t1Num == null) continue
             const holeDollars = hr.diff * ppt
             running += holeDollars
-            const star = hr.multiplier > 1 ? '★' : ''
+            const star = hr.variant ? '★' : ''
             if (holeDollars > 0) {
-              holeCells[hr.hole] = { text: `+$${holeDollars}${star}`, cls: 'nota-t1' }
+              holeCells[hr.hole] = { text: `$${holeDollars}${star}`, cls: 'nota-t1' }
             } else if (holeDollars < 0) {
-              holeCells[hr.hole] = { text: `-$${Math.abs(holeDollars)}${star}`, cls: 'nota-t2' }
+              holeCells[hr.hole] = { text: `($${Math.abs(holeDollars)})${star}`, cls: 'nota-t2' }
             } else {
               holeCells[hr.hole] = { text: '-', cls: 'nota-halved' }
             }
-            const runText = running > 0 ? `+$${running}` : running < 0 ? `-$${Math.abs(running)}` : 'E'
+            const runText = running === 0 ? 'E' : fmtAmt(running)
             runCells[hr.hole] = {
               text: runText,
               cls: running > 0 ? 'nota-t1' : running < 0 ? 'nota-t2' : 'nota-halved',
             }
           }
           const finalNet = r.t1Total * ppt
-          const summary = finalNet === 0 ? 'AS' : `${finalNet > 0 ? t1n : teamInitialsStr(cfg.team2 || []) || 'T2'} +$${Math.abs(finalNet)}`
+          const t2n = teamInitialsStr(cfg.team2 || []) || 'T2'
+          const summary = finalNet === 0 ? 'AS' : `${finalNet > 0 ? t1n : t2n} ${fmtAmt(Math.abs(finalNet))}`
           rows.push({ icon: '🎰', label: t1n, cells: holeCells, outSummary: '', inSummary: '', totalSummary: '', netSummary: '' })
           rows.push({ icon: '', label: 'Δ', cells: runCells, outSummary: '', inSummary: '', totalSummary: summary, netSummary: '' })
         } catch(e) { /* skip */ }

@@ -911,13 +911,14 @@ export function computeVegas(ctx, config) {
 
     const par = holePar(ctx.course, h)
     let holeMultiplier = 1
+    let anyVariant = false
 
     // Penalty threshold (7-flip): if any player scored gross >= threshold, flip their team's number
     if (penaltyThreshold > 0) {
       const t1HasPenalty = t1.some(m => { const g = getScore(ctx, m.id, h); return g != null && g >= penaltyThreshold })
       const t2HasPenalty = t2.some(m => { const g = getScore(ctx, m.id, h); return g != null && g >= penaltyThreshold })
-      if (t1HasPenalty && !t2HasPenalty) n1 = flipNumber(n1)
-      else if (t2HasPenalty && !t1HasPenalty) n2 = flipNumber(n2)
+      if (t1HasPenalty && !t2HasPenalty) { n1 = flipNumber(n1); anyVariant = true }
+      else if (t2HasPenalty && !t1HasPenalty) { n2 = flipNumber(n2); anyVariant = true }
     }
 
     // Birdie/Eagle flip logic
@@ -927,23 +928,23 @@ export function computeVegas(ctx, config) {
     const t2HasEagle = eagleFlip && t2.some(m => { const n = playerScore(m, h); return n != null && n <= par - 2 })
 
     if (t1HasEagle && !t2HasEagle) {
-      n2 = flipNumber(n2); holeMultiplier = 2  // eagle = flip + double
+      n2 = flipNumber(n2); holeMultiplier = 2; anyVariant = true  // eagle = flip + double
     } else if (t2HasEagle && !t1HasEagle) {
-      n1 = flipNumber(n1); holeMultiplier = 2
+      n1 = flipNumber(n1); holeMultiplier = 2; anyVariant = true
     } else if (birdieFlip) {
       const t1HasBirdie = t1BirdieCount > 0
       const t2HasBirdie = t2BirdieCount > 0
-      if (t1HasBirdie && !t2HasBirdie) n2 = flipNumber(n2)
-      else if (t2HasBirdie && !t1HasBirdie) n1 = flipNumber(n1)
+      if (t1HasBirdie && !t2HasBirdie) { n2 = flipNumber(n2); anyVariant = true }
+      else if (t2HasBirdie && !t1HasBirdie) { n1 = flipNumber(n1); anyVariant = true }
     }
 
     // Double-birdie: both teammates birdie = double the diff
-    if (doubleBirdie && t1BirdieCount >= 2) holeMultiplier = Math.max(holeMultiplier, 2)
-    if (doubleBirdie && t2BirdieCount >= 2) holeMultiplier = Math.max(holeMultiplier, 2)
+    if (doubleBirdie && t1BirdieCount >= 2) { holeMultiplier = Math.max(holeMultiplier, 2); anyVariant = true }
+    if (doubleBirdie && t2BirdieCount >= 2) { holeMultiplier = Math.max(holeMultiplier, 2); anyVariant = true }
 
     const diff = (n2 - n1) * holeMultiplier
     t1Total += diff
-    holeResults.push({ hole: h, t1Num: n1, t2Num: n2, diff, multiplier: holeMultiplier })
+    holeResults.push({ hole: h, t1Num: n1, t2Num: n2, diff, multiplier: holeMultiplier, variant: anyVariant })
   }
 
   const t1Net = t1Total * ppt
