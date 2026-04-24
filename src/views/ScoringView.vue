@@ -136,6 +136,7 @@
                     <input type="number" min="0" max="54" step="1" class="hcp-editor-input"
                       :value="m.stroke_override != null ? m.stroke_override : hcpEditorCourseHcp(m)"
                       :class="{ 'hcp-editor-input--modified': m.stroke_override != null }"
+                      @input="updateMemberStrokesLocal(m.id, $event.target.value)"
                       @change="updateMemberStrokes(m.id, $event.target.value)" />
                   </div>
                   <div class="hcp-input-group">
@@ -2016,12 +2017,20 @@ function hcpEditorStrokes(member) {
   const tee = roundsStore.activeRound?.tee
   const holesMode = roundsStore.activeRound?.holes_mode || '18'
   const numHoles = holesMode === '9f' || holesMode === '9b' ? 9 : 18
-  const hcp = hcpEditorCourseHcp(member)
+  // Use stroke_override when set — this makes the hole grid react to edits in real-time
+  const hcp = member.stroke_override != null ? member.stroke_override : hcpEditorCourseHcp(member)
   return Array.from({ length: numHoles }, (_, i) => {
     const hole = holesMode === '9b' ? i + 10 : i + 1
     const si = holeSI(course, hole, tee)
     return strokesOnHole(hcp, si)
   })
+}
+
+function updateMemberStrokesLocal(memberId, rawValue) {
+  const strokes = rawValue === '' || rawValue == null ? null : parseInt(rawValue)
+  if (strokes !== null && !Number.isFinite(strokes)) return  // ignore partial/invalid input mid-type
+  const m = roundsStore.activeMembers.find(x => x.id === memberId)
+  if (m) m.stroke_override = strokes
 }
 
 async function addSnakeEvent(pid) {
