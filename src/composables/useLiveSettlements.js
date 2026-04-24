@@ -190,26 +190,52 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
 
       // ── Match ──
       if (t === 'match' || t === 'match1v1') {
-        const r = computeMatch(ctx, cfg)
-        if (!r) return _gameLine({ gameName: 'Match', winner: null, value: null, detail: 'Waiting for scores' })
+        const is1v1 = !!(cfg.player1 && cfg.player2)
+        const is2v2 = !is1v1 && Array.isArray(cfg.team1) && cfg.team1.length && Array.isArray(cfg.team2) && cfg.team2.length
 
-        const p1n = r.p1?.name || '?'
-        const p2n = r.p2?.name || '?'
-        const up = r.finalUp
-        const ppt = r.settlement?.ppt || cfg.ppt || 0
-        const p1Net = r.settlement?.p1Net || 0
-        const isTournament = !!cfg.tournament
-        const points = cfg.points || 1
-        const played = (r.holeResults || []).filter(h => !h.incomplete).length
-        const scoring = r.settlement?.scoring || cfg.scoring || 'closeout'
+        if (!is1v1 && !is2v2) return _gameLine({ gameName: 'Match', winner: null, value: null, detail: 'Waiting for scores' })
+
+        let r, p1n, p2n, up, ppt, p1Net, played, scoring, isTournament, points
+
+        if (is1v1) {
+          r = computeMatch(ctx, cfg)
+          if (!r) return _gameLine({ gameName: 'Match', winner: null, value: null, detail: 'Waiting for scores' })
+          p1n = r.p1?.name || '?'
+          p2n = r.p2?.name || '?'
+          up = r.finalUp
+          ppt = r.settlement?.ppt || cfg.ppt || 0
+          p1Net = r.settlement?.p1Net || 0
+          played = (r.holeResults || []).filter(h => !h.incomplete).length
+          scoring = r.settlement?.scoring || cfg.scoring || 'closeout'
+          isTournament = !!cfg.tournament
+          points = cfg.points || 1
+        } else {
+          r = computeBestBall(ctx, { ...cfg, ballsPerTeam: 1 })
+          if (!r) return _gameLine({ gameName: 'Match', winner: null, value: null, detail: 'Waiting for scores' })
+          p1n = r.t1Name || teamInitialsStr(cfg.team1) || 'T1'
+          p2n = r.t2Name || teamInitialsStr(cfg.team2) || 'T2'
+          up = r.finalUp
+          ppt = cfg.ppt || 0
+          p1Net = r.settlement?.t1Net || 0
+          played = (r.holeResults || []).filter(h => !h.incomplete).length
+          scoring = cfg.scoring || 'closeout'
+          isTournament = !!cfg.tournament
+          points = cfg.points || 1
+        }
+
+        const totalHoles = visibleHoles.value?.length || 18
+        const remaining = totalHoles - played
+        // computeBestBall doesn't emit matchOver — compute it from remaining holes
+        const matchOver = r.matchOver ?? (played > 0 && Math.abs(up) > remaining)
+        const matchResult = r.result ?? (up > 0 ? `${up}&${remaining}` : `${-up}&${remaining}`)
 
         let winner = null, value = null, detail
         if (played === 0) {
           detail = `${p1n} vs ${p2n} — waiting for scores`
-        } else if (r.matchOver) {
+        } else if (matchOver) {
           winner = up > 0 ? p1n : p2n
           const loser = up > 0 ? p2n : p1n
-          detail = `${winner} (${r.result}) vs ${loser}`
+          detail = `${winner} (${matchResult}) vs ${loser}`
           value = { pts: isTournament ? points : null, dollars: p1Net !== 0 ? Math.abs(p1Net) : (ppt > 0 ? ppt : null) }
         } else if (up === 0) {
           detail = `${p1n} vs ${p2n} — AS thru ${played}`
@@ -224,32 +250,34 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         const scoringBadge = scoring === 'nassau' ? ' Nassau' : scoring === 'skins' ? ' Skins' : ''
 
         let strokesLine = null
-        try {
-          const m1 = ctx.members.find(m => m.id === cfg.player1)
-          const m2 = ctx.members.find(m => m.id === cfg.player2)
-          if (m1 && m2) {
-            const h1 = m1.round_hcp ?? 0
-            const h2 = m2.round_hcp ?? 0
-            if (h1 !== h2) {
-              const giver = h1 < h2 ? m1 : m2
-              const receiver = h1 < h2 ? m2 : m1
-              const strokeDiff = Math.abs(h1 - h2)
-              const course = ctx.course || {}
-              const teeSiByHole = course?.teesData?.[ctx.tee]?.siByHole
-              const siArr = teeSiByHole || course.si || []
-              const holesWithStrokes = []
-              for (let h = 1; h <= 18; h++) {
-                const si = siArr[h - 1] ?? 18
-                if (si <= strokeDiff) holesWithStrokes.push(h)
-              }
-              if (holesWithStrokes.length) {
-                const giverName = giver.short_name || giver.guest_name?.split(/\s+/)[0] || '?'
-                const recvName = receiver.short_name || receiver.guest_name?.split(/\s+/)[0] || '?'
-                strokesLine = `↳ ${giverName} gives ${recvName} ${strokeDiff} stroke${strokeDiff === 1 ? '' : 's'} on hole${holesWithStrokes.length === 1 ? '' : 's'} ${holesWithStrokes.join(', ')}`
+        if (is1v1) {
+          try {
+            const m1 = ctx.members.find(m => m.id === cfg.player1)
+            const m2 = ctx.members.find(m => m.id === cfg.player2)
+            if (m1 && m2) {
+              const h1 = m1.round_hcp ?? 0
+              const h2 = m2.round_hcp ?? 0
+              if (h1 !== h2) {
+                const giver = h1 < h2 ? m1 : m2
+                const receiver = h1 < h2 ? m2 : m1
+                const strokeDiff = Math.abs(h1 - h2)
+                const course = ctx.course || {}
+                const teeSiByHole = course?.teesData?.[ctx.tee]?.siByHole
+                const siArr = teeSiByHole || course.si || []
+                const holesWithStrokes = []
+                for (let h = 1; h <= 18; h++) {
+                  const si = siArr[h - 1] ?? 18
+                  if (si <= strokeDiff) holesWithStrokes.push(h)
+                }
+                if (holesWithStrokes.length) {
+                  const giverName = giver.short_name || giver.guest_name?.split(/\s+/)[0] || '?'
+                  const recvName = receiver.short_name || receiver.guest_name?.split(/\s+/)[0] || '?'
+                  strokesLine = `↳ ${giverName} gives ${recvName} ${strokeDiff} stroke${strokeDiff === 1 ? '' : 's'} on hole${holesWithStrokes.length === 1 ? '' : 's'} ${holesWithStrokes.join(', ')}`
+                }
               }
             }
-          }
-        } catch { /* skip */ }
+          } catch { /* skip */ }
+        }
 
         const base = _gameLine({ gameName: `Match${scoringBadge}`, winner, value, detail })
         return strokesLine

@@ -46,7 +46,7 @@
         <input
           v-if="!props.lockedCourse"
           v-model="courseSearch"
-          class="wiz-input"
+          class="wiz-input wiz-course-search"
           placeholder="Search courses…"
           @focus="scrollInputIntoView"
         />
@@ -2065,7 +2065,7 @@ function openCourseSetup() {
 }
 
 function scrollInputIntoView(e) {
-  setTimeout(() => { e.target?.scrollIntoView({ behavior: 'smooth', block: 'center' }) }, 350)
+  setTimeout(() => { e.target?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }, 350)
 }
 
 const TEE_COLORS = {
@@ -2485,6 +2485,14 @@ function reloadApp() {
 </script>
 
 <style scoped>
+/* ── Course search: pinned at top of the step scroll area so keyboard doesn't push it down ── */
+.wiz-course-search {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--gw-neutral-800);
+}
+
 /* ── Inline mode (embedded in accept view) ── */
 .wizard-inline { display: block; }
 .wizard-inline-body {

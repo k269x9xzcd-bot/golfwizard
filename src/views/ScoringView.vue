@@ -984,7 +984,7 @@ import RetroScoreOverlay from '../components/RetroScoreOverlay.vue'
 import { useScorecardHelpers } from '../composables/useScorecardHelpers'
 import { useGameNotation } from '../composables/useGameNotation'
 import { useLiveSettlements } from '../composables/useLiveSettlements'
-import { computeNassau, computeHammer } from '../modules/gameEngine'
+import { computeNassau, computeHammer, courseHandicap, holeSI, strokesOnHole } from '../modules/gameEngine'
 import { simulateRound } from '../modules/simulator'
 
 const authStore = useAuthStore()

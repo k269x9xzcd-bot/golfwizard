@@ -2,7 +2,7 @@
  * simulator.js — generate realistic scores + game choices for a full round.
  * Used by the "Simulate Round" dev/testing feature.
  */
-import { holeRange, holePar, holeSI, strokesOnHole, memberHandicap } from './gameEngine'
+import { holeRange, holePar, holeSI, strokesOnHole, memberHandicap, memberNetOnHoleLowMan } from './gameEngine'
 
 // ── RNG helpers ──────────────────────────────────────────────────────────────
 function randNormal() {
@@ -160,6 +160,49 @@ function simulateDotsManual(members, dotsConfig, scores, course, tee, holesMode)
   return manual
 }
 
+// ── BBB (Bingo Bango Bongo) simulation ───────────────────────────────────────
+function simulateBbbAwards(members, scores, course, tee, holesMode) {
+  const { from, to } = holeRange(holesMode)
+  const awards = {}
+  const ctx = { scores, members, course, tee, holesMode }
+
+  for (let h = from; h <= to; h++) {
+    const eligible = members.filter(m => scores[m.id]?.[h] != null)
+    if (!eligible.length) continue
+
+    // Bingo: awarded to lowest net score (proxy for first on green)
+    const netScores = eligible.map(m => ({
+      id: m.id,
+      net: memberNetOnHoleLowMan(ctx, m, h, members) ?? scores[m.id][h],
+    }))
+    const minNet = Math.min(...netScores.map(n => n.net))
+    const bingoPool = netScores.filter(n => n.net === minNet)
+    if (bingoPool.length) {
+      if (!awards[h]) awards[h] = {}
+      awards[h].bingo = pick(bingoPool).id
+    }
+
+    // Bango: closest to pin — awarded with 60% chance to a par-or-better player
+    const parOrBetter = eligible.filter(m => scores[m.id][h] <= holePar(course, h))
+    if (parOrBetter.length && chance(0.6)) {
+      if (!awards[h]) awards[h] = {}
+      awards[h].bango = pick(parOrBetter).id
+    } else if (eligible.length && chance(0.3)) {
+      if (!awards[h]) awards[h] = {}
+      awards[h].bango = pick(eligible).id
+    }
+
+    // Bongo: first in hole — awarded to lowest gross score
+    const minGross = Math.min(...eligible.map(m => scores[m.id][h]))
+    const bongoPool = eligible.filter(m => scores[m.id][h] === minGross)
+    if (bongoPool.length) {
+      if (!awards[h]) awards[h] = {}
+      awards[h].bongo = pick(bongoPool).id
+    }
+  }
+  return awards
+}
+
 // ── Hammer simulation ─────────────────────────────────────────────────────────
 // Simulate a modest number of throws (20% chance per hole), no concessions
 function simulateHammerLog(holesMode) {
@@ -229,6 +272,9 @@ export function simulateRound({ members, games, course, tee, holesMode }) {
       gameUpdates.push({ gameId: game.id, config: cfg })
     } else if (t === 'hammer') {
       cfg.hammerLog = simulateHammerLog(holesMode)
+      gameUpdates.push({ gameId: game.id, config: cfg })
+    } else if (t === 'bbb') {
+      cfg.awards = simulateBbbAwards(members, scores, course, tee, holesMode)
       gameUpdates.push({ gameId: game.id, config: cfg })
     }
   }

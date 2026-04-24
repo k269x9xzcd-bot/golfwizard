@@ -140,6 +140,22 @@ export const useCoursesStore = defineStore('courses', () => {
         if (!byName[c.name] || (c.updated_at > byName[c.name].updated_at)) byName[c.name] = c
       }
       customCourses.value = Object.values(byName)
+
+      // Merge any courses that were saved to localStorage as a fallback (e.g. when Supabase was unreachable)
+      const supaNames = new Set(customCourses.value.map(c => c.name.toLowerCase()))
+      const pending = JSON.parse(localStorage.getItem('golf_pending_courses') || '{}')
+      for (const [name, data] of Object.entries(pending)) {
+        if (!supaNames.has(name.toLowerCase())) {
+          try {
+            await addCourse({ name, ...data })
+            delete pending[name]
+            localStorage.setItem('golf_pending_courses', JSON.stringify(pending))
+          } catch { /* will retry next session */ }
+        } else {
+          delete pending[name]
+          localStorage.setItem('golf_pending_courses', JSON.stringify(pending))
+        }
+      }
     }
 
     // Fetch favorites from user_preferences
@@ -213,7 +229,17 @@ export const useCoursesStore = defineStore('courses', () => {
       () => supabase.from('courses').insert(row).select().single(),
       8000,
     )
-    if (error) throw error
+    if (error) {
+      // Supabase unreachable (e.g. iOS stuck socket) — persist to a pending queue so
+      // the next fetchCustomCourses can retry the insert automatically.
+      const pending = JSON.parse(localStorage.getItem('golf_pending_courses') || '{}')
+      pending[course.name] = { teesData, par, si: holes.map(h => h.si), defaultTee: course.defaultTee ?? null }
+      localStorage.setItem('golf_pending_courses', JSON.stringify(pending))
+      // Still update in-memory store so the course is available for the current session
+      const fallback = { id: `pending_${course.name}`, ...row, teesData, par, si: holes.map(h => h.si), isCustom: true }
+      customCourses.value.push(fallback)
+      return fallback
+    }
     customCourses.value.push(data)
     return data
   }

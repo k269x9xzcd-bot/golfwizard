@@ -8,8 +8,8 @@ import { computed } from 'vue'
 import { useRoundsStore } from '../stores/rounds'
 import {
   computeNassau, computeSkins, computeMatch, computeSnake,
-  computeDots, computeFidget, computeBestBallNet, computeFiveThreeOne, computeNines,
-  computeVegas, computeHiLow, computeSixes, computeStableford, computeHammer, computeBbb,
+  computeDots, computeFidget, computeBestBall, computeBestBallNet, computeFiveThreeOne, computeNines,
+  computeVegas, computeHiLow, computeSixes, computeStableford, computeHammer, computeBbb, computeWolf,
   holePar,
 } from '../modules/gameEngine'
 
@@ -150,28 +150,51 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
       // ── MATCH / 1v1 ──
       if (t === 'match' || t === 'match1v1') {
         try {
-          const r = computeMatch(ctx, game.config)
-          if (!r) continue
+          const cfg = game.config || {}
+          // 1v1: use computeMatch; 2v2: fall back to computeBestBall (team match play)
+          const is1v1 = cfg.player1 && cfg.player2
+          let holeResults, finalUp, p1Label, p2Label, isDormie
+
+          if (is1v1) {
+            const r = computeMatch(ctx, cfg)
+            if (!r) continue
+            holeResults = r.holeResults || []
+            finalUp = r.finalUp
+            const played = holeResults.filter(hr => !hr.incomplete)
+            const remaining = visibleHoles.value.length - played.length
+            isDormie = remaining > 0 && Math.abs(finalUp) === remaining
+            p1Label = pInit(r.p1?.id) || r.p1?.name?.slice(0, 2) || 'P1'
+            p2Label = pInit(r.p2?.id) || r.p2?.name?.slice(0, 2) || 'P2'
+          } else if (cfg.team1?.length && cfg.team2?.length) {
+            const r = computeBestBall(ctx, { ...cfg, ballsPerTeam: 1 })
+            if (!r) continue
+            holeResults = (r.holeResults || []).map(hr => ({
+              ...hr,
+              p1Up: hr.t1Up,  // normalise field name for shared cell-build below
+            }))
+            finalUp = r.finalUp
+            const played = holeResults.filter(hr => !hr.incomplete)
+            const remaining = visibleHoles.value.length - played.length
+            isDormie = remaining > 0 && Math.abs(finalUp) === remaining
+            p1Label = teamInitialsStr(cfg.team1)
+            p2Label = teamInitialsStr(cfg.team2)
+          } else {
+            continue  // config incomplete — skip
+          }
+
           const cells = {}
-          const played = r.holeResults?.filter(hr => !hr.incomplete) || []
-          const totalHoles = visibleHoles.value.length
-          for (const hr of (r.holeResults || [])) {
+          for (const hr of holeResults) {
             if (hr.incomplete) { cells[hr.hole] = { text: '', cls: '' }; continue }
             const up = hr.p1Up ?? 0
             if (up > 0) cells[hr.hole] = { text: `U${up}`, cls: 'nota-t1' }
             else if (up < 0) cells[hr.hole] = { text: `D${Math.abs(up)}`, cls: 'nota-t2' }
             else cells[hr.hole] = { text: 'AS', cls: 'nota-halved' }
           }
-          const up = r.finalUp
-          const remaining = totalHoles - played.length
-          const isDormie = remaining > 0 && Math.abs(up) === remaining
-          const p1Init = pInit(r.p1?.id) || r.p1?.name?.slice(0,2) || 'P1'
-          const p2Init = pInit(r.p2?.id) || r.p2?.name?.slice(0,2) || 'P2'
-          const leader = up > 0 ? p1Init : p2Init
-          let summary = up === 0 ? 'AS' : `${leader} ${Math.abs(up)}up`
+          const leader = finalUp > 0 ? p1Label : p2Label
+          let summary = finalUp === 0 ? 'AS' : `${leader} ${Math.abs(finalUp)}up`
           if (isDormie) summary = `<span class="nota-dormie">${summary} D!</span>`
           rows.push({
-            icon: '⚔️', label: `${p1Init} v ${p2Init}`,
+            icon: '⚔️', label: `${p1Label} v ${p2Label}`,
             cells, outSummary: '', inSummary: '', totalSummary: summary,
           })
         } catch(e) { /* skip */ }
@@ -308,10 +331,35 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
         } catch(e) { /* skip */ }
       }
 
-      // ── WOLF — omitted from scorecard grid; live game status covers per-hole detail ──
+      // ── WOLF ──
       if (t === 'wolf') {
         try {
-          // no scorecard rows for wolf
+          const r = computeWolf(ctx, game.config)
+          if (!r) continue
+          const cells = {}
+          for (const hr of (r.holeResults || [])) {
+            if (hr.incomplete) { cells[hr.hole] = { text: '', cls: '' }; continue }
+            const wolfInit = pInit(hr.wolf) || hr.wolfName?.slice(0, 2) || '?'
+            const partnerInit = hr.partner ? (pInit(hr.partner) || hr.partnerName?.slice(0, 2) || '?') : null
+            const tag = hr.isBlind ? '×' + (game.config?.blindWolfMultiplier ?? 8)
+              : hr.isLone ? '×' + (game.config?.wolfLoneMultiplier ?? 4)
+              : partnerInit ? `+${partnerInit}` : ''
+            const cls = hr.winner === 'wolf' ? 'nota-t1'
+              : hr.winner === 'field' ? 'nota-t2'
+              : 'nota-halved'
+            const resultMark = hr.winner === 'wolf' ? '▲' : hr.winner === 'field' ? '▼' : '='
+            cells[hr.hole] = { text: `🐺${wolfInit}${tag} ${resultMark}`, cls }
+          }
+          // Summary: player with highest net gain
+          const sorted = [...(r.settlements || [])].sort((a, b) => b.net - a.net)
+          const leader = sorted[0]
+          const summary = (leader && leader.net > 0)
+            ? `${pInit(leader.id) || leader.name} +$${leader.net}`
+            : 'AS'
+          rows.push({
+            icon: '🐺', label: 'Wolf', cells,
+            outSummary: '', inSummary: '', totalSummary: summary,
+          })
         } catch(e) { /* skip */ }
       }
 

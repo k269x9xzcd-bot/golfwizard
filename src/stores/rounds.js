@@ -286,6 +286,7 @@ export const useRoundsStore = defineStore('rounds', () => {
         short_name: p.shortName ?? p.name?.slice(0, 6),
         ghin_index: p.ghinIndex ?? null,
         round_hcp: p.roundHcp ?? null,
+        stroke_override: p.stroke_override ?? null,
         team: p.team ?? null,
         group_index: p.groupIndex ?? 0,
         role: i === 0 ? 'admin' : 'player',
@@ -327,8 +328,6 @@ export const useRoundsStore = defineStore('rounds', () => {
     // ── AUTHENTICATED PATH ──────────────────────────────────
     console.log('[rounds] Authenticated path, user:', auth.user?.id)
 
-    // Helper: race a Supabase call against a short timeout so a stuck
-    // HTTP/2 stream on iOS PWA doesn't hang the whole creation forever.
     function _debugLog(msg) {
       try {
         const log = JSON.parse(localStorage.getItem('gw_create_log') || '[]')
@@ -337,7 +336,8 @@ export const useRoundsStore = defineStore('rounds', () => {
       } catch {}
       console.log('[rounds]', msg)
     }
-    async function supaWithTimeout(label, promise, ms = 6000) {
+    // 2 s SJS budget — pivot to raw fetch quickly on iOS stuck-socket
+    async function supaWithTimeout(label, promise, ms = 2000) {
       _debugLog(`→ ${label}`)
       const t0 = Date.now()
       const timeoutPromise = new Promise((_, reject) =>
@@ -355,11 +355,37 @@ export const useRoundsStore = defineStore('rounds', () => {
 
     let roomCode = null
     if (withRoomCode) {
-      roomCode = await supaWithTimeout('generateRoomCode', generateRoomCode(), 4000).catch(() => null)
+      roomCode = await supaWithTimeout('generateRoomCode', generateRoomCode(), 3000).catch(() => null)
     }
 
-    // Build the insert body once so raw-fetch fallback can reuse it
+    // ── Pre-generate ALL IDs client-side (Tier-2 optimistic) ──────
+    // Using crypto.randomUUID() means IDs are determined before any DB call:
+    // • game configs reference the correct member UUIDs immediately — no post-insert
+    //   short_name matching that could silently produce wrong IDs
+    // • games insert can fire in the background after store state is set
+    const roundId = crypto.randomUUID()
+    const memberIds = players.map(() => crypto.randomUUID())
+    const gameIds = games.map(() => crypto.randomUUID())
+
+    // Build idMap deterministically: wizard player index → pre-generated member UUID
+    const idMap = {}
+    players.forEach((p, i) => { if (p.id) idMap[p.id] = memberIds[i] })
+
+    // Helper: remap all player/team references in a game config from wizard IDs → member UUIDs
+    function _remapConfig(cfg) {
+      const c = { ...cfg }
+      if (Array.isArray(c.team1)) c.team1 = c.team1.map(id => idMap[id] ?? id)
+      if (Array.isArray(c.team2)) c.team2 = c.team2.map(id => idMap[id] ?? id)
+      if (c.player1) c.player1 = idMap[c.player1] ?? c.player1
+      if (c.player2) c.player2 = idMap[c.player2] ?? c.player2
+      if (Array.isArray(c.players)) c.players = c.players.map(id => idMap[id] ?? id)
+      if (Array.isArray(c.wolfTeeOrder)) c.wolfTeeOrder = c.wolfTeeOrder.map(id => idMap[id] ?? id)
+      return c
+    }
+
+    // Build all entity rows with pre-generated IDs
     const roundBody = {
+      id: roundId,
       name: name || courseName || 'Round',
       course_name: courseName,
       course_snapshot: courseSnapshot,
@@ -372,33 +398,53 @@ export const useRoundsStore = defineStore('rounds', () => {
       opponent_players: opponentPlayers.length > 0 ? opponentPlayers : [],
     }
 
-    // Try Supabase JS first, fall back to raw fetch() on timeout.
-    // The Supabase JS client's internal fetch reuses connections, so when
-    // WKWebView's HTTP/2 pool has a stuck socket EVERY SJS call times out.
-    // Raw fetch with cache:'no-store' + keepalive:false forces a fresh connection.
-    let round, error
+    const memberRows = players.map((p, i) => ({
+      id: memberIds[i],
+      round_id: roundId,
+      profile_id: p.profileId ?? null,
+      guest_name: p.profileId ? null : p.name,
+      short_name: p.shortName ?? p.name?.slice(0, 6),
+      ghin_index: p.ghinIndex ?? null,
+      round_hcp: p.roundHcp ?? null,
+      stroke_override: p.stroke_override ?? null,
+      team: p.team ?? null,
+      group_index: p.groupIndex ?? 0,
+      role: i === 0 && auth.user?.id ? 'admin' : 'player',
+      nickname: p.nickname ?? null,
+      use_nickname: p.use_nickname ?? false,
+      email: p.email ?? null,
+    }))
+
+    const gameRows = games.map((g, i) => ({
+      id: gameIds[i],
+      round_id: roundId,
+      type: g.type,
+      config: _remapConfig(g.config),
+      sort_order: i,
+      created_by: auth.user?.id ?? null,
+    }))
+
+    // ── Insert round ────────────────────────────────────────────────
+    let round
     try {
       const res = await supaWithTimeout(
         'rounds.insert',
         supabase.from('rounds').insert(roundBody).select().single(),
-        5000  // 5s SJS budget — pivot to raw quickly so user isn't stuck waiting
+        2000,
       )
       round = res.data
-      error = res.error
+      if (res.error) throw res.error
     } catch (e) {
       _debugLog(`[rounds] SJS insert timed out, trying raw fetch fallback…`)
       try {
-        const rows = await supaRawInsert('rounds', roundBody, 15000)
+        const rows = await supaRawInsert('rounds', roundBody, 12000)
         round = Array.isArray(rows) ? rows[0] : rows
-        error = null
         _debugLog(`[rounds] raw insert SUCCEEDED — round id ${round?.id?.slice(0, 8) || '?'}`)
       } catch (rawErr) {
         _debugLog(`[rounds] raw insert also failed: ${rawErr.message} (HTTP ${rawErr.status || '?'})`)
-        // 400 = invalid/missing required field (e.g. course_name is empty)
         if (rawErr.status === 400 || rawErr.message?.includes('400')) {
           throw new Error(`Round data is incomplete — make sure you selected a course and tee before tapping Start Round. (${rawErr.message})`)
         }
-        // 409 = unique constraint (room_code collision — very rare)
         if (rawErr.status === 409) {
           throw new Error('Room code conflict — please try again.')
         }
@@ -408,37 +454,22 @@ export const useRoundsStore = defineStore('rounds', () => {
       }
     }
 
-    if (error) {
-      console.error('[rounds] Supabase insert error:', error)
-      if (error.code === '42501' || error.message?.includes('policy') || error.code === 'PGRST301') {
-        throw new Error('Session expired — please sign in again and retry.')
-      }
-      throw new Error(error.message || 'Failed to create round in database.')
+    if (!round) throw new Error('Failed to create round in database.')
+    if (round.id !== roundId) {
+      // Supabase accepted the insert but the returned id differs — shouldn't happen with explicit id,
+      // but if it does, patch idMap so score FK writes use the correct id.
+      _debugLog(`[rounds] WARNING: returned id ${round.id} differs from pre-generated ${roundId}`)
     }
     console.log('[rounds] Round inserted:', round.id)
 
-    // Add members — use .select() to get back the new UUIDs
+    // ── Insert members ──────────────────────────────────────────────
     let insertedMembers = []
     if (players.length) {
-      const memberRows = players.map((p, i) => ({
-        round_id: round.id,
-        profile_id: p.profileId ?? null,
-        guest_name: p.profileId ? null : p.name,
-        short_name: p.shortName ?? p.name?.slice(0, 6),
-        ghin_index: p.ghinIndex ?? null,
-        round_hcp: p.roundHcp ?? null,
-        team: p.team ?? null,
-        group_index: p.groupIndex ?? 0,
-        role: i === 0 && auth.user?.id ? 'admin' : 'player',
-        nickname: p.nickname ?? null,
-        use_nickname: p.use_nickname ?? false,
-        email: p.email ?? null,
-      }))
       try {
         const { data: mData, error: mErr } = await supaWithTimeout(
           'round_members.insert',
           supabase.from('round_members').insert(memberRows).select(),
-          5000
+          2000,
         )
         if (mErr) throw mErr
         insertedMembers = mData ?? []
@@ -448,102 +479,58 @@ export const useRoundsStore = defineStore('rounds', () => {
           const rows = await supaRawInsert('round_members', memberRows, 10000)
           insertedMembers = Array.isArray(rows) ? rows : []
         } catch (rawErr) {
-          // If insert truly can't land, try a raw SELECT in case the previous
-          // attempts actually wrote something before the stream stalled
           try {
             const rows = await supaRawSelect('round_members', `select=*&round_id=eq.${round.id}`, 8000)
             insertedMembers = Array.isArray(rows) ? rows : []
           } catch {
-            console.warn('[rounds] raw members fallback failed, using local fallback')
-            insertedMembers = memberRows.map((row, i) => ({
-              ...row,
-              id: `local_${round.id}_${i}`,
-            }))
+            // Last resort: use pre-generated rows so IDs are consistent
+            console.warn('[rounds] all member insert paths failed — using pre-generated rows')
+            insertedMembers = memberRows
           }
         }
       }
     }
 
-    // Build a mapping from wizard player IDs → new Supabase member IDs
-    // Primary: match by short_name. Fallback: match by insertion position.
-    const idMap = {}
-    for (const p of players) {
-      const shortName = p.shortName ?? p.name?.slice(0, 6)
-      const match = insertedMembers.find(m => m.short_name === shortName)
-      if (match && p.id) idMap[p.id] = match.id
-    }
-    // Position-based fallback for any wizard player whose short_name didn't match
-    players.forEach((p, i) => {
-      if (p.id && !idMap[p.id] && insertedMembers[i]) {
-        idMap[p.id] = insertedMembers[i].id
-      }
-    })
-
-    // Add games — remap team1/team2/player IDs from wizard IDs to real member IDs
-    let insertedGames = []
-    if (games.length) {
-      const gameRows = games.map((g, i) => {
-        const config = { ...g.config }
-        // Remap team arrays
-        if (Array.isArray(config.team1)) config.team1 = config.team1.map(id => idMap[id] || id)
-        if (Array.isArray(config.team2)) config.team2 = config.team2.map(id => idMap[id] || id)
-        // Remap individual player refs
-        if (config.player1) config.player1 = idMap[config.player1] || config.player1
-        if (config.player2) config.player2 = idMap[config.player2] || config.player2
-        // Remap players array (fidget, etc.)
-        if (Array.isArray(config.players)) config.players = config.players.map(id => idMap[id] || id)
-        // Remap wolf tee order from wizard profile IDs to round member IDs
-        if (Array.isArray(config.wolfTeeOrder)) config.wolfTeeOrder = config.wolfTeeOrder.map(id => idMap[id] || id)
-        return {
-          round_id: round.id,
-          type: g.type,
-          config,
-          sort_order: i,
-          created_by: auth.user?.id ?? null,
-        }
-      })
-      try {
-        const { data: gData, error: gErr } = await supaWithTimeout(
-          'game_configs.insert',
-          supabase.from('game_configs').insert(gameRows).select(),
-          5000
-        )
-        if (gErr) throw gErr
-        insertedGames = gData ?? []
-      } catch (e) {
-        _debugLog('[rounds] games SJS insert failed, trying raw fetch…')
-        try {
-          const rows = await supaRawInsert('game_configs', gameRows, 10000)
-          insertedGames = Array.isArray(rows) ? rows : []
-        } catch (rawErr) {
-          try {
-            const rows = await supaRawSelect('game_configs', `select=*&round_id=eq.${round.id}&order=sort_order`, 8000)
-            insertedGames = Array.isArray(rows) ? rows : []
-          } catch {
-            console.warn('[rounds] raw games fallback failed, using local fallback')
-            insertedGames = gameRows.map((row, i) => ({ ...row, id: `local_g_${round.id}_${i}` }))
-          }
-        }
-      }
-    }
-
-    // Set active state directly from insert results — no extra round-trip.
+    // ── Set store state immediately ─────────────────────────────────
+    // Games are inserted in the background below. We already have their pre-generated
+    // rows, so the store is fully usable (notation, scoring) without waiting for the DB.
     activeRound.value = round
-    activeMembers.value = insertedMembers
-    activeGames.value = insertedGames
+    activeMembers.value = insertedMembers.length ? insertedMembers : memberRows
+    activeGames.value = gameRows
     activeScores.value = {}
 
-    console.log('[rounds] Round active, members:', insertedMembers.length, 'games:', insertedGames.length)
+    console.log('[rounds] Round active, members:', activeMembers.value.length, 'games:', gameRows.length)
 
-    // Set up real-time subscriptions AFTER returning.
-    // iOS PWA (WKWebView) has stricter WebSocket timing than regular Safari —
-    // calling .subscribe() synchronously here can block the microtask queue.
-    // Push it to the next macrotask so the promise resolves immediately.
+    // ── Insert games in background — non-blocking ───────────────────
+    // Round and members are in DB now (FK constraints satisfied for score writes).
+    // Games insert in the background so the scorecard appears without waiting.
+    if (gameRows.length) {
+      setTimeout(async () => {
+        try {
+          const { data: gData, error: gErr } = await supabase.from('game_configs').insert(gameRows).select()
+          if (gErr) throw gErr
+          // Patch store with DB-returned rows (e.g. server-set timestamps)
+          if (gData?.length) activeGames.value = gData
+          _debugLog(`✓ game_configs.insert (background, ${gData?.length} rows)`)
+        } catch (e) {
+          _debugLog(`✗ game_configs.insert (SJS bg): ${e.message} — trying raw…`)
+          try {
+            const rows = await supaRawInsert('game_configs', gameRows, 10000)
+            if (Array.isArray(rows) && rows.length) activeGames.value = rows
+          } catch (rawErr) {
+            // Games failed to persist — active store still has pre-generated rows so
+            // the UI works; they just won't survive a reload.
+            console.warn('[rounds] background game_configs insert failed:', rawErr.message)
+          }
+        }
+      }, 0)
+    }
+
+    // Subscribe to real-time and auto-save roster — deferred to avoid blocking
     setTimeout(() => {
       try { subscribeToRound(round.id) } catch (e) { console.warn('[rounds] Subscribe failed (non-critical):', e) }
     }, 0)
 
-    // Auto-save co-players to this user's roster (fire-and-forget)
     setTimeout(() => {
       try { _autoSaveCoPlayers(players, auth) } catch (e) { console.warn('[rounds] autoSaveCoPlayers failed:', e) }
     }, 500)
@@ -955,12 +942,8 @@ export const useRoundsStore = defineStore('rounds', () => {
     }
 
     // ── AUTHENTICATED PATH ──
-    // All child tables (scores, round_members, game_configs, round_settlements)
-    // have ON DELETE CASCADE — one delete on the parent round wipes everything.
-    const { error } = await supabase.from('rounds').delete().eq('id', roundId)
-    if (error) throw new Error(error.message)
-
-    // Clear active if this was the active round
+    // Optimistic clear — unblock UI immediately so delete never "hangs".
+    // All child tables have ON DELETE CASCADE; one parent delete wipes everything.
     if (activeRound.value?.id === roundId) {
       activeRound.value = null
       activeMembers.value = []
@@ -968,6 +951,27 @@ export const useRoundsStore = defineStore('rounds', () => {
       activeGames.value = []
     }
     rounds.value = rounds.value.filter(r => r.id !== roundId)
+
+    // DB delete with 4 s SJS budget → raw fetch fallback (avoids iOS stuck-socket hang)
+    const _withTimeout = (promise, ms) => Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`delete timed out after ${ms}ms`)), ms)),
+    ])
+
+    try {
+      const { error } = await _withTimeout(
+        supabase.from('rounds').delete().eq('id', roundId),
+        4000,
+      )
+      if (error) throw new Error(error.message)
+    } catch (e) {
+      try {
+        await supaRawDelete('rounds', `id=eq.${roundId}`, 8000)
+      } catch (rawErr) {
+        console.warn('[rounds] deleteRound raw fallback failed:', rawErr.message)
+        throw new Error('Could not delete round from server. It may reappear after reload.')
+      }
+    }
   }
 
   // ── Set a round as active and reload data ────────────────

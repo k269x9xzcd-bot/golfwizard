@@ -13,11 +13,20 @@ import {
   computeBbb, computeScotch6s, computeTeamDay,
 } from './gameEngine.js'
 
+// Route match games: 1v1 uses computeMatch, 2v2 (team1/team2) uses computeBestBall
+function _computeMatchAny(ctx, config) {
+  if (config.player1 && config.player2) return computeMatch(ctx, config)
+  if (Array.isArray(config.team1) && config.team1.length && Array.isArray(config.team2) && config.team2.length) {
+    return computeBestBall(ctx, { ...config, ballsPerTeam: 1 })
+  }
+  return null
+}
+
 const ENGINE_MAP = {
   nassau: computeNassau,
   skins: computeSkins,
-  match: computeMatch,
-  match1v1: computeMatch,
+  match: _computeMatchAny,
+  match1v1: _computeMatchAny,
   vegas: computeVegas,
   snake: computeSnake,
   hilow: computeHiLow,
@@ -60,11 +69,10 @@ function extractPlayerNets(type, result, config, members) {
     return members.map(m => ({ id: m.id, name: m.short_name, net: netMap[m.id] || 0 }))
   }
 
-  // ── Match / 1v1 — engine returns settlement.p1Net (signed) ──
-  // p1Net > 0  → player1 wins that much from player2
-  // p1Net < 0  → player1 loses that much to player2
-  // p1Net === 0 → halved / no money moves
+  // ── Match — 1v1 uses settlement.p1Net; 2v2 delegates to bestball handler ──
   if (t === 'match' || t === 'match1v1') {
+    const is1v1 = config.player1 && config.player2
+    if (!is1v1) return extractPlayerNets('bestball', result, config, members)
     const m1 = members.find(m => m.id === config.player1)
     const m2 = members.find(m => m.id === config.player2)
     if (!m1 || !m2) return []
@@ -113,9 +121,9 @@ function extractPlayerNets(type, result, config, members) {
     return nets
   }
 
-  // ── Vegas — team-based, runningTotal > 0 means t1 wins ──
-  if (t === 'vegas' && result.runningTotal != null) {
-    const total = result.runningTotal
+  // ── Vegas — team-based, t1Total > 0 means t1 wins ──
+  if (t === 'vegas' && result.t1Total != null) {
+    const total = result.t1Total
     if (total === 0) return []
     const t1Ids = config.team1 || []
     const t2Ids = config.team2 || []
