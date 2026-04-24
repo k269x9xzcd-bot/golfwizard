@@ -1079,6 +1079,48 @@
 }
 .hole-gs-summary:first-of-type { border-top: none; }
 
+/* Hole math breakdown */
+.hole-math-section {
+  background: rgba(13,51,37,.5);
+  border: 1px solid rgba(212,175,55,.12);
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin: 8px 0 6px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.hole-math-game {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 6px;
+  font-size: 12px;
+}
+.hole-math-icon { font-size: 13px; }
+.hole-math-lbl { font-weight: 700; color: var(--gw-gold, #d4af37); white-space: nowrap; }
+.hole-math-line {
+  color: rgba(240,237,224,.75);
+  white-space: nowrap;
+}
+.hole-math-line:not(:first-of-type)::before { content: '· '; color: rgba(240,237,224,.35); }
+
+/* Scorecard notation math detail row */
+.row-math-detail td { background: rgba(0,0,0,.25); }
+.nota-math-hole {
+  font-size: 10px; font-weight: 700; color: var(--gw-gold, #d4af37);
+  opacity: 0.8; text-align: center;
+}
+.nota-math-body {
+  padding: 4px 8px !important;
+  vertical-align: middle;
+}
+.nota-math-line {
+  display: inline-block;
+  font-size: 11px; color: rgba(240,237,224,.8);
+  margin-right: 8px;
+  white-space: nowrap;
+}
+.nota-cell-active {
+  outline: 1px solid rgba(212,175,55,.5);
+  background: rgba(212,175,55,.12) !important;
+}
+
 /* Hole nav buttons */
 .hole-nav-buttons {
   display: flex; align-items: center; justify-content: space-between;

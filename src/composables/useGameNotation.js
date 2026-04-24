@@ -117,6 +117,7 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
             inSummary: fmtSeg(bUp, bDormie),
             totalSummary: fmtSeg(oUp, oDormie),
             cls: 'row-nassau-nota',
+            game,
           })
         } catch(e) { /* skip */ }
       }
@@ -143,6 +144,7 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
             icon: '💎', label: 'Skins', cells,
             outSummary: '', inSummary: '',
             totalSummary: `${totalWon} won`,
+            game,
           })
         } catch(e) { /* skip */ }
       }
@@ -196,6 +198,7 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
           rows.push({
             icon: '⚔️', label: `${p1Label} v ${p2Label}`,
             cells, outSummary: '', inSummary: '', totalSummary: summary,
+            game,
           })
         } catch(e) { /* skip */ }
       }
@@ -222,6 +225,7 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
             icon: '🎯', label: 'Dots', cells,
             outSummary: '', inSummary: '',
             totalSummary: summaryParts.join(' ') || '',
+            game,
           })
         } catch(e) { /* skip */ }
       }
@@ -246,6 +250,7 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
             icon: '🏌️', label: game.config?.label || 'BB Net', cells,
             outSummary: '', inSummary: '',
             totalSummary: `${runTotal} (${overallStr})`,
+            game,
           })
         } catch(e) { /* skip */ }
       }
@@ -268,6 +273,7 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
             icon: '🐍', label: 'Snake', cells,
             outSummary: '', inSummary: '',
             totalSummary: r.holderName ? `${r.holderName} holds` : '',
+            game,
           })
         } catch(e) { /* skip */ }
       }
@@ -305,8 +311,8 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
           const finalNet = r.t1Total * ppt
           const t2n = teamInitialsStr(cfg.team2 || []) || 'T2'
           const summary = finalNet === 0 ? 'AS' : `${finalNet > 0 ? t1n : t2n} ${fmtAmt(Math.abs(finalNet))}`
-          rows.push({ icon: '🎰', label: t1n, cells: holeCells, outSummary: '', inSummary: '', totalSummary: '', netSummary: '' })
-          rows.push({ icon: '', label: 'Δ', cells: runCells, outSummary: '', inSummary: '', totalSummary: summary, netSummary: '' })
+          rows.push({ icon: '🎰', label: t1n, cells: holeCells, outSummary: '', inSummary: '', totalSummary: '', netSummary: '', game })
+          rows.push({ icon: '', label: 'Δ', cells: runCells, outSummary: '', inSummary: '', totalSummary: summary, netSummary: '', game })
         } catch(e) { /* skip */ }
       }
 
@@ -337,7 +343,7 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
           const ppt = game.config?.ppt || 5
           const net = (r.t1Pts - r.t2Pts) * ppt
           const summary = net === 0 ? 'AS' : `${net > 0 ? t1n : t2n} +$${Math.abs(net)}`
-          rows.push({ icon: '📊', label: `${t1n}v${t2n}`, cells, outSummary: `${r.t1Pts}`, inSummary: `${r.t2Pts}`, totalSummary: summary })
+          rows.push({ icon: '📊', label: `${t1n}v${t2n}`, cells, outSummary: `${r.t1Pts}`, inSummary: `${r.t2Pts}`, totalSummary: summary, game })
         } catch(e) { /* skip */ }
       }
 
@@ -369,6 +375,7 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
           rows.push({
             icon: '🐺', label: 'Wolf', cells,
             outSummary: '', inSummary: '', totalSummary: summary,
+            game,
           })
         } catch(e) { /* skip */ }
       }
@@ -395,7 +402,7 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
           const sorted = [...(r.settlements || [])].sort((a, b) => b.net - a.net)
           const topNet = sorted[0]?.net || 0
           const summary = topNet > 0 ? `${sorted[0].name} +$${topNet}` : 'AS'
-          rows.push({ icon: '🎲', label: 'Sixes', cells, outSummary: '', inSummary: '', totalSummary: summary })
+          rows.push({ icon: '🎲', label: 'Sixes', cells, outSummary: '', inSummary: '', totalSummary: summary, game })
         } catch(e) { /* skip */ }
       }
 
@@ -436,6 +443,7 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
               totalSummary: `<span style="font-weight:700">${totalPts}pts</span>`,
               netSummary: `<span style="color:${netColor};font-size:11px;font-weight:700">${netStr}</span>`,
               cls: 'row-531',
+              game,
             })
           }
         } catch(e) { /* skip */ }
@@ -473,8 +481,8 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
           }
           const finalNet = r.settlement?.t1Net || 0
           const summary = finalNet === 0 ? 'AS' : `${finalNet > 0 ? t1n : t2n} +$${Math.abs(finalNet)}`
-          rows.push({ icon: '🔨', label: t1n, cells: eventCells, outSummary: '', inSummary: '', totalSummary: '', netSummary: '' })
-          rows.push({ icon: '', label: 'Δ', cells: netCells, outSummary: '', inSummary: '', totalSummary: summary, netSummary: '' })
+          rows.push({ icon: '🔨', label: t1n, cells: eventCells, outSummary: '', inSummary: '', totalSummary: '', netSummary: '', game })
+          rows.push({ icon: '', label: 'Δ', cells: netCells, outSummary: '', inSummary: '', totalSummary: summary, netSummary: '', game })
         } catch(e) { /* skip */ }
       }
 
@@ -522,6 +530,7 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
               totalSummary: `<span style="font-weight:700">${totalPts}pts</span>`,
               netSummary: `<span style="color:${netColor};font-size:11px;font-weight:700">${netStr}</span>`,
               cls: 'row-531',
+              game,
             })
           }
         } catch(e) { /* skip */ }
@@ -546,6 +555,7 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
             icon: '🏌️', label: 'BBB', cells,
             outSummary: '', inSummary: '',
             totalSummary: summaryParts.join(' ') || '',
+            game,
           })
         } catch(e) { /* skip */ }
       }

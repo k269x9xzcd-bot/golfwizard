@@ -470,30 +470,43 @@
 
             <!-- Game notation rows: compact summary by default, tap to expand per-hole -->
             <tfoot v-if="gameNotationRows.length > 0 && showGameRows">
-              <tr v-for="(row, ri) in gameNotationRows" :key="'gn-'+ri"
-                  class="row-game-notation" :class="[row.cls || '', { 'notation-row-expanded': expandedNotationRows.has(ri) }]"
-                  @click="toggleNotationRow(ri)">
-                <td class="col-sticky col-notation-label">
-                  <span class="notation-icon">{{ row.icon }}</span>
-                  <span class="notation-name" v-if="!row.labelHtml">{{ row.label }}</span>
-                  <span class="notation-name" v-else v-html="row.labelHtml"></span>
-                  <span class="notation-expand-caret">{{ expandedNotationRows.has(ri) ? '▴' : '▾' }}</span>
-                </td>
-                <template v-if="!expandedNotationRows.has(ri)">
-                  <td :colspan="frontHoles.length + (hasBack9 ? backHoles.length + 2 : 0) + 2" class="col-notation-summary-collapsed">
-                    <span class="nota-summary-pill" v-html="row.totalSummary || '&mdash;'"></span>
-                    <span v-if="row.netSummary" class="nota-summary-net" v-html="row.netSummary"></span>
+              <template v-for="(row, ri) in gameNotationRows" :key="'gn-'+ri">
+                <tr class="row-game-notation" :class="[row.cls || '', { 'notation-row-expanded': expandedNotationRows.has(ri) }]"
+                    @click="toggleNotationRow(ri)">
+                  <td class="col-sticky col-notation-label">
+                    <span class="notation-icon">{{ row.icon }}</span>
+                    <span class="notation-name" v-if="!row.labelHtml">{{ row.label }}</span>
+                    <span class="notation-name" v-else v-html="row.labelHtml"></span>
+                    <span class="notation-expand-caret">{{ expandedNotationRows.has(ri) ? '▴' : '▾' }}</span>
                   </td>
-                </template>
-                <template v-else>
-                  <td v-for="h in frontHoles" :key="'gn-'+ri+'-'+h" class="col-notation-cell" :class="row.cells[h]?.cls || ''" v-html="row.cells[h]?.text || ''"></td>
-                  <td v-if="hasBack9" class="col-subtotal col-notation-sub" v-html="row.outSummary || ''"></td>
-                  <td v-for="h in backHoles" :key="'gn-'+ri+'-'+h" class="col-notation-cell" :class="row.cells[h]?.cls || ''" v-html="row.cells[h]?.text || ''"></td>
-                  <td v-if="hasBack9" class="col-subtotal col-notation-sub" v-html="row.inSummary || ''"></td>
-                  <td class="col-total col-notation-total" v-html="row.totalSummary || ''"></td>
-                  <td class="col-total col-notation-total" v-html="row.netSummary || ''"></td>
-                </template>
-              </tr>
+                  <template v-if="!expandedNotationRows.has(ri)">
+                    <td :colspan="frontHoles.length + (hasBack9 ? backHoles.length + 2 : 0) + 2" class="col-notation-summary-collapsed">
+                      <span class="nota-summary-pill" v-html="row.totalSummary || '&mdash;'"></span>
+                      <span v-if="row.netSummary" class="nota-summary-net" v-html="row.netSummary"></span>
+                    </td>
+                  </template>
+                  <template v-else>
+                    <td v-for="h in frontHoles" :key="'gn-'+ri+'-'+h"
+                        class="col-notation-cell" :class="[row.cells[h]?.cls || '', { 'nota-cell-active': mathCell?.ri === ri && mathCell?.hole === h }]"
+                        v-html="row.cells[h]?.text || ''"
+                        @click.stop="toggleMathCell(ri, h)"></td>
+                    <td v-if="hasBack9" class="col-subtotal col-notation-sub" v-html="row.outSummary || ''"></td>
+                    <td v-for="h in backHoles" :key="'gn-'+ri+'-'+h"
+                        class="col-notation-cell" :class="[row.cells[h]?.cls || '', { 'nota-cell-active': mathCell?.ri === ri && mathCell?.hole === h }]"
+                        v-html="row.cells[h]?.text || ''"
+                        @click.stop="toggleMathCell(ri, h)"></td>
+                    <td v-if="hasBack9" class="col-subtotal col-notation-sub" v-html="row.inSummary || ''"></td>
+                    <td class="col-total col-notation-total" v-html="row.totalSummary || ''"></td>
+                    <td class="col-total col-notation-total" v-html="row.netSummary || ''"></td>
+                  </template>
+                </tr>
+                <tr v-if="mathCell?.ri === ri && mathCellLines.length" class="row-math-detail">
+                  <td class="col-sticky col-notation-label nota-math-hole">H{{ mathCell.hole }}</td>
+                  <td :colspan="frontHoles.length + (hasBack9 ? backHoles.length + 2 : 0) + 2" class="nota-math-body">
+                    <span v-for="(line, li) in mathCellLines" :key="li" class="nota-math-line">{{ line }}</span>
+                  </td>
+                </tr>
+              </template>
             </tfoot>
           </table>
         </div>
@@ -922,6 +935,15 @@
           </div>
         </div>
 
+        <!-- Per-hole game math breakdown for current hole -->
+        <div v-if="holeGameMath.length" class="hole-math-section">
+          <div v-for="gm in holeGameMath" :key="gm.id" class="hole-math-game">
+            <span class="hole-math-icon">{{ gm.icon }}</span>
+            <span class="hole-math-lbl">{{ gm.label }}</span>
+            <span v-for="(line, li) in gm.lines" :key="li" class="hole-math-line">{{ line }}</span>
+          </div>
+        </div>
+
         <div class="hole-nav-buttons">
           <button v-if="activeHole > visibleHoles[0]" class="hole-nav-btn hole-nav-prev" @click="activeHole = activeHole - 1">← H{{ activeHole - 1 }}</button>
           <span v-else class="hole-nav-spacer"></span>
@@ -984,6 +1006,7 @@ import GameEditorOverlay from '../components/GameEditorOverlay.vue'
 import RetroScoreOverlay from '../components/RetroScoreOverlay.vue'
 import { useScorecardHelpers } from '../composables/useScorecardHelpers'
 import { useGameNotation } from '../composables/useGameNotation'
+import { useHoleMath } from '../composables/useHoleMath'
 import { useLiveSettlements } from '../composables/useLiveSettlements'
 import { computeNassau, computeHammer, courseHandicap, holeSI, strokesOnHole } from '../modules/gameEngine'
 import { simulateRound } from '../modules/simulator'
@@ -1016,6 +1039,9 @@ const {
   HALVED_HTML, buildCtx, gameIcon, gameLabel, pressHoles, gameNotationRows,
   fidgetHoleWinners, isFidgetWinner,
 } = useGameNotation({ courseData, visibleHoles, teamInitialsStr, pInit })
+
+// ── Composable: hole math breakdown ─────────────────────────────────
+const { holeMathLines } = useHoleMath({ buildCtx, pInit, teamInitialsStr })
 
 // ── Composable: live settlements ──────────────────────────────────
 const {
@@ -1597,7 +1623,34 @@ function toggleNotationRow(ri) {
   const s = new Set(expandedNotationRows.value)
   s.has(ri) ? s.delete(ri) : s.add(ri)
   expandedNotationRows.value = s
+  if (mathCell.value?.ri === ri && !s.has(ri)) mathCell.value = null
 }
+
+const mathCell = ref(null) // { ri, hole }
+function toggleMathCell(ri, hole) {
+  if (mathCell.value?.ri === ri && mathCell.value?.hole === hole) {
+    mathCell.value = null
+  } else {
+    mathCell.value = { ri, hole }
+  }
+}
+const mathCellLines = computed(() => {
+  if (!mathCell.value) return []
+  const row = gameNotationRows.value[mathCell.value.ri]
+  if (!row?.game) return []
+  return holeMathLines(row.game, mathCell.value.hole)
+})
+
+const holeGameMath = computed(() => {
+  const result = []
+  for (const game of (roundsStore.activeGames || [])) {
+    const lines = holeMathLines(game, activeHole.value)
+    if (lines.length) {
+      result.push({ id: game.id, icon: gameIcon(game.type), label: gameLabel(game.type, game.config), lines })
+    }
+  }
+  return result
+})
 // Auto-expand 5-3-1 / nines rows — per-hole points are the whole game,
 // collapsing them to a single total defeats the purpose.
 watch(gameNotationRows, (rows) => {
