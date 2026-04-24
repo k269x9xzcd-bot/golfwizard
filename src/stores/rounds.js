@@ -6,7 +6,7 @@ import { useCoursesStore } from './courses'
 import { useRosterStore } from './roster'
 import { computeAllSettlements } from '../modules/settlements'
 import { getCourse, COURSES as BUILTIN_COURSES } from '../modules/courses'
-import { supaRawInsert, supaRawSelect, supaRawUpdate, supaRawRequest } from '../modules/supaRaw'
+import { supaRawInsert, supaRawSelect, supaRawUpdate, supaRawRequest, supaRawDelete } from '../modules/supaRaw'
 
 /**
  * Build a deterministic, self-contained snapshot of a course at the moment
@@ -952,24 +952,27 @@ export const useRoundsStore = defineStore('rounds', () => {
     }
     rounds.value = rounds.value.filter(r => r.id !== roundId)
 
-    // DB delete with 4 s SJS budget → raw fetch fallback (avoids iOS stuck-socket hang)
-    const _withTimeout = (promise, ms) => Promise.race([
-      promise,
-      new Promise((_, reject) => setTimeout(() => reject(new Error(`delete timed out after ${ms}ms`)), ms)),
-    ])
-
-    try {
-      const { error } = await _withTimeout(
-        supabase.from('rounds').delete().eq('id', roundId),
-        4000,
-      )
-      if (error) throw new Error(error.message)
-    } catch (e) {
+    // Delete child rows first (FK safety — ON DELETE CASCADE may not be configured),
+    // then delete the parent round. All four steps use the raw fetch path so iOS
+    // stuck-socket issues don't block the operation.
+    const tables = ['scores', 'round_games', 'round_members', 'rounds']
+    const filters = [
+      `round_id=eq.${roundId}`,
+      `round_id=eq.${roundId}`,
+      `round_id=eq.${roundId}`,
+      `id=eq.${roundId}`,
+    ]
+    for (let i = 0; i < tables.length; i++) {
       try {
-        await supaRawDelete('rounds', `id=eq.${roundId}`, 8000)
-      } catch (rawErr) {
-        console.warn('[rounds] deleteRound raw fallback failed:', rawErr.message)
-        throw new Error('Could not delete round from server. It may reappear after reload.')
+        await supaRawDelete(tables[i], filters[i], 10000)
+      } catch (e) {
+        // scores/round_games/round_members failures are non-fatal (row may not exist);
+        // a rounds delete failure is the one that actually matters.
+        if (tables[i] === 'rounds') {
+          console.warn('[rounds] deleteRound failed:', e.message, e.detail)
+          throw new Error('Could not delete round from server. It may reappear after reload.')
+        }
+        console.warn(`[rounds] deleteRound child delete failed (${tables[i]}):`, e.message)
       }
     }
   }
