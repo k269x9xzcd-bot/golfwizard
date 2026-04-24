@@ -949,6 +949,37 @@
                 <label>$ per point</label>
                 <input v-model.number="sideGames.nines.ppt" type="number" class="config-input" placeholder="1" />
               </div>
+              <div class="config-row config-row--toggles">
+                <div class="config-toggle-row">
+                  <label class="toggle-label">
+                    <input type="checkbox" v-model="sideGames.nines.sweepBonus" />
+                    <span>🧹 Sweep bonus</span>
+                  </label>
+                  <span class="toggle-desc">Win by 2+ net strokes → take all 9 pts</span>
+                </div>
+                <div v-if="sideGames.nines.sweepBonus" class="config-field config-field--sub">
+                  <label>Margin (strokes)</label>
+                  <input v-model.number="sideGames.nines.sweepMargin" type="number" min="1" max="5" class="config-input config-input--sm" />
+                </div>
+                <div class="config-toggle-row">
+                  <label class="toggle-label">
+                    <input type="checkbox" v-model="sideGames.nines.birdieBonus" />
+                    <span>🐦 Birdie bonus</span>
+                  </label>
+                  <span class="toggle-desc">Solo net birdie = +{{ sideGames.nines.birdieBonusPts ?? 1 }} extra pt</span>
+                </div>
+                <div v-if="sideGames.nines.birdieBonus" class="config-field config-field--sub">
+                  <label>Bonus pts</label>
+                  <input v-model.number="sideGames.nines.birdieBonusPts" type="number" min="1" max="3" class="config-input config-input--sm" />
+                </div>
+                <div class="config-toggle-row">
+                  <label class="toggle-label">
+                    <input type="checkbox" v-model="sideGames.nines.birdieDouble" />
+                    <span>🐦 Birdie double</span>
+                  </label>
+                  <span class="toggle-desc">Net birdie on a hole awards a bonus point</span>
+                </div>
+              </div>
               <!-- 3-player picker when round has 4+ players -->
               <div v-if="form.players.length > 3" class="config-row config-row--players" style="margin-top:8px">
                 <label class="wiz-label">Pick 3 players for this game:</label>
