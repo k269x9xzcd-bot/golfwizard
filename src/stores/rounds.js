@@ -64,6 +64,42 @@ export const useRoundsStore = defineStore('rounds', () => {
   const rounds = ref([])
   const loading = ref(false)
 
+  // ── Known rounds registry ────────────────────────────────────
+  // Tracks rounds this user has created or joined so they can switch between them.
+  // Stored as lightweight summaries; full data is loaded on demand via loadRound().
+  const _KNOWN_KEY = 'gw_known_rounds'
+  const knownRounds = ref([])  // [{ id, courseName, date, holesMode, isComplete }]
+
+  function _loadKnownList() {
+    try { return JSON.parse(localStorage.getItem(_KNOWN_KEY) || '[]') } catch { return [] }
+  }
+  function _saveKnownList(list) {
+    try { localStorage.setItem(_KNOWN_KEY, JSON.stringify(list.slice(0, 10))) } catch {}
+  }
+  function _registerKnownRound(round) {
+    if (!round?.id || String(round.id).startsWith('guest_')) return
+    const list = _loadKnownList()
+    const entry = {
+      id: round.id,
+      courseName: round.course_name,
+      date: round.date,
+      holesMode: round.holes_mode || '18',
+      isComplete: !!round.is_complete,
+    }
+    const idx = list.findIndex(r => r.id === round.id)
+    if (idx >= 0) list[idx] = entry
+    else list.unshift(entry)
+    _saveKnownList(list)
+    knownRounds.value = list.filter(r => !r.isComplete)
+  }
+  function _removeKnownRound(roundId) {
+    const list = _loadKnownList().filter(r => r.id !== roundId)
+    _saveKnownList(list)
+    knownRounds.value = list.filter(r => !r.isComplete)
+  }
+  // Boot: restore from localStorage, strip completed rounds
+  knownRounds.value = _loadKnownList().filter(r => !r.isComplete)
+
   // Real-time subscription handle
   let scoreSubscription = null
   let memberSubscription = null
@@ -535,6 +571,7 @@ export const useRoundsStore = defineStore('rounds', () => {
       try { _autoSaveCoPlayers(players, auth) } catch (e) { console.warn('[rounds] autoSaveCoPlayers failed:', e) }
     }, 500)
 
+    _registerKnownRound(round)
     return round
   }
 
@@ -594,6 +631,7 @@ export const useRoundsStore = defineStore('rounds', () => {
 
     // Subscribe to real-time updates
     subscribeToRound(roundId)
+    _registerKnownRound(data)
     return data
   }
 
@@ -746,6 +784,8 @@ export const useRoundsStore = defineStore('rounds', () => {
     }
 
     await loadRound(round.id)
+    // loadRound already calls _registerKnownRound; ensure we also mark this device as knowing about this round
+    _registerKnownRound(activeRound.value ?? round)
     return round
   }
 
@@ -919,9 +959,9 @@ export const useRoundsStore = defineStore('rounds', () => {
     }
 
     if (activeRound.value?.id === roundId) {
-      // Reassign to trigger Vue reactivity
       activeRound.value = { ...activeRound.value, is_complete: true }
     }
+    _removeKnownRound(roundId)
     unsubscribe()
     return settlementData
   }
@@ -951,6 +991,7 @@ export const useRoundsStore = defineStore('rounds', () => {
       activeGames.value = []
     }
     rounds.value = rounds.value.filter(r => r.id !== roundId)
+    _removeKnownRound(roundId)
 
     // Delete child rows first (FK safety — ON DELETE CASCADE may not be configured),
     // then delete the parent round. All four steps use the raw fetch path so iOS
@@ -1057,6 +1098,7 @@ export const useRoundsStore = defineStore('rounds', () => {
 
   return {
     activeRound, activeMembers, activeScores, activeGames,
+    knownRounds,
     rounds, loading, activeRoundId, scoreSyncError,
     pendingQueueCount,
     flushQueue: _flushQueue,

@@ -39,11 +39,18 @@
             <span class="meta-tag">{{ roundsStore.activeRound.tee }}</span>
             <span class="meta-tag">{{ holesLabel }}</span>
             <span v-if="isViewOnly" class="meta-tag meta-viewer" title="Viewing completed round — tap any score to edit">📋 History View</span>
-            <span v-else-if="!isCaptain" class="meta-tag meta-viewer" title="View-only — you're not the scorer for this round">👀 Viewer</span>
+            <span v-else-if="!isCaptain && canScore" class="meta-tag meta-scorer" title="You're a member — you can enter scores">✏️ Scorer</span>
+            <span v-else-if="!isCaptain && !canScore" class="meta-tag meta-viewer" title="View-only — you're not a member of this round">👀 Viewer</span>
           </div>
           <div v-if="isViewOnly" style="margin-top:6px">
             <button class="back-to-history-btn" @click="goBackToHistory">← Back to History</button>
           </div>
+          <!-- Round switcher chip — only when 2+ known active rounds -->
+          <button
+            v-if="!isViewOnly && roundsStore.knownRounds.length > 1"
+            class="round-switch-chip"
+            @click.stop="showRoundPicker = true"
+          >⇄ Switch round</button>
         </div>
         <div class="header-right-actions">
           <button
@@ -88,8 +95,11 @@
           <button v-if="isCaptain" class="round-menu-item round-menu-danger" @click="showRoundMenu = false; confirmDeleteActive = true">
             🗑️ Delete Round
           </button>
-          <div v-if="!isCaptain" class="round-menu-item round-menu-note">
-            👀 You're viewing this round in read-only mode. Ask the scorer to transfer the role if needed.
+          <div v-if="!isCaptain && canScore" class="round-menu-item round-menu-note">
+            ✏️ You're a member of this round and can enter scores.
+          </div>
+          <div v-else-if="!isCaptain && !canScore" class="round-menu-item round-menu-note">
+            👀 You're viewing this round in read-only mode. Ask the scorer to share the room code so you can join.
           </div>
         </div>
       </header>
@@ -245,6 +255,31 @@
           <div class="delete-actions">
             <button class="btn-cancel" @click="confirmDeleteActive = false">Cancel</button>
             <button class="btn-delete-confirm" @click="deleteActiveRound">Delete</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Round picker bottom sheet ────────────────────────── -->
+      <div v-if="showRoundPicker" class="junk-sheet-backdrop" @click.self="showRoundPicker = false">
+        <div class="junk-sheet round-picker-sheet">
+          <div class="junk-sheet-header">
+            <span>Switch Round</span>
+            <button class="junk-sheet-close" @click="showRoundPicker = false">Done</button>
+          </div>
+          <div class="junk-sheet-body">
+            <button
+              v-for="kr in roundsStore.knownRounds"
+              :key="kr.id"
+              class="round-picker-row"
+              :class="{ 'round-picker-row--active': kr.id === roundsStore.activeRound?.id }"
+              @click="switchToRound(kr.id)"
+            >
+              <div class="rpr-left">
+                <span class="rpr-course">{{ kr.courseName }}</span>
+                <span class="rpr-meta">{{ kr.holesMode }}h · {{ kr.date }}</span>
+              </div>
+              <span v-if="kr.id === roundsStore.activeRound?.id" class="rpr-active-dot">✓</span>
+            </button>
           </div>
         </div>
       </div>
@@ -1180,6 +1215,7 @@ onUnmounted(() => {
 const activeHole = ref(0) // 0 = Card view, >0 = Hole entry
 const selectedGame = ref(null)
 const showRoundMenu = ref(false)
+const showRoundPicker = ref(false)
 const confirmDeleteActive = ref(false)
 const showGameEditor = ref(false)
 const showHcpEditor = ref(false)
@@ -1538,6 +1574,13 @@ function goBackToHistory() {
   router.push('/history')
 }
 
+async function switchToRound(roundId) {
+  if (roundId === roundsStore.activeRound?.id) { showRoundPicker.value = false; return }
+  showRoundPicker.value = false
+  activeHole.value = 0
+  await roundsStore.loadRound(roundId)
+}
+
 // ── Opponent editor state ─────────────────────────────────────────
 const editOppPlayers = ref([])
 const oppEditorSearch = ref('')
@@ -1711,12 +1754,10 @@ function onTouchEnd(e) {
   }
 }
 
-// ── Captain / viewer role ──────────────────────────────────────
-// Captain = the signed-in user who OWNS this round. For local/guest rounds
-// everyone is effectively the captain. Non-captain viewers can read the
-// scorecard but can't tap to enter scores (RLS would block the write anyway
-// at the DB level, but we preempt it client-side with a clear toast).
-// Opponent group from the active round
+// ── Captain / scorer / viewer roles ───────────────────────────
+// Captain  = the round owner (edit games, finish round, delete)
+// canScore = captain OR any round_member linked to this user (enter scores)
+// viewer   = authenticated but not a member (read-only)
 const opponentPlayers = computed(() => {
   const r = roundsStore.activeRound
   if (!r || !Array.isArray(r.opponent_players)) return []
@@ -1731,16 +1772,23 @@ const isBonnieBriar = computed(() => {
 const isCaptain = computed(() => {
   const r = roundsStore.activeRound
   if (!r) return true
-  // Guest round (no owner) — whoever is looking at it is effectively the captain
   if (!r.owner_id) return true
-  // Unauthenticated user viewing a real round — not the captain
   if (!authStore.isAuthenticated) return false
   return r.owner_id === authStore.user?.id
 })
 
+// Any authenticated member of the round can enter scores (not just the owner).
+const canScore = computed(() => {
+  if (isCaptain.value) return true
+  const r = roundsStore.activeRound
+  if (!r?.owner_id) return true  // guest round
+  if (!authStore.isAuthenticated) return false
+  return roundsStore.activeMembers.some(m => m.profile_id === authStore.user?.id)
+})
+
 const viewerToast = ref('')
 function flashViewerToast() {
-  viewerToast.value = 'View-only — ask the scorer to enter this score, or request scorer role in the ⚙️ menu.'
+  viewerToast.value = 'View-only — you\'re not a member of this round. Ask the scorer to share the room code.'
   setTimeout(() => { viewerToast.value = '' }, 3500)
 }
 
@@ -1753,7 +1801,7 @@ async function updateSelectedConfig(field, value) {
 
 // ── Inline score entry (replaces modal) ─────────────────────────
 function inlineSetPar(member) {
-  if (!isCaptain.value) return flashViewerToast()
+  if (!canScore.value) return flashViewerToast()
   const hole = activeHole.value
   const existing = getScore(member.id, hole)
   const par = parForHole(hole)
@@ -1762,7 +1810,7 @@ function inlineSetPar(member) {
 }
 
 function inlineInc(member) {
-  if (!isCaptain.value) return flashViewerToast()
+  if (!canScore.value) return flashViewerToast()
   const hole = activeHole.value
   const existing = getScore(member.id, hole)
   const par = parForHole(hole)
@@ -1774,7 +1822,7 @@ function inlineInc(member) {
 }
 
 function inlineDec(member) {
-  if (!isCaptain.value) return flashViewerToast()
+  if (!canScore.value) return flashViewerToast()
   const hole = activeHole.value
   const existing = getScore(member.id, hole)
   const par = parForHole(hole)
