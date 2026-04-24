@@ -420,7 +420,7 @@ const GAME_LABELS = {
   nassau: 'Nassau', skins: 'Skins', match: 'Match', matchplay: 'Match Play', match1v1: '1v1 Match',
   bestball: 'Best Ball', best_ball: 'Best Ball', bbn: 'Best Ball Net',
   wolf: 'Wolf', vegas: 'Vegas', hilow: 'Hi-Low', stableford: 'Stableford',
-  snake: 'Snake', dots: 'Dots', fidget: 'Fidget', hammer: 'Hammer', sixes: 'Sixes', fivethreeone: '5-3-1',
+  snake: 'Snake', dots: 'Dots', fidget: 'Fidget', hammer: 'Hammer', sixes: 'Sixes', fivethreeone: '5-3-1', nines: '5-3-1',
 }
 
 function gameIcon(type) { return GAME_ICONS[(type || '').toLowerCase()] || '🏌️' }
@@ -648,7 +648,11 @@ function _recapOne(ctx, game) {
     }
 
     if (t === 'fivethreeone' || t === 'nines') {
-      const r = t === 'nines' ? computeNines(ctx, cfg) : computeFiveThreeOne(ctx, cfg)
+      let resolvedCfg = cfg
+      if (!resolvedCfg.players && ctx.members.length > 3) {
+        resolvedCfg = { ...resolvedCfg, players: ctx.members.slice(0, 3).map(m => m.id) }
+      }
+      const r = t === 'nines' ? computeNines(ctx, resolvedCfg) : computeFiveThreeOne(ctx, resolvedCfg)
       if (!r || !r.settlements) return base
       const sorted = [...r.settlements].sort((a, b) => b.pts - a.pts)
       const winner = sorted[0]
