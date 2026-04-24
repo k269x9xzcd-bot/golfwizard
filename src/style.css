@@ -1301,6 +1301,43 @@ body {
   line-height: 1.4;
   padding: 4px 0;
 }
+.config-note--warn {
+  color: #f97316;
+}
+
+/* ── Nines player picker ─────────────────────────────────────── */
+.config-row--players {
+  flex-direction: column;
+  gap: 6px;
+}
+.nines-player-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+.nines-player-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--gw-green-600);
+  background: var(--gw-green-900);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--gw-text);
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.nines-player-option.selected {
+  background: var(--gw-accent);
+  border-color: var(--gw-accent);
+  color: #000;
+}
+.nines-player-option input[type="checkbox"] {
+  display: none;
+}
 
 .config-row--toggles {
   flex-direction: column;

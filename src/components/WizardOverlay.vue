@@ -331,13 +331,13 @@
             v-for="g in MAIN_GAMES"
             :key="g.key"
             class="game-type-btn"
-            :class="{ selected: mainGame.type === g.key, 'game-type-btn--disabled': g.key === 'fiveThreeOne' && (props.lockedPlayers ?? form.players).length !== 3 }"
-            :disabled="g.key === 'fiveThreeOne' && (props.lockedPlayers ?? form.players).length !== 3"
-            :title="g.key === 'fiveThreeOne' && (props.lockedPlayers ?? form.players).length !== 3 ? '5-3-1 requires exactly 3 players' : ''"
+            :class="{ selected: mainGame.type === g.key, 'game-type-btn--disabled': g.key === 'nines' && (props.lockedPlayers ?? form.players).length < 3 }"
+            :disabled="g.key === 'nines' && (props.lockedPlayers ?? form.players).length < 3"
+            :title="g.key === 'nines' && (props.lockedPlayers ?? form.players).length < 3 ? '5-3-1 requires at least 3 players' : ''"
             @click="setMainGame(g.key)"
           >
             <span class="gtb-icon">{{ g.icon }}</span>
-            <span class="gtb-label">{{ g.label }}<span v-if="g.key === 'fiveThreeOne' && (props.lockedPlayers ?? form.players).length !== 3" style="font-size:9px;display:block;opacity:.6;">3 players only</span></span>
+            <span class="gtb-label">{{ g.label }}<span v-if="g.key === 'nines' && (props.lockedPlayers ?? form.players).length < 3" style="font-size:9px;display:block;opacity:.6;">3+ players</span></span>
             <button class="btn-game-info btn-game-info-grid" @click.stop="toggleGameInfo(g.key)" title="How to play" v-if="g.key !== 'none'">ℹ️</button>
           </button>
         </div>
@@ -783,7 +783,35 @@
               <span class="toggle-desc">Net birdie on a hole awards a bonus point</span>
             </div>
           </div>
-          <div class="config-note">Best net gets 5, second gets 3, third gets 1, worst gets 0. All {{ form.players.length }} players compete.</div>
+          <!-- 3-player picker: only shown when round has 4+ players -->
+          <div v-if="form.players.length > 3" class="config-row config-row--players">
+            <label class="wiz-label">Pick 3 players for this game:</label>
+            <div class="nines-player-picker">
+              <label
+                v-for="p in form.players"
+                :key="p.id"
+                class="nines-player-option"
+                :class="{ selected: (mainGame.config.players || []).includes(p.id) }"
+              >
+                <input
+                  type="checkbox"
+                  :value="p.id"
+                  :checked="(mainGame.config.players || []).includes(p.id)"
+                  :disabled="!(mainGame.config.players || []).includes(p.id) && (mainGame.config.players || []).length >= 3"
+                  @change="toggleNinesPlayer(p.id)"
+                />
+                {{ p.short_name || p.full_name }}
+              </label>
+            </div>
+            <div v-if="(mainGame.config.players || []).length !== 3" class="config-note config-note--warn">Select exactly 3 players.</div>
+          </div>
+          <div class="config-note">
+            Best net gets 5 pts, second 3, third 1, last 0.
+            <span v-if="form.players.length > 3 && (mainGame.config.players || []).length === 3">
+              Players: {{ (mainGame.config.players || []).map(id => form.players.find(p => p.id === id)?.short_name).join(', ') }}
+            </span>
+            <span v-else-if="form.players.length <= 3">All {{ form.players.length }} players compete.</span>
+          </div>
         </div>
 
         <!-- No main game -->
@@ -1492,7 +1520,7 @@ const GAME_DEFAULTS = {
   wolf:        { ppt: 1, wolfLoneMultiplier: 4, blindWolfMultiplier: 8, wolfTeeOrder: [], blindWolfEnabled: true, wolfTeesFirst: true, wolfChoices: {}, tieRule: 'push' },
   hammer:      { ppt: 1, airHammer: false, fuHammer: false, birdieDouble: false, carryover: false, team1: [], team2: [] },
   sixes:       { ppt: 1, scoringModel: 'segment' },
-  nines:       { ppt: 1, sweepBonus: false, sweepMargin: 2, birdieBonus: false, birdieBonusPts: 1, birdieDouble: false },
+  nines:       { ppt: 1, sweepBonus: false, sweepMargin: 2, birdieBonus: false, birdieBonusPts: 1, birdieDouble: false, players: null },
   bestball:    { ppt: 5, ballsPerTeam: 1, team1: [], team2: [], hidden: true },
   none:        {},
 }
@@ -1574,9 +1602,22 @@ function setMainGame(key) {
     mainGame.value.config.team1 = oldTeam1
     mainGame.value.config.team2 = oldTeam2
   }
+  // Pre-select first 3 players for nines when 4+ in round
+  if (key === 'nines' && form.value.players.length > 3) {
+    mainGame.value.config.players = form.value.players.slice(0, 3).map(p => p.id)
+  }
   // Collapse grid once a real game is picked
   if (key !== 'none') showMainGrid.value = false
   gameInfoKey.value = null
+}
+
+function toggleNinesPlayer(id) {
+  const current = mainGame.value.config.players || []
+  if (current.includes(id)) {
+    mainGame.value.config.players = current.filter(x => x !== id)
+  } else if (current.length < 3) {
+    mainGame.value.config.players = [...current, id]
+  }
 }
 
 function toggleSideGame(key) {
@@ -2255,7 +2296,14 @@ function buildGameConfigs() {
 
   // Main game
   if (mainGame.value.type !== 'none') {
-    games.push({ type: mainGame.value.type, config: { ...mainGame.value.config } })
+    const cfg = { ...mainGame.value.config }
+    // nines: only persist players subset when exactly 3 selected and round has 4+ players
+    if (mainGame.value.type === 'nines') {
+      if (!cfg.players || cfg.players.length !== 3 || form.value.players.length <= 3) {
+        delete cfg.players
+      }
+    }
+    games.push({ type: mainGame.value.type, config: cfg })
   }
 
   // Side games
@@ -2335,10 +2383,16 @@ function _loadEditGames() {
     ghinIndex: m.handicap_index ?? null,
   }))
 
+  const TYPE_NORM = { fivethreeone: 'nines' }
   const games = roundsStore.activeGames
   const mainRow = games.find(g => !SIDE_TYPES.has(g.type) && !(g.type === 'nassau' && g.config?._sideMatch))
   if (mainRow) {
-    mainGame.value = { type: mainRow.type, config: { ...mainRow.config } }
+    const normType = TYPE_NORM[mainRow.type] || mainRow.type
+    mainGame.value = { type: normType, config: { ...mainRow.config } }
+    // Re-init players picker for nines if round has 4+ members
+    if (normType === 'nines' && form.value.players.length > 3 && !mainGame.value.config.players) {
+      mainGame.value.config.players = form.value.players.slice(0, 3).map(p => p.id)
+    }
     showMainGrid.value = false
   } else {
     mainGame.value = { type: 'none', config: {} }
@@ -2389,8 +2443,9 @@ async function saveEditedGames() {
     const newConfigs = buildGameConfigs()
     const existing = [...roundsStore.activeGames]
     const matched = new Set()
+    const _normType = t => t === 'fivethreeone' ? 'nines' : t
     for (const nc of newConfigs) {
-      const idx = existing.findIndex((eg, i) => !matched.has(i) && eg.type === nc.type)
+      const idx = existing.findIndex((eg, i) => !matched.has(i) && _normType(eg.type) === _normType(nc.type))
       if (idx >= 0) {
         matched.add(idx)
         await roundsStore.updateGameConfig(existing[idx].id, nc.config)
