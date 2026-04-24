@@ -373,8 +373,10 @@ export function computeNassau(ctx, config) {
         for (const bet of bets) {
           if (bet.pressed) continue // already pressed this bet
           if (h < bet.start) continue
-          // A team presses when they're down by pressAt on THIS bet
-          if (Math.abs(bet.score) >= pressAt && rem > 0) {
+          // A team presses when they're down by pressAt on THIS bet.
+          // Require rem > 1 so a press never auto-opens on the very last hole
+          // (hole 18 / hole 9): that's Aloha, which is a manual optional bet.
+          if (Math.abs(bet.score) >= pressAt && rem > 1) {
             bet.pressed = true
             newPresses.push({ start: h + 1, score: 0, value: betValue, pressed: false })
           }

@@ -2368,7 +2368,7 @@ body.gw-landscape .scorecard-grid tbody .col-player-name {
   background: #fbf6e8;
 }
 .col-notation-label {
-  padding: 4px 8px;
+  padding: 6px 8px;
   background: #f0ebdd;
   white-space: nowrap;
   position: sticky; left: 0; z-index: 3;
@@ -2386,8 +2386,8 @@ body.gw-landscape .scorecard-grid tbody .col-player-name {
   font-size: 12px; font-weight: 800; min-width: 26px;
   color: #1a1f1b;
 }
-.col-notation-sub { font-size: 10px; font-weight: 700; color: #4a5249; }
-.col-notation-total { font-size: 11px; font-weight: 800; color: #1a1f1b; }
+.col-notation-sub { font-size: 10px; font-weight: 700; color: #4a5249; padding: 4px 3px; }
+.col-notation-total { font-size: 11px; font-weight: 800; color: #1a1f1b; padding: 4px 3px; }
 
 /* Notation cell classes — darker saturated hues for paper bg */
 .nota-t1 { color: #1d4ed8; }

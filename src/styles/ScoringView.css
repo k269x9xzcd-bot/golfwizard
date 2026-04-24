@@ -1621,7 +1621,7 @@
 .col-notation-label {
   font-size: 11px;
   white-space: nowrap;
-  padding: 3px 6px;
+  padding: 6px 6px;
   cursor: pointer;
 }
 .notation-row-expanded .col-notation-label {
@@ -1630,7 +1630,7 @@
 .col-notation-cell {
   font-size: 10px;
   text-align: center;
-  padding: 2px 1px;
+  padding: 4px 3px;
   line-height: 1.2;
   max-width: 28px;
   overflow: hidden;
@@ -1638,7 +1638,7 @@
 .col-notation-sub, .col-notation-total {
   font-size: 10px;
   text-align: center;
-  padding: 2px 3px;
+  padding: 4px 3px;
 }
 
 /* ── Offline / save-state UX additions ─────────────────────────────────── */

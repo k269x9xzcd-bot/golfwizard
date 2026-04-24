@@ -278,25 +278,29 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
         try {
           const r = computeVegas(ctx, game.config)
           if (!r) continue
-          const cells = {}
-          const t1n = teamInitialsStr(game.config?.team1 || []) || 'T1'
-          const t2n = teamInitialsStr(game.config?.team2 || []) || 'T2'
-          let t1Run = 0
+          const cfg = game.config || {}
+          const t1n = teamInitialsStr(cfg.team1 || []) || 'T1'
+          const t2n = teamInitialsStr(cfg.team2 || []) || 'T2'
+          const ppt = cfg.ppt || 1
+          const t1Cells = {}, t2Cells = {}, netCells = {}
+          let running = 0
           for (const hr of (r.holeResults || [])) {
             if (hr.incomplete || hr.t1Num == null) continue
-            t1Run += hr.diff
-            const diff = hr.diff
+            running += hr.diff
             const mult = hr.multiplier > 1 ? `×${hr.multiplier}` : ''
-            const flip = hr.t1Num !== hr.t2Num && (hr.multiplier > 1) ? '🔄' : ''
-            cells[hr.hole] = {
-              text: `${hr.t1Num}v${hr.t2Num}${flip}`,
-              cls: diff > 0 ? 'nota-t1' : diff < 0 ? 'nota-t2' : 'nota-halved',
+            t1Cells[hr.hole] = { text: `${hr.t1Num}${mult}`, cls: hr.diff > 0 ? 'nota-t1' : '' }
+            t2Cells[hr.hole] = { text: `${hr.t2Num}${mult}`, cls: hr.diff < 0 ? 'nota-t1' : '' }
+            const runText = running > 0 ? `+${running}` : running < 0 ? `${running}` : 'E'
+            netCells[hr.hole] = {
+              text: runText,
+              cls: running > 0 ? 'nota-t1' : running < 0 ? 'nota-t2' : 'nota-halved',
             }
           }
-          const ppt = game.config?.ppt || 1
-          const net = t1Run * ppt
-          const summary = net === 0 ? 'AS' : `${net > 0 ? t1n : t2n} +$${Math.abs(net)}`
-          rows.push({ icon: '🎰', label: `${t1n}v${t2n}`, cells, outSummary: '', inSummary: '', totalSummary: summary })
+          const finalNet = r.t1Total * ppt
+          const summary = finalNet === 0 ? 'AS' : `${finalNet > 0 ? t1n : t2n} +$${Math.abs(finalNet)}`
+          rows.push({ icon: '🎰', label: t1n, cells: t1Cells, outSummary: '', inSummary: '', totalSummary: '', netSummary: '' })
+          rows.push({ icon: '', label: t2n, cells: t2Cells, outSummary: '', inSummary: '', totalSummary: '', netSummary: '' })
+          rows.push({ icon: '', label: 'Δ', cells: netCells, outSummary: '', inSummary: '', totalSummary: summary, netSummary: '' })
         } catch(e) { /* skip */ }
       }
 
@@ -436,24 +440,35 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
         try {
           const r = computeHammer(ctx, game.config)
           if (!r) continue
-          const cells = {}
-          const t1n = teamInitialsStr(game.config?.team1 || []) || 'T1'
-          const t2n = teamInitialsStr(game.config?.team2 || []) || 'T2'
+          const cfg = game.config || {}
+          const t1n = teamInitialsStr(cfg.team1 || []) || 'T1'
+          const t2n = teamInitialsStr(cfg.team2 || []) || 'T2'
+          const eventCells = {}, netCells = {}
+          let running = 0
           for (const hr of (r.holeResults || [])) {
             if (hr.incomplete) continue
-            const val = hr.holeValue || game.config?.ppt || 1
-            const throws = hr.throws || 0
+            running += hr.t1Wins
+            // Row 1: hammer events — only holes with hammer activity get text
             if (hr.conceded) {
-              const winInit = hr.concededBy === 't2' ? t1n : t2n
-              cells[hr.hole] = { text: `${winInit}$${val}🏳️`, cls: hr.concededBy === 't2' ? 'nota-t1' : 'nota-t2' }
-            } else if (hr.winner) {
-              const winInit = hr.winner === 't1' ? t1n : t2n
-              cells[hr.hole] = { text: `${winInit}$${val}${throws > 0 ? '🔨×' + throws : ''}`, cls: hr.winner === 't1' ? 'nota-t1' : 'nota-t2' }
+              const winner = hr.concededBy === 't2' ? t1n : t2n
+              eventCells[hr.hole] = { text: `${winner}🏳️$${hr.holeValue}`, cls: hr.concededBy === 't2' ? 'nota-t1' : 'nota-t2' }
+            } else if (hr.throws > 0) {
+              const cls = hr.winner === 't1' ? 'nota-t1' : hr.winner === 't2' ? 'nota-t2' : 'nota-halved'
+              eventCells[hr.hole] = { text: `🔨$${hr.holeValue}`, cls }
+            } else if (hr.carried) {
+              eventCells[hr.hole] = { text: `→$${hr.holeValue}`, cls: 'nota-halved' }
+            }
+            // Row 2: running dollar total from T1's perspective
+            const runText = running > 0 ? `+$${running}` : running < 0 ? `-$${Math.abs(running)}` : 'E'
+            netCells[hr.hole] = {
+              text: runText,
+              cls: running > 0 ? 'nota-t1' : running < 0 ? 'nota-t2' : 'nota-halved',
             }
           }
-          const net = r.settlement?.t1Net || 0
-          const summary = net === 0 ? 'AS' : `${net > 0 ? t1n : t2n} +$${Math.abs(net)}`
-          rows.push({ icon: '🔨', label: `${t1n}v${t2n}`, cells, outSummary: '', inSummary: '', totalSummary: summary })
+          const finalNet = r.settlement?.t1Net || 0
+          const summary = finalNet === 0 ? 'AS' : `${finalNet > 0 ? t1n : t2n} +$${Math.abs(finalNet)}`
+          rows.push({ icon: '🔨', label: t1n, cells: eventCells, outSummary: '', inSummary: '', totalSummary: '', netSummary: '' })
+          rows.push({ icon: '', label: 'Δ', cells: netCells, outSummary: '', inSummary: '', totalSummary: summary, netSummary: '' })
         } catch(e) { /* skip */ }
       }
 

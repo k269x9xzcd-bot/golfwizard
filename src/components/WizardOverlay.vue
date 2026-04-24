@@ -198,28 +198,33 @@
             <div class="ps-section-label">
               <span>{{ psQuery ? 'Your Roster' : 'Favorites' }}</span>
             </div>
-            <div
-              v-for="r in psResults.roster"
-              :key="r.id"
-              class="ps-row"
-              :class="{ 'ps-row--added': isPlayerAddedById(r.id) }"
-              @click="psAddResult(r)"
-            >
-              <div class="ps-row-info">
-                <span class="ps-row-name">{{ r.name }}</span>
-                <span class="ps-row-meta">
-                  <span
-                    v-if="r.ghinSyncedAt"
-                    class="ghin-dot"
-                    :class="ghinDotClass(r.ghinSyncedAt)"
-                    :title="ghinDotTitle(r.ghinSyncedAt)"
-                  />
-                  idx {{ r.ghinIndex ?? '—' }}
-                  <span v-if="r.isFavorite" class="ps-fav-star">★</span>
-                </span>
+            <template v-for="r in psResults.roster" :key="r.id">
+              <!-- Section divider between favorites and all players -->
+              <div v-if="r.isDivider" class="ps-roster-divider">
+                <span class="ps-roster-divider-label">{{ r.label }}</span>
               </div>
-              <span class="ps-row-action">{{ isPlayerAddedById(r.id) ? '✓' : '+' }}</span>
-            </div>
+              <div
+                v-else
+                class="ps-row"
+                :class="{ 'ps-row--added': isPlayerAddedById(r.id) }"
+                @click="psAddResult(r)"
+              >
+                <div class="ps-row-info">
+                  <span class="ps-row-name">{{ r.name }}</span>
+                  <span class="ps-row-meta">
+                    <span
+                      v-if="r.ghinSyncedAt"
+                      class="ghin-dot"
+                      :class="ghinDotClass(r.ghinSyncedAt)"
+                      :title="ghinDotTitle(r.ghinSyncedAt)"
+                    />
+                    idx {{ r.ghinIndex ?? '—' }}
+                    <span v-if="r.isFavorite" class="ps-fav-star">★</span>
+                  </span>
+                </div>
+                <span class="ps-row-action">{{ isPlayerAddedById(r.id) ? '✓' : '+' }}</span>
+              </div>
+            </template>
           </template>
 
           <!-- BB Members section -->
@@ -2944,6 +2949,18 @@ function reloadApp() {
   font-size: 12px; color: var(--gw-text-muted);
 }
 .ps-fav-star { color: #d4af37; font-size: 11px; }
+.ps-roster-divider {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px 4px;
+  margin-top: 4px;
+}
+.ps-roster-divider::before, .ps-roster-divider::after {
+  content: ''; flex: 1; height: 1px; background: rgba(255,255,255,.1);
+}
+.ps-roster-divider-label {
+  font-size: 10px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase;
+  color: var(--gw-text-muted); white-space: nowrap;
+}
 .ps-row-action {
   font-size: 20px; font-weight: 300; color: var(--gw-green-400);
   min-width: 28px; text-align: center; flex-shrink: 0;

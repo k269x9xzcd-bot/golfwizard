@@ -16,13 +16,24 @@ export function usePlayerSearch(rosterPlayers) {
   let _debounceTimer = null
   let _lastQuery = ''
 
+  function _byLastName(a, b) {
+    const lastName = n => { const parts = (n.name || '').trim().split(/\s+/); return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : parts[0].toLowerCase() }
+    const firstPart = n => (n.name || '').trim().split(/\s+/)[0].toLowerCase()
+    const lastDiff = lastName(a).localeCompare(lastName(b))
+    return lastDiff !== 0 ? lastDiff : firstPart(a).localeCompare(firstPart(b))
+  }
+
   // ── Roster matches (instant, client-side) ──────────────────────
   const rosterMatches = computed(() => {
     const q = query.value.trim().toLowerCase()
     if (!q) {
-      const favs = rosterPlayers.value.filter(p => p.is_favorite)
-      const others = rosterPlayers.value.filter(p => !p.is_favorite)
-      return [...favs, ...others].map(p => _toResult(p, 'roster'))
+      const favs = rosterPlayers.value.filter(p => p.is_favorite).slice().sort(_byLastName)
+      const others = rosterPlayers.value.filter(p => !p.is_favorite).slice().sort(_byLastName)
+      const items = []
+      items.push(...favs.map(p => _toResult(p, 'roster')))
+      if (favs.length && others.length) items.push({ isDivider: true, id: '__divider__', label: 'All Players' })
+      items.push(...others.map(p => _toResult(p, 'roster')))
+      return items
     }
     return rosterPlayers.value
       .filter(p => {
@@ -31,6 +42,7 @@ export function usePlayerSearch(rosterPlayers) {
         const nick = p.nickname?.toLowerCase() || ''
         return name.includes(q) || short.includes(q) || nick.includes(q)
       })
+      .slice().sort(_byLastName)
       .map(p => _toResult(p, 'roster'))
   })
 
