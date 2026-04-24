@@ -1034,11 +1034,12 @@ export const useRoundsStore = defineStore('rounds', () => {
     const { data: members } = await supabase.from('round_members').select('*').eq('round_id', round.id)
     activeMembers.value = members ?? []
     const { data: scores } = await supabase.from('scores').select('*').eq('round_id', round.id)
-    activeScores.value = {}
+    const sm = {}
     for (const s of (scores ?? [])) {
-      const key = `${s.member_id}_${s.hole}`
-      activeScores.value[key] = s.strokes
+      if (!sm[s.member_id]) sm[s.member_id] = {}
+      sm[s.member_id][s.hole] = s.score
     }
+    activeScores.value = sm
     const { data: games } = await supabase.from('game_configs').select('*').eq('round_id', round.id)
     activeGames.value = (games ?? []).map(g => ({ ...g, config: typeof g.config === 'string' ? JSON.parse(g.config) : g.config }))
   }

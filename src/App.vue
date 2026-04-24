@@ -122,19 +122,44 @@ onMounted(async () => {
   } catch (e) { console.warn('Data load error:', e) }
 
   // Auto-rehydrate most recent active round after reload (so scoring view isn't blank)
-  if (authStore.isAuthenticated && !roundsStore.activeRound) {
-    try {
-      const { supabase } = await import('./supabase')
-      const { data } = await supabase
-        .from('rounds')
-        .select('id')
-        .eq('owner_id', authStore.user.id)
-        .eq('is_complete', false)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      if (data?.id) await roundsStore.loadRound(data.id)
-    } catch (e) { console.warn('Auto-rehydrate round failed:', e) }
+  if (!roundsStore.activeRound) {
+    if (authStore.isAuthenticated) {
+      // Step 1: knownRounds registry already includes both owned and joined rounds
+      // (populated via createRound / loadRound / joinByRoomCode on this device)
+      const known = roundsStore.knownRounds
+      if (known.length > 0) {
+        try { await roundsStore.loadRound(known[0].id) } catch (e) { console.warn('knownRound reload failed:', e) }
+      }
+      // Step 2: fallback Supabase query — catches first-time users or cleared localStorage
+      if (!roundsStore.activeRound) {
+        try {
+          const { supabase } = await import('./supabase')
+          const { data } = await supabase
+            .from('rounds')
+            .select('id')
+            .eq('owner_id', authStore.user.id)
+            .eq('is_complete', false)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          if (data?.id) await roundsStore.loadRound(data.id)
+        } catch (e) { console.warn('Auto-rehydrate fallback failed:', e) }
+      }
+    } else {
+      // Guest path: restore most recent non-complete guest round from local index
+      try {
+        const index = JSON.parse(localStorage.getItem('gw_guest_rounds_index') || '[]')
+        for (const id of index) {
+          const raw = localStorage.getItem(`gw_guest_round_${id}`)
+          if (!raw) continue
+          const payload = JSON.parse(raw)
+          if (payload.round && !payload.round.is_complete) {
+            await roundsStore.loadRound(payload.round.id)
+            break
+          }
+        }
+      } catch (e) { console.warn('Guest round restore failed:', e) }
+    }
   }
 
   const hash = window.location.hash

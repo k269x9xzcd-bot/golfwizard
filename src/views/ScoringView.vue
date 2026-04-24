@@ -323,16 +323,6 @@
         <!-- Cross-match banner (shown only when a linked match touches this round) -->
         <CrossMatchBanner />
 
-        <!-- Challenge another foursome — only when no games/opponents set yet.
-             Once you have games configured, cross-team scoring is already live in the card. -->
-        <div v-if="isCaptain && !roundsStore.activeRound?.is_complete && roundsStore.activeGames.length === 0 && !opponentPlayers.length" class="challenge-strip">
-          <router-link to="/cross-match/new" class="challenge-btn">
-            <span class="challenge-icon">⚔️</span>
-            <span class="challenge-label">Challenge another foursome (separate device)</span>
-            <span class="challenge-arrow">›</span>
-          </router-link>
-        </div>
-
         <!-- Finish Round Banner -->
         <!-- Round complete badge — only shown after the round is finalized -->
         <div v-if="roundsStore.activeRound?.is_complete" class="finish-banner finish-done">
