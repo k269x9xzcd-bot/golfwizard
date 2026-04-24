@@ -228,7 +228,9 @@ function extractPlayerNets(type, result, config, members) {
   }
 
   // ── 5-3-1 — explicit handler (engine returns settlements[], not standings[]) ──
-  if (t === 'fivethreeone') {
+  // Both 'nines' (wizard-created) and 'fivethreeone' (legacy DB) must be handled here
+  // before the generic standings/settlements fallback, to ensure correct routing.
+  if (t === 'fivethreeone' || t === 'nines') {
     return (result.settlements || [])
       .filter(s => s && s.id)
       .map(s => ({ id: s.id, name: s.name, net: s.net ?? 0 }))
