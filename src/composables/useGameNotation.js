@@ -286,33 +286,28 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
           if (!r) continue
           const cfg = game.config || {}
           const t1n = teamInitialsStr(cfg.team1 || []) || 'T1'
+          const t2n = teamInitialsStr(cfg.team2 || []) || 'T2'
           const ppt = cfg.ppt || 1
-          const fmtAmt = (n) => n >= 0 ? `$${n}` : `($${Math.abs(n)})`
-          const holeCells = {}, runCells = {}
+          const cells = {}
           let running = 0
           for (const hr of (r.holeResults || [])) {
             if (hr.incomplete || hr.t1Num == null) continue
             const holeDollars = hr.diff * ppt
             running += holeDollars
             const star = hr.variant ? '★' : ''
+            const amt = Math.abs(holeDollars)
             if (holeDollars > 0) {
-              holeCells[hr.hole] = { text: `$${holeDollars}${star}`, cls: 'nota-t1' }
+              cells[hr.hole] = { text: `${amt}${star}`, cls: 'nota-t1' }
             } else if (holeDollars < 0) {
-              holeCells[hr.hole] = { text: `($${Math.abs(holeDollars)})${star}`, cls: 'nota-t2' }
+              cells[hr.hole] = { text: `${amt}${star}`, cls: 'nota-t2' }
             } else {
-              holeCells[hr.hole] = { text: '-', cls: 'nota-halved' }
-            }
-            const runText = running === 0 ? 'E' : fmtAmt(running)
-            runCells[hr.hole] = {
-              text: runText,
-              cls: running > 0 ? 'nota-t1' : running < 0 ? 'nota-t2' : 'nota-halved',
+              cells[hr.hole] = { text: star ? `—${star}` : '—', cls: 'nota-halved' }
             }
           }
           const finalNet = r.t1Total * ppt
-          const t2n = teamInitialsStr(cfg.team2 || []) || 'T2'
-          const summary = finalNet === 0 ? 'AS' : `${finalNet > 0 ? t1n : t2n} ${fmtAmt(Math.abs(finalNet))}`
-          rows.push({ icon: '🎰', label: t1n, cells: holeCells, outSummary: '', inSummary: '', totalSummary: '', netSummary: '', game })
-          rows.push({ icon: '', label: 'Δ', cells: runCells, outSummary: '', inSummary: '', totalSummary: summary, netSummary: '', game })
+          const totalLabel = finalNet === 0 ? 'E' : finalNet > 0 ? `$${finalNet}` : `($${Math.abs(finalNet)})`
+          const summary = finalNet === 0 ? 'AS' : `${finalNet > 0 ? t1n : t2n} $${Math.abs(finalNet)}`
+          rows.push({ icon: '🎰', label: `${t1n} (${totalLabel})`, cells, outSummary: '', inSummary: '', totalSummary: summary, game })
         } catch(e) { /* skip */ }
       }
 

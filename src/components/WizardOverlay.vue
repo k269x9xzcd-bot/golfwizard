@@ -2,7 +2,7 @@
   <div :class="props.inline ? 'wizard-inline' : 'modal-overlay wizard-overlay'">
     <div :class="props.inline ? 'wizard-inline-body' : 'modal wizard-modal'">
       <div class="wizard-header">
-        <div class="wizard-step-indicator">Step {{ step }} of {{ totalSteps }}</div>
+        <div v-if="!props.editMode" class="wizard-step-indicator">Step {{ step }} of {{ totalSteps }}</div>
         <div v-if="stepTitle" class="wizard-header-title">{{ stepTitle }}</div>
         <button class="wizard-close-btn" @click="$emit('close')">✕</button>
       </div>
@@ -1188,9 +1188,12 @@
 
       <!-- Nav -->
       <div class="wizard-nav">
-        <button v-if="step > 1" class="btn-ghost" @click="goBack">← Back</button>
+        <button v-if="step > 1 && !props.editMode" class="btn-ghost" @click="goBack">← Back</button>
         <span v-else />
-        <button v-if="step < totalSteps" class="btn-primary" :disabled="!canNext" @click="nextStep">Next →</button>
+        <button v-if="props.editMode" class="btn-primary" :disabled="saving" @click="saveEditedGames">
+          {{ saving ? 'Saving…' : 'Save Games' }}
+        </button>
+        <button v-else-if="step < totalSteps" class="btn-primary" :disabled="!canNext" @click="nextStep">Next →</button>
         <button v-else class="btn-primary" :disabled="!canFinish || creating" @click="create">
           {{ creating ? 'Creating…' : 'Start Round 🏌️' }}
         </button>
@@ -1235,7 +1238,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, h } from 'vue'
+import { ref, computed, watch, h, onMounted } from 'vue'
 import { useCoursesStore } from '../stores/courses'
 import { useRosterStore } from '../stores/roster'
 import { useRoundsStore } from '../stores/rounds'
@@ -1350,18 +1353,22 @@ const props = defineProps({
   startStep: { type: Number, default: 1 },
   // Render without the full-screen modal overlay (embedded in another view).
   inline: { type: Boolean, default: false },
+  // Edit mode: pre-populate games from active round, skip course/player steps.
+  editMode: { type: Boolean, default: false },
 })
 const coursesStore = useCoursesStore()
 const rosterStore = useRosterStore()
 const roundsStore = useRoundsStore()
 
-const step = ref(props.startStep || 1)
+const step = ref(props.editMode ? 3 : (props.startStep || 1))
 // When lockedPlayers is set (inline accept flow), skip the opponent step — already linked via invite
 const totalSteps = computed(() => props.lockedPlayers ? 3 : 4)
 const stepTitle = computed(() => {
+  if (props.editMode) return 'Edit Games & Stakes'
   return { 1: 'Where are you playing?', 2: "Who's playing?", 3: 'Set up games', 4: 'Opponent group?' }[step.value] || ''
 })
 const creating = ref(false)
+const saving = ref(false)
 const creationError = ref(null) // { message, log, copied }
 
 // Pre-flight connectivity warning state.
@@ -2315,6 +2322,94 @@ function buildGameConfigs() {
 
   return games
 }
+
+// ── Edit mode: load + save ────────────────────────────────────────
+const SIDE_TYPES = new Set(['skins', 'dots', 'snake', 'fidget', 'bbn', 'bbb', 'match1v1'])
+
+function _loadEditGames() {
+  form.value.players = roundsStore.activeMembers.map(m => ({
+    id: m.id,
+    short_name: m.short_name,
+    full_name: m.full_name,
+    handicap_index: m.handicap_index,
+    ghinIndex: m.handicap_index ?? null,
+  }))
+
+  const games = roundsStore.activeGames
+  const mainRow = games.find(g => !SIDE_TYPES.has(g.type) && !(g.type === 'nassau' && g.config?._sideMatch))
+  if (mainRow) {
+    mainGame.value = { type: mainRow.type, config: { ...mainRow.config } }
+    showMainGrid.value = false
+  } else {
+    mainGame.value = { type: 'none', config: {} }
+    showMainGrid.value = true
+  }
+
+  const sg = sideGames.value
+  const skinsRow = games.find(g => g.type === 'skins')
+  if (skinsRow) { sg.skins.enabled = true; sg.skins.ppt = skinsRow.config?.ppt ?? 5; sg.skins.carry = skinsRow.config?.carry ?? true }
+
+  const dotsRow = games.find(g => g.type === 'dots')
+  if (dotsRow) { sg.dots.enabled = true; Object.assign(sg.dots, dotsRow.config) }
+
+  const snakeRow = games.find(g => g.type === 'snake')
+  if (snakeRow) { sg.snake.enabled = true; sg.snake.ppt = snakeRow.config?.ppt ?? 5 }
+
+  const fidgetRow = games.find(g => g.type === 'fidget')
+  if (fidgetRow) { sg.fidget.enabled = true; sg.fidget.ppp = fidgetRow.config?.ppp ?? 10 }
+
+  const bbbRow = games.find(g => g.type === 'bbb')
+  if (bbbRow) { sg.bbb.enabled = true; sg.bbb.ppt = bbbRow.config?.ppt ?? 1; sg.bbb.doubleBongo = bbbRow.config?.doubleBongo ?? false }
+
+  const sideMatches = games.filter(g => g.type === 'match1v1' || (g.type === 'nassau' && g.config?._sideMatch))
+  sideMatches.forEach((smg, idx) => {
+    const key = idx === 0 ? 'match1' : 'match2'
+    const m = sg[key]
+    m.enabled = true
+    if (smg.type === 'nassau') {
+      m.scoring = 'nassau'; m.player1 = smg.config?.team1?.[0] || ''; m.player2 = smg.config?.team2?.[0] || ''
+      m.front = smg.config?.front ?? 10; m.back = smg.config?.back ?? 10; m.overall = smg.config?.overall ?? 20; m.pressAt = smg.config?.pressAt ?? 2
+    } else {
+      m.scoring = smg.config?.scoring || 'closeout'; m.player1 = smg.config?.player1 || ''; m.player2 = smg.config?.player2 || ''; m.ppt = smg.config?.ppt ?? 10
+    }
+  })
+
+  const bbnRows = games.filter(g => g.type === 'bbn')
+  if (bbnRows.length) {
+    sg.bbn.enabled = true
+    bbnTrackers.value = bbnRows.map((g, i) => ({ id: i + 1, ballsToCount: g.config?.ballsToCount ?? 1, scoring: g.config?.scoring ?? 'net' }))
+    bbnNextId = bbnRows.length + 1
+  }
+}
+
+async function saveEditedGames() {
+  if (saving.value) return
+  saving.value = true
+  try {
+    const newConfigs = buildGameConfigs()
+    const existing = [...roundsStore.activeGames]
+    const matched = new Set()
+    for (const nc of newConfigs) {
+      const idx = existing.findIndex((eg, i) => !matched.has(i) && eg.type === nc.type)
+      if (idx >= 0) {
+        matched.add(idx)
+        await roundsStore.updateGameConfig(existing[idx].id, nc.config)
+      } else {
+        await roundsStore.saveGameConfig({ type: nc.type, config: nc.config, round_id: roundsStore.activeRound.id })
+      }
+    }
+    for (let i = 0; i < existing.length; i++) {
+      if (!matched.has(i)) await roundsStore.deleteGameConfig(existing[i].id)
+    }
+    emit('close')
+  } catch (e) {
+    console.error('[editGames] save error', e)
+  } finally {
+    saving.value = false
+  }
+}
+
+onMounted(() => { if (props.editMode) _loadEditGames() })
 
 // ── Create round ─────────────────────────────────────────────────
 function _wizLog(msg) {

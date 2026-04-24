@@ -250,7 +250,7 @@
       </div>
 
       <!-- ── Game Editor Overlay ────────────────────────────────── -->
-      <GameEditorOverlay :show="showGameEditor" :game-icon="gameIcon" :game-label="gameLabel" @close="showGameEditor = false" />
+      <WizardOverlay v-if="showGameEditor" edit-mode @close="showGameEditor = false" />
 
       <!-- ── Retro score overlay (bulk-enter scores from paper card) ── -->
       <RetroScoreOverlay
@@ -487,24 +487,16 @@
                   </template>
                   <template v-else>
                     <td v-for="h in frontHoles" :key="'gn-'+ri+'-'+h"
-                        class="col-notation-cell" :class="[row.cells[h]?.cls || '', { 'nota-cell-active': mathCell?.ri === ri && mathCell?.hole === h }]"
-                        v-html="row.cells[h]?.text || ''"
-                        @click.stop="toggleMathCell(ri, h)"></td>
+                        class="col-notation-cell" :class="row.cells[h]?.cls || ''"
+                        v-html="row.cells[h]?.text || ''"></td>
                     <td v-if="hasBack9" class="col-subtotal col-notation-sub" v-html="row.outSummary || ''"></td>
                     <td v-for="h in backHoles" :key="'gn-'+ri+'-'+h"
-                        class="col-notation-cell" :class="[row.cells[h]?.cls || '', { 'nota-cell-active': mathCell?.ri === ri && mathCell?.hole === h }]"
-                        v-html="row.cells[h]?.text || ''"
-                        @click.stop="toggleMathCell(ri, h)"></td>
+                        class="col-notation-cell" :class="row.cells[h]?.cls || ''"
+                        v-html="row.cells[h]?.text || ''"></td>
                     <td v-if="hasBack9" class="col-subtotal col-notation-sub" v-html="row.inSummary || ''"></td>
                     <td class="col-total col-notation-total" v-html="row.totalSummary || ''"></td>
                     <td class="col-total col-notation-total" v-html="row.netSummary || ''"></td>
                   </template>
-                </tr>
-                <tr v-if="mathCell?.ri === ri && mathCellLines.length" class="row-math-detail">
-                  <td class="col-sticky col-notation-label nota-math-hole">H{{ mathCell.hole }}</td>
-                  <td :colspan="frontHoles.length + (hasBack9 ? backHoles.length + 2 : 0) + 2" class="nota-math-body">
-                    <span v-for="(line, li) in mathCellLines" :key="li" class="nota-math-line">{{ line }}</span>
-                  </td>
                 </tr>
               </template>
             </tfoot>
@@ -1002,7 +994,7 @@ import { useCoursesStore } from '../stores/courses'
 import { useRosterStore, displayName as rosterDisplayName, displayInitials as rosterDisplayInitials } from '../stores/roster'
 import { shareScorecard, shareRecap } from '../modules/scorecardShare'
 import CrossMatchBanner from '../components/CrossMatchBanner.vue'
-import GameEditorOverlay from '../components/GameEditorOverlay.vue'
+import WizardOverlay from '../components/WizardOverlay.vue'
 import RetroScoreOverlay from '../components/RetroScoreOverlay.vue'
 import { useScorecardHelpers } from '../composables/useScorecardHelpers'
 import { useGameNotation } from '../composables/useGameNotation'
@@ -1623,23 +1615,7 @@ function toggleNotationRow(ri) {
   const s = new Set(expandedNotationRows.value)
   s.has(ri) ? s.delete(ri) : s.add(ri)
   expandedNotationRows.value = s
-  if (mathCell.value?.ri === ri && !s.has(ri)) mathCell.value = null
 }
-
-const mathCell = ref(null) // { ri, hole }
-function toggleMathCell(ri, hole) {
-  if (mathCell.value?.ri === ri && mathCell.value?.hole === hole) {
-    mathCell.value = null
-  } else {
-    mathCell.value = { ri, hole }
-  }
-}
-const mathCellLines = computed(() => {
-  if (!mathCell.value) return []
-  const row = gameNotationRows.value[mathCell.value.ri]
-  if (!row?.game) return []
-  return holeMathLines(row.game, mathCell.value.hole)
-})
 
 const holeGameMath = computed(() => {
   const result = []

@@ -87,13 +87,17 @@ export function useHoleMath({ buildCtx, pInit, teamInitialsStr }) {
     const t2n = teamInitialsStr(cfg.team2 || []) || 'T2'
     const ppt = cfg.ppt || 1
     const dollars = hr.diff * ppt
-    const star = hr.variant ? ' ★' : ''
-    const multStr = hr.multiplier > 1 ? ` ×${hr.multiplier}` : ''
     const dollarStr = dollars > 0 ? `$${dollars} → ${t1n}` : dollars < 0 ? `($${Math.abs(dollars)}) → ${t2n}` : 'Even'
-    return [
-      `${t1n}: ${hr.t1Num} · ${t2n}: ${hr.t2Num}${star}`,
-      `diff ${hr.diff}${multStr} × $${ppt} = ${dollarStr}`,
-    ]
+    const lines = [`${t1n}: ${hr.t1Num} · ${t2n}: ${hr.t2Num}`]
+    if (hr.flipReason) {
+      const who = hr.flipReason.startsWith('t1') ? t1n : t2n
+      const what = hr.flipReason.endsWith('eagle') ? 'net eagle → flip+×2' : hr.flipReason.endsWith('dbl') ? 'dbl birdie → ×2' : 'net birdie → flip'
+      lines.push(`${who} ${what}: diff ${hr.diff} ×${hr.multiplier} × $${ppt} = ${dollarStr}`)
+    } else {
+      const multStr = hr.multiplier > 1 ? ` ×${hr.multiplier}` : ''
+      lines.push(`diff ${hr.diff}${multStr} × $${ppt} = ${dollarStr}`)
+    }
+    return lines
   }
 
   function _skins(ctx, cfg, hole) {

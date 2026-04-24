@@ -921,31 +921,31 @@ export function computeVegas(ctx, config) {
       else if (t2HasPenalty && !t1HasPenalty) { n2 = flipNumber(n2); anyVariant = true }
     }
 
-    // Birdie/Eagle flip logic — always use gross score so handicap strokes
-    // don't accidentally convert a gross birdie into a net eagle (×2).
-    const t1BirdieCount = t1.filter(m => { const g = getScore(ctx, m.id, h); return g != null && g <= par - 1 }).length
-    const t2BirdieCount = t2.filter(m => { const g = getScore(ctx, m.id, h); return g != null && g <= par - 1 }).length
-    const t1HasEagle = eagleFlip && t1.some(m => { const g = getScore(ctx, m.id, h); return g != null && g <= par - 2 })
-    const t2HasEagle = eagleFlip && t2.some(m => { const g = getScore(ctx, m.id, h); return g != null && g <= par - 2 })
+    // Birdie/Eagle flip logic uses net scores (playerScore) — net Vegas uses net birdies/eagles.
+    const t1BirdieCount = t1.filter(m => { const n = playerScore(m, h); return n != null && n <= par - 1 }).length
+    const t2BirdieCount = t2.filter(m => { const n = playerScore(m, h); return n != null && n <= par - 1 }).length
+    const t1HasEagle = eagleFlip && t1.some(m => { const n = playerScore(m, h); return n != null && n <= par - 2 })
+    const t2HasEagle = eagleFlip && t2.some(m => { const n = playerScore(m, h); return n != null && n <= par - 2 })
 
+    let flipReason = null
     if (t1HasEagle && !t2HasEagle) {
-      n2 = flipNumber(n2); holeMultiplier = 2; anyVariant = true  // eagle = flip + double
+      n2 = flipNumber(n2); holeMultiplier = 2; anyVariant = true; flipReason = 't1eagle'
     } else if (t2HasEagle && !t1HasEagle) {
-      n1 = flipNumber(n1); holeMultiplier = 2; anyVariant = true
+      n1 = flipNumber(n1); holeMultiplier = 2; anyVariant = true; flipReason = 't2eagle'
     } else if (birdieFlip) {
       const t1HasBirdie = t1BirdieCount > 0
       const t2HasBirdie = t2BirdieCount > 0
-      if (t1HasBirdie && !t2HasBirdie) { n2 = flipNumber(n2); anyVariant = true }
-      else if (t2HasBirdie && !t1HasBirdie) { n1 = flipNumber(n1); anyVariant = true }
+      if (t1HasBirdie && !t2HasBirdie) { n2 = flipNumber(n2); anyVariant = true; flipReason = 't1birdie' }
+      else if (t2HasBirdie && !t1HasBirdie) { n1 = flipNumber(n1); anyVariant = true; flipReason = 't2birdie' }
     }
 
     // Double-birdie: both teammates birdie = double the diff
-    if (doubleBirdie && t1BirdieCount >= 2) { holeMultiplier = Math.max(holeMultiplier, 2); anyVariant = true }
-    if (doubleBirdie && t2BirdieCount >= 2) { holeMultiplier = Math.max(holeMultiplier, 2); anyVariant = true }
+    if (doubleBirdie && t1BirdieCount >= 2) { holeMultiplier = Math.max(holeMultiplier, 2); anyVariant = true; if (!flipReason) flipReason = 't1dbl' }
+    if (doubleBirdie && t2BirdieCount >= 2) { holeMultiplier = Math.max(holeMultiplier, 2); anyVariant = true; if (!flipReason) flipReason = 't2dbl' }
 
     const diff = (n2 - n1) * holeMultiplier
     t1Total += diff
-    holeResults.push({ hole: h, t1Num: n1, t2Num: n2, diff, multiplier: holeMultiplier, variant: anyVariant })
+    holeResults.push({ hole: h, t1Num: n1, t2Num: n2, diff, multiplier: holeMultiplier, variant: anyVariant, flipReason })
   }
 
   const t1Net = t1Total * ppt
