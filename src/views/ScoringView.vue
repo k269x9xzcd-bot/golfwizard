@@ -277,6 +277,7 @@
               <div class="rpr-left">
                 <span class="rpr-course">{{ kr.courseName }}</span>
                 <span class="rpr-meta">{{ kr.holesMode }}h · {{ kr.date }}</span>
+                <span v-if="kr.players" class="rpr-players">{{ kr.players }}</span>
               </div>
               <span v-if="kr.id === roundsStore.activeRound?.id" class="rpr-active-dot">✓</span>
             </button>

@@ -79,12 +79,16 @@ export const useRoundsStore = defineStore('rounds', () => {
   function _registerKnownRound(round) {
     if (!round?.id || String(round.id).startsWith('guest_')) return
     const list = _loadKnownList()
+    const memberNames = activeMembers.value.length
+      ? activeMembers.value.map(m => m.short_name || m.full_name?.split(' ')[0] || '?').join(', ')
+      : ''
     const entry = {
       id: round.id,
       courseName: round.course_name,
       date: round.date,
       holesMode: round.holes_mode || '18',
       isComplete: !!round.is_complete,
+      players: memberNames,
     }
     const idx = list.findIndex(r => r.id === round.id)
     if (idx >= 0) list[idx] = entry
