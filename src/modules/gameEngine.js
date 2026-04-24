@@ -921,11 +921,12 @@ export function computeVegas(ctx, config) {
       else if (t2HasPenalty && !t1HasPenalty) { n2 = flipNumber(n2); anyVariant = true }
     }
 
-    // Birdie/Eagle flip logic
-    const t1BirdieCount = t1.filter(m => { const n = playerScore(m, h); return n != null && n <= par - 1 }).length
-    const t2BirdieCount = t2.filter(m => { const n = playerScore(m, h); return n != null && n <= par - 1 }).length
-    const t1HasEagle = eagleFlip && t1.some(m => { const n = playerScore(m, h); return n != null && n <= par - 2 })
-    const t2HasEagle = eagleFlip && t2.some(m => { const n = playerScore(m, h); return n != null && n <= par - 2 })
+    // Birdie/Eagle flip logic — always use gross score so handicap strokes
+    // don't accidentally convert a gross birdie into a net eagle (×2).
+    const t1BirdieCount = t1.filter(m => { const g = getScore(ctx, m.id, h); return g != null && g <= par - 1 }).length
+    const t2BirdieCount = t2.filter(m => { const g = getScore(ctx, m.id, h); return g != null && g <= par - 1 }).length
+    const t1HasEagle = eagleFlip && t1.some(m => { const g = getScore(ctx, m.id, h); return g != null && g <= par - 2 })
+    const t2HasEagle = eagleFlip && t2.some(m => { const g = getScore(ctx, m.id, h); return g != null && g <= par - 2 })
 
     if (t1HasEagle && !t2HasEagle) {
       n2 = flipNumber(n2); holeMultiplier = 2; anyVariant = true  // eagle = flip + double
