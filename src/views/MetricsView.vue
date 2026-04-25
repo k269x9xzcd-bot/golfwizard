@@ -123,19 +123,25 @@
 
         <!-- Head-to-head -->
         <div class="section" v-if="h2hRecords.length">
-          <div class="section-title">Head-to-Head</div>
+          <div class="section-title">Head-to-Head (Net)</div>
           <div class="h2h-list">
             <div v-for="h in h2hRecords" :key="h.opponentId" class="h2h-row">
               <div class="h2h-name">{{ h.opponentName }}</div>
-              <div class="h2h-record">
-                <span class="h2h-win">{{ h.wins }}W</span>
-                <span class="h2h-sep">–</span>
-                <span class="h2h-loss">{{ h.losses }}L</span>
-                <span class="h2h-sep">–</span>
-                <span class="h2h-tie">{{ h.ties }}T</span>
-              </div>
-              <div class="h2h-diff" :class="{ positive: h.avgDiff < 0, negative: h.avgDiff > 0 }">
-                {{ h.avgDiff > 0 ? '+' : '' }}{{ h.avgDiff.toFixed(1) }}
+              <div class="h2h-right">
+                <div class="h2h-record">
+                  <span class="h2h-win">{{ h.wins }}W</span>
+                  <span class="h2h-sep">–</span>
+                  <span class="h2h-loss">{{ h.losses }}L</span>
+                  <span v-if="h.ties" class="h2h-sep">–{{ h.ties }}T</span>
+                </div>
+                <div class="h2h-sub-row">
+                  <span class="h2h-diff" :class="{ positive: h.avgNetDiff < 0, negative: h.avgNetDiff > 0 }">
+                    avg {{ h.avgNetDiff > 0 ? '+' : '' }}{{ h.avgNetDiff }} net
+                  </span>
+                  <span v-if="h.moneyRounds > 0" class="h2h-money" :class="{ positive: h.moneyNet > 0, negative: h.moneyNet < 0 }">
+                    {{ h.moneyNet > 0 ? '+' : '' }}${{ Math.abs(h.moneyNet) }}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -517,10 +523,10 @@ const gamesTotalNet = computed(() => {
   return Math.round(gameStats.value.reduce((s, g) => s + g.net, 0) * 100) / 100
 })
 
-// ── Head-to-head ────────────────────────────────────────────
+// ── Head-to-head (Net) ───────────────────────────────────────
 const h2hRecords = computed(() => {
   if (!selectedPlayer.value) return []
-  const opponents = new Map() // opponentKey → { wins, losses, ties, totalDiff, count, name }
+  const opponents = new Map()
 
   for (const r of allRounds.value) {
     if (selectedCourse.value && r.course_name !== selectedCourse.value) continue
@@ -528,27 +534,46 @@ const h2hRecords = computed(() => {
     if (!me) continue
 
     const scores = r.scores || []
-    const myScores = scores.filter(s => s.member_id === me.id)
-    const myTotal = myScores.reduce((s, sc) => s + (sc.score ?? sc.strokes ?? 0), 0)
-    if (!myTotal) continue
+    const myGross = scores.filter(s => s.member_id === me.id).reduce((sum, s) => sum + (s.score ?? 0), 0)
+    if (!myGross) continue
+
+    const myStrokes = me.stroke_override ?? me.round_hcp ?? 0
+    const myNet = myGross - myStrokes
+
+    // Money for this round (my total from settlement)
+    const myMoney = settlementsMap.value[r.id]?.playerTotals?.[me.id]?.total ?? null
 
     for (const opp of (r.round_members || [])) {
       if ((opp.profile_id || opp.id) === selectedPlayer.value) continue
       const oppKey = opp.profile_id || opp.id
-      const oppScores = scores.filter(s => s.member_id === opp.id)
-      const oppTotal = oppScores.reduce((s, sc) => s + (sc.score ?? sc.strokes ?? 0), 0)
-      if (!oppTotal) continue
+
+      const oppGross = scores.filter(s => s.member_id === opp.id).reduce((sum, s) => sum + (s.score ?? 0), 0)
+      if (!oppGross) continue
+
+      const oppStrokes = opp.stroke_override ?? opp.round_hcp ?? 0
+      const oppNet = oppGross - oppStrokes
 
       if (!opponents.has(oppKey)) {
-        opponents.set(oppKey, { wins: 0, losses: 0, ties: 0, totalDiff: 0, count: 0, opponentName: opp.short_name || opp.guest_name || '?' })
+        opponents.set(oppKey, {
+          wins: 0, losses: 0, ties: 0,
+          totalNetDiff: 0, count: 0,
+          moneyNet: 0, moneyRounds: 0,
+          opponentName: opp.short_name || opp.guest_name || '?'
+        })
       }
       const rec = opponents.get(oppKey)
       rec.count++
-      const diff = myTotal - oppTotal
-      rec.totalDiff += diff
+      const diff = myNet - oppNet
+      rec.totalNetDiff += diff
       if (diff < 0) rec.wins++
       else if (diff > 0) rec.losses++
       else rec.ties++
+
+      // Money
+      if (myMoney !== null) {
+        rec.moneyNet += myMoney
+        rec.moneyRounds++
+      }
     }
   }
 
@@ -560,9 +585,11 @@ const h2hRecords = computed(() => {
       wins: v.wins,
       losses: v.losses,
       ties: v.ties,
-      avgDiff: v.count ? v.totalDiff / v.count : 0,
+      avgNetDiff: v.count ? +(v.totalNetDiff / v.count).toFixed(1) : 0,
+      moneyNet: Math.round(v.moneyNet),
+      moneyRounds: v.moneyRounds,
     }))
-    .sort((a, b) => b.wins - a.wins || a.avgDiff - b.avgDiff)
+    .sort((a, b) => b.wins - a.wins || a.avgNetDiff - b.avgNetDiff)
 })
 
 // ── Helpers ─────────────────────────────────────────────────
@@ -866,8 +893,9 @@ function formatToPar(r) {
 }
 .h2h-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
+  justify-content: space-between;
   padding: 10px 14px;
   background: var(--gw-green-800, #0d3325);
   border-radius: 10px;
@@ -878,6 +906,17 @@ function formatToPar(r) {
   font-size: 14px;
   font-weight: 600;
   color: var(--gw-text, #f0ede0);
+}
+.h2h-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+.h2h-sub-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 .h2h-record {
   display: flex;
@@ -890,14 +929,18 @@ function formatToPar(r) {
 .h2h-tie { color: var(--gw-text-muted); }
 .h2h-sep { color: rgba(255,255,255,0.2); }
 .h2h-diff {
-  font-family: var(--gw-font-mono);
-  font-size: 13px;
-  font-weight: 700;
-  min-width: 40px;
-  text-align: right;
+  font-size: 11px;
+  color: var(--gw-text-muted, #7d9283);
 }
 .h2h-diff.positive { color: #86efac; }
 .h2h-diff.negative { color: #fca5a5; }
+.h2h-money {
+  font-family: var(--gw-font-mono);
+  font-size: 13px;
+  font-weight: 700;
+}
+.h2h-money.positive { color: #86efac; }
+.h2h-money.negative { color: #fca5a5; }
 
 /* Game rows */
 .game-row-left {
