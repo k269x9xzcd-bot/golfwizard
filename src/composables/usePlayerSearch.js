@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import { supabase } from '../supabase'
+import { useAuthStore } from '../stores/auth'
 
 /**
  * usePlayerSearch — cascading search across roster, BB member index, and GHIN API.
@@ -11,6 +12,7 @@ export function usePlayerSearch(rosterPlayers) {
   const query = ref('')
   const bbResults = ref([])
   const ghinResult = ref(null)
+  const ghinResults = ref([])  // multiple GHIN matches
   const searching = ref(false)
 
   let _debounceTimer = null
@@ -59,7 +61,7 @@ export function usePlayerSearch(rosterPlayers) {
   const results = computed(() => ({
     roster: rosterMatches.value,
     bb: bbFiltered.value,
-    ghin: ghinResult.value ? [ghinResult.value] : [],
+    ghin: ghinResults.value.length ? ghinResults.value : (ghinResult.value ? [ghinResult.value] : []),
   }))
 
   const hasResults = computed(() => {
@@ -72,6 +74,7 @@ export function usePlayerSearch(rosterPlayers) {
     query.value = val
     bbResults.value = []
     ghinResult.value = null
+    ghinResults.value = []
 
     const q = val.trim()
     if (!q || q.length < 2) return
@@ -128,6 +131,56 @@ export function usePlayerSearch(rosterPlayers) {
       isFavorite: false,
       source: 'bb',
     }))
+
+    // If no BB results, try GHIN name search as fallback
+    if (bbResults.value.length === 0 && _lastQuery === query.value.trim()) {
+      await _ghinNameSearch(q)
+    }
+  }
+
+  async function _ghinNameSearch(q) {
+    const authStore = useAuthStore()
+    const profile = authStore.profile
+    if (!profile?.ghin_number || !profile?.ghin_password) return
+    if (_lastQuery !== query.value.trim()) return
+
+    try {
+      const { data, error } = await supabase.functions.invoke('ghin-player-search', {
+        body: {
+          ghin_number: profile.ghin_number,
+          password: profile.ghin_password,
+          query: q,
+        },
+      })
+      if (error || !data?.results?.length) return
+      if (_lastQuery !== query.value.trim()) return
+
+      // Map to ghinResult array — filter out anyone already in the roster
+      const rosterNames = new Set(rosterPlayers.value.map(p => p.name?.toLowerCase()))
+      const rosterGhins = new Set(rosterPlayers.value.map(p => p.ghin_number).filter(Boolean))
+
+      const mapped = data.results
+        .filter(g => !rosterGhins.has(g.ghin_number) && !rosterNames.has(g.full_name?.toLowerCase()))
+        .map(g => ({
+          id: `ghin_${g.ghin_number}`,
+          name: g.full_name,
+          shortName: g.last_name,
+          ghinIndex: g.handicap_index,
+          ghinNumber: g.ghin_number,
+          ghinSyncedAt: null,
+          isFavorite: false,
+          club: g.club_name,
+          source: 'ghin',
+        }))
+
+      if (mapped.length === 1) {
+        ghinResult.value = mapped[0]
+      } else if (mapped.length > 1) {
+        // Store multiple results — use first as primary, rest as extras
+        ghinResult.value = mapped[0]
+        ghinResults.value = mapped
+      }
+    } catch { /* silent — GHIN search is best-effort */ }
   }
 
   async function _ghinNumberLookup(ghinNumber) {
@@ -179,6 +232,7 @@ export function usePlayerSearch(rosterPlayers) {
     query.value = ''
     bbResults.value = []
     ghinResult.value = null
+    ghinResults.value = []
     searching.value = false
     clearTimeout(_debounceTimer)
   }

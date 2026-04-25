@@ -247,10 +247,10 @@
             </div>
           </template>
 
-          <!-- GHIN lookup result -->
+          <!-- GHIN name search results -->
           <template v-if="psResults.ghin.length">
             <div class="ps-section-label">
-              <span>GHIN Lookup</span>
+              <span>GHIN Search</span>
               <span class="ps-section-badge">GHIN</span>
             </div>
             <div
@@ -261,7 +261,11 @@
             >
               <div class="ps-row-info">
                 <span class="ps-row-name">{{ r.name }}</span>
-                <span class="ps-row-meta">idx {{ r.ghinIndex ?? 'NH' }} · #{{ r.ghinNumber }}</span>
+                <span class="ps-row-meta">
+                  idx {{ r.ghinIndex ?? 'NH' }}
+                  <span v-if="r.club"> · {{ r.club }}</span>
+                  <span class="ps-ghin-num"> · #{{ r.ghinNumber }}</span>
+                </span>
               </div>
               <span class="ps-row-action">+</span>
             </div>
