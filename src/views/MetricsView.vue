@@ -57,6 +57,7 @@
       <div class="tab-bar">
         <button class="tab-btn" :class="{ active: activeTab === 'scoring' }" @click="activeTab = 'scoring'">Scoring</button>
         <button class="tab-btn" :class="{ active: activeTab === 'games' }" @click="activeTab = 'games'">Games</button>
+        <button class="tab-btn" :class="{ active: activeTab === 'course' }" @click="activeTab = 'course'">Course</button>
       </div>
 
       <!-- ── SCORING TAB ── -->
@@ -114,8 +115,18 @@
                 <div class="recent-date">{{ formatDate(r.date) }}</div>
               </div>
               <div class="recent-right">
-                <div class="recent-score" :class="scoreToPar(r)">{{ r.total }}</div>
-                <div class="recent-to-par">{{ formatToPar(r) }}</div>
+                <div class="recent-scores-row">
+                  <div class="recent-score-block">
+                    <div class="recent-score-label">Gross</div>
+                    <div class="recent-score" :class="scoreToPar(r)">{{ r.total }}</div>
+                    <div class="recent-to-par">{{ formatToPar(r) }}</div>
+                  </div>
+                  <div class="recent-score-block">
+                    <div class="recent-score-label">Net</div>
+                    <div class="recent-score" :class="netScoreToPar(r)">{{ r.total - (r.strokes || 0) }}</div>
+                    <div class="recent-to-par">{{ formatNetToPar(r) }}</div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -220,6 +231,106 @@
           </div>
         </template>
       </template>
+
+      <!-- ── COURSE TAB ── -->
+      <div v-if="activeTab === 'course'">
+        <!-- Course selector -->
+        <div class="selector-section" v-if="courseNames.length > 1">
+          <label class="selector-label">Course</label>
+          <div class="pill-row">
+            <button
+              v-for="c in courseNames"
+              :key="c"
+              class="pill"
+              :class="{ active: (selectedCourse || courseNames[0]) === c }"
+              @click="selectedCourse = c"
+            >{{ c }}</button>
+          </div>
+        </div>
+
+        <div v-if="!courseHoleStats" class="empty-state" style="padding: 40px 0;">
+          <div class="empty-icon">⛳</div>
+          <div class="empty-title" style="font-size:16px;">No course data yet</div>
+          <div class="empty-sub">Play some rounds to see hole-by-hole stats.</div>
+        </div>
+
+        <template v-else>
+          <div class="section-header-row">
+            <div class="section-title">{{ courseHoleStats.courseName }}</div>
+            <div class="section-sub">{{ courseHoleStats.roundCount }} round{{ courseHoleStats.roundCount !== 1 ? 's' : '' }}</div>
+          </div>
+
+          <!-- Hole grid header -->
+          <div class="hole-grid-header">
+            <span class="hg-hole">Hole</span>
+            <span class="hg-par">Par</span>
+            <span class="hg-si">SI</span>
+            <span class="hg-yds">Yds</span>
+            <span class="hg-avg">Avg</span>
+            <span class="hg-net">Net</span>
+            <span class="hg-best">Best</span>
+          </div>
+
+          <div class="hole-grid-body">
+            <div
+              v-for="h in courseHoleStats.holes"
+              :key="h.holeNum"
+              class="hole-grid-row"
+              :class="{ 'front-nine': h.holeNum <= 9, 'back-nine': h.holeNum > 9 }"
+            >
+              <span class="hg-hole">{{ h.holeNum }}</span>
+              <span class="hg-par">{{ h.holePar }}</span>
+              <span class="hg-si">{{ h.holeSI }}</span>
+              <span class="hg-yds">{{ h.holeYards || '—' }}</span>
+              <template v-if="h.noData">
+                <span class="hg-avg">—</span>
+                <span class="hg-net">—</span>
+                <span class="hg-best">—</span>
+              </template>
+              <template v-else>
+                <span class="hg-avg" :class="diffClass(h.avgVsPar)">
+                  {{ h.avgVsPar > 0 ? '+' : '' }}{{ h.avgVsPar.toFixed(1) }}
+                </span>
+                <span class="hg-net" :class="diffClass(h.avgNetVsPar)">
+                  {{ h.avgNetVsPar > 0 ? '+' : '' }}{{ h.avgNetVsPar.toFixed(1) }}
+                </span>
+                <span class="hg-best" :class="bestScoreClass(h.bestGross, h.holePar)">
+                  {{ h.bestGross }}
+                </span>
+              </template>
+            </div>
+          </div>
+
+          <!-- Hardest / Easiest holes summary -->
+          <div class="section" style="margin-top: 16px;">
+            <div class="section-title">Hardest Holes (vs Par)</div>
+            <div class="h2h-list">
+              <div
+                v-for="h in [...courseHoleStats.holes].filter(h => !h.noData).sort((a,b) => b.avgVsPar - a.avgVsPar).slice(0, 3)"
+                :key="h.holeNum"
+                class="h2h-row"
+              >
+                <div class="h2h-name">Hole {{ h.holeNum }} · Par {{ h.holePar }} · SI {{ h.holeSI }}</div>
+                <div class="hg-avg negative">+{{ h.avgVsPar.toFixed(2) }}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Best Holes (vs Par)</div>
+            <div class="h2h-list">
+              <div
+                v-for="h in [...courseHoleStats.holes].filter(h => !h.noData).sort((a,b) => a.avgVsPar - b.avgVsPar).slice(0, 3)"
+                :key="h.holeNum"
+                class="h2h-row"
+              >
+                <div class="h2h-name">Hole {{ h.holeNum }} · Par {{ h.holePar }} · SI {{ h.holeSI }}</div>
+                <div class="hg-avg" :class="diffClass(h.avgVsPar)">{{ h.avgVsPar > 0 ? '+' : '' }}{{ h.avgVsPar.toFixed(2) }}</div>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
     </template>
   </div>
 </template>
@@ -258,7 +369,7 @@ onMounted(async () => {
   loading.value = false
 })
 
-// ── Player list ─────────────────────────────────────────────
+// ── Player list ──────────────────────────────────────
 function extractPlayers() {
   const map = new Map()
   for (const r of allRounds.value) {
@@ -337,13 +448,14 @@ const playerRounds = computed(() => {
       coursePar,
       pars, birdies, eagles, bogeys, doubles, triples,
       memberId: m.id,
+      strokes: m.stroke_override ?? m.round_hcp ?? 0,
     })
   }
   results.sort((a, b) => (b.date || '').localeCompare(a.date || ''))
   return results
 })
 
-// ── Aggregate stats ─────────────────────────────────────────
+// ── Aggregate stats ─────────────────────────────────────
 const playerStats = computed(() => {
   const rounds = playerRounds.value
   if (!rounds.length) return null
@@ -403,7 +515,7 @@ const playerStats = computed(() => {
   }
 })
 
-// ── Game type label map ──────────────────────────────────────
+// ── Game type label map ─────────────────────────────────
 const GAME_LABELS = {
   skins: 'Skins',
   nassau: 'Nassau',
@@ -421,7 +533,7 @@ function gameLabel(type) {
   return GAME_LABELS[type] || (type ? type.charAt(0).toUpperCase() + type.slice(1) : 'Unknown')
 }
 
-// ── Games tab computed data ──────────────────────────────────
+// ── Games tab computed data ─────────────────────────────
 const gameStats = computed(() => {
   if (!selectedPlayer.value) return []
   const byType = new Map() // type → { rounds, wins, losses, pushes, net }
@@ -483,7 +595,7 @@ const gameStats = computed(() => {
     .sort((a, b) => b.rounds - a.rounds)
 })
 
-// ── Wolf lone-wolf specific stats ────────────────────────────
+// ── Wolf lone-wolf specific stats ────────────────────────
 const wolfStats = computed(() => {
   if (!selectedPlayer.value) return null
   let attempts = 0, wins = 0, losses = 0, net = 0
@@ -523,7 +635,7 @@ const gamesTotalNet = computed(() => {
   return Math.round(gameStats.value.reduce((s, g) => s + g.net, 0) * 100) / 100
 })
 
-// ── Head-to-head (Net) ───────────────────────────────────────
+// ── Head-to-head (Net) ───────────────────────────────────
 const h2hRecords = computed(() => {
   if (!selectedPlayer.value) return []
   const opponents = new Map()
@@ -592,7 +704,104 @@ const h2hRecords = computed(() => {
     .sort((a, b) => b.wins - a.wins || a.avgNetDiff - b.avgNetDiff)
 })
 
-// ── Helpers ─────────────────────────────────────────────────
+// ── Course tab computeds ────────────────────────────────
+const courseNames = computed(() => {
+  const set = new Set()
+  for (const r of allRounds.value) {
+    if (r.course_name) set.add(r.course_name)
+  }
+  return Array.from(set).sort()
+})
+
+const courseHoleStats = computed(() => {
+  if (!selectedPlayer.value) return null
+
+  // Group rounds by course, filtered to selected player
+  const courseMap = new Map() // courseName → { rounds: [], snapshot }
+
+  for (const r of allRounds.value) {
+    if (!r.course_snapshot?.par) continue
+    const me = findMember(r)
+    if (!me) continue
+    const scores = r.scores || []
+    const myScores = scores.filter(s => s.member_id === me.id)
+    if (!myScores.length) continue
+
+    const name = r.course_name
+    if (!courseMap.has(name)) {
+      courseMap.set(name, { snapshot: r.course_snapshot, tee: r.tee, rounds: [] })
+    }
+    courseMap.get(name).rounds.push({ round: r, member: me, myScores })
+  }
+
+  // Build per-hole stats for selected course
+  const courseName = selectedCourse.value || Array.from(courseMap.keys())[0]
+  if (!courseName || !courseMap.has(courseName)) return null
+
+  const { snapshot, tee, rounds } = courseMap.get(courseName)
+  const par = snapshot.par // array[18]
+  const si = snapshot.si   // array[18]
+  const yards = snapshot.teesData?.[tee]?.yardsByHole || []
+
+  const holes = []
+  for (let h = 0; h < 18; h++) {
+    const holeNum = h + 1
+    const holePar = par[h] || 4
+    const holeSI = si[h] || (h + 1)
+    const holeYards = yards[h] || null
+
+    const holeScores = []
+    const holeNetScores = []
+    let eagles = 0, birdies = 0, pars = 0, bogeys = 0, doubles = 0
+
+    for (const { member, myScores } of rounds) {
+      const scoreRow = myScores.find(s => s.hole === holeNum)
+      if (!scoreRow || scoreRow.score == null) continue
+
+      const gross = scoreRow.score
+      const strokes = member.stroke_override ?? member.round_hcp ?? 0
+      const strokesOnHole = strokes > 18
+        ? (holeSI <= (strokes - 18) ? 2 : holeSI <= strokes ? 1 : 0)
+        : (holeSI <= strokes ? 1 : 0)
+      const net = gross - strokesOnHole
+
+      holeScores.push(gross)
+      holeNetScores.push(net)
+
+      const diff = gross - holePar
+      if (diff <= -2) eagles++
+      else if (diff === -1) birdies++
+      else if (diff === 0) pars++
+      else if (diff === 1) bogeys++
+      else doubles++
+    }
+
+    if (!holeScores.length) {
+      holes.push({ holeNum, holePar, holeSI, holeYards, noData: true })
+      continue
+    }
+
+    const avgGross = holeScores.reduce((s, v) => s + v, 0) / holeScores.length
+    const avgNet = holeNetScores.reduce((s, v) => s + v, 0) / holeNetScores.length
+    const bestGross = Math.min(...holeScores)
+
+    holes.push({
+      holeNum, holePar, holeSI, holeYards,
+      avgGross: +avgGross.toFixed(2),
+      avgNet: +avgNet.toFixed(2),
+      avgVsPar: +(avgGross - holePar).toFixed(2),
+      avgNetVsPar: +(avgNet - holePar).toFixed(2),
+      bestGross,
+      rounds: holeScores.length,
+      eagles, birdies, pars, bogeys, doubles,
+      noData: false
+    })
+  }
+
+  return { courseName, holes, roundCount: rounds.length }
+})
+
+// ── Helpers ─────────────────────────────────────────
 function formatDate(d) {
   if (!d) return ''
   const dt = new Date(d + 'T12:00:00')
@@ -612,6 +821,37 @@ function formatToPar(r) {
   const diff = r.total - r.coursePar
   if (diff === 0) return 'E'
   return diff > 0 ? `+${diff}` : `${diff}`
+}
+
+function netScoreToPar(r) {
+  const net = r.total - (r.strokes || 0)
+  const diff = net - r.coursePar
+  if (diff <= -3) return 'sp-hot'
+  if (diff < 0) return 'sp-under'
+  if (diff === 0) return 'sp-even'
+  if (diff <= 5) return 'sp-over'
+  return 'sp-way-over'
+}
+
+function formatNetToPar(r) {
+  const diff = (r.total - (r.strokes || 0)) - r.coursePar
+  if (diff === 0) return 'E'
+  return diff > 0 ? `+${diff}` : `${diff}`
+}
+
+function diffClass(val) {
+  if (val < -0.1) return 'sp-under'
+  if (val > 0.1) return 'sp-way-over'
+  return 'sp-even'
+}
+
+function bestScoreClass(score, par) {
+  const diff = score - par
+  if (diff <= -2) return 'dist-eagle'
+  if (diff === -1) return 'dist-birdie'
+  if (diff === 0) return 'dist-par'
+  if (diff === 1) return 'dist-bogey'
+  return 'dist-double'
 }
 </script>
 
@@ -861,6 +1101,22 @@ function formatToPar(r) {
 .recent-right {
   text-align: right;
 }
+.recent-scores-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+}
+.recent-score-block {
+  text-align: right;
+}
+.recent-score-label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--gw-text-muted, #7d9283);
+  margin-bottom: 1px;
+}
 .recent-score {
   font-family: var(--gw-font-mono);
   font-size: 20px;
@@ -1000,6 +1256,54 @@ function formatToPar(r) {
   color: var(--gw-text-muted);
   margin-top: 6px;
 }
+
+/* Course tab */
+.section-header-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.section-sub {
+  font-size: 11px;
+  color: var(--gw-text-muted, #7d9283);
+}
+.hole-grid-header, .hole-grid-row {
+  display: grid;
+  grid-template-columns: 28px 28px 28px 40px 46px 46px 36px;
+  gap: 2px;
+  align-items: center;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.hole-grid-header {
+  color: var(--gw-text-muted, #7d9283);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--gw-green-700, #114a35);
+  margin-bottom: 2px;
+}
+.hole-grid-row {
+  background: var(--gw-green-800, #0d3325);
+  border-radius: 6px;
+  margin-bottom: 2px;
+  font-family: var(--gw-font-mono, monospace);
+}
+.hole-grid-row.back-nine {
+  background: rgba(13,51,37,0.6);
+}
+.hg-hole { font-weight: 700; color: var(--gw-text, #f0ede0); }
+.hg-par { color: var(--gw-text-muted, #7d9283); }
+.hg-si { color: var(--gw-text-muted, #7d9283); font-size: 10px; }
+.hg-yds { color: var(--gw-text-muted, #7d9283); font-size: 11px; }
+.hg-avg, .hg-net { font-weight: 700; }
+.hg-best { font-weight: 700; }
+.negative { color: #fca5a5; }
+.sp-under { color: #86efac; }
+.sp-even { color: var(--gw-text, #f0ede0); }
+.sp-way-over { color: #fca5a5; }
 
 @keyframes spin {
   from { transform: rotate(0deg); } to { transform: rotate(360deg); }
