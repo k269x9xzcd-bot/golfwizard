@@ -80,6 +80,70 @@
       </button>
     </div>
 
+    <!-- You section -->
+    <div v-if="myRosterPlayer" class="section-label">You</div>
+    <div v-if="myRosterPlayer" class="player-card player-card--you">
+      <div class="player-info" @click="showGhinSheet = true">
+        <div class="player-name">
+          {{ myRosterPlayer.name }}
+          <span class="you-badge">YOU</span>
+          <span v-if="myRosterPlayer.ghin_index != null" class="player-hcp">
+            ({{ Number(myRosterPlayer.ghin_index).toFixed(1) }}<span class="ghin-dot-inline" :class="ghinSyncStatus(myRosterPlayer)" :title="ghinSyncTitle(myRosterPlayer)"></span>)
+          </span>
+        </div>
+        <div class="player-meta you-meta">
+          <span v-if="myRosterPlayer.ghin_number">GHIN #{{ myRosterPlayer.ghin_number }}</span>
+          <span v-else class="you-no-ghin">No GHIN linked</span>
+          <span v-if="myRosterPlayer.ghin_synced_at" class="you-sync-time"> · Synced {{ ghinSyncTitle(myRosterPlayer) }}</span>
+        </div>
+      </div>
+      <button v-if="myRosterPlayer.ghin_number" class="ghin-sheet-btn" @click.stop="showGhinSheet = true">GHIN</button>
+    </div>
+
+    <!-- GHIN score history sheet -->
+    <Teleport to="body">
+      <div v-if="showGhinSheet" class="ghin-sheet-backdrop" @click.self="showGhinSheet = false">
+        <div class="ghin-sheet-panel">
+          <div class="ghin-sheet-handle"></div>
+          <div class="ghin-sheet-top">
+            <div>
+              <div class="ghin-sheet-name">{{ myRosterPlayer?.name }}</div>
+              <div class="ghin-sheet-meta">
+                <span v-if="myRosterPlayer?.ghin_number">GHIN #{{ myRosterPlayer.ghin_number }}</span>
+                <span v-if="myRosterPlayer?.club_name"> · {{ myRosterPlayer.club_name }}</span>
+              </div>
+            </div>
+            <button class="close-btn" @click="showGhinSheet = false">✕</button>
+          </div>
+          <div class="ghin-stats-grid">
+            <div class="ghin-stat">
+              <div class="ghin-stat-label">Index</div>
+              <div class="ghin-stat-val">{{ myRosterPlayer?.ghin_index != null ? Number(myRosterPlayer.ghin_index).toFixed(1) : '—' }}</div>
+              <div class="ghin-stat-sub">current</div>
+            </div>
+            <div class="ghin-stat">
+              <div class="ghin-stat-label">Last Sync</div>
+              <div class="ghin-stat-val ghin-stat-val--sm">{{ myRosterPlayer?.ghin_synced_at ? ghinSyncDate(myRosterPlayer) : '—' }}</div>
+              <div class="ghin-stat-sub">GHIN update</div>
+            </div>
+            <div class="ghin-stat">
+              <div class="ghin-stat-label">Status</div>
+              <div class="ghin-stat-val ghin-stat-val--sm" :class="ghinSyncStatus(myRosterPlayer) === 'dot-blue' ? 'ghin-stat-fresh' : 'ghin-stat-stale'">
+                {{ ghinSyncStatus(myRosterPlayer) === 'dot-blue' ? 'Fresh' : ghinSyncStatus(myRosterPlayer) === 'dot-red' ? 'Stale' : 'Not synced' }}
+              </div>
+              <div class="ghin-stat-sub">sync status</div>
+            </div>
+          </div>
+          <div class="ghin-sheet-scores-msg">
+            <div class="ghin-scores-note">📊 Score history requires GHIN credentials</div>
+            <div class="ghin-scores-sub">Add your GHIN login in Settings → Profile to view your last 20 rounds here.</div>
+            <button class="btn-ghost btn-sm" style="margin-top:10px;" @click="showGhinSheet = false; $router.push('/settings')">Go to Settings →</button>
+          </div>
+          <div style="height:32px;"></div>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- Favorites section -->
     <div v-if="favoritePlayers.length" class="section-label">
       Favorites <span class="swipe-hint">← delete &nbsp;·&nbsp; unfav →</span>
@@ -413,6 +477,30 @@ function sortByLastName(arr) {
 
 const favoritePlayers = computed(() => sortByLastName(rosterStore.players.filter(p => p.is_favorite)))
 const otherPlayers = computed(() => sortByLastName(rosterStore.players.filter(p => !p.is_favorite)))
+
+// ── You section ─────────────────────────────────────────────
+const showGhinSheet = ref(false)
+const myRosterPlayer = computed(() => {
+  const profile = authStore.profile
+  if (!profile) return null
+  const name = profile.display_name || ''
+  const ghinNum = profile.ghin_number
+  // Match by ghin_number first, then by display_name
+  return rosterStore.players.find(p =>
+    (ghinNum && p.ghin_number && String(p.ghin_number) === String(ghinNum)) ||
+    (name && p.name?.toLowerCase() === name.toLowerCase())
+  ) || null
+})
+
+function ghinSyncDate(p) {
+  if (!p.ghin_synced_at) return '—'
+  const d = new Date(p.ghin_synced_at)
+  const now = new Date()
+  const diffDays = Math.floor((now - d) / (1000 * 60 * 60 * 24))
+  if (diffDays === 0) return 'Today'
+  if (diffDays === 1) return 'Yesterday'
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
 
 
 async function addSearchGhin() {
@@ -855,6 +943,83 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 
 <style scoped>
 .players-view { padding: 16px; padding-bottom: 80px; }
+
+/* ── You card ───────────────────────────────────────────────── */
+.player-card--you {
+  border: 1.5px solid var(--gw-green-400);
+  background: rgba(34, 160, 107, 0.06);
+  margin-bottom: 4px;
+}
+.you-badge {
+  font-size: 9px; font-weight: 800; color: var(--gw-green-400);
+  letter-spacing: 0.5px; margin-left: 6px; vertical-align: middle;
+  text-transform: uppercase;
+}
+.you-meta { margin-top: 3px; font-size: 12px; color: var(--gw-text-muted); }
+.you-no-ghin { color: var(--gw-text-muted); font-style: italic; }
+.you-sync-time { color: var(--gw-green-400); }
+.ghin-sheet-btn {
+  background: var(--gw-green-800);
+  color: var(--gw-green-300);
+  font-size: 11px; font-weight: 700;
+  padding: 5px 11px; border-radius: 8px;
+  border: 1px solid var(--gw-green-700);
+  cursor: pointer; flex-shrink: 0;
+  letter-spacing: 0.3px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── GHIN sheet ─────────────────────────────────────────────── */
+.ghin-sheet-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+  display: flex; align-items: flex-end; z-index: 200;
+}
+.ghin-sheet-panel {
+  background: var(--gw-neutral-900);
+  border-radius: 24px 24px 0 0;
+  width: 100%; max-height: 85vh; overflow-y: auto;
+  border-top: 1px solid var(--gw-card-border);
+}
+.ghin-sheet-handle {
+  width: 36px; height: 4px;
+  background: var(--gw-neutral-700);
+  border-radius: 2px; margin: 12px auto 0;
+}
+.ghin-sheet-top {
+  padding: 14px 20px 0;
+  display: flex; align-items: flex-start; justify-content: space-between;
+}
+.ghin-sheet-name { font-size: 20px; font-weight: 700; color: var(--gw-text); }
+.ghin-sheet-meta { font-size: 12px; color: var(--gw-text-muted); margin-top: 3px; }
+.ghin-stats-grid {
+  display: grid; grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 8px; padding: 14px 16px 0;
+}
+.ghin-stat {
+  background: var(--gw-neutral-800);
+  border-radius: 10px; border: 1px solid var(--gw-card-border);
+  padding: 10px 12px;
+}
+.ghin-stat-label {
+  font-size: 10px; color: var(--gw-text-muted); font-weight: 600;
+  letter-spacing: 0.4px; text-transform: uppercase; margin-bottom: 4px;
+}
+.ghin-stat-val {
+  font-size: 22px; font-weight: 700;
+  color: var(--gw-text); font-family: var(--gw-font-mono);
+}
+.ghin-stat-val--sm { font-size: 16px; }
+.ghin-stat-fresh { color: var(--gw-green-400); }
+.ghin-stat-stale { color: var(--gw-bogey); }
+.ghin-stat-sub { font-size: 10px; color: var(--gw-text-muted); margin-top: 2px; }
+.ghin-sheet-scores-msg {
+  margin: 14px 16px 0;
+  background: var(--gw-neutral-800);
+  border-radius: 12px; border: 1px solid var(--gw-card-border);
+  padding: 14px 16px; text-align: center;
+}
+.ghin-scores-note { font-size: 15px; font-weight: 600; color: var(--gw-text); margin-bottom: 6px; }
+.ghin-scores-sub { font-size: 13px; color: var(--gw-text-muted); line-height: 1.5; }
 .view-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .view-header h2 { font-size: 22px; font-weight: 700; margin: 0; color: var(--gw-text); }
 .header-actions { display: flex; gap: 6px; align-items: center; }
