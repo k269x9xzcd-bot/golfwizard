@@ -107,10 +107,33 @@
           </div>
         </div>
 
-        <!-- API course with no tee data -->
+        <!-- Save as Favorite (shown when a course is selected and not already a favorite) -->
+        <div
+          v-if="form.courseName && !apiLoadingWizard"
+          class="wiz-fav-row"
+        >
+          <button
+            class="wiz-fav-btn"
+            :class="{ 'wiz-fav-btn--active': coursesStore.favoriteNames.has(form.courseName) }"
+            @click="coursesStore.toggleFavorite(form.courseName)"
+          >
+            {{ coursesStore.favoriteNames.has(form.courseName) ? '★ Saved as Favorite' : '☆ Save as Favorite' }}
+          </button>
+        </div>
+
+        <!-- API course with no tee data → inline quick tee setup -->
         <div v-if="!apiLoadingWizard && form.courseName && !teesForCourse.length" class="api-course-notice">
-          <div class="api-notice-text">📋 <strong>{{ form.courseName }}</strong> needs tee/SI setup.</div>
-          <button class="btn-primary btn-sm" @click="openCourseSetup">Set up course →</button>
+          <div class="api-notice-text">📋 Add tee info to start your round.</div>
+          <div class="quick-tee-form">
+            <input v-model="quickTee.name" class="wiz-input" placeholder="Tee name (e.g. White)" />
+            <div class="quick-tee-row">
+              <input v-model.number="quickTee.rating" class="wiz-input" placeholder="Rating (e.g. 71.4)" type="number" step="0.1" />
+              <input v-model.number="quickTee.slope" class="wiz-input" placeholder="Slope (e.g. 128)" type="number" step="1" />
+              <input v-model.number="quickTee.yards" class="wiz-input" placeholder="Yards (opt.)" type="number" step="1" />
+            </div>
+            <button class="btn-primary btn-sm" :disabled="!quickTee.name.trim()" @click="saveQuickTee">Add Tee & Continue</button>
+          </div>
+          <div class="api-course-edit-hint">Full hole-by-hole editing available in the Courses tab.</div>
         </div>
 
         <div class="wiz-row">
@@ -2214,6 +2237,41 @@ function wolfMoveDown(idx) {
 function openCourseSetup() {
   const apiResult = apiResults.value.find(c => c.name === form.value.courseName)
   emit('setup-course', form.value.courseName, apiResult?.apiId ?? null)
+}
+
+// ── Quick tee inline setup (for API courses with no tee data) ──
+const quickTee = ref({ name: '', rating: null, slope: null, yards: null })
+
+async function saveQuickTee() {
+  const name = quickTee.value.name.trim()
+  if (!name) return
+  const teesData = {
+    [name]: {
+      rating: quickTee.value.rating ?? null,
+      slope: quickTee.value.slope ?? null,
+      yards: quickTee.value.yards ?? null,
+      yardsByHole: [],
+      siByHole: [],
+    }
+  }
+  // Store in apiEnrichedTees so the wizard can proceed
+  apiEnrichedTees.value[form.value.courseName] = teesData
+  // Save to courses store so it persists and appears in Courses tab
+  try {
+    const existing = coursesStore.getCourse(form.value.courseName)
+    if (existing) {
+      await coursesStore.updateCourse(existing.id, { tees: teesData, teesData, defaultTee: name })
+    } else {
+      await coursesStore.addCourse({
+        name: form.value.courseName,
+        tees: teesData,
+        teesData,
+        defaultTee: name,
+      })
+    }
+  } catch { /* silent — wizard can still proceed with in-memory tee */ }
+  form.value.tee = name
+  quickTee.value = { name: '', rating: null, slope: null, yards: null }
 }
 
 function scrollInputIntoView(e) {

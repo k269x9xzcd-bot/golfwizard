@@ -2645,3 +2645,38 @@ body.gw-landscape .scorecard-grid tbody .col-player-name {
 .phc-net-value.sn-dbl { color: #f87171; }
 .phc-net-value.sn-trip { color: #dc2626; }
 
+
+/* ── Wizard course favorite + quick tee setup ──────────────────── */
+.wiz-fav-row { margin-top: 6px; }
+.wiz-fav-btn {
+  background: transparent;
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  color: var(--gw-text-muted);
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.wiz-fav-btn--active {
+  border-color: var(--gw-accent);
+  color: var(--gw-accent);
+  background: rgba(212, 175, 55, 0.08);
+}
+.quick-tee-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.quick-tee-row {
+  display: flex;
+  gap: 8px;
+}
+.quick-tee-row .wiz-input { flex: 1; min-width: 0; }
+.api-course-edit-hint {
+  font-size: 11px;
+  color: var(--gw-text-muted);
+  margin-top: 4px;
+  opacity: 0.7;
+}
