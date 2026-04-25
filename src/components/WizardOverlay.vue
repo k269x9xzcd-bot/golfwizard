@@ -759,14 +759,7 @@
               <input v-model.number="mainGame.config.ppt" type="number" min="1" class="config-input" placeholder="1" />
             </div>
           </div>
-          <div class="config-field">
-            <label>Scoring model</label>
-            <select v-model="mainGame.config.scoringModel" class="config-select">
-              <option value="segment">Segment match (6/3/0 pts)</option>
-              <option value="perhole">Per hole (win 4, loss 2, tie 3)</option>
-            </select>
-          </div>
-          <div class="config-note">Teams rotate every 6 holes. 6 pts per hole split among winners.</div>
+          <div class="config-note">Per hole: win=4pts, loss=2pts, tie=3/3. Teams rotate every 6 holes. Settle pairwise.</div>
         </div>
 
         <!-- 5-3-1 config -->
@@ -1068,7 +1061,10 @@
           <div class="side-game-row" :class="{ 'side-game-on': sideGames.match1.enabled }">
             <div class="side-game-header" @click="toggleSideGame('match1')">
               <span>⚔️ 1v1 Side Match</span>
-              <span class="side-toggle">{{ sideGames.match1.enabled ? '▲' : '▼' }}</span>
+              <span class="side-header-actions">
+                <button class="btn-game-info btn-game-info-sm" @click.stop="toggleGameInfo('match1v1')" title="How to play">ℹ️</button>
+                <span class="side-toggle">{{ sideGames.match1.enabled ? '▲' : '▼' }}</span>
+              </span>
             </div>
             <div v-if="sideGames.match1.enabled" class="side-game-config">
               <!-- Players row: 2 cols side-by-side with vs separator -->
@@ -1139,7 +1135,10 @@
           <div v-if="sideGames.match1.enabled" class="side-game-row" :class="{ 'side-game-on': sideGames.match2.enabled }">
             <div class="side-game-header" @click="toggleSideGame('match2')">
               <span>⚔️ 2nd Side Match</span>
-              <span class="side-toggle">{{ sideGames.match2.enabled ? '▲' : '▼' }}</span>
+              <span class="side-header-actions">
+                <button class="btn-game-info btn-game-info-sm" @click.stop="toggleGameInfo('match1v1')" title="How to play">ℹ️</button>
+                <span class="side-toggle">{{ sideGames.match2.enabled ? '▲' : '▼' }}</span>
+              </span>
             </div>
             <div v-if="sideGames.match2.enabled" class="side-game-config">
               <div class="sm-players-row">
@@ -1206,7 +1205,10 @@
           <div class="side-game-row" :class="{ 'side-game-on': sideGames.bbn.enabled }">
             <div class="side-game-header" @click="toggleSideGame('bbn')">
               <span>🏅 Best Ball Tracker</span>
-              <span class="side-toggle">{{ sideGames.bbn.enabled ? '▲' : '▼' }}</span>
+              <span class="side-header-actions">
+                <button class="btn-game-info btn-game-info-sm" @click.stop="toggleGameInfo('bbn')" title="How to play">ℹ️</button>
+                <span class="side-toggle">{{ sideGames.bbn.enabled ? '▲' : '▼' }}</span>
+              </span>
             </div>
             <div v-if="sideGames.bbn.enabled" class="side-game-config">
               <div v-for="tracker in bbnTrackers" :key="tracker.id" style="margin-bottom:8px">
@@ -1620,7 +1622,7 @@ const GAME_DEFAULTS = {
   stableford:  { ppt: 1, variant: 'standard', pts: {} },
   wolf:        { ppt: 1, wolfLoneMultiplier: 4, blindWolfMultiplier: 8, wolfTeeOrder: [], blindWolfEnabled: true, wolfTeesFirst: true, wolfChoices: {}, tieRule: 'push' },
   hammer:      { ppt: 1, airHammer: false, fuHammer: false, birdieDouble: false, carryover: false, team1: [], team2: [] },
-  sixes:       { ppt: 1, scoringModel: 'segment' },
+  sixes:       { ppt: 1, scoringModel: 'perhole' },
   nines:       { ppt: 1, sweepBonus: false, sweepMargin: 2, birdieBonus: false, birdieBonusPts: 1, birdieDouble: false, players: null },
   bestball:    { ppt: 5, ballsPerTeam: 1, team1: [], team2: [], hidden: true },
   none:        {},
