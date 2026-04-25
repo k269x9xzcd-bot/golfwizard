@@ -614,19 +614,40 @@ function _recapOne(ctx, game) {
       if (!r) return base
       const fidgeters = r.fidgeters || []
       const incomplete = (r.holeLog || []).some(h => h.incomplete)
+
+      // Build Fidget 1 summary
+      let detail = ''
       if (fidgeters.length) {
         const names = fidgeters.map(m => m.short_name || m.guest_name || '?').join(', ')
         base.winnerLine = null
-        base.detail = `Fidget: ${names} (owes $${r.ppp} per player)`
+        detail = `Fidget: ${names} (owes $${r.ppp} per player)`
       } else if (incomplete) {
-        // Round in progress -- show who hasn't won yet
-        const atRisk = (r.members || ctx.members).filter(m => !r.hasWon?.[m.id])
-        base.detail = atRisk.length
+        const atRisk = ctx.members.filter(m => !r.hasWon?.[m.id])
+        detail = atRisk.length
           ? `At risk: ${atRisk.map(m => m.short_name || '?').join(', ')}`
           : 'Everyone has won a hole'
       } else {
-        base.detail = 'Everyone won at least one hole -- no fidget'
+        detail = 'Everyone won at least one hole — no fidget'
       }
+
+      // Append Fidget 2 summary if double-fidget is on
+      if (r.doubleFidget) {
+        if (!r.fidget2Active) {
+          detail += r.allClearedHole
+            ? ` | Fidget 2: eligible (not started)`
+            : ` | Fidget 2: waiting`
+        } else if (r.fidget2) {
+          const f2 = r.fidget2
+          if (f2.fidgeters.length) {
+            const f2names = f2.fidgeters.map(m => m.short_name || m.guest_name || '?').join(', ')
+            detail += ` | Fidget 2 (H${r.fidget2StartHole}+): ${f2names} owes $${r.ppp}`
+          } else {
+            detail += ` | Fidget 2 (H${r.fidget2StartHole}+): all safe`
+          }
+        }
+      }
+
+      base.detail = detail
       return base
     }
 

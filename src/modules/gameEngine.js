@@ -756,13 +756,8 @@ export function computeDots(ctx, config) {
 // ── FIDGET ───────────────────────────────────────────────────────
 // Player who never wins a hole outright owes every other player $ppp
 // ─────────────────────────────────────────────────────────────────
-export function computeFidget(ctx, config) {
-  const { ppp = 10, players: pids } = config
-  const members = pids
-    ? ctx.members.filter(m => pids.includes(m.id))
-    : ctx.members
-  const { from, to } = holeRange(ctx.holesMode)
-
+// ── Internal helper: run fidget logic over a hole range ──────────
+function _runFidget(ctx, members, from, to, ppp) {
   const hasWon = {}
   const holeLog = []
   for (const m of members) hasWon[m.id] = false
@@ -773,21 +768,18 @@ export function computeFidget(ctx, config) {
       holeLog.push({ hole: h, winner: null, incomplete: true })
       continue
     }
-
     const min = Math.min(...nets.map(n => n.net))
-    const winners = nets.filter(n => n.net === min)
-    if (winners.length === 1) {
-      hasWon[winners[0].id] = true
-      holeLog.push({ hole: h, winner: winners[0].id })
+    const minWinners = nets.filter(n => n.net === min)
+    if (minWinners.length === 1) {
+      hasWon[minWinners[0].id] = true
+      holeLog.push({ hole: h, winner: minWinners[0].id })
     } else {
-      holeLog.push({ hole: h, winner: null, tied: winners.map(w => w.id) })
+      holeLog.push({ hole: h, winner: null, tied: minWinners.map(w => w.id) })
     }
   }
 
   const fidgeters = members.filter(m => !hasWon[m.id])
   const winners = members.filter(m => hasWon[m.id])
-
-  // Each fidgeter owes $ppp to each other player
   const settlements = []
   for (const loser of fidgeters) {
     for (const other of members) {
@@ -795,8 +787,53 @@ export function computeFidget(ctx, config) {
       settlements.push({ from: loser.id, fromName: loser.short_name, to: other.id, toName: other.short_name, amount: ppp })
     }
   }
+  return { hasWon, holeLog, fidgeters, winners, settlements }
+}
 
-  return { hasWon, holeLog, fidgeters, winners, settlements, ppp }
+export function computeFidget(ctx, config) {
+  const { ppp = 10, players: pids, doubleFidget = false, fidget2Active = false, fidget2StartHole = null } = config
+  const members = pids
+    ? ctx.members.filter(m => pids.includes(m.id))
+    : ctx.members
+  const { from, to } = holeRange(ctx.holesMode)
+
+  // Fidget 1: always runs full range
+  const f1 = _runFidget(ctx, members, from, to, ppp)
+
+  // Find the earliest hole where all players have won at least once
+  const allClearedHole = (() => {
+    if (!doubleFidget) return null
+    const wonBy = {}
+    for (const m of members) wonBy[m.id] = false
+    for (const hl of f1.holeLog) {
+      if (hl.winner) wonBy[hl.winner] = true
+      if (members.every(m => wonBy[m.id])) return hl.hole
+    }
+    return null
+  })()
+
+  // Fidget 2: runs from fidget2StartHole to end if group confirmed it
+  let f2 = null
+  if (doubleFidget && fidget2Active && fidget2StartHole != null) {
+    f2 = _runFidget(ctx, members, fidget2StartHole, to, ppp)
+  }
+
+  // Merge settlements: fidget1 + fidget2 (if active)
+  const settlements = [...f1.settlements, ...(f2 ? f2.settlements : [])]
+
+  return {
+    hasWon: f1.hasWon,
+    holeLog: f1.holeLog,
+    fidgeters: f1.fidgeters,
+    winners: f1.winners,
+    settlements,
+    ppp,
+    doubleFidget,
+    allClearedHole,
+    fidget2Active,
+    fidget2StartHole,
+    fidget2: f2,
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────

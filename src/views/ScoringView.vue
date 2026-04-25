@@ -710,6 +710,18 @@
         </div>
 
 
+        <!-- Double Fidget prompt — fires once when all players have won a hole -->
+        <div v-if="showDoubleFidgetPrompt" class="aloha-banner aloha-call double-fidget-prompt">
+          <span class="aloha-icon">😬</span>
+          <div class="aloha-text">
+            <strong>Everyone's off the hook!</strong> Start a second Fidget pot from the next hole?
+          </div>
+          <div class="aloha-respond">
+            <button class="aloha-btn aloha-accept" @click="startDoubleFidget">Yes, run it</button>
+            <button class="aloha-btn aloha-decline" @click="dismissDoubleFidget">No thanks</button>
+          </div>
+        </div>
+
         <!-- Hammer banner: shows on every hole when a hammer game is active -->
         <template v-if="hammerGame">
           <div v-if="!hammerHoleLog(activeHole).conceded && hammerHoleLog(activeHole).status !== 'accepted'"
@@ -1051,7 +1063,7 @@ import { useScorecardHelpers } from '../composables/useScorecardHelpers'
 import { useGameNotation } from '../composables/useGameNotation'
 import { useHoleMath } from '../composables/useHoleMath'
 import { useLiveSettlements } from '../composables/useLiveSettlements'
-import { computeNassau, computeHammer, courseHandicap, holeSI, strokesOnHole } from '../modules/gameEngine'
+import { computeNassau, computeHammer, computeFidget, courseHandicap, holeSI, strokesOnHole } from '../modules/gameEngine'
 import { simulateRound } from '../modules/simulator'
 
 const authStore = useAuthStore()
@@ -1083,6 +1095,53 @@ const {
   HALVED_HTML, buildCtx, gameIcon, gameLabel, pressHoles, gameNotationRows, sixesHoleTeamMap,
   fidgetHoleWinners, isFidgetWinner,
 } = useGameNotation({ courseData, visibleHoles, teamInitialsStr, pInit })
+
+// ── Double Fidget ──────────────────────────────────────────────────
+const showDoubleFidgetPrompt = ref(false)
+const doubleFidgetGame = ref(null)
+
+const fidgetGame = computed(() => roundsStore.activeGames.find(g => g.type === 'fidget'))
+
+// Watch for all-cleared condition after each score change
+watch(
+  () => roundsStore.activeScores,
+  () => {
+    const game = fidgetGame.value
+    if (!game?.config?.doubleFidget) return
+    if (game.config.fidget2Active) return  // already triggered
+    if (showDoubleFidgetPrompt.value) return
+    const ctx = buildCtx()
+    if (!ctx?.course) return
+    try {
+      const r = computeFidget(ctx, game.config)
+      if (r.allClearedHole != null && !game.config.fidget2Active) {
+        doubleFidgetGame.value = game
+        showDoubleFidgetPrompt.value = true
+      }
+    } catch (e) { /* scores incomplete */ }
+  },
+  { deep: true }
+)
+
+async function startDoubleFidget() {
+  const game = doubleFidgetGame.value
+  if (!game) return
+  const ctx = buildCtx()
+  const r = computeFidget(ctx, game.config)
+  const startHole = (r.allClearedHole ?? activeHole.value) + 1
+  await roundsStore.updateGameConfig(game.id, {
+    ...game.config,
+    fidget2Active: true,
+    fidget2StartHole: startHole,
+  })
+  showDoubleFidgetPrompt.value = false
+  doubleFidgetGame.value = null
+}
+
+function dismissDoubleFidget() {
+  showDoubleFidgetPrompt.value = false
+  doubleFidgetGame.value = null
+}
 
 // ── Composable: hole math breakdown ─────────────────────────────────
 const { holeMathLines } = useHoleMath({ buildCtx, pInit, teamInitialsStr })
@@ -1911,6 +1970,7 @@ const GAME_HOLE_STATE_KEYS = {
   dots:   ['manual'],
   bbb:    ['awards'],
   hammer: ['hammerLog'],
+  fidget: ['fidget2Active', 'fidget2StartHole'],
 }
 
 async function clearGameState() {

@@ -235,12 +235,15 @@
               <!-- Fidget -->
               <template v-else-if="isGameType(game, 'fidget')">
                 <div v-if="fidgetResult(game)" class="fidget-standings">
+                  <!-- Fidget 1 -->
+                  <div class="fidget-pot-label" v-if="fidgetResult(game).doubleFidget">Fidget 1</div>
                   <div class="fidget-group">
                     <div class="fidget-label">Fidgeters (no wins)</div>
                     <div v-for="player in fidgetResult(game).fidgeters" :key="player.id" class="fidget-player">
                       <span class="fidget-name">{{ player.short_name || player.guest_name }}</span>
                       <span class="fidget-owes">Owes {{ (roundsStore.activeMembers.length - 1) * (game.config?.ppp || 10) }}</span>
                     </div>
+                    <div v-if="!fidgetResult(game).fidgeters.length" class="fidget-safe">All safe ✓</div>
                   </div>
                   <div class="fidget-group">
                     <div class="fidget-label">Winners</div>
@@ -248,6 +251,27 @@
                       <span class="fidget-name">{{ player.short_name || player.guest_name }}</span>
                     </div>
                   </div>
+                  <!-- Double Fidget -->
+                  <template v-if="fidgetResult(game).doubleFidget">
+                    <div class="fidget-divider"></div>
+                    <div class="fidget-pot-label">
+                      Fidget 2
+                      <span v-if="!fidgetResult(game).fidget2Active" class="fidget-2-status">
+                        {{ fidgetResult(game).allClearedHole ? '· Eligible (not started)' : '· Waiting for all to win a hole' }}
+                      </span>
+                      <span v-else class="fidget-2-status">· From hole {{ fidgetResult(game).fidget2StartHole }}</span>
+                    </div>
+                    <template v-if="fidgetResult(game).fidget2Active && fidgetResult(game).fidget2?.fidgeters">
+                      <div class="fidget-group">
+                        <div class="fidget-label">Fidgeters</div>
+                        <div v-for="player in fidgetResult(game).fidget2.fidgeters" :key="player.id" class="fidget-player">
+                          <span class="fidget-name">{{ player.short_name || player.guest_name }}</span>
+                          <span class="fidget-owes">Owes {{ (roundsStore.activeMembers.length - 1) * (game.config?.ppp || 10) }}</span>
+                        </div>
+                        <div v-if="!fidgetResult(game).fidget2.fidgeters.length" class="fidget-safe">All safe ✓</div>
+                      </div>
+                    </template>
+                  </template>
                 </div>
               </template>
 
@@ -1407,6 +1431,30 @@ function balanceClass(val) {
 .fidget-name {
   font-weight: 500;
   color: var(--gw-text);
+}
+.fidget-pot-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-accent);
+  margin: 6px 0 2px;
+}
+.fidget-2-status {
+  font-weight: 400;
+  opacity: 0.7;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.fidget-divider {
+  height: 1px;
+  background: var(--color-border, rgba(255,255,255,0.1));
+  margin: 8px 0;
+}
+.fidget-safe {
+  font-size: 12px;
+  opacity: 0.6;
+  padding: 2px 0;
 }
 .fidget-owes {
   font-size: 12px;

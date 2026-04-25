@@ -948,6 +948,12 @@
                 <label>$ paid to each player</label>
                 <input v-model.number="sideGames.fidget.ppp" type="number" class="config-input" placeholder="10" />
               </div>
+              <div class="config-field config-field--toggle">
+                <label class="toggle-label">
+                  <input type="checkbox" v-model="sideGames.fidget.doubleFidget" />
+                  Double Fidget — if everyone wins a hole early, restart the bet
+                </label>
+              </div>
             </div>
           </div>
 
@@ -1673,7 +1679,7 @@ const sideGames = ref({
   skins:  { enabled: false, ppt: 5, carry: true },
   dots:   { enabled: false, ppt: 2, birdieEnabled: true, eagleEnabled: true, greenieEnabled: true, sandieEnabled: true },
   snake:  { enabled: false, ppt: 5 },
-  fidget: { enabled: false, ppp: 10 },
+  fidget: { enabled: false, ppp: 10, doubleFidget: false },
   nines:  { enabled: false, ppt: 1, sweepBonus: false, sweepMargin: 2, birdieBonus: false, birdieBonusPts: 1, birdieDouble: false, players: null },
   match1: { enabled: false, player1: '', player2: '', ppt: 10, scoring: 'closeout', front: 10, back: 10, overall: 20, pressAt: 2 },
   match2: { enabled: false, player1: '', player2: '', ppt: 10, scoring: 'closeout', front: 10, back: 10, overall: 20, pressAt: 2 },
@@ -2490,7 +2496,7 @@ function buildGameConfigs() {
     games.push({ type: 'snake', config: { ppt: sg.snake.ppt } })
   }
   if (sg.fidget.enabled) {
-    games.push({ type: 'fidget', config: { ppp: sg.fidget.ppp } })
+    games.push({ type: 'fidget', config: { ppp: sg.fidget.ppp, doubleFidget: sg.fidget.doubleFidget ?? false } })
   }
   if (sg.nines.enabled && mainGame.value.type !== 'nines') {
     const ninesCfg = {
@@ -2594,7 +2600,7 @@ function _loadEditGames() {
   if (snakeRow) { sg.snake.enabled = true; sg.snake.ppt = snakeRow.config?.ppt ?? 5 }
 
   const fidgetRow = games.find(g => g.type === 'fidget')
-  if (fidgetRow) { sg.fidget.enabled = true; sg.fidget.ppp = fidgetRow.config?.ppp ?? 10 }
+  if (fidgetRow) { sg.fidget.enabled = true; sg.fidget.ppp = fidgetRow.config?.ppp ?? 10; sg.fidget.doubleFidget = fidgetRow.config?.doubleFidget ?? false }
 
   const bbbRow = games.find(g => g.type === 'bbb')
   if (bbbRow) { sg.bbb.enabled = true; sg.bbb.ppt = bbbRow.config?.ppt ?? 1; sg.bbb.doubleBongo = bbbRow.config?.doubleBongo ?? false }
