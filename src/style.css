@@ -2427,6 +2427,16 @@ body.gw-landscape .scorecard-grid tbody .col-player-name {
 }
 .col-notation-sub { font-size: 10px; font-weight: 700; color: #4a5249; padding: 4px 3px; }
 .col-notation-total { font-size: 11px; font-weight: 800; color: #1a1f1b; padding: 4px 6px; white-space: nowrap; min-width: 56px; }
+.col-notation-summary {
+  font-size: 11px;
+  font-weight: 800;
+  color: #1a1f1b;
+  padding: 4px 8px;
+  white-space: nowrap;
+  text-align: right;
+  background: #f5efde;
+  border-left: 1px solid rgba(212,175,55,.25);
+}
 
 /* Notation cell classes — darker saturated hues for paper bg */
 .nota-t1 { color: #1d4ed8; }

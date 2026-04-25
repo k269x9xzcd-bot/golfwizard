@@ -526,9 +526,8 @@
                         :class="row.cells[h]?.cls || ''"
                         v-html="row.cells[h]?.text || ''"></td>
                   </template>
-                  <td v-if="hasBack9" class="col-subtotal col-notation-sub"></td>
-                  <!-- Segment result — no wrap, clean -->
-                  <td class="col-total col-sixes-result" v-html="row.totalSummary || ''"></td>
+                  <!-- Segment result: spans IN+G+N (or G+N for 9-hole) -->
+                  <td :colspan="hasBack9 ? 3 : 2" class="col-notation-summary" v-html="row.totalSummary || ''"></td>
                 </tr>
 
                 <!-- ── All other notation rows (standard) ── -->
@@ -541,12 +540,13 @@
                   <td v-for="h in frontHoles" :key="'gn-'+ri+'-'+h"
                       class="col-notation-cell" :class="row.cells[h]?.cls || ''"
                       v-html="row.cells[h]?.text || ''"></td>
-                  <td v-if="hasBack9" class="col-subtotal col-notation-sub" v-html="row.outSummary || ''"></td>
+                  <!-- Blank OUT subtotal (keep column widths, show nothing) -->
+                  <td v-if="hasBack9" class="col-subtotal col-notation-sub"></td>
                   <td v-for="h in backHoles" :key="'gn-'+ri+'-'+h"
                       class="col-notation-cell" :class="row.cells[h]?.cls || ''"
                       v-html="row.cells[h]?.text || ''"></td>
-                  <td v-if="hasBack9" class="col-subtotal col-notation-sub" v-html="row.inSummary || ''"></td>
-                  <td class="col-total col-notation-total" v-html="row.totalSummary || ''"></td>
+                  <!-- Summary spans IN+G+N (3 cols for 18h) or G+N (2 cols for 9h) -->
+                  <td :colspan="hasBack9 ? 3 : 2" class="col-notation-summary" v-html="row.totalSummary || ''"></td>
                 </tr>
 
               </template>
