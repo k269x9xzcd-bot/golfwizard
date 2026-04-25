@@ -6,15 +6,6 @@
         <div class="header-version">v{{ appVersion }}</div>
       </div>
       <div class="header-actions">
-        <button
-          class="theme-toggle-btn"
-          :class="{ 'is-light': theme === 'light' }"
-          @click="toggle"
-          :aria-label="theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'"
-        >
-          <span class="tt-icon tt-moon">🌙</span>
-          <span class="tt-icon tt-sun">☀️</span>
-        </button>
         <button v-if="!authStore.isAuthenticated" class="btn-signin" @click="showAuth = true">
           Sign In
         </button>
@@ -131,7 +122,6 @@
 import { ref, computed, onMounted, watch, inject } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import { useTheme } from '../composables/useTheme.js'
 import { useRoundsStore } from '../stores/rounds'
 import { useTournamentStore } from '../stores/tournament.js'
 import { useLinkedMatchesStore } from '../stores/linkedMatches'
@@ -145,18 +135,15 @@ const roundsStore = useRoundsStore()
 const tournamentStore = useTournamentStore()
 const linkedStore = useLinkedMatchesStore()
 const router = useRouter()
-const { theme, toggle } = useTheme()
 const showAuth = ref(false)
 const openWizard = inject('openWizard', () => {})
 const showTournament = computed(() => {
   const email = authStore.user?.email
   if (!email) return false
   const norm = email.toLowerCase().trim()
-  // Show if members are loaded and user is in the list
   if (tournamentStore.members.length > 0) {
     return tournamentStore.members.some(m => m.email?.toLowerCase().trim() === norm)
   }
-  // Fallback: show for known authorized emails while members are loading
   const AUTHORIZED = [
     'jayspieler@aol.com',
     'alexcarroll333@gmail.com','bcimons19@yahoo.com',
@@ -180,8 +167,6 @@ onMounted(async () => {
   }
 })
 
-// Auth might not be restored yet when onMounted fires (async session init).
-// Watch for isAuthenticated becoming true and fetch rounds if we haven't yet.
 watch(() => authStore.isAuthenticated, async (authed) => {
   if (authed) {
     if (roundsStore.rounds.length === 0) await roundsStore.fetchRounds()
@@ -192,14 +177,11 @@ watch(() => authStore.isAuthenticated, async (authed) => {
 })
 
 async function openRound(id) {
-  // Find round in the list to know if it's complete
   const r = roundsStore.rounds.find(x => x.id === id)
   if (r?.is_complete) {
-    // Completed → History with this round pre-expanded
     router.push({ path: '/history', query: { expand: id } })
     return
   }
-  // In progress (or unknown) → scoring view
   try {
     await roundsStore.loadRound(id)
     router.push('/scoring')
@@ -276,14 +258,8 @@ async function openRound(id) {
   transform: scale(0.98);
   border-color: rgba(212,175,55,.6);
 }
-.cup-home-icon {
-  font-size: 28px;
-  flex-shrink: 0;
-}
-.cup-home-body {
-  flex: 1;
-  min-width: 0;
-}
+.cup-home-icon { font-size: 28px; flex-shrink: 0; }
+.cup-home-body { flex: 1; min-width: 0; }
 .cup-home-title {
   font-family: var(--gw-font-display);
   font-size: 18px;
@@ -291,19 +267,9 @@ async function openRound(id) {
   color: var(--gw-gold, #d4af37);
   line-height: 1.2;
 }
-.cup-home-sub {
-  font-size: 12px;
-  color: rgba(240,237,224,.55);
-  margin-top: 2px;
-}
-.cup-home-arrow {
-  font-size: 28px;
-  color: rgba(212,175,55,.6);
-  font-weight: 300;
-  flex-shrink: 0;
-}
+.cup-home-sub { font-size: 12px; color: rgba(240,237,224,.55); margin-top: 2px; }
+.cup-home-arrow { font-size: 28px; color: rgba(212,175,55,.6); font-weight: 300; flex-shrink: 0; }
 
-/* Cup card with active tournament round nested */
 .cup-home-card--active {
   display: block;
   padding: 0;
@@ -328,9 +294,7 @@ async function openRound(id) {
   -webkit-tap-highlight-color: transparent;
   transition: background .12s;
 }
-.cup-active-round:active {
-  background: rgba(212,175,55,.08);
-}
+.cup-active-round:active { background: rgba(212,175,55,.08); }
 .car-badge {
   display: inline-flex;
   align-items: center;
@@ -351,38 +315,21 @@ async function openRound(id) {
 }
 .car-body { flex: 1; min-width: 0; }
 .car-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--gw-text, #f0ede0);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 14px; font-weight: 700; color: var(--gw-text, #f0ede0);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .car-sub {
-  font-size: 11px;
-  color: rgba(240,237,224,.5);
-  margin-top: 1px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 11px; color: rgba(240,237,224,.5); margin-top: 1px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.car-cta {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--gw-gold, #d4af37);
-  flex-shrink: 0;
-}
+.car-cta { font-size: 13px; font-weight: 700; color: var(--gw-gold, #d4af37); flex-shrink: 0; }
 
-/* Recent-round card tap affordance */
 .round-card {
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: transform .12s, border-color .12s, background .12s;
 }
-.round-card:active {
-  transform: scale(.985);
-  background: rgba(255,255,255,.03);
-}
+.round-card:active { transform: scale(.985); background: rgba(255,255,255,.03); }
 .round-badge {
   display: inline-block;
   margin-left: 8px;
@@ -395,54 +342,23 @@ async function openRound(id) {
   font-family: var(--gw-font-body);
   text-transform: uppercase;
 }
-.round-badge--done {
-  background: rgba(74,222,128,.14);
-  color: #4ade80;
-  border: 1px solid rgba(74,222,128,.3);
-}
-.round-badge--live {
-  background: rgba(212,175,55,.14);
-  color: #d4af37;
-  border: 1px solid rgba(212,175,55,.35);
-}
+.round-badge--done { background: rgba(74,222,128,.14); color: #4ade80; border: 1px solid rgba(74,222,128,.3); }
+.round-badge--live { background: rgba(212,175,55,.14); color: #d4af37; border: 1px solid rgba(212,175,55,.35); }
 
-/* Cross-foursome match entry */
 .cm-home-card {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin: 12px var(--gw-space-4) 0;
-  padding: 14px 16px;
+  display: flex; align-items: center; gap: 14px;
+  margin: 12px var(--gw-space-4) 0; padding: 14px 16px;
   border-radius: 16px;
   background: linear-gradient(135deg, rgba(96,165,250,.1) 0%, rgba(96,165,250,.03) 100%);
   border: 1px solid rgba(96,165,250,.3);
-  text-decoration: none;
-  color: var(--gw-text);
+  text-decoration: none; color: var(--gw-text);
   transition: transform .12s, border-color .12s;
   -webkit-tap-highlight-color: transparent;
 }
-.cm-home-card:active {
-  transform: scale(.98);
-  border-color: rgba(96,165,250,.6);
-}
+.cm-home-card:active { transform: scale(.98); border-color: rgba(96,165,250,.6); }
 .cm-home-icon { font-size: 28px; flex-shrink: 0; }
 .cm-home-body { flex: 1; min-width: 0; }
-.cm-home-title {
-  font-family: var(--gw-font-display);
-  font-size: 17px;
-  font-weight: 700;
-  color: #93c5fd;
-  line-height: 1.2;
-}
-.cm-home-sub {
-  font-size: 12px;
-  color: rgba(240,237,224,.55);
-  margin-top: 2px;
-}
-.cm-home-arrow {
-  font-size: 28px;
-  color: rgba(147,197,253,.6);
-  font-weight: 300;
-  flex-shrink: 0;
-}
+.cm-home-title { font-family: var(--gw-font-display); font-size: 17px; font-weight: 700; color: #93c5fd; line-height: 1.2; }
+.cm-home-sub { font-size: 12px; color: rgba(240,237,224,.55); margin-top: 2px; }
+.cm-home-arrow { font-size: 28px; color: rgba(147,197,253,.6); font-weight: 300; flex-shrink: 0; }
 </style>
