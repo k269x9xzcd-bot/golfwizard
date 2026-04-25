@@ -298,7 +298,13 @@ export const useCoursesStore = defineStore('courses', () => {
       customCourses.value = customCourses.value.filter(c => c.id !== id)
       return
     }
-    const { error } = await supabase.from('courses').delete().eq('id', id)
+    // Wrap with retry + 8s timeout — same pattern as all other writes.
+    // Delete is idempotent so a retry after a stuck socket is safe.
+    const { error } = await supaCallWithRetry(
+      'courses.deleteCourse',
+      () => supabase.from('courses').delete().eq('id', id),
+      8000,
+    )
     if (error) throw error
     customCourses.value = customCourses.value.filter(c => c.id !== id)
   }
@@ -369,32 +375,23 @@ export const useCoursesStore = defineStore('courses', () => {
       const json = await resp.json()
       const course = json.course || json
       // ── Normalize tees ───────────────────────────────────────
-      // API returns: { "male": [ {tee_name, course_rating, slope_rating, holes:[...]}, ... ],
-      //               "female": [ ... ] }
-      // We flatten all gender groups into one tee list.
-      // If a tee name appears in both male & female we suffix with (M)/(F).
       const teesRawInput = course.tees || {}
-      let teesFlat = []  // [{tee_name, course_rating, slope_rating, holes, _gender}, ...]
+      let teesFlat = []
 
       if (Array.isArray(teesRawInput)) {
-        // Already a flat array of tee objects
         teesFlat = teesRawInput
       } else if (typeof teesRawInput === 'object' && teesRawInput !== null) {
-        // Object keyed by gender or tee name
         for (const [groupKey, groupVal] of Object.entries(teesRawInput)) {
           if (Array.isArray(groupVal)) {
-            // gender group: "male" → [{tee_name: "Blue", ...}, ...]
             for (const tee of groupVal) {
               teesFlat.push({ ...tee, _gender: groupKey })
             }
           } else if (typeof groupVal === 'object' && groupVal !== null) {
-            // single tee object keyed by name: "Blue" → {courseRating, ...}
             teesFlat.push({ ...groupVal, _keyName: groupKey })
           }
         }
       }
 
-      // Deduplicate names: if same tee_name appears in male & female, suffix with (M)/(F)
       const nameCount = {}
       for (const tee of teesFlat) {
         const base = tee.tee_name || tee.teeName || tee.name || tee._keyName || 'Unknown'
@@ -406,9 +403,8 @@ export const useCoursesStore = defineStore('courses', () => {
       const teesData = {}
       for (const tee of teesFlat) {
         let teeName = tee.tee_name || tee.teeName || tee.name || tee._keyName || 'Unknown'
-        // Suffix with gender if name collision
         if (nameCount[teeName] > 1 && tee._gender) {
-          const g = tee._gender.charAt(0).toUpperCase()  // M or F
+          const g = tee._gender.charAt(0).toUpperCase()
           teeName = `${teeName} (${g})`
         }
         const holes = tee.holes || []
@@ -421,7 +417,6 @@ export const useCoursesStore = defineStore('courses', () => {
           parByHole: holes.map(h => h.par || null),
         }
       }
-      // Global par/si: prefer tee with most complete par data (stable across API call order)
       const firstTeeHoles = teesFlat[0]?.holes || course.holes || []
       let bestParSource = null
       for (const tee of teesFlat) {
@@ -431,7 +426,6 @@ export const useCoursesStore = defineStore('courses', () => {
         }
       }
       const par = (bestParSource ?? firstTeeHoles.map(h => h.par || null)).map(p => p || 4)
-      // si: use first tee that has handicap data
       let si = null
       for (const tee of teesFlat) {
         const sis = (tee.holes || []).map(h => h.handicap || h.stroke_index || null)
