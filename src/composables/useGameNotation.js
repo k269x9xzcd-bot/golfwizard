@@ -384,13 +384,21 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
           // One row per 6-hole segment — shows pairing + per-hole hole-winner
           for (const seg of (r.segResults || [])) {
             if (seg.skipped) continue
-            const aNms = seg.teamANames || 'A'
-            const bNms = seg.teamBNames || 'B'
+            // Use pInit (initials, collision-aware) if IDs available, else fall back to short names
+            const aNms = seg.teamAIds?.length
+              ? seg.teamAIds.map(id => pInit(id)).join('+')
+              : seg.teamANames || 'A'
+            const bNms = seg.teamBIds?.length
+              ? seg.teamBIds.map(id => pInit(id)).join('+')
+              : seg.teamBNames || 'B'
             const cells = {}
             for (const hd of (seg.holeDetails || [])) {
               if (hd.incomplete) { cells[hd.hole] = { text: '', cls: '' }; continue }
               const cls = hd.winner === 'a' ? 'nota-t1' : hd.winner === 'b' ? 'nota-t2' : 'nota-halved'
-              const sym = hd.winner === 'a' ? aNms.slice(0,2) : hd.winner === 'b' ? bNms.slice(0,2) : '='
+              // Cell shows first player's initials for winning team (or '=' for halve)
+              const aCell = seg.teamAIds?.length ? pInit(seg.teamAIds[0]) : aNms.slice(0,2)
+              const bCell = seg.teamBIds?.length ? pInit(seg.teamBIds[0]) : bNms.slice(0,2)
+              const sym = hd.winner === 'a' ? aCell : hd.winner === 'b' ? bCell : '='
               cells[hd.hole] = { text: sym, cls }
             }
             const played = (seg.holeDetails || []).filter(hd => !hd.incomplete)

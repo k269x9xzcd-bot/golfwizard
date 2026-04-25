@@ -495,35 +495,24 @@
               </template>
             </tbody>
 
-            <!-- Game notation rows: compact summary by default, tap to expand per-hole -->
+            <!-- Game notation rows: always expanded per-hole -->
             <tfoot v-if="gameNotationRows.length > 0 && showGameRows">
               <template v-for="(row, ri) in gameNotationRows" :key="'gn-'+ri">
-                <tr class="row-game-notation" :class="[row.cls || '', { 'notation-row-expanded': expandedNotationRows.has(ri) }]"
-                    @click="toggleNotationRow(ri)">
+                <tr class="row-game-notation notation-row-expanded" :class="row.cls || ''">
                   <td class="col-sticky col-notation-label">
                     <span class="notation-icon">{{ row.icon }}</span>
                     <span class="notation-name" v-if="!row.labelHtml">{{ row.label }}</span>
                     <span class="notation-name" v-else v-html="row.labelHtml"></span>
-                    <span class="notation-expand-caret">{{ expandedNotationRows.has(ri) ? '▴' : '▾' }}</span>
                   </td>
-                  <template v-if="!expandedNotationRows.has(ri)">
-                    <td :colspan="frontHoles.length + (hasBack9 ? backHoles.length + 2 : 0) + 2" class="col-notation-summary-collapsed">
-                      <span class="nota-summary-pill" v-html="row.totalSummary || '&mdash;'"></span>
-                      <span v-if="row.netSummary" class="nota-summary-net" v-html="row.netSummary"></span>
-                    </td>
-                  </template>
-                  <template v-else>
-                    <td v-for="h in frontHoles" :key="'gn-'+ri+'-'+h"
-                        class="col-notation-cell" :class="row.cells[h]?.cls || ''"
-                        v-html="row.cells[h]?.text || ''"></td>
-                    <td v-if="hasBack9" class="col-subtotal col-notation-sub" v-html="row.outSummary || ''"></td>
-                    <td v-for="h in backHoles" :key="'gn-'+ri+'-'+h"
-                        class="col-notation-cell" :class="row.cells[h]?.cls || ''"
-                        v-html="row.cells[h]?.text || ''"></td>
-                    <td v-if="hasBack9" class="col-subtotal col-notation-sub" v-html="row.inSummary || ''"></td>
-                    <td class="col-total col-notation-total" v-html="row.totalSummary || ''"></td>
-                    <td class="col-total col-notation-total" v-html="row.netSummary || ''"></td>
-                  </template>
+                  <td v-for="h in frontHoles" :key="'gn-'+ri+'-'+h"
+                      class="col-notation-cell" :class="row.cells[h]?.cls || ''"
+                      v-html="row.cells[h]?.text || ''"></td>
+                  <td v-if="hasBack9" class="col-subtotal col-notation-sub" v-html="row.outSummary || ''"></td>
+                  <td v-for="h in backHoles" :key="'gn-'+ri+'-'+h"
+                      class="col-notation-cell" :class="row.cells[h]?.cls || ''"
+                      v-html="row.cells[h]?.text || ''"></td>
+                  <td v-if="hasBack9" class="col-subtotal col-notation-sub" v-html="row.inSummary || ''"></td>
+                  <td class="col-total col-notation-total" v-html="row.totalSummary || ''"></td>
                 </tr>
               </template>
             </tfoot>

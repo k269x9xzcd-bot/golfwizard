@@ -1479,6 +1479,8 @@ export function computeSixes(ctx, config) {
 
     segResults.push({
       ...seg,
+      teamAIds: seg.teamA.map(m => m.id),
+      teamBIds: seg.teamB.map(m => m.id),
       teamANames: seg.teamA.map(m => m.short_name).join('+'),
       teamBNames: seg.teamB.map(m => m.short_name).join('+'),
       aWins, bWins, aPts, bPts, holeDetails, scoringModel,
