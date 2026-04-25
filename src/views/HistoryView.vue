@@ -570,9 +570,9 @@ function _recapOne(ctx, game) {
         if (s.front) parts.push(`F ${s.front > 0 ? '+' : '-'}$${Math.abs(s.front)}`)
         if (s.back) parts.push(`B ${s.back > 0 ? '+' : '-'}$${Math.abs(s.back)}`)
         if (s.overall) parts.push(`O ${s.overall > 0 ? '+' : '-'}$${Math.abs(s.overall)}`)
-        if (r.alohaResult) {
-          const alohaWinner = r.alohaResult.t1Delta > 0 ? t1n : t2n
-          parts.push(`Aloha +$${r.alohaResult.amount} -> ${alohaWinner}`)
+        if (r.aloha) {
+          const alohaWinner = r.aloha.t1Delta > 0 ? t1n : t2n
+          parts.push(`Aloha +$${r.aloha.amount} -> ${alohaWinner}`)
         } else if (cfg.aloha?.status === 'accepted') {
           parts.push('Aloha pending')
         } else if (cfg.aloha?.status === 'pending') {

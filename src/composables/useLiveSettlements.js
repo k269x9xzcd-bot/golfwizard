@@ -107,8 +107,8 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         }
 
         let alohaHtml = ''
-        if (r.alohaResult) {
-          const ar = r.alohaResult
+        if (r.aloha) {
+          const ar = r.aloha
           const alohaWinner = ar.t1Delta > 0 ? t1n : t2n
           alohaHtml = `<div>🌺 <span style="font-weight:600">Aloha:</span> <span style="color:#4ade80;font-weight:700">${alohaWinner} +$${ar.amount}</span></div>`
         } else if (cfg.aloha?.status === 'accepted') {
