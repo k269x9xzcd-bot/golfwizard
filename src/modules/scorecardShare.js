@@ -128,7 +128,7 @@ function buildGamesSummaryText(gameRows, settlement) {
  * Build the props object for ScorecardCapture from ScoringView context.
  * Called by both shareScorecard and shareRecap.
  */
-function buildCaptureProps(round, members, scores, courseData, games, settlement, gameRows, notationRows) {
+function buildCaptureProps(round, members, scores, courseData, games, settlement, gameRows, notationRows, sixesHoleTeamMap) {
   return {
     round,
     members,
@@ -138,6 +138,7 @@ function buildCaptureProps(round, members, scores, courseData, games, settlement
     settlement: settlement || null,
     gameRows: gameRows || [],
     notationRows: notationRows || [],
+    sixesHoleTeamMap: sixesHoleTeamMap || {},
   }
 }
 
@@ -152,9 +153,9 @@ function buildCaptureProps(round, members, scores, courseData, games, settlement
  * @param {object} courseData     - resolved course object
  * @param {Array}  notationRows   - gameNotationRows computed value
  */
-export async function shareScorecard(round, members, scores, courseData, notationRows) {
+export async function shareScorecard(round, members, scores, courseData, notationRows, sixesHoleTeamMap) {
   const filename = `${(round.course_name || 'scorecard').replace(/\s+/g, '-')}-${round.date || 'today'}.png`
-  const props = buildCaptureProps(round, members, scores, courseData, [], null, [], notationRows)
+  const props = buildCaptureProps(round, members, scores, courseData, [], null, [], notationRows, sixesHoleTeamMap)
   await captureComponent(props, filename, `${round.course_name} scorecard`)
 }
 
@@ -170,12 +171,12 @@ export async function shareScorecard(round, members, scores, courseData, notatio
  * @param {Array}  gameRows       - buildGameLines() result
  * @param {Array}  notationRows   - gameNotationRows computed value
  */
-export async function shareRecap(round, members, scores, courseData, games, settlement, gameRows, notationRows) {
+export async function shareRecap(round, members, scores, courseData, games, settlement, gameRows, notationRows, sixesHoleTeamMap) {
   const filename = `${(round.course_name || 'recap').replace(/\s+/g, '-')}-${round.date || 'today'}-recap.png`
   const gamesSummary = buildGamesSummaryText(gameRows, settlement)
   const header = `GolfWizard Recap \u00b7 ${round.course_name} \u00b7 ${round.date || ''}`
   const text = gamesSummary ? `${header}\n\n${gamesSummary}` : header
-  const props = buildCaptureProps(round, members, scores, courseData, games, settlement, gameRows, notationRows)
+  const props = buildCaptureProps(round, members, scores, courseData, games, settlement, gameRows, notationRows, sixesHoleTeamMap)
   await captureComponent(props, filename, text)
 }
 

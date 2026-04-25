@@ -2043,6 +2043,7 @@ async function doShareScorecard() {
       roundsStore.activeScores,
       courseData.value,
       gameNotationRows.value,
+      sixesHoleTeamMap.value,
     )
   } catch (e) { console.error('Share scorecard failed:', e) }
   finally { sharing.value = false }
@@ -2062,6 +2063,7 @@ async function doShareRecap() {
       liveSettlements.value,
       buildGameLines(),
       gameNotationRows.value,
+      sixesHoleTeamMap.value,
     )
   } catch (e) { console.error('Share recap failed:', e) }
   finally { sharing.value = false }

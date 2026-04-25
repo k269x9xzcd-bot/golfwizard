@@ -75,6 +75,7 @@
               v-for="h in frontHoles"
               :key="'fs-'+member.id+'-'+h"
               class="sc-td sc-col-hole sc-score-td"
+              :class="sixesCellClass(member.id, h)"
             >
               <span v-if="getScore(member.id, h) != null" :class="scoreClass(getScore(member.id, h), parForHole(h))">
                 {{ getScore(member.id, h) }}
@@ -89,6 +90,7 @@
               v-for="h in backHoles"
               :key="'bs-'+member.id+'-'+h"
               class="sc-td sc-col-hole sc-score-td"
+              :class="sixesCellClass(member.id, h)"
             >
               <span v-if="getScore(member.id, h) != null" :class="scoreClass(getScore(member.id, h), parForHole(h))">
                 {{ getScore(member.id, h) }}
@@ -191,7 +193,8 @@ const props = defineProps({
   games:        { type: Array,  default: () => [] },
   settlement:   { type: Object, default: null },
   gameRows:     { type: Array,  default: () => [] },
-  notationRows: { type: Array,  default: () => [] },
+  notationRows:     { type: Array,  default: () => [] },
+  sixesHoleTeamMap: { type: Object, default: () => ({}) },
 })
 
 // ── Holes ──────────────────────────────────────────────────────
@@ -267,6 +270,15 @@ function scoreClass(score, par) {
   if (d === 1)  return 'sn sn-bogey'
   if (d === 2)  return 'sn sn-dbl'
   return 'sn sn-trip'
+}
+
+// ── Sixes team coloring per player per hole ────────────────────
+function sixesCellClass(memberId, hole) {
+  const seg = props.sixesHoleTeamMap?.[hole]
+  if (!seg) return ''
+  if (seg.aIds?.includes(memberId)) return 'six-score-a'
+  if (seg.bIds?.includes(memberId)) return 'six-score-b'
+  return ''
 }
 
 // ── Settlement ─────────────────────────────────────────────────
