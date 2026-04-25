@@ -71,7 +71,7 @@
             <!-- Player name + hcp -->
             <td class="sc-td sc-col-player sc-player-cell">
               <span class="sc-name">{{ member.short_name }}</span>
-              <span v-if="hcpDisplay(member)" class="sc-hcp">{{ hcpDisplay(member) }}</span>
+              <span v-if="hcpDisplay(member) !== ''" class="sc-hcp">{{ hcpDisplay(member) }}<span v-if="lowManFor(member) !== null && lowManFor(member) !== Math.round(hcpDisplay(member))" class="sc-hcp-lm"> ({{ lowManFor(member) }})</span></span>
             </td>
             <!-- Settle amount column -->
             <td v-if="hasSettlement" class="sc-td sc-col-settle sc-settle-inline">
@@ -307,14 +307,29 @@ function settleTotalFor(memberId) {
   return pt.total ?? 0
 }
 
-// ── Stroke dots per member per hole (off low-man) ─────────────
+// ── Low-man stroke differential ──────────────────────────────
+function lowManFor(member) {
+  const hcps = props.members.map(m => memberHandicap(m, props.course, props.round?.tee)).filter(h => h != null)
+  if (hcps.length < 2) return null
+  const lowest = Math.min(...hcps)
+  const myHcp = memberHandicap(member, props.course, props.round?.tee)
+  if (myHcp == null) return null
+  return Math.round(myHcp - lowest)
+}
+
+// ── Stroke dots per member per hole (off low-man like live scorecard) ────────
 function strokeDotsFor(memberId, hole) {
   const member = props.members.find(m => m.id === memberId)
   if (!member) return 0
-  const hcp = memberHandicap(member, props.course, props.round?.tee)
-  if (hcp == null) return 0
   const si = siForHole(hole)
-  return strokesOnHole(hcp, si)
+  const hcps = props.members.map(m => memberHandicap(m, props.course, props.round?.tee)).filter(h => h != null)
+  if (hcps.length >= 2) {
+    const lowest = Math.min(...hcps)
+    const myHcp = memberHandicap(member, props.course, props.round?.tee)
+    if (myHcp != null) return strokesOnHole(myHcp - lowest, si)
+  }
+  const hcp = memberHandicap(member, props.course, props.round?.tee)
+  return hcp != null ? strokesOnHole(hcp, si) : 0
 }
 </script>
 
@@ -455,8 +470,9 @@ function strokeDotsFor(memberId, hole) {
   display: block;
   font-size: 10px;
   color: #9ca3af;
-  line-height: 1;
+  line-height: 1.2;
 }
+.sc-hcp-lm { color: #b45309; font-weight: 700; margin-left: 2px; }
 
 /* Score cells */
 .sc-score-td {
@@ -592,9 +608,9 @@ function strokeDotsFor(memberId, hole) {
   gap: 6px;
 }
 .sc-ledger-row:last-child { border-bottom: none; }
-.sc-ledger-from   { font-weight: 800; color: #dc2626; min-width: 70px; }
+.sc-ledger-from   { font-weight: 800; color: #dc2626; min-width: 80px; }
 .sc-ledger-arrow  { color: #9ca3af; }
-.sc-ledger-to     { font-weight: 800; color: #166534; flex: 1; }
-.sc-ledger-amount { font-weight: 900; font-family: 'DM Mono', monospace; font-size: 16px; color: #1a1f1b; }
+.sc-ledger-to     { font-weight: 800; color: #166534; min-width: 80px; }
+.sc-ledger-amount { font-weight: 900; font-family: 'DM Mono', monospace; font-size: 16px; color: #1a1f1b; margin-left: 6px; }
 .sc-even-msg      { font-size: 14px; color: #166534; font-weight: 600; text-align: center; padding: 6px 0; }
 </style>
