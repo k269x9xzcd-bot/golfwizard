@@ -464,7 +464,7 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
 
           for (const player of (r.settlements || [])) {
             const m = ctx.members.find(x => x.id === player.id)
-            const initials = m ? (m.short_name || m.guest_name || '?').slice(0,3) : '?'
+            const initials = m ? pInit(m.id) : '?'
             const holePoints = r.playerResults?.[player.id]?.holePoints || []
             const cells = {}
             let outPts = 0, inPts = 0
@@ -545,7 +545,7 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
           for (let pi = 0; pi < r.settlements.length; pi++) {
             const player = r.settlements[pi]
             const m = ctx.members.find(x => x.id === player.id)
-            const initials = m ? (m.short_name || m.guest_name || '?').slice(0,3) : '?'
+            const initials = m ? pInit(m.id) : '?'
             const cells = {}
             let outPts = 0, inPts = 0
 
