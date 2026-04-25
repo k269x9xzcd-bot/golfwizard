@@ -1324,10 +1324,10 @@ function nassauLosingTeam(game) {
   if (!ctx) return null
   try {
     const r = computeNassau(ctx, { ...game.config, aloha: null })
-    // Aloha is about the back-9 bet — whoever is losing the back is the one who calls
-    const backT1Up = r.backSeg?.t1Up ?? 0
-    if (backT1Up === 0) return null  // all square on back — no loser to call
-    return backT1Up > 0 ? 't2' : 't1'
+    // Aloha caller = whoever is down the most $ in the total match
+    const total = r.settlement?.total ?? 0
+    if (total === 0) return null
+    return total > 0 ? 't2' : 't1'
   } catch { return null }
 }
 
