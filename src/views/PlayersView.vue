@@ -90,11 +90,8 @@
           <span v-if="myRosterPlayer.ghin_index != null" class="player-hcp">
             ({{ Number(myRosterPlayer.ghin_index).toFixed(1) }}<span class="trend-arrow" v-if="myRosterPlayer.ghin_trend" :class="'trend-' + myRosterPlayer.ghin_trend">{{ myRosterPlayer.ghin_trend === 'up' ? '↑' : myRosterPlayer.ghin_trend === 'down' ? '↓' : '' }}</span><span class="ghin-dot-inline" :class="ghinSyncStatus(myRosterPlayer)" :title="ghinSyncTitle(myRosterPlayer)"></span>)
           </span>
-        </div>
-        <div class="player-meta you-meta">
-          <span v-if="myRosterPlayer.ghin_number">GHIN #{{ myRosterPlayer.ghin_number }}</span>
-          <span v-else class="you-no-ghin">No GHIN linked</span>
-          <span v-if="myRosterPlayer.ghin_synced_at" class="you-sync-time"> · Synced {{ ghinSyncTitle(myRosterPlayer) }}</span>
+          <span v-if="myRosterPlayer.hard_cap === 'true' || myRosterPlayer.hard_cap === true" class="cap-badge cap-hard" title="Hard Cap applied">HC</span>
+          <span v-else-if="myRosterPlayer.soft_cap === 'true' || myRosterPlayer.soft_cap === true" class="cap-badge cap-soft" title="Soft Cap applied">SC</span>
         </div>
       </div>
       <button v-if="myRosterPlayer.ghin_number" class="ghin-sheet-btn" @click.stop="openGhinSheet">GHIN</button>
