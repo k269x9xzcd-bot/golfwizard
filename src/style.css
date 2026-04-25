@@ -668,6 +668,8 @@ body {
   max-height: 92dvh;
   /* svh = small viewport height (excludes keyboard on iOS Safari) */
   max-height: 92svh;
+  height: 92svh;          /* fixed height — sheet doesn't shrink as results change */
+  height: 92dvh;
   display: flex;
   flex-direction: column;
   padding: 0;
