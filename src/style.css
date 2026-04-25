@@ -2716,7 +2716,8 @@ body.gw-landscape .scorecard-grid tbody .col-player-name {
 
 /* ── Sixes segment row layout ──────────────────────────────────── */
 .row-sixes-seg {
-  border-top: 2px solid rgba(0,0,0,0.06);
+  border-top: 1px solid rgba(0,0,0,0.06);
+  height: 32px;
 }
 .row-sixes-seg + .row-sixes-seg {
   border-top: 1px solid rgba(0,0,0,0.04);
@@ -2724,13 +2725,14 @@ body.gw-landscape .scorecard-grid tbody .col-player-name {
 
 /* Sticky label — taller, chips have room to breathe */
 .col-sixes-label {
-  padding: 7px 6px;
-  min-width: 120px;
-  line-height: 1.5;
+  padding: 4px 6px;
+  min-width: 0;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 .col-sixes-label .notation-name {
   display: inline-flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 2px;
   vertical-align: middle;
@@ -2770,7 +2772,7 @@ body.gw-landscape .scorecard-grid tbody .col-player-name {
 
 /* Chips in label — slightly larger */
 .six-chip {
-  font-size: 11px;
-  padding: 2px 5px;
-  border-radius: 4px;
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 3px;
 }

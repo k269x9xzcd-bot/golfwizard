@@ -503,7 +503,6 @@
                 <tr v-if="row.isSixesSeg" class="row-game-notation row-sixes-seg">
                   <!-- Sticky label: merged with non-segment holes (left blank) -->
                   <td class="col-sticky col-notation-label col-sixes-label">
-                    <span class="notation-icon">🎲</span>
                     <span class="notation-name" v-html="row.labelHtml"></span>
                   </td>
                   <!-- Front holes -->

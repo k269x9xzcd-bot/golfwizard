@@ -448,7 +448,7 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
           const sorted = [...(r.settlements || [])].sort((a, b) => b.net - a.net)
           const topNet = sorted[0]?.net || 0
           const summary = topNet > 0 ? `${sorted[0].name} +$${topNet}` : 'AS'
-          rows.push({ icon: '🎲', label: '💰 Total', cells: {}, outSummary: '', inSummary: '', totalSummary: summary, game })
+          rows.push({ icon: '', label: '💰 Total', cells: {}, outSummary: '', inSummary: '', totalSummary: summary, game })
         } catch(e) { /* skip */ }
       }
 
