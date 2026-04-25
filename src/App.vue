@@ -1,21 +1,15 @@
 <template>
   <div id="golfwizard-app" :class="{ 'guest-mode': authStore.isGuest }">
 
-    <!-- Loading splash -->
     <div v-if="authStore.loading" class="splash">
       <div class="splash-logo">⛳ GolfWizard</div>
       <div class="splash-spinner"></div>
     </div>
 
-    <!-- Main app -->
     <template v-else>
-      <!-- Wizard overlay for creating a new round -->
       <WizardOverlay v-if="showWizard" @close="showWizard = false" @created="onRoundCreated" @setup-course="onSetupCourse" />
-
-      <!-- Join by room code overlay -->
       <JoinOverlay v-if="showJoin" @close="showJoin = false" />
 
-      <!-- 4v4 Invite modal — shown after round + linked match created -->
       <div v-if="inviteModal" class="invite-modal-backdrop" @click.self="inviteModal = null">
         <div class="invite-modal">
           <div class="invite-modal-icon">🤝</div>
@@ -29,16 +23,11 @@
         </div>
       </div>
 
-      <!-- Main content -->
       <div class="app-container">
         <RouterView />
       </div>
 
-      <!-- Bottom nav — hidden when wizard is open or on full-screen wizard routes -->
-      <nav
-        v-if="!showWizard && !isWizardRoute"
-        class="bottom-nav"
-      >
+      <nav v-if="!showWizard && !isWizardRoute" class="bottom-nav">
         <RouterLink to="/" class="nav-item" :class="{ active: $route.name === 'home' }">
           <span class="nav-icon">🏠</span>
           <span class="nav-label">Home</span>
@@ -51,9 +40,12 @@
           <span class="nav-icon">📊</span>
           <span class="nav-label">Stats</span>
         </RouterLink>
-        <RouterLink to="/player-courses" class="nav-item" :class="{ active: $route.name === 'player-courses' || $route.name === 'players' || $route.name === 'courses' }">
-          <span class="nav-icon">🏌️</span>
-          <span class="nav-label">Roster</span>
+        <RouterLink
+          to="/player-courses"
+          class="nav-item nav-item--text-only"
+          :class="{ active: $route.name === 'player-courses' || $route.name === 'players' || $route.name === 'courses' }"
+        >
+          <span class="nav-label">Courses &amp;<br>Roster</span>
         </RouterLink>
         <RouterLink to="/history" class="nav-item" :class="{ active: $route.name === 'history' }">
           <span class="nav-icon">📋</span>
@@ -208,6 +200,17 @@ function onSetupCourse(courseName, apiId) {
 </script>
 
 <style>
+/* Courses & Roster nav item: no icon, label wraps to two lines */
+.nav-item--text-only {
+  justify-content: center;
+}
+.nav-item--text-only .nav-label {
+  font-size: 10.5px;
+  text-align: center;
+  line-height: 1.25;
+  white-space: normal;
+}
+
 .invite-modal-backdrop {
   position: fixed; inset: 0; z-index: 9999;
   background: rgba(0,0,0,0.75);
