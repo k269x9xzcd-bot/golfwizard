@@ -34,8 +34,8 @@
         </div>
       </div>
 
-      <!-- Course filter -->
-      <div class="selector-section" v-if="allCourses.length > 1">
+      <!-- Course filter (Scoring/Games tabs) -->
+      <div class="selector-section" v-if="allCourses.length > 1 && activeTab !== 'course'">
         <label class="selector-label">Course</label>
         <div class="pill-row">
           <button
@@ -234,18 +234,17 @@
 
       <!-- ── COURSE TAB ── -->
       <div v-if="activeTab === 'course'">
-        <!-- Course selector -->
+        <!-- Course dropdown (shown when >1 course played) -->
         <div class="selector-section" v-if="courseNames.length > 1">
-          <label class="selector-label">Course</label>
-          <div class="pill-row">
-            <button
-              v-for="c in courseNames"
-              :key="c"
-              class="pill"
-              :class="{ active: (selectedCourse || courseNames[0]) === c }"
-              @click="selectedCourse = c"
-            >{{ c }}</button>
-          </div>
+          <label class="selector-label" for="course-select">Course</label>
+          <select
+            id="course-select"
+            class="course-select"
+            :value="selectedCourseTab"
+            @change="onCourseTabChange"
+          >
+            <option v-for="c in courseNames" :key="c" :value="c">{{ c }}</option>
+          </select>
         </div>
 
         <div v-if="!courseHoleStats" class="empty-state" style="padding: 40px 0;">
@@ -269,6 +268,7 @@
             <span class="hg-avg">Avg</span>
             <span class="hg-net">Net</span>
             <span class="hg-best">Best</span>
+            <span class="hg-bird">🐦</span>
           </div>
 
           <div class="hole-grid-body">
@@ -286,6 +286,7 @@
                 <span class="hg-avg">—</span>
                 <span class="hg-net">—</span>
                 <span class="hg-best">—</span>
+                <span class="hg-bird"></span>
               </template>
               <template v-else>
                 <span class="hg-avg" :class="diffClass(h.avgVsPar)">
@@ -296,6 +297,11 @@
                 </span>
                 <span class="hg-best" :class="bestScoreClass(h.bestGross, h.holePar)">
                   {{ h.bestGross }}
+                </span>
+                <span class="hg-bird">
+                  <template v-if="h.birdies > 0">🐦<span class="bird-count">{{ h.birdies > 1 ? h.birdies : '' }}</span></template>
+                  <template v-else-if="h.eagles > 0">🦅</template>
+                  <template v-else>—</template>
                 </span>
               </template>
             </div>
@@ -340,13 +346,16 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoundsStore } from '../stores/rounds'
 import { getCourse } from '../modules/courses'
 
+const LS_COURSE_KEY = 'gw_metrics_course_tab'
+
 const roundsStore = useRoundsStore()
 const loading = ref(true)
 const allRounds = ref([])
 const settlementsMap = ref({}) // roundId → settlement_json
 
 const selectedPlayer = ref(null)
-const selectedCourse = ref(null)
+const selectedCourse = ref(null)  // used by Scoring/Games tabs
+const selectedCourseTab = ref(null) // used by Course tab — persisted
 const activeTab = ref('scoring')
 
 onMounted(async () => {
@@ -357,6 +366,10 @@ onMounted(async () => {
   if (players.length && !selectedPlayer.value) {
     selectedPlayer.value = players[0].id
   }
+  // Restore last selected course for Course tab
+  const saved = localStorage.getItem(LS_COURSE_KEY)
+  if (saved) selectedCourseTab.value = saved
+
   // Pre-fetch settlements for completed rounds
   for (const r of allRounds.value) {
     if (r.is_complete && r.game_configs?.length) {
@@ -368,6 +381,11 @@ onMounted(async () => {
   }
   loading.value = false
 })
+
+function onCourseTabChange(e) {
+  selectedCourseTab.value = e.target.value
+  localStorage.setItem(LS_COURSE_KEY, e.target.value)
+}
 
 // ── Player list ──────────────────────────────────────
 function extractPlayers() {
@@ -551,11 +569,9 @@ const gameStats = computed(() => {
       const type = gc.type
       if (!type) continue
 
-      // Determine net for this player in this game type
       let net = 0
       let found = false
 
-      // Try settlement.games[] first
       if (settlement.games && Array.isArray(settlement.games)) {
         const gameEntry = settlement.games.find(g => g.type === type || g.gameType === type)
         if (gameEntry) {
@@ -567,7 +583,6 @@ const gameStats = computed(() => {
         }
       }
 
-      // Fallback: playerTotals at top level (only if single game round)
       if (!found && settlement.playerTotals && gameConfigs.length === 1) {
         const pt = settlement.playerTotals[me.id]
         if (pt != null) {
@@ -611,7 +626,6 @@ const wolfStats = computed(() => {
     const hasWolf = (r.game_configs || []).some(g => g.type === 'wolf')
     if (!hasWolf) continue
 
-    // Look for lone wolf data in settlement
     const wolfGame = settlement.games?.find(g => g.type === 'wolf' || g.gameType === 'wolf')
     if (!wolfGame) continue
 
@@ -652,7 +666,6 @@ const h2hRecords = computed(() => {
     const myStrokes = me.stroke_override ?? me.round_hcp ?? 0
     const myNet = myGross - myStrokes
 
-    // Money for this round (my total from settlement)
     const myMoney = settlementsMap.value[r.id]?.playerTotals?.[me.id]?.total ?? null
 
     for (const opp of (r.round_members || [])) {
@@ -681,7 +694,6 @@ const h2hRecords = computed(() => {
       else if (diff > 0) rec.losses++
       else rec.ties++
 
-      // Money
       if (myMoney !== null) {
         rec.moneyNet += myMoney
         rec.moneyRounds++
@@ -716,8 +728,7 @@ const courseNames = computed(() => {
 const courseHoleStats = computed(() => {
   if (!selectedPlayer.value) return null
 
-  // Group rounds by course, filtered to selected player
-  const courseMap = new Map() // courseName → { rounds: [], snapshot }
+  const courseMap = new Map()
 
   for (const r of allRounds.value) {
     if (!r.course_snapshot?.par) continue
@@ -734,13 +745,21 @@ const courseHoleStats = computed(() => {
     courseMap.get(name).rounds.push({ round: r, member: me, myScores })
   }
 
-  // Build per-hole stats for selected course
-  const courseName = selectedCourse.value || Array.from(courseMap.keys())[0]
-  if (!courseName || !courseMap.has(courseName)) return null
+  // Use selectedCourseTab; fall back to first available; validate saved value still exists
+  const available = Array.from(courseMap.keys())
+  let courseName = selectedCourseTab.value
+  if (!courseName || !courseMap.has(courseName)) {
+    courseName = available[0] || null
+    // Update the ref so the dropdown reflects reality
+    if (courseName && selectedCourseTab.value !== courseName) {
+      selectedCourseTab.value = courseName
+    }
+  }
+  if (!courseName) return null
 
   const { snapshot, tee, rounds } = courseMap.get(courseName)
-  const par = snapshot.par // array[18]
-  const si = snapshot.si   // array[18]
+  const par = snapshot.par
+  const si = snapshot.si
   const yards = snapshot.teesData?.[tee]?.yardsByHole || []
 
   const holes = []
@@ -777,7 +796,7 @@ const courseHoleStats = computed(() => {
     }
 
     if (!holeScores.length) {
-      holes.push({ holeNum, holePar, holeSI, holeYards, noData: true })
+      holes.push({ holeNum, holePar, holeSI, holeYards, noData: true, birdies: 0, eagles: 0 })
       continue
     }
 
@@ -942,6 +961,29 @@ function bestScoreClass(score, par) {
 .pill.active {
   background: var(--gw-green-700, #114a35);
   color: var(--gw-text, #f0ede0);
+  border-color: var(--gw-gold, #d4af37);
+}
+
+/* Course dropdown */
+.course-select {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--gw-green-800, #0d3325);
+  border: 1px solid var(--gw-green-700, #114a35);
+  border-radius: 10px;
+  color: var(--gw-text, #f0ede0);
+  font-size: 15px;
+  font-weight: 600;
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23a3b8aa' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 36px;
+  cursor: pointer;
+}
+.course-select:focus {
+  outline: none;
   border-color: var(--gw-gold, #d4af37);
 }
 
@@ -1134,7 +1176,6 @@ function bestScoreClass(score, par) {
 .recent-right .recent-to-par { margin-top: 2px; }
 .sp-hot + .recent-to-par { color: #fbbf24; }
 
-/* To-par coloring */
 .recent-right .sp-hot { color: #fbbf24; }
 .recent-right .sp-under { color: #86efac; }
 .recent-right .sp-even { color: var(--gw-text, #f0ede0); }
@@ -1270,7 +1311,7 @@ function bestScoreClass(score, par) {
 }
 .hole-grid-header, .hole-grid-row {
   display: grid;
-  grid-template-columns: 28px 28px 28px 40px 46px 46px 36px;
+  grid-template-columns: 28px 28px 28px 40px 46px 46px 36px 28px;
   gap: 2px;
   align-items: center;
   padding: 4px 8px;
@@ -1300,6 +1341,8 @@ function bestScoreClass(score, par) {
 .hg-yds { color: var(--gw-text-muted, #7d9283); font-size: 11px; }
 .hg-avg, .hg-net { font-weight: 700; }
 .hg-best { font-weight: 700; }
+.hg-bird { font-size: 13px; line-height: 1; display: flex; align-items: center; gap: 1px; }
+.bird-count { font-size: 10px; font-weight: 700; color: #60a5fa; font-family: var(--gw-font-mono); }
 .negative { color: #fca5a5; }
 .sp-under { color: #86efac; }
 .sp-even { color: var(--gw-text, #f0ede0); }
