@@ -39,7 +39,6 @@
         v-if="!showWizard && !isWizardRoute"
         class="bottom-nav"
       >
-        <!-- 5 equal nav items -->
         <RouterLink to="/" class="nav-item" :class="{ active: $route.name === 'home' }">
           <span class="nav-icon">🏠</span>
           <span class="nav-label">Home</span>
@@ -53,8 +52,8 @@
           <span class="nav-label">Stats</span>
         </RouterLink>
         <RouterLink to="/player-courses" class="nav-item" :class="{ active: $route.name === 'player-courses' || $route.name === 'players' || $route.name === 'courses' }">
-          <span class="nav-icon">👥</span>
-          <span class="nav-label">Players</span>
+          <span class="nav-icon">🏌️</span>
+          <span class="nav-label">Roster</span>
         </RouterLink>
         <RouterLink to="/history" class="nav-item" :class="{ active: $route.name === 'history' }">
           <span class="nav-icon">📋</span>
@@ -88,16 +87,12 @@ const route = useRoute()
 
 const showTournament = computed(() => hasTournamentAccess(authStore.user?.email))
 
-// Routes that are full-screen wizard-like flows — hide the bottom nav
 const WIZARD_ROUTES = new Set(['cross-match-new', 'cross-match-accept', 'cross-match-detail'])
 const isWizardRoute = computed(() => WIZARD_ROUTES.has(route.name))
 
 const showWizard = ref(false)
 const showJoin = ref(false)
-
-// Invite modal state — shown after round+linked match created together
-const inviteModal = ref(null)  // { inviteCode, inviteUrl, copied }
-
+const inviteModal = ref(null)
 
 provide('openWizard', () => { showWizard.value = true })
 
@@ -121,16 +116,12 @@ onMounted(async () => {
     ])
   } catch (e) { console.warn('Data load error:', e) }
 
-  // Auto-rehydrate most recent active round after reload (so scoring view isn't blank)
   if (!roundsStore.activeRound) {
     if (authStore.isAuthenticated) {
-      // Step 1: knownRounds registry already includes both owned and joined rounds
-      // (populated via createRound / loadRound / joinByRoomCode on this device)
       const known = roundsStore.knownRounds
       if (known.length > 0) {
         try { await roundsStore.loadRound(known[0].id) } catch (e) { console.warn('knownRound reload failed:', e) }
       }
-      // Step 2: fallback Supabase query — catches first-time users or cleared localStorage
       if (!roundsStore.activeRound) {
         try {
           const { supabase } = await import('./supabase')
@@ -146,7 +137,6 @@ onMounted(async () => {
         } catch (e) { console.warn('Auto-rehydrate fallback failed:', e) }
       }
     } else {
-      // Guest path: restore most recent non-complete guest round from local index
       try {
         const index = JSON.parse(localStorage.getItem('gw_guest_rounds_index') || '[]')
         for (const id of index) {
@@ -166,11 +156,8 @@ onMounted(async () => {
   const joinMatch = hash.match(/\/join\/([A-Z0-9]{6})/i)
   if (joinMatch) showJoin.value = true
 
-  // Auto-launch wizard if navigated from tournament match
-  // Use Vue Router's parsed query (works with hash history) instead of window.location.search
   if (router.currentRoute.value.query.launchWizard === '1') {
     showWizard.value = true
-    // Clean URL
     router.replace({ query: {} })
   }
 })
@@ -214,7 +201,6 @@ async function copyInvite() {
 
 function onSetupCourse(courseName, apiId) {
   showWizard.value = false
-  // Navigate to courses view with pre-fill query param
   const query = { add: courseName }
   if (apiId) query.apiId = apiId
   router.push({ path: '/courses', query })
