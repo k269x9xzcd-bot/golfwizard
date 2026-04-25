@@ -102,6 +102,8 @@
       <div v-if="showGhinSheet" class="ghin-sheet-backdrop" @click.self="showGhinSheet = false">
         <div class="ghin-sheet-panel">
           <div class="ghin-sheet-handle"></div>
+
+          <!-- Header -->
           <div class="ghin-sheet-top">
             <div>
               <div class="ghin-sheet-name">{{ myRosterPlayer?.name }}</div>
@@ -113,37 +115,73 @@
             <button class="close-btn" @click="showGhinSheet = false">✕</button>
           </div>
 
-          <!-- Stats grid: Index / Low HI / Scores Posted -->
+          <!-- ── Hero stat: HI + trend ── -->
+          <div class="ghin-hero">
+            <div class="ghin-hero-hi">
+              <span class="ghin-hero-num">{{ ghinLiveHI ?? (myRosterPlayer?.ghin_index != null ? Number(myRosterPlayer.ghin_index).toFixed(1) : '—') }}</span>
+              <span
+                v-if="ghinScoresFetched"
+                class="ghin-hero-trend"
+                :class="'trend-' + ghinComputedTrend"
+              >{{ ghinComputedTrend === 'improving' ? '↓' : ghinComputedTrend === 'declining' ? '↑' : '→' }}</span>
+            </div>
+            <div class="ghin-hero-label">Handicap Index</div>
+            <div class="ghin-hero-trend-label" v-if="ghinScoresFetched">
+              <span v-if="ghinComputedTrend === 'improving'" class="trend-improving">Trending down ↓ (improving)</span>
+              <span v-else-if="ghinComputedTrend === 'declining'" class="trend-declining">Trending up ↑ (rising)</span>
+              <span v-else class="trend-neutral">Stable</span>
+            </div>
+          </div>
+
+          <!-- ── Stats row ── -->
           <div class="ghin-stats-grid">
             <div class="ghin-stat">
-              <div class="ghin-stat-label">Index</div>
-              <div class="ghin-stat-val">
-                {{ myRosterPlayer?.ghin_index != null ? Number(myRosterPlayer.ghin_index).toFixed(1) : '—' }}
-                <span v-if="myRosterPlayer?.ghin_trend" class="stat-trend" :class="'trend-' + myRosterPlayer.ghin_trend">
-                  {{ myRosterPlayer.ghin_trend === 'up' ? '↑' : myRosterPlayer.ghin_trend === 'down' ? '↓' : '→' }}
-                </span>
-              </div>
-              <div class="ghin-stat-sub">current HI</div>
-            </div>
-            <div class="ghin-stat">
               <div class="ghin-stat-label">Low HI</div>
-              <div class="ghin-stat-val">{{ myRosterPlayer?.ghin_low_hi != null ? Number(myRosterPlayer.ghin_low_hi).toFixed(1) : '—' }}</div>
+              <div class="ghin-stat-val">{{ ghinLiveLowHI ?? (myRosterPlayer?.ghin_low_hi != null ? Number(myRosterPlayer.ghin_low_hi).toFixed(1) : '—') }}</div>
               <div class="ghin-stat-sub">career low</div>
             </div>
             <div class="ghin-stat">
               <div class="ghin-stat-label">Posted</div>
-              <div class="ghin-stat-val ghin-stat-val--sm">{{ myRosterPlayer?.ghin_scores_posted ?? '—' }}</div>
-              <div class="ghin-stat-sub">total scores</div>
+              <div class="ghin-stat-val">{{ ghinScoresPosted ?? myRosterPlayer?.ghin_scores_posted ?? '—' }}</div>
+              <div class="ghin-stat-sub">total rounds</div>
+            </div>
+            <div class="ghin-stat">
+              <div class="ghin-stat-label">Avg Score</div>
+              <div class="ghin-stat-val">{{ ghinScoreStats?.average != null ? Number(ghinScoreStats.average).toFixed(1) : '—' }}</div>
+              <div class="ghin-stat-sub">last 20</div>
             </div>
           </div>
 
-          <!-- Score history -->
+          <!-- ── Score range strip (only when loaded) ── -->
+          <div v-if="ghinScoreStats" class="ghin-range-strip">
+            <div class="ghin-range-item">
+              <span class="ghin-range-label">Low</span>
+              <span class="ghin-range-val ghin-range-val--low">{{ ghinScoreStats.lowest_score }}</span>
+            </div>
+            <div class="ghin-range-divider"></div>
+            <div class="ghin-range-item">
+              <span class="ghin-range-label">High</span>
+              <span class="ghin-range-val ghin-range-val--high">{{ ghinScoreStats.highest_score }}</span>
+            </div>
+            <div class="ghin-range-divider"></div>
+            <div class="ghin-range-item">
+              <span class="ghin-range-label">Used for HI</span>
+              <span class="ghin-range-val">{{ ghinScores.filter(s => s.used_for_hi).length }} of {{ ghinScores.length }}</span>
+            </div>
+          </div>
+
+          <!-- ── Cap badges ── -->
+          <div v-if="myRosterPlayer?.soft_cap === 'true' || myRosterPlayer?.hard_cap === 'true'" class="ghin-cap-row">
+            <div v-if="myRosterPlayer?.hard_cap === 'true'" class="ghin-cap-badge ghin-cap-badge--hard">⚠ Hard Cap Applied</div>
+            <div v-else-if="myRosterPlayer?.soft_cap === 'true'" class="ghin-cap-badge ghin-cap-badge--soft">Soft Cap Applied</div>
+          </div>
+
+          <!-- ── Score history ── -->
           <div class="ghin-history-section">
             <div class="ghin-history-header">
-              <span class="ghin-history-title">Recent Scores</span>
-              <button class="ghin-refresh-btn" @click="fetchGhinScores" :disabled="ghinScoresLoading">
-                <span v-if="ghinScoresLoading" class="spin">⟳</span>
-                <span v-else>⟳</span>
+              <span class="ghin-history-title">Score History</span>
+              <button class="ghin-refresh-btn" @click="fetchGhinScores" :disabled="ghinScoresLoading" title="Refresh">
+                <span :class="{ spin: ghinScoresLoading }">⟳</span>
               </button>
             </div>
 
@@ -166,7 +204,11 @@
             <!-- Scores list -->
             <div v-else-if="ghinScores.length" class="ghin-scores-list">
               <div class="ghin-scores-cols">
-                <span>Date</span><span>Course</span><span>AGS</span><span>Diff</span>
+                <span>Date</span>
+                <span>Course / Tee</span>
+                <span class="col-center">Gross</span>
+                <span class="col-center">Net</span>
+                <span class="col-right">Diff</span>
               </div>
               <div
                 v-for="(s, i) in ghinScores"
@@ -175,16 +217,24 @@
                 :class="{ 'ghin-score-row--used': s.used_for_hi }"
               >
                 <span class="score-date">{{ formatScoreDate(s.date) }}</span>
-                <span class="score-course" :title="s.course_name">{{ s.course_name }}</span>
-                <span class="score-ags">{{ s.adjusted_gross_score ?? '—' }}</span>
-                <span class="score-diff" :class="s.used_for_hi ? 'diff-used' : ''">{{ s.differential != null ? Number(s.differential).toFixed(1) : '—' }}</span>
+                <span class="score-course-wrap">
+                  <span class="score-course" :title="s.course_name">{{ s.course_name }}</span>
+                  <span class="score-tee" v-if="s.tee_name">{{ s.tee_name }}</span>
+                </span>
+                <span class="score-ags col-center">{{ s.adjusted_gross_score ?? '—' }}</span>
+                <span class="score-net col-center">{{ s.net_score ?? '—' }}</span>
+                <span class="score-diff col-right" :class="s.used_for_hi ? 'diff-used' : ''">
+                  {{ s.differential != null ? Number(s.differential).toFixed(1) : '—' }}
+                  <span v-if="s.used_for_hi" class="hi-dot" title="Used for HI">●</span>
+                </span>
               </div>
               <div class="ghin-scores-legend">
-                <span class="legend-dot legend-used"></span> Used for HI calculation
+                <span class="hi-dot" style="color:var(--gw-green-400);font-size:8px;">●</span>
+                Used for HI calculation ({{ ghinScores.filter(s => s.used_for_hi).length }} scores)
               </div>
             </div>
 
-            <!-- Empty -->
+            <!-- Empty after fetch -->
             <div v-else-if="ghinScoresFetched" class="ghin-scores-empty">No scores found</div>
 
             <!-- Prompt to load -->
@@ -536,6 +586,24 @@ const ghinScores = ref([])
 const ghinScoresLoading = ref(false)
 const ghinScoresFetched = ref(false)
 const ghinScoresError = ref('')
+const ghinScoresPosted = ref(null)
+const ghinScoreStats = ref(null)
+const ghinLiveHI = ref(null)
+const ghinLiveLowHI = ref(null)
+
+// Compute trend from differentials: lower = improving = 'down' (good in golf)
+const ghinComputedTrend = computed(() => {
+  const scores = ghinScores.value
+  if (!scores || scores.length < 4) return 'neutral'
+  const recent = scores.slice(0, 3).map(s => s.differential).filter(d => d != null)
+  const older  = scores.slice(3, 6).map(s => s.differential).filter(d => d != null)
+  if (!recent.length || !older.length) return 'neutral'
+  const avgRecent = recent.reduce((a, b) => a + b, 0) / recent.length
+  const avgOlder  = older.reduce((a, b) => a + b, 0) / older.length
+  if (avgRecent < avgOlder - 0.3) return 'improving'
+  if (avgRecent > avgOlder + 0.3) return 'declining'
+  return 'neutral'
+})
 
 const myRosterPlayer = computed(() => {
   const profile = authStore.profile
@@ -594,9 +662,12 @@ async function fetchGhinScores() {
     if (data?.error) throw new Error(data.error)
 
     ghinScores.value = data.scores || []
+    ghinScoresPosted.value = data.scores_posted ?? null
+    ghinScoreStats.value = data.score_stats ?? null
+    ghinLiveHI.value = data.handicap_index ?? null
+    ghinLiveLowHI.value = data.low_hi_display ?? null
     ghinScoresFetched.value = true
 
-    // Also update the roster player's stored scores if player_id was sent
     if (player?.id) {
       await rosterStore.fetchPlayers()
     }
@@ -1072,13 +1143,13 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 
 /* ── GHIN sheet ─────────────────────────────────────────────── */
 .ghin-sheet-backdrop {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+  position: fixed; inset: 0; background: rgba(0,0,0,0.6);
   display: flex; align-items: flex-end; z-index: 200;
 }
 .ghin-sheet-panel {
   background: var(--gw-neutral-900);
   border-radius: 24px 24px 0 0;
-  width: 100%; max-height: 90vh; overflow-y: auto;
+  width: 100%; max-height: 92vh; overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   border-top: 1px solid var(--gw-card-border);
   padding-bottom: env(safe-area-inset-bottom);
@@ -1095,10 +1166,39 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 .ghin-sheet-name { font-size: 20px; font-weight: 700; color: var(--gw-text); }
 .ghin-sheet-meta { font-size: 12px; color: var(--gw-text-muted); margin-top: 3px; }
 
+/* Hero HI display */
+.ghin-hero {
+  text-align: center;
+  padding: 20px 16px 4px;
+  border-bottom: 1px solid var(--gw-card-border);
+  margin: 0 16px;
+}
+.ghin-hero-hi {
+  display: flex; align-items: baseline; justify-content: center; gap: 8px;
+}
+.ghin-hero-num {
+  font-size: 56px; font-weight: 800; line-height: 1;
+  font-family: var(--gw-font-mono); color: var(--gw-text);
+  letter-spacing: -2px;
+}
+.ghin-hero-trend {
+  font-size: 28px; font-weight: 800;
+}
+.ghin-hero-label {
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .08em; color: var(--gw-text-muted); margin-top: 4px;
+}
+.ghin-hero-trend-label {
+  font-size: 12px; margin-top: 6px; margin-bottom: 4px;
+}
+.trend-improving { color: var(--gw-green-400); font-weight: 600; }
+.trend-declining  { color: #f87171; font-weight: 600; }
+.trend-neutral    { color: var(--gw-text-muted); }
+
 /* Stats grid */
 .ghin-stats-grid {
   display: grid; grid-template-columns: repeat(3, minmax(0,1fr));
-  gap: 8px; padding: 14px 16px 0;
+  gap: 8px; padding: 12px 16px 0;
 }
 .ghin-stat {
   background: var(--gw-neutral-800);
@@ -1110,18 +1210,45 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
   letter-spacing: 0.4px; text-transform: uppercase; margin-bottom: 4px;
 }
 .ghin-stat-val {
-  font-size: 22px; font-weight: 700;
+  font-size: 20px; font-weight: 700;
   color: var(--gw-text); font-family: var(--gw-font-mono);
-  display: flex; align-items: center; gap: 4px;
 }
-.ghin-stat-val--sm { font-size: 16px; }
-.stat-trend { font-size: 16px; font-weight: 800; }
 .ghin-stat-sub { font-size: 10px; color: var(--gw-text-muted); margin-top: 2px; }
 
-/* Score history section */
-.ghin-history-section {
-  margin: 14px 16px 0;
+/* Score range strip */
+.ghin-range-strip {
+  display: flex; align-items: center; justify-content: space-around;
+  margin: 10px 16px 0;
+  background: var(--gw-neutral-800);
+  border-radius: 10px; border: 1px solid var(--gw-card-border);
+  padding: 10px 16px;
 }
+.ghin-range-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.ghin-range-label { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--gw-text-muted); font-weight: 600; }
+.ghin-range-val { font-size: 18px; font-weight: 700; font-family: var(--gw-font-mono); color: var(--gw-text); }
+.ghin-range-val--low  { color: var(--gw-green-400); }
+.ghin-range-val--high { color: #f87171; }
+.ghin-range-divider { width: 1px; height: 28px; background: var(--gw-card-border); }
+
+/* Cap badges */
+.ghin-cap-row {
+  display: flex; gap: 8px; padding: 8px 16px 0;
+}
+.ghin-cap-badge {
+  font-size: 11px; font-weight: 700; padding: 4px 10px;
+  border-radius: 6px; letter-spacing: .03em;
+}
+.ghin-cap-badge--hard {
+  background: rgba(239,68,68,.15); color: #fca5a5;
+  border: 1px solid rgba(239,68,68,.3);
+}
+.ghin-cap-badge--soft {
+  background: rgba(251,191,36,.12); color: #fcd34d;
+  border: 1px solid rgba(251,191,36,.25);
+}
+
+/* Score history section */
+.ghin-history-section { margin: 12px 16px 0; }
 .ghin-history-header {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 8px;
@@ -1132,7 +1259,7 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 }
 .ghin-refresh-btn {
   background: none; border: none; cursor: pointer;
-  color: var(--gw-green-400); font-size: 16px; padding: 4px 6px;
+  color: var(--gw-green-400); font-size: 18px; padding: 4px 6px;
   border-radius: 6px; -webkit-tap-highlight-color: transparent;
 }
 .ghin-refresh-btn:disabled { opacity: 0.4; }
@@ -1145,8 +1272,7 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 .ghin-scores-note { font-size: 15px; font-weight: 600; color: var(--gw-text); margin-bottom: 6px; }
 .ghin-scores-sub { font-size: 13px; color: var(--gw-text-muted); line-height: 1.5; }
 .ghin-scores-loading {
-  display: flex; align-items: center; justify-content: center;
-  padding: 24px 0;
+  display: flex; align-items: center; justify-content: center; padding: 24px 0;
 }
 .ghin-scores-error {
   background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.3);
@@ -1154,7 +1280,7 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
   color: #fca5a5; font-size: 13px;
 }
 
-/* Score rows */
+/* Score rows — 5 columns: date | course+tee | gross | net | diff */
 .ghin-scores-list {
   background: var(--gw-neutral-800);
   border-radius: 12px; border: 1px solid var(--gw-card-border);
@@ -1162,40 +1288,40 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 }
 .ghin-scores-cols {
   display: grid;
-  grid-template-columns: 72px 1fr 36px 44px;
-  gap: 4px;
-  padding: 7px 12px;
+  grid-template-columns: 62px 1fr 34px 34px 46px;
+  gap: 4px; padding: 7px 10px;
   background: var(--gw-neutral-700);
   font-size: 10px; font-weight: 700; text-transform: uppercase;
   letter-spacing: .06em; color: var(--gw-text-muted);
 }
 .ghin-score-row {
   display: grid;
-  grid-template-columns: 72px 1fr 36px 44px;
-  gap: 4px;
-  padding: 9px 12px;
+  grid-template-columns: 62px 1fr 34px 34px 46px;
+  gap: 4px; padding: 8px 10px;
   border-top: 1px solid var(--gw-card-border);
   font-size: 13px; color: var(--gw-text);
   align-items: center;
 }
-.ghin-score-row--used {
-  background: rgba(34,160,107,0.07);
-}
-.score-date { font-size: 12px; color: var(--gw-text-muted); white-space: nowrap; }
+.ghin-score-row--used { background: rgba(34,160,107,0.07); }
+.score-date { font-size: 11px; color: var(--gw-text-muted); white-space: nowrap; }
+.score-course-wrap { display: flex; flex-direction: column; min-width: 0; }
 .score-course {
   font-size: 12px; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis;
 }
-.score-ags { font-weight: 700; font-family: var(--gw-font-mono); text-align: right; }
-.score-diff { font-family: var(--gw-font-mono); font-size: 12px; text-align: right; color: var(--gw-text-muted); }
+.score-tee { font-size: 10px; color: var(--gw-text-muted); white-space: nowrap; }
+.score-ags { font-weight: 700; font-family: var(--gw-font-mono); }
+.score-net { font-family: var(--gw-font-mono); font-size: 12px; color: var(--gw-text-muted); }
+.score-diff { font-family: var(--gw-font-mono); font-size: 12px; color: var(--gw-text-muted); display: flex; align-items: center; gap: 3px; }
+.col-center { text-align: center; }
+.col-right  { text-align: right; justify-content: flex-end; }
 .diff-used { color: var(--gw-green-400); font-weight: 700; }
+.hi-dot { color: var(--gw-green-400); font-size: 7px; line-height: 1; }
 .ghin-scores-legend {
   display: flex; align-items: center; gap: 6px;
-  padding: 8px 12px; font-size: 11px; color: var(--gw-text-muted);
+  padding: 8px 10px; font-size: 11px; color: var(--gw-text-muted);
   border-top: 1px solid var(--gw-card-border);
 }
-.legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.legend-used { background: var(--gw-green-400); }
 
 /* ── Rest of styles (unchanged) ─────────────────────────────── */
 .view-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
