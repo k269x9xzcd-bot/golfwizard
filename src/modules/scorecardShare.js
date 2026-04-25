@@ -88,40 +88,60 @@ async function captureComponent(captureProps, filename, text) {
  */
 function buildGamesSummaryText(gameRows, settlement) {
   const lines = []
+  const HR = '─────────────────────────'
 
   if (gameRows?.length) {
-    lines.push('\u26f3 GAMES')
+    lines.push('⛳ GAMES')
+    lines.push(HR)
     for (const g of gameRows) {
-      const icon = g.icon || '\ud83c\udfcc\ufe0f'
+      const icon = g.icon || '🏌️'
       const label = g.label || ''
       if (g.winnerLine) {
-        lines.push(`${icon} ${label}: ${g.winnerLine}`)
-        if (g.detail) lines.push(`   ${g.detail}`)
+        lines.push(`${icon} ${label}`)
+        lines.push(`   🏆 ${g.winnerLine}`)
+        if (g.detail) {
+          // break detail "A: +$X · B: -$Y" into one line each
+          const parts = g.detail.split(' · ')
+          for (const p of parts) lines.push(`   ${p}`)
+        }
       } else if (g.detail) {
         lines.push(`${icon} ${label}: ${g.detail}`)
       }
+      lines.push('')
     }
   }
 
   if (settlement?.ledger?.length) {
-    if (lines.length) lines.push('')
-    lines.push('\ud83d\udcb5 SETTLE UP')
+    lines.push('💵 SETTLE UP')
+    lines.push(HR)
+    // player totals first
+    const totals = Object.values(settlement.playerTotals || {})
+    const winners = totals.filter(t => t.total > 0).sort((a,b) => b.total - a.total)
+    const losers  = totals.filter(t => t.total < 0).sort((a,b) => a.total - b.total)
+    const evens   = totals.filter(t => t.total === 0)
+    for (const t of winners) lines.push(`✅ ${t.name}: +$${t.total}`)
+    for (const t of losers)  lines.push(`❌ ${t.name}: -$${Math.abs(t.total)}`)
+    for (const t of evens)   lines.push(`➖ ${t.name}: even`)
+    lines.push('')
+    lines.push('💸 Transfers:')
     for (const e of settlement.ledger) {
-      lines.push(`${e.from_name} \u2192 ${e.to_name}: $${e.amount}`)
+      lines.push(`   ${e.from_name} → ${e.to_name}  $${e.amount}`)
     }
   } else if (settlement?.playerTotals) {
     const totals = Object.values(settlement.playerTotals)
     if (totals.some(t => t.total !== 0)) {
-      if (lines.length) lines.push('')
-      lines.push('\ud83d\udcb5 SETTLE UP')
-      for (const t of totals) {
-        const sign = t.total > 0 ? '+' : ''
-        lines.push(`${t.name}: ${sign}$${Math.abs(t.total)}`)
+      lines.push('💵 SETTLE UP')
+      lines.push(HR)
+      const sorted = [...totals].sort((a,b) => b.total - a.total)
+      for (const t of sorted) {
+        const sign = t.total > 0 ? '+' : t.total < 0 ? '-' : ''
+        const prefix = t.total > 0 ? '✅' : t.total < 0 ? '❌' : '➖'
+        lines.push(`${prefix} ${t.name}: ${sign}$${Math.abs(t.total)}`)
       }
     }
   }
 
-  return lines.join('\n')
+  return lines.join('\n').trimEnd()
 }
 
 /**

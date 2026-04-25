@@ -34,6 +34,7 @@
           <!-- Hole number row -->
           <tr class="sc-row-header">
             <th class="sc-th sc-col-player">Player</th>
+            <th v-if="hasSettlement" class="sc-th sc-col-settle">$</th>
             <th v-for="h in frontHoles" :key="'fh-'+h" class="sc-th sc-col-hole">{{ h }}</th>
             <th v-if="hasBack9" class="sc-th sc-col-sub">OUT</th>
             <th v-for="h in backHoles" :key="'bh-'+h" class="sc-th sc-col-hole">{{ h }}</th>
@@ -44,6 +45,7 @@
           <!-- Par row -->
           <tr class="sc-row-par">
             <td class="sc-td sc-col-player sc-row-label">Par</td>
+            <td v-if="hasSettlement" class="sc-td sc-col-settle"></td>
             <td v-for="h in frontHoles" :key="'fp-'+h" class="sc-td sc-col-hole">{{ parForHole(h) }}</td>
             <td v-if="hasBack9" class="sc-td sc-col-sub sc-sub-muted">{{ parRangeTotal(frontHoles[0], frontHoles[frontHoles.length-1]) }}</td>
             <td v-for="h in backHoles" :key="'bp-'+h" class="sc-td sc-col-hole">{{ parForHole(h) }}</td>
@@ -54,6 +56,7 @@
           <!-- SI row -->
           <tr class="sc-row-si">
             <td class="sc-td sc-col-player sc-row-label">SI</td>
+            <td v-if="hasSettlement" class="sc-td sc-col-settle"></td>
             <td v-for="h in frontHoles" :key="'fsi-'+h" class="sc-td sc-col-hole sc-si-val">{{ siForHole(h) }}</td>
             <td v-if="hasBack9" class="sc-td sc-col-sub"></td>
             <td v-for="h in backHoles" :key="'bsi-'+h" class="sc-td sc-col-hole sc-si-val">{{ siForHole(h) }}</td>
@@ -70,6 +73,14 @@
               <span class="sc-name">{{ member.short_name }}</span>
               <span v-if="hcpDisplay(member)" class="sc-hcp">{{ hcpDisplay(member) }}</span>
             </td>
+            <!-- Settle amount column -->
+            <td v-if="hasSettlement" class="sc-td sc-col-settle sc-settle-inline">
+              <template v-if="settleTotalFor(member.id) !== null">
+                <span :class="settleTotalFor(member.id) > 0 ? 'sc-settle-pos' : settleTotalFor(member.id) < 0 ? 'sc-settle-neg' : 'sc-settle-even'">
+                  {{ settleTotalFor(member.id) > 0 ? '+' : '' }}${{ Math.abs(settleTotalFor(member.id)) }}
+                </span>
+              </template>
+            </td>
             <!-- Front 9 -->
             <td
               v-for="h in frontHoles"
@@ -77,9 +88,9 @@
               class="sc-td sc-col-hole sc-score-td"
               :class="sixesCellClass(member.id, h)"
             >
-              <span v-if="getScore(member.id, h) != null" :class="scoreClass(getScore(member.id, h), parForHole(h))">
-                {{ getScore(member.id, h) }}
-              </span>
+              <template v-if="getScore(member.id, h) != null">
+                <span :class="scoreClass(getScore(member.id, h), parForHole(h))">{{ getScore(member.id, h) }}</span><span v-if="strokeDotsFor(member.id, h)" class="sc-stroke-dot">{{ '•'.repeat(strokeDotsFor(member.id, h)) }}</span>
+              </template>
               <span v-else class="sc-dot">·</span>
             </td>
             <td v-if="hasBack9" class="sc-td sc-col-sub sc-sub-val">
@@ -92,9 +103,9 @@
               class="sc-td sc-col-hole sc-score-td"
               :class="sixesCellClass(member.id, h)"
             >
-              <span v-if="getScore(member.id, h) != null" :class="scoreClass(getScore(member.id, h), parForHole(h))">
-                {{ getScore(member.id, h) }}
-              </span>
+              <template v-if="getScore(member.id, h) != null">
+                <span :class="scoreClass(getScore(member.id, h), parForHole(h))">{{ getScore(member.id, h) }}</span><span v-if="strokeDotsFor(member.id, h)" class="sc-stroke-dot">{{ '•'.repeat(strokeDotsFor(member.id, h)) }}</span>
+              </template>
               <span v-else class="sc-dot">·</span>
             </td>
             <td v-if="hasBack9" class="sc-td sc-col-sub sc-sub-val">
@@ -123,6 +134,7 @@
               <span v-if="!row.labelHtml" class="sc-nota-name">{{ row.label }}</span>
               <span v-else class="sc-nota-name" v-html="row.labelHtml"></span>
             </td>
+            <td v-if="hasSettlement" class="sc-td sc-col-settle"></td>
             <td v-for="h in frontHoles" :key="'fn-'+ri+'-'+h" class="sc-td sc-col-hole sc-nota-cell" :class="row.cells?.[h]?.cls || ''" v-html="row.cells?.[h]?.text || ''"></td>
             <td v-if="hasBack9" class="sc-td sc-col-sub sc-nota-sub" v-html="row.outSummary || ''"></td>
             <td v-for="h in backHoles" :key="'bn-'+ri+'-'+h" class="sc-td sc-col-hole sc-nota-cell" :class="row.cells?.[h]?.cls || ''" v-html="row.cells?.[h]?.text || ''"></td>
@@ -287,6 +299,23 @@ const hasSettlement = computed(() => {
   const totals = Object.values(props.settlement.playerTotals || {})
   return totals.some(t => t.total !== 0) || (props.settlement.ledger?.length > 0)
 })
+
+// ── Per-member settle total ────────────────────────────────────
+function settleTotalFor(memberId) {
+  const pt = props.settlement?.playerTotals?.[memberId]
+  if (pt == null) return null
+  return pt.total ?? 0
+}
+
+// ── Stroke dots per member per hole (off low-man) ─────────────
+function strokeDotsFor(memberId, hole) {
+  const member = props.members.find(m => m.id === memberId)
+  if (!member) return 0
+  const hcp = memberHandicap(member, props.course, props.round?.tee)
+  if (hcp == null) return 0
+  const si = siForHole(hole)
+  return strokesOnHole(hcp, si)
+}
 </script>
 
 <style scoped>
@@ -366,9 +395,19 @@ const hasSettlement = computed(() => {
 
 /* Column widths — fixed layout, must sum to ~960px */
 .sc-col-player { width: 80px; text-align: left; }
+.sc-col-settle { width: 44px; background: #edf5ee; border-left: 2px solid #bbdfc0 !important; }
 .sc-col-hole   { width: 36px; }
 .sc-col-sub    { width: 38px; background: #e4dfc8; font-weight: 700; }
 .sc-col-total  { width: 38px; background: #e4dfc8; font-weight: 700; }
+
+/* Inline settle cell */
+.sc-settle-inline { text-align: center; padding: 2px 1px; }
+.sc-settle-pos { font-size: 10px; font-weight: 800; color: #166534; display: block; line-height: 1.2; }
+.sc-settle-neg { font-size: 10px; font-weight: 800; color: #dc2626; display: block; line-height: 1.2; }
+.sc-settle-even { font-size: 10px; font-weight: 600; color: #9ca3af; display: block; }
+
+/* Stroke dots */
+.sc-stroke-dot { font-size: 7px; color: #f59e0b; vertical-align: super; line-height: 0; margin-left: 1px; }
 
 /* Par row */
 .sc-row-par .sc-td {
