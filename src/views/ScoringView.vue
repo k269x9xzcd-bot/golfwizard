@@ -9,7 +9,8 @@
     <div v-if="!roundsStore.activeRound" class="empty-state">
       <div class="empty-icon">🏌️</div>
       <h2 class="empty-title">No Active Round</h2>
-      <p class="empty-message">Start a new round to begin tracking scores</p>
+      <p class="empty-message">Start a new round to begin scoring</p>
+      <button class="empty-start-btn" @click="openWizard">+ Start a Round</button>
     </div>
 
     <!-- Active Round -->
@@ -1012,7 +1013,7 @@
 
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, inject } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useRoundsStore } from '../stores/rounds'
@@ -1035,6 +1036,7 @@ const coursesStore = useCoursesStore()
 const rosterStore = useRosterStore()
 const router = useRouter()
 const route = useRoute()
+const openWizard = inject('openWizard')
 
 // ── Composable: scorecard helpers ────────────────────────────────
 const showFullHcp = ref(false) // must be declared before composables

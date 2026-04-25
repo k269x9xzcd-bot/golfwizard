@@ -30,7 +30,18 @@
 }
 .empty-icon { font-size: 4rem; margin-bottom: 1rem; }
 .empty-title { font-family: var(--gw-font-display); font-size: 1.75rem; color: var(--gw-text); margin: 0 0 0.5rem; }
-.empty-message { color: var(--gw-text-muted); margin: 0; }
+.empty-message { color: var(--gw-text-muted); margin: 0 0 1.5rem; }
+.empty-start-btn {
+  padding: 0.75rem 2rem;
+  background: var(--gw-accent);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+}
 
 /* ── Header ───────────────────────────────────────────────────── */
 .scoring-header {
