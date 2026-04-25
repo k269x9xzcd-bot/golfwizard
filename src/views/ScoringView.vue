@@ -498,7 +498,42 @@
             <!-- Game notation rows: always expanded per-hole -->
             <tfoot v-if="gameNotationRows.length > 0 && showGameRows">
               <template v-for="(row, ri) in gameNotationRows" :key="'gn-'+ri">
-                <tr class="row-game-notation notation-row-expanded" :class="row.cls || ''">
+
+                <!-- ── Sixes segment row: merged label + per-hole cells ── -->
+                <tr v-if="row.isSixesSeg" class="row-game-notation row-sixes-seg">
+                  <!-- Sticky label: merged with non-segment holes (left blank) -->
+                  <td class="col-sticky col-notation-label col-sixes-label">
+                    <span class="notation-icon">🎲</span>
+                    <span class="notation-name" v-html="row.labelHtml"></span>
+                  </td>
+                  <!-- Front holes -->
+                  <template v-for="h in frontHoles" :key="'gn-'+ri+'-'+h">
+                    <!-- Holes outside this segment: blank, dimmed -->
+                    <td v-if="h < row.segFrom || h > row.segTo"
+                        class="col-notation-cell col-sixes-outside"></td>
+                    <!-- Holes inside this segment: winner cell -->
+                    <td v-else
+                        class="col-notation-cell col-sixes-inside"
+                        :class="row.cells[h]?.cls || ''"
+                        v-html="row.cells[h]?.text || ''"></td>
+                  </template>
+                  <td v-if="hasBack9" class="col-subtotal col-notation-sub"></td>
+                  <!-- Back holes -->
+                  <template v-for="h in backHoles" :key="'gn-'+ri+'-'+h">
+                    <td v-if="h < row.segFrom || h > row.segTo"
+                        class="col-notation-cell col-sixes-outside"></td>
+                    <td v-else
+                        class="col-notation-cell col-sixes-inside"
+                        :class="row.cells[h]?.cls || ''"
+                        v-html="row.cells[h]?.text || ''"></td>
+                  </template>
+                  <td v-if="hasBack9" class="col-subtotal col-notation-sub"></td>
+                  <!-- Segment result — no wrap, clean -->
+                  <td class="col-total col-sixes-result" v-html="row.totalSummary || ''"></td>
+                </tr>
+
+                <!-- ── All other notation rows (standard) ── -->
+                <tr v-else class="row-game-notation notation-row-expanded" :class="row.cls || ''">
                   <td class="col-sticky col-notation-label">
                     <span class="notation-icon">{{ row.icon }}</span>
                     <span class="notation-name" v-if="!row.labelHtml">{{ row.label }}</span>
@@ -514,6 +549,7 @@
                   <td v-if="hasBack9" class="col-subtotal col-notation-sub" v-html="row.inSummary || ''"></td>
                   <td class="col-total col-notation-total" v-html="row.totalSummary || ''"></td>
                 </tr>
+
               </template>
             </tfoot>
           </table>

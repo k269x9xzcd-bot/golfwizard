@@ -438,6 +438,9 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
               game,
               cls: 'row-sixes-seg',
               holeTeamMap,   // expose so scorecard can color player cells
+              segFrom: seg.from,
+              segTo: seg.to,
+              isSixesSeg: true,
             })
           }
 
