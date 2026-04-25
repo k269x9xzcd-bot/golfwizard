@@ -606,7 +606,7 @@
       <!-- ═══════════════════════════════════════════════════════════
            HOLE VIEW (activeHole > 0) — Per-hole score entry
            ═══════════════════════════════════════════════════════════ -->
-      <div v-else class="hole-view" @touchstart="onTouchStart" @touchend="onTouchEnd">
+      <div v-else ref="holeViewEl" class="hole-view" @touchstart="onTouchStart" @touchend="onTouchEnd">
 
         <!-- Offline pending scores banner -->
         <div v-if="pendingScores > 0" class="offline-pending-banner">
@@ -1162,6 +1162,7 @@ function toggleGps() {
 
 // When hole changes while GPS is active, clear distance/accuracy until next position update
 watch(() => activeHole.value, () => {
+  if (holeViewEl.value) holeViewEl.value.scrollTop = 0
   if (gpsActive.value) {
     gpsDistance.value = null
     gpsAccuracy.value = null
@@ -1206,6 +1207,7 @@ onUnmounted(() => {
 
 // ── View state ──────────────────────────────────────────────────
 const activeHole = ref(0) // 0 = Card view, >0 = Hole entry
+const holeViewEl = ref(null)
 const selectedGame = ref(null)
 const showRoundMenu = ref(false)
 const showRoundPicker = ref(false)
