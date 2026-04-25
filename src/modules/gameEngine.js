@@ -430,10 +430,13 @@ export function computeNassau(ctx, config) {
   let aloha = null
   const alohaCfg = config.aloha
   if (alohaCfg?.status === 'accepted' && alohaCfg?.amount != null) {
-    const h18 = backSeg.holeResults.find(r => r.hole === 18)
-    if (h18 && h18.winner !== null) {
-      const t1Delta = h18.winner === 't1' ? alohaCfg.amount : -alohaCfg.amount
-      aloha = { winner: h18.winner, amount: alohaCfg.amount, t1Delta }
+    const lastHole = backSeg.holeResults.at(-1)  // hole 18 (or hole 9 for back9)
+    if (lastHole && lastHole.n1 !== null && lastHole.n2 !== null) {
+      // Resolved even on a halved hole (winner null = tie = 0 delta)
+      const t1Delta = lastHole.winner === 't1' ? alohaCfg.amount
+                    : lastHole.winner === 't2' ? -alohaCfg.amount
+                    : 0  // halved
+      aloha = { winner: lastHole.winner ?? 'halved', amount: alohaCfg.amount, t1Delta }
     }
   }
   const alohaDelta = aloha?.t1Delta ?? 0

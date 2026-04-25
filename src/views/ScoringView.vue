@@ -1324,9 +1324,10 @@ function nassauLosingTeam(game) {
   if (!ctx) return null
   try {
     const r = computeNassau(ctx, { ...game.config, aloha: null })
-    const total = r.settlement?.total ?? 0
-    if (total === 0) return null
-    return total > 0 ? 't2' : 't1'
+    // Aloha is about the back-9 bet — whoever is losing the back is the one who calls
+    const backT1Up = r.backSeg?.t1Up ?? 0
+    if (backT1Up === 0) return null  // all square on back — no loser to call
+    return backT1Up > 0 ? 't2' : 't1'
   } catch { return null }
 }
 
@@ -1335,7 +1336,9 @@ function defaultAlohaAmount(game) {
   if (!ctx) return 0
   try {
     const r = computeNassau(ctx, { ...game.config, aloha: null })
-    return Math.abs(r.settlement?.total ?? 0) * 2
+    // Default = double the current back-9 bet value
+    const backBet = game.config?.back ?? game.config?.front ?? 10
+    return backBet * 2
   } catch { return 0 }
 }
 
