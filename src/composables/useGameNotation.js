@@ -381,41 +381,63 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
           const r = computeSixes(ctx, game.config)
           if (!r) continue
 
-          // One row per 6-hole segment — shows pairing + per-hole hole-winner
+          // Two rotating team colors: green = Team A, amber = Team B
+          const COL_A = { bg: 'rgba(22,163,74,0.18)', text: '#15803d', cls: 'nota-six-a' }
+          const COL_B = { bg: 'rgba(217,119,6,0.18)', text: '#b45309', cls: 'nota-six-b' }
+
+          // Build per-hole team assignment map: holeNum → { aIds, bIds }
+          const holeTeamMap = {}
+          for (const seg of (r.segResults || [])) {
+            for (let h = seg.from; h <= seg.to; h++) {
+              holeTeamMap[h] = { aIds: seg.teamAIds || [], bIds: seg.teamBIds || [] }
+            }
+          }
+
+          // One row per 6-hole segment
           for (const seg of (r.segResults || [])) {
             if (seg.skipped) continue
-            // Use pInit (initials, collision-aware) if IDs available, else fall back to short names
-            const aNms = seg.teamAIds?.length
-              ? seg.teamAIds.map(id => pInit(id)).join('+')
-              : seg.teamANames || 'A'
-            const bNms = seg.teamBIds?.length
-              ? seg.teamBIds.map(id => pInit(id)).join('+')
-              : seg.teamBNames || 'B'
+            const aInits = (seg.teamAIds || []).map(id => pInit(id))
+            const bInits = (seg.teamBIds || []).map(id => pInit(id))
+
+            // Label: two colored chip groups
+            const aChips = aInits.map(i => `<span class="six-chip six-chip-a">${i}</span>`).join('')
+            const bChips = bInits.map(i => `<span class="six-chip six-chip-b">${i}</span>`).join('')
+            const labelHtml = `${aChips}<span class="six-vs">v</span>${bChips}`
+
             const cells = {}
             for (const hd of (seg.holeDetails || [])) {
               if (hd.incomplete) { cells[hd.hole] = { text: '', cls: '' }; continue }
-              const cls = hd.winner === 'a' ? 'nota-t1' : hd.winner === 'b' ? 'nota-t2' : 'nota-halved'
-              // Cell shows first player's initials for winning team (or '=' for halve)
-              const aCell = seg.teamAIds?.length ? pInit(seg.teamAIds[0]) : aNms.slice(0,2)
-              const bCell = seg.teamBIds?.length ? pInit(seg.teamBIds[0]) : bNms.slice(0,2)
-              const sym = hd.winner === 'a' ? aCell : hd.winner === 'b' ? bCell : '='
-              cells[hd.hole] = { text: sym, cls }
+              if (hd.winner === 'a') {
+                const init = aInits[0] || 'A'
+                cells[hd.hole] = { text: `<span class="six-winner six-winner-a">${init}</span>`, cls: 'nota-six-a-cell' }
+              } else if (hd.winner === 'b') {
+                const init = bInits[0] || 'B'
+                cells[hd.hole] = { text: `<span class="six-winner six-winner-b">${init}</span>`, cls: 'nota-six-b-cell' }
+              } else {
+                cells[hd.hole] = { text: '<span class="six-halved">=</span>', cls: 'nota-six-halved' }
+              }
             }
+
             const played = (seg.holeDetails || []).filter(hd => !hd.incomplete)
+            const aLabel = aInits.join('+')
+            const bLabel = bInits.join('+')
             const segResult = played.length === 0 ? ''
-              : seg.aWins > seg.bWins ? `${aNms} ${seg.aWins}-${seg.bWins}`
-              : seg.bWins > seg.aWins ? `${bNms} ${seg.bWins}-${seg.aWins}`
-              : `AS ${seg.aWins}-${seg.bWins}`
+              : seg.aWins > seg.bWins ? `<span style="color:#15803d">${aLabel} ${seg.aWins}-${seg.bWins}</span>`
+              : seg.bWins > seg.aWins ? `<span style="color:#b45309">${bLabel} ${seg.bWins}-${seg.aWins}</span>`
+              : `<span style="color:#6b7280">AS ${seg.aWins}-${seg.bWins}</span>`
             const ptsStr = seg.aPts != null && played.length === (seg.to - seg.from + 1)
-              ? ` (${seg.aPts}/${seg.bPts}pts)` : ''
+              ? ` <span style="font-size:9px;opacity:.7">(${seg.aPts}/${seg.bPts})</span>` : ''
+
             rows.push({
               icon: '🎲',
-              label: `${aNms}v${bNms}`,
+              label: '',
+              labelHtml,
               cells,
               outSummary: '', inSummary: '',
               totalSummary: segResult + ptsStr,
               game,
               cls: 'row-sixes-seg',
+              holeTeamMap,   // expose so scorecard can color player cells
             })
           }
 
@@ -423,7 +445,7 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
           const sorted = [...(r.settlements || [])].sort((a, b) => b.net - a.net)
           const topNet = sorted[0]?.net || 0
           const summary = topNet > 0 ? `${sorted[0].name} +$${topNet}` : 'AS'
-          rows.push({ icon: '', label: '💰 Total', cells: {}, outSummary: '', inSummary: '', totalSummary: summary, game })
+          rows.push({ icon: '🎲', label: '💰 Total', cells: {}, outSummary: '', inSummary: '', totalSummary: summary, game })
         } catch(e) { /* skip */ }
       }
 
@@ -614,5 +636,13 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
     gameLabel,
     pressHoles,
     gameNotationRows,
+    sixesHoleTeamMap: computed(() => {
+      // Merge holeTeamMap from all sixes notation rows
+      const map = {}
+      for (const row of gameNotationRows.value) {
+        if (row.holeTeamMap) Object.assign(map, row.holeTeamMap)
+      }
+      return map
+    }),
   }
 }

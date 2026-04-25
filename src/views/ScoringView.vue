@@ -464,7 +464,7 @@
                     v-for="h in frontHoles"
                     :key="h"
                     class="col-score-cell"
-                    :class="{ 'cell-winner': isNetWinner(group.member.id, h), 'cell-defidget': isFidgetWinner(group.member.id, h) }"
+                    :class="{ 'cell-winner': isNetWinner(group.member.id, h), 'cell-defidget': isFidgetWinner(group.member.id, h), [sixesCellClass(group.member.id, h)]: true }"
                     @click="isViewOnly ? openEditScoreDialog(group.member.id, h) : (activeHole = h)"
                   >
                     <span v-if="getScore(group.member.id, h)" :class="showNotations ? scoreNotation(getScore(group.member.id, h), parForHole(h)) : ''">{{ getScore(group.member.id, h) }}</span>
@@ -478,7 +478,7 @@
                     v-for="h in backHoles"
                     :key="h"
                     class="col-score-cell"
-                    :class="{ 'cell-winner': isNetWinner(group.member.id, h), 'cell-defidget': isFidgetWinner(group.member.id, h) }"
+                    :class="{ 'cell-winner': isNetWinner(group.member.id, h), 'cell-defidget': isFidgetWinner(group.member.id, h), [sixesCellClass(group.member.id, h)]: true }"
                     @click="isViewOnly ? openEditScoreDialog(group.member.id, h) : (activeHole = h)"
                   >
                     <span v-if="getScore(group.member.id, h)" :class="showNotations ? scoreNotation(getScore(group.member.id, h), parForHole(h)) : ''">{{ getScore(group.member.id, h) }}</span>
@@ -1045,7 +1045,7 @@ const {
 // ── Composable: game notation ─────────────────────────────────────
 // buildCtx is returned here so all composables share one definition
 const {
-  HALVED_HTML, buildCtx, gameIcon, gameLabel, pressHoles, gameNotationRows,
+  HALVED_HTML, buildCtx, gameIcon, gameLabel, pressHoles, gameNotationRows, sixesHoleTeamMap,
   fidgetHoleWinners, isFidgetWinner,
 } = useGameNotation({ courseData, visibleHoles, teamInitialsStr, pInit })
 
@@ -1656,6 +1656,15 @@ const holeGameMath = computed(() => {
 })
 // Auto-expand 5-3-1 / nines rows — per-hole points are the whole game,
 // collapsing them to a single total defeats the purpose.
+// ── Sixes team color per player per hole ──────────────────────────
+function sixesCellClass(memberId, hole) {
+  const seg = sixesHoleTeamMap.value?.[hole]
+  if (!seg) return ''
+  if (seg.aIds?.includes(memberId)) return 'six-score-a'
+  if (seg.bIds?.includes(memberId)) return 'six-score-b'
+  return ''
+}
+
 watch(gameNotationRows, (rows) => {
   const s = new Set(expandedNotationRows.value)
   rows.forEach((row, ri) => {

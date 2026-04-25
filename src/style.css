@@ -2680,3 +2680,36 @@ body.gw-landscape .scorecard-grid tbody .col-player-name {
   margin-top: 4px;
   opacity: 0.7;
 }
+
+/* ── Sixes rotating team colors ─────────────────────────────────── */
+
+/* Score cell tints — subtle bg per segment team assignment */
+.six-score-a { background: rgba(22,163,74,0.10) !important; }
+.six-score-b { background: rgba(217,119,6,0.10) !important; }
+
+/* Notation label chips */
+.six-chip {
+  display: inline-block;
+  font-size: 10px; font-weight: 800;
+  padding: 1px 4px; border-radius: 3px;
+  margin: 0 1px; line-height: 1.4;
+}
+.six-chip-a { background: rgba(22,163,74,0.18); color: #15803d; }
+.six-chip-b { background: rgba(217,119,6,0.18); color: #b45309; }
+.six-vs { font-size: 9px; color: #9ca3af; margin: 0 2px; font-weight: 600; }
+
+/* Notation cell winner pills */
+.six-winner {
+  display: inline-block;
+  font-size: 11px; font-weight: 800;
+  padding: 1px 3px; border-radius: 3px;
+  line-height: 1.3;
+}
+.six-winner-a { background: rgba(22,163,74,0.20); color: #15803d; }
+.six-winner-b { background: rgba(217,119,6,0.20); color: #b45309; }
+.six-halved { color: #9ca3af; font-weight: 700; font-size: 11px; }
+
+/* Cell background classes for notation cells */
+.nota-six-a-cell { background: rgba(22,163,74,0.06); }
+.nota-six-b-cell { background: rgba(217,119,6,0.06); }
+.nota-six-halved { background: transparent; }
