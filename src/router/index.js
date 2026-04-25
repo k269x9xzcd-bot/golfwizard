@@ -10,6 +10,7 @@ const routes = [
   { path: '/history',  name: 'history',  component: () => import('../views/HistoryView.vue') },
   { path: '/players',  name: 'players',  component: () => import('../views/PlayersView.vue') },
   { path: '/courses',  name: 'courses',  component: () => import('../views/CoursesView.vue') },
+  { path: '/player-courses', name: 'player-courses', component: () => import('../views/PlayerCoursesView.vue') },
   { path: '/settings', name: 'settings', component: () => import('../views/SettingsView.vue') },
   { path: '/library',  name: 'library',  component: () => import('../views/GameLibraryView.vue') },
   { path: '/metrics',  name: 'metrics',  component: () => import('../views/MetricsView.vue') },

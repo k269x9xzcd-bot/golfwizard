@@ -52,7 +52,7 @@
           <span class="nav-icon">📊</span>
           <span class="nav-label">Stats</span>
         </RouterLink>
-        <RouterLink to="/players" class="nav-item" :class="{ active: $route.name === 'players' }">
+        <RouterLink to="/player-courses" class="nav-item" :class="{ active: $route.name === 'player-courses' || $route.name === 'players' || $route.name === 'courses' }">
           <span class="nav-icon">👥</span>
           <span class="nav-label">Players</span>
         </RouterLink>
