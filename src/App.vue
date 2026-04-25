@@ -48,9 +48,9 @@
           <span class="nav-icon">🏌️</span>
           <span class="nav-label">Score</span>
         </RouterLink>
-        <RouterLink to="/courses" class="nav-item" :class="{ active: $route.name === 'courses' }">
-          <span class="nav-icon">⛳</span>
-          <span class="nav-label">Courses</span>
+        <RouterLink to="/metrics" class="nav-item" :class="{ active: $route.name === 'metrics' }">
+          <span class="nav-icon">📊</span>
+          <span class="nav-label">Stats</span>
         </RouterLink>
         <RouterLink to="/players" class="nav-item" :class="{ active: $route.name === 'players' }">
           <span class="nav-icon">👥</span>

@@ -53,94 +53,167 @@
         </div>
       </div>
 
-      <!-- KPI Cards -->
-      <div class="kpi-grid" v-if="playerStats">
-        <div class="kpi-card">
-          <div class="kpi-value">{{ playerStats.roundsPlayed }}</div>
-          <div class="kpi-label">Rounds</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-value">{{ playerStats.avgScore || '—' }}</div>
-          <div class="kpi-label">Avg Score</div>
-        </div>
-        <div class="kpi-card kpi-highlight">
-          <div class="kpi-value">{{ playerStats.bestRound || '—' }}</div>
-          <div class="kpi-label">Best Round</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-value">{{ playerStats.parPct }}%</div>
-          <div class="kpi-label">Par or Better</div>
-        </div>
-        <div class="kpi-card kpi-birdie">
-          <div class="kpi-value">{{ playerStats.birdies }}</div>
-          <div class="kpi-label">Birdies</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-value">{{ playerStats.eagles }}</div>
-          <div class="kpi-label">Eagles</div>
-        </div>
+      <!-- Tab bar -->
+      <div class="tab-bar">
+        <button class="tab-btn" :class="{ active: activeTab === 'scoring' }" @click="activeTab = 'scoring'">Scoring</button>
+        <button class="tab-btn" :class="{ active: activeTab === 'games' }" @click="activeTab = 'games'">Games</button>
       </div>
 
-      <!-- Scoring distribution -->
-      <div class="section" v-if="playerStats">
-        <div class="section-title">Scoring Distribution</div>
-        <div class="dist-bars">
-          <div v-for="d in playerStats.distribution" :key="d.label" class="dist-row">
-            <span class="dist-label" :class="d.class">{{ d.label }}</span>
-            <div class="dist-bar-track">
-              <div class="dist-bar-fill" :class="d.class" :style="{ width: d.pct + '%' }"></div>
-            </div>
-            <span class="dist-count">{{ d.count }}</span>
-            <span class="dist-pct">{{ d.pct }}%</span>
+      <!-- ── SCORING TAB ── -->
+      <template v-if="activeTab === 'scoring'">
+        <!-- KPI Cards -->
+        <div class="kpi-grid" v-if="playerStats">
+          <div class="kpi-card">
+            <div class="kpi-value">{{ playerStats.roundsPlayed }}</div>
+            <div class="kpi-label">Rounds</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-value">{{ playerStats.avgScore || '—' }}</div>
+            <div class="kpi-label">Avg Score</div>
+          </div>
+          <div class="kpi-card kpi-highlight">
+            <div class="kpi-value">{{ playerStats.bestRound || '—' }}</div>
+            <div class="kpi-label">Best Round</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-value">{{ playerStats.parPct }}%</div>
+            <div class="kpi-label">Par or Better</div>
+          </div>
+          <div class="kpi-card kpi-birdie">
+            <div class="kpi-value">{{ playerStats.birdies }}</div>
+            <div class="kpi-label">Birdies</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-value">{{ playerStats.eagles }}</div>
+            <div class="kpi-label">Eagles</div>
           </div>
         </div>
-      </div>
 
-      <!-- Recent rounds -->
-      <div class="section" v-if="playerRounds.length">
-        <div class="section-title">Recent Rounds</div>
-        <div class="recent-list">
-          <div v-for="r in playerRounds.slice(0, 10)" :key="r.roundId" class="recent-row">
-            <div class="recent-left">
-              <div class="recent-course">{{ r.courseName }}</div>
-              <div class="recent-date">{{ formatDate(r.date) }}</div>
-            </div>
-            <div class="recent-right">
-              <div class="recent-score" :class="scoreToPar(r)">{{ r.total }}</div>
-              <div class="recent-to-par">{{ formatToPar(r) }}</div>
+        <!-- Scoring distribution -->
+        <div class="section" v-if="playerStats">
+          <div class="section-title">Scoring Distribution</div>
+          <div class="dist-bars">
+            <div v-for="d in playerStats.distribution" :key="d.label" class="dist-row">
+              <span class="dist-label" :class="d.class">{{ d.label }}</span>
+              <div class="dist-bar-track">
+                <div class="dist-bar-fill" :class="d.class" :style="{ width: d.pct + '%' }"></div>
+              </div>
+              <span class="dist-count">{{ d.count }}</span>
+              <span class="dist-pct">{{ d.pct }}%</span>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- Head-to-head -->
-      <div class="section" v-if="h2hRecords.length">
-        <div class="section-title">Head-to-Head</div>
-        <div class="h2h-list">
-          <div v-for="h in h2hRecords" :key="h.opponentId" class="h2h-row">
-            <div class="h2h-name">{{ h.opponentName }}</div>
-            <div class="h2h-record">
-              <span class="h2h-win">{{ h.wins }}W</span>
-              <span class="h2h-sep">–</span>
-              <span class="h2h-loss">{{ h.losses }}L</span>
-              <span class="h2h-sep">–</span>
-              <span class="h2h-tie">{{ h.ties }}T</span>
-            </div>
-            <div class="h2h-diff" :class="{ positive: h.avgDiff < 0, negative: h.avgDiff > 0 }">
-              {{ h.avgDiff > 0 ? '+' : '' }}{{ h.avgDiff.toFixed(1) }}
+        <!-- Recent rounds -->
+        <div class="section" v-if="playerRounds.length">
+          <div class="section-title">Recent Rounds</div>
+          <div class="recent-list">
+            <div v-for="r in playerRounds.slice(0, 10)" :key="r.roundId" class="recent-row">
+              <div class="recent-left">
+                <div class="recent-course">{{ r.courseName }}</div>
+                <div class="recent-date">{{ formatDate(r.date) }}</div>
+              </div>
+              <div class="recent-right">
+                <div class="recent-score" :class="scoreToPar(r)">{{ r.total }}</div>
+                <div class="recent-to-par">{{ formatToPar(r) }}</div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- Gambling winnings (if settlements available) -->
-      <div class="section" v-if="playerStats && playerStats.totalWinnings !== 0">
-        <div class="section-title">Season Winnings</div>
-        <div class="winnings-card" :class="{ positive: playerStats.totalWinnings > 0, negative: playerStats.totalWinnings < 0 }">
-          <div class="winnings-amount">{{ playerStats.totalWinnings > 0 ? '+' : '' }}${{ Math.abs(playerStats.totalWinnings).toFixed(0) }}</div>
-          <div class="winnings-label">across {{ playerStats.roundsWithSettlements }} rounds</div>
+        <!-- Head-to-head -->
+        <div class="section" v-if="h2hRecords.length">
+          <div class="section-title">Head-to-Head</div>
+          <div class="h2h-list">
+            <div v-for="h in h2hRecords" :key="h.opponentId" class="h2h-row">
+              <div class="h2h-name">{{ h.opponentName }}</div>
+              <div class="h2h-record">
+                <span class="h2h-win">{{ h.wins }}W</span>
+                <span class="h2h-sep">–</span>
+                <span class="h2h-loss">{{ h.losses }}L</span>
+                <span class="h2h-sep">–</span>
+                <span class="h2h-tie">{{ h.ties }}T</span>
+              </div>
+              <div class="h2h-diff" :class="{ positive: h.avgDiff < 0, negative: h.avgDiff > 0 }">
+                {{ h.avgDiff > 0 ? '+' : '' }}{{ h.avgDiff.toFixed(1) }}
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+
+        <!-- Gambling winnings (if settlements available) -->
+        <div class="section" v-if="playerStats && playerStats.totalWinnings !== 0">
+          <div class="section-title">Season Winnings</div>
+          <div class="winnings-card" :class="{ positive: playerStats.totalWinnings > 0, negative: playerStats.totalWinnings < 0 }">
+            <div class="winnings-amount">{{ playerStats.totalWinnings > 0 ? '+' : '' }}${{ Math.abs(playerStats.totalWinnings).toFixed(0) }}</div>
+            <div class="winnings-label">across {{ playerStats.roundsWithSettlements }} rounds</div>
+          </div>
+        </div>
+      </template>
+
+      <!-- ── GAMES TAB ── -->
+      <template v-if="activeTab === 'games'">
+        <div v-if="!gameStats.length" class="empty-state" style="padding: 40px 20px;">
+          <div class="empty-icon">🎰</div>
+          <div class="empty-title">No game data yet</div>
+          <div class="empty-sub">Complete rounds with games and settlements to see stats here.</div>
+        </div>
+
+        <template v-else>
+          <!-- Per-game type rows -->
+          <div class="section">
+            <div class="section-title">By Game Type</div>
+            <div class="h2h-list">
+              <div v-for="g in gameStats" :key="g.type" class="h2h-row game-row">
+                <div class="game-row-left">
+                  <div class="game-name">{{ g.label }}</div>
+                  <div class="game-rounds">{{ g.rounds }} round{{ g.rounds !== 1 ? 's' : '' }}</div>
+                </div>
+                <div class="game-record">
+                  <span class="h2h-win">{{ g.wins }}W</span>
+                  <span class="h2h-sep">–</span>
+                  <span class="h2h-loss">{{ g.losses }}L</span>
+                  <span v-if="g.pushes > 0">
+                    <span class="h2h-sep">–</span>
+                    <span class="h2h-tie">{{ g.pushes }}P</span>
+                  </span>
+                </div>
+                <div class="game-net" :class="{ positive: g.net > 0, negative: g.net < 0 }">
+                  {{ g.net > 0 ? '+' : '' }}${{ Math.abs(g.net).toFixed(0) }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Wolf-specific stats -->
+          <div class="section" v-if="wolfStats">
+            <div class="section-title">Wolf — Lone Wolf</div>
+            <div class="h2h-row game-row">
+              <div class="game-row-left">
+                <div class="game-name">Lone Wolf Attempts</div>
+                <div class="game-rounds">{{ wolfStats.attempts }} attempt{{ wolfStats.attempts !== 1 ? 's' : '' }}</div>
+              </div>
+              <div class="game-record">
+                <span class="h2h-win">{{ wolfStats.wins }}W</span>
+                <span class="h2h-sep">–</span>
+                <span class="h2h-loss">{{ wolfStats.losses }}L</span>
+              </div>
+              <div class="game-net" :class="{ positive: wolfStats.net > 0, negative: wolfStats.net < 0 }">
+                {{ wolfStats.net > 0 ? '+' : '' }}${{ Math.abs(wolfStats.net).toFixed(0) }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Total across all games -->
+          <div class="section">
+            <div class="section-title">Overall</div>
+            <div class="winnings-card" :class="{ positive: gamesTotalNet > 0, negative: gamesTotalNet < 0 }">
+              <div class="winnings-amount">{{ gamesTotalNet > 0 ? '+' : '' }}${{ Math.abs(gamesTotalNet).toFixed(0) }}</div>
+              <div class="winnings-label">net across all game types</div>
+            </div>
+          </div>
+        </template>
+      </template>
     </template>
   </div>
 </template>
@@ -157,6 +230,7 @@ const settlementsMap = ref({}) // roundId → settlement_json
 
 const selectedPlayer = ref(null)
 const selectedCourse = ref(null)
+const activeTab = ref('scoring')
 
 onMounted(async () => {
   await roundsStore.fetchRounds()
@@ -323,6 +397,126 @@ const playerStats = computed(() => {
   }
 })
 
+// ── Game type label map ──────────────────────────────────────
+const GAME_LABELS = {
+  skins: 'Skins',
+  nassau: 'Nassau',
+  wolf: 'Wolf',
+  stroke: 'Stroke Play',
+  stableford: 'Stableford',
+  match: 'Match Play',
+  bingo_bango_bongo: 'Bingo Bango Bongo',
+  '5_3_1': '5-3-1',
+  banker: 'Banker',
+  scramble: 'Scramble',
+}
+
+function gameLabel(type) {
+  return GAME_LABELS[type] || (type ? type.charAt(0).toUpperCase() + type.slice(1) : 'Unknown')
+}
+
+// ── Games tab computed data ──────────────────────────────────
+const gameStats = computed(() => {
+  if (!selectedPlayer.value) return []
+  const byType = new Map() // type → { rounds, wins, losses, pushes, net }
+
+  for (const r of allRounds.value) {
+    if (selectedCourse.value && r.course_name !== selectedCourse.value) continue
+    const me = findMember(r)
+    if (!me) continue
+
+    const settlement = settlementsMap.value[r.id]
+    if (!settlement) continue
+
+    const gameConfigs = r.game_configs || []
+    for (const gc of gameConfigs) {
+      const type = gc.type
+      if (!type) continue
+
+      // Determine net for this player in this game type
+      let net = 0
+      let found = false
+
+      // Try settlement.games[] first
+      if (settlement.games && Array.isArray(settlement.games)) {
+        const gameEntry = settlement.games.find(g => g.type === type || g.gameType === type)
+        if (gameEntry) {
+          const playerEntry = gameEntry.playerTotals?.[me.id] ?? gameEntry.players?.[me.id]
+          if (playerEntry != null) {
+            net = typeof playerEntry === 'object' ? (playerEntry.total ?? playerEntry.net ?? 0) : playerEntry
+            found = true
+          }
+        }
+      }
+
+      // Fallback: playerTotals at top level (only if single game round)
+      if (!found && settlement.playerTotals && gameConfigs.length === 1) {
+        const pt = settlement.playerTotals[me.id]
+        if (pt != null) {
+          net = typeof pt === 'object' ? (pt.total ?? pt.net ?? 0) : pt
+          found = true
+        }
+      }
+
+      if (!found) continue
+
+      if (!byType.has(type)) {
+        byType.set(type, { type, rounds: 0, wins: 0, losses: 0, pushes: 0, net: 0 })
+      }
+      const rec = byType.get(type)
+      rec.rounds++
+      rec.net += net
+      if (net > 0) rec.wins++
+      else if (net < 0) rec.losses++
+      else rec.pushes++
+    }
+  }
+
+  return Array.from(byType.values())
+    .map(r => ({ ...r, label: gameLabel(r.type), net: Math.round(r.net * 100) / 100 }))
+    .sort((a, b) => b.rounds - a.rounds)
+})
+
+// ── Wolf lone-wolf specific stats ────────────────────────────
+const wolfStats = computed(() => {
+  if (!selectedPlayer.value) return null
+  let attempts = 0, wins = 0, losses = 0, net = 0
+
+  for (const r of allRounds.value) {
+    if (selectedCourse.value && r.course_name !== selectedCourse.value) continue
+    const me = findMember(r)
+    if (!me) continue
+
+    const settlement = settlementsMap.value[r.id]
+    if (!settlement) continue
+
+    const hasWolf = (r.game_configs || []).some(g => g.type === 'wolf')
+    if (!hasWolf) continue
+
+    // Look for lone wolf data in settlement
+    const wolfGame = settlement.games?.find(g => g.type === 'wolf' || g.gameType === 'wolf')
+    if (!wolfGame) continue
+
+    const loneWolfRounds = wolfGame.loneWolf || wolfGame.lone_wolf || []
+    for (const lw of loneWolfRounds) {
+      const playerId = lw.playerId || lw.player_id || lw.memberId
+      if (playerId !== me.id) continue
+      attempts++
+      const lwNet = lw.net ?? lw.total ?? 0
+      net += lwNet
+      if (lwNet > 0) wins++
+      else if (lwNet < 0) losses++
+    }
+  }
+
+  if (attempts === 0) return null
+  return { attempts, wins, losses, net: Math.round(net * 100) / 100 }
+})
+
+const gamesTotalNet = computed(() => {
+  return Math.round(gameStats.value.reduce((s, g) => s + g.net, 0) * 100) / 100
+})
+
 // ── Head-to-head ────────────────────────────────────────────
 const h2hRecords = computed(() => {
   if (!selectedPlayer.value) return []
@@ -482,6 +676,31 @@ function formatToPar(r) {
   background: var(--gw-green-700, #114a35);
   color: var(--gw-text, #f0ede0);
   border-color: var(--gw-gold, #d4af37);
+}
+
+/* Tab bar */
+.tab-bar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 20px;
+  background: var(--gw-green-800, #0d3325);
+  border-radius: 12px;
+  padding: 4px;
+}
+.tab-btn {
+  flex: 1;
+  padding: 8px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--gw-text-secondary, #a3b8aa);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tab-btn.active {
+  background: var(--gw-green-600, #166044);
+  color: #fff;
 }
 
 /* KPI Grid */
@@ -679,6 +898,37 @@ function formatToPar(r) {
 }
 .h2h-diff.positive { color: #86efac; }
 .h2h-diff.negative { color: #fca5a5; }
+
+/* Game rows */
+.game-row-left {
+  flex: 1;
+}
+.game-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gw-text, #f0ede0);
+}
+.game-rounds {
+  font-size: 11px;
+  color: var(--gw-text-muted, #7d9283);
+  margin-top: 2px;
+}
+.game-record {
+  display: flex;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.game-net {
+  font-family: var(--gw-font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  min-width: 44px;
+  text-align: right;
+  color: var(--gw-text-muted, #7d9283);
+}
+.game-net.positive { color: #86efac; }
+.game-net.negative { color: #fca5a5; }
 
 /* Winnings */
 .winnings-card {
