@@ -668,7 +668,7 @@
 
         <!-- Aloha banner / button — hole 18 only -->
         <template v-if="nassauGameForAloha">
-          <div v-if="!nassauGameForAloha.config?.aloha?.status && nassauLosingTeam(nassauGameForAloha) !== null && (myNassauTeam(nassauGameForAloha) === null || nassauLosingTeam(nassauGameForAloha) === myNassauTeam(nassauGameForAloha))"
+          <div v-if="!nassauGameForAloha.config?.aloha?.status && nassauLosingTeam(nassauGameForAloha) !== null"
                class="aloha-banner aloha-call">
             <span class="aloha-icon">🌺</span>
             <div class="aloha-text"><strong>{{ alohaLosingTeamNames(nassauGameForAloha) }}</strong> can call Aloha — double or nothing on hole 18</div>
