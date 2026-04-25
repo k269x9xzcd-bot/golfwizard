@@ -6,6 +6,15 @@
         <div class="header-version">v{{ appVersion }}</div>
       </div>
       <div class="header-actions">
+        <button
+          class="theme-toggle-btn"
+          :class="{ 'is-light': theme === 'light' }"
+          @click="toggle"
+          :aria-label="theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'"
+        >
+          <span class="tt-icon tt-moon">🌙</span>
+          <span class="tt-icon tt-sun">☀️</span>
+        </button>
         <button v-if="!authStore.isAuthenticated" class="btn-signin" @click="showAuth = true">
           Sign In
         </button>
@@ -122,6 +131,7 @@
 import { ref, computed, onMounted, watch, inject } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useTheme } from '../composables/useTheme.js'
 import { useRoundsStore } from '../stores/rounds'
 import { useTournamentStore } from '../stores/tournament.js'
 import { useLinkedMatchesStore } from '../stores/linkedMatches'
@@ -135,6 +145,7 @@ const roundsStore = useRoundsStore()
 const tournamentStore = useTournamentStore()
 const linkedStore = useLinkedMatchesStore()
 const router = useRouter()
+const { theme, toggle } = useTheme()
 const showAuth = ref(false)
 const openWizard = inject('openWizard', () => {})
 const showTournament = computed(() => {
