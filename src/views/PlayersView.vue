@@ -170,6 +170,38 @@
             </div>
           </div>
 
+          <!-- ── Aggregate stats (birdie/par/bogey/GIR) ── -->
+          <div v-if="ghinScoreStats?.avg_birdie_pct != null" class="ghin-agg-grid">
+            <div class="ghin-agg-stat">
+              <div class="ghin-agg-val" style="color:var(--gw-birdie)">{{ Math.round((ghinScoreStats.avg_birdie_pct ?? 0) * 100) }}%</div>
+              <div class="ghin-agg-label">Birdies</div>
+            </div>
+            <div class="ghin-agg-stat">
+              <div class="ghin-agg-val">{{ Math.round((ghinScoreStats.avg_par_pct ?? 0) * 100) }}%</div>
+              <div class="ghin-agg-label">Pars</div>
+            </div>
+            <div class="ghin-agg-stat">
+              <div class="ghin-agg-val" style="color:var(--gw-bogey)">{{ Math.round((ghinScoreStats.avg_bogey_pct ?? 0) * 100) }}%</div>
+              <div class="ghin-agg-label">Bogeys</div>
+            </div>
+            <div class="ghin-agg-stat">
+              <div class="ghin-agg-val">{{ Math.round((ghinScoreStats.avg_gir_pct ?? 0) * 100) }}%</div>
+              <div class="ghin-agg-label">GIR</div>
+            </div>
+            <div class="ghin-agg-stat">
+              <div class="ghin-agg-val">{{ ghinScoreStats.avg_par3 != null ? Number(ghinScoreStats.avg_par3).toFixed(1) : '—' }}</div>
+              <div class="ghin-agg-label">Avg Par 3</div>
+            </div>
+            <div class="ghin-agg-stat">
+              <div class="ghin-agg-val">{{ ghinScoreStats.avg_par4 != null ? Number(ghinScoreStats.avg_par4).toFixed(1) : '—' }}</div>
+              <div class="ghin-agg-label">Avg Par 4</div>
+            </div>
+            <div class="ghin-agg-stat">
+              <div class="ghin-agg-val">{{ ghinScoreStats.avg_par5 != null ? Number(ghinScoreStats.avg_par5).toFixed(1) : '—' }}</div>
+              <div class="ghin-agg-label">Avg Par 5</div>
+            </div>
+          </div>
+
           <!-- ── Cap badges ── -->
           <div v-if="myRosterPlayer?.soft_cap === 'true' || myRosterPlayer?.hard_cap === 'true'" class="ghin-cap-row">
             <div v-if="myRosterPlayer?.hard_cap === 'true'" class="ghin-cap-badge ghin-cap-badge--hard">⚠ Hard Cap Applied</div>
@@ -224,13 +256,12 @@
                 <span class="score-ags col-center">{{ s.adjusted_gross_score ?? '—' }}</span>
                 <span class="score-net col-center">{{ s.net_score ?? '—' }}</span>
                 <span class="score-diff col-right" :class="s.used_for_hi ? 'diff-used' : ''">
-                  {{ s.differential != null ? Number(s.differential).toFixed(1) : '—' }}
-                  <span v-if="s.used_for_hi" class="hi-dot" title="Used for HI">●</span>
+                  <span v-if="s.used_for_hi" class="hi-star" title="Used for HI">★</span>{{ s.differential != null ? Number(s.differential).toFixed(1) : '—' }}
                 </span>
               </div>
               <div class="ghin-scores-legend">
-                <span class="hi-dot" style="color:var(--gw-green-400);font-size:8px;">●</span>
-                Used for HI calculation ({{ ghinScores.filter(s => s.used_for_hi).length }} scores)
+                <span class="hi-star" style="font-size:11px;">★</span>
+                Used for HI calculation ({{ ghinScores.filter(s => s.used_for_hi).length }} of {{ ghinScores.length }})
               </div>
             </div>
 
@@ -244,6 +275,54 @@
           </div>
 
           <div style="height:32px;"></div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Public player GHIN sheet -->
+    <Teleport to="body">
+      <div v-if="playerSheetTarget" class="ghin-sheet-backdrop" @click.self="playerSheetTarget = null">
+        <div class="ghin-sheet-panel">
+          <div class="ghin-sheet-handle"></div>
+          <div class="ghin-sheet-top">
+            <div>
+              <div class="ghin-sheet-name">{{ playerSheetTarget.name }}</div>
+              <div class="ghin-sheet-meta">
+                <span v-if="playerSheetTarget.ghin_number">GHIN #{{ playerSheetTarget.ghin_number }}</span>
+                <span v-if="playerSheetTarget.club_name"> · {{ playerSheetTarget.club_name }}</span>
+              </div>
+            </div>
+            <button class="close-btn" @click="playerSheetTarget = null">✕</button>
+          </div>
+          <div class="ghin-stats-grid">
+            <div class="ghin-stat">
+              <div class="ghin-stat-label">Index</div>
+              <div class="ghin-stat-val">{{ playerSheetTarget.ghin_index != null ? Number(playerSheetTarget.ghin_index).toFixed(1) : '—' }}</div>
+              <div class="ghin-stat-sub">current</div>
+            </div>
+            <div class="ghin-stat">
+              <div class="ghin-stat-label">Low HI</div>
+              <div class="ghin-stat-val">{{ playerSheetTarget.low_hi != null ? Number(playerSheetTarget.low_hi).toFixed(1) : '—' }}</div>
+              <div class="ghin-stat-sub">season low</div>
+            </div>
+            <div class="ghin-stat">
+              <div class="ghin-stat-label">Cap</div>
+              <div class="ghin-stat-val ghin-stat-val--sm">
+                <span v-if="playerSheetTarget.hard_cap === 'true' || playerSheetTarget.hard_cap === true" class="cap-badge cap-hard">Hard</span>
+                <span v-else-if="playerSheetTarget.soft_cap === 'true' || playerSheetTarget.soft_cap === true" class="cap-badge cap-soft">Soft</span>
+                <span v-else class="cap-badge cap-none">None</span>
+              </div>
+              <div class="ghin-stat-sub">cap status</div>
+            </div>
+          </div>
+          <div class="ghin-player-sheet-note">
+            <div class="ghin-sync-row">
+              <span class="ghin-dot-inline" :class="ghinSyncStatus(playerSheetTarget)"></span>
+              Synced {{ playerSheetTarget.ghin_synced_at ? ghinSyncDate(playerSheetTarget) : 'never' }}
+            </div>
+            <div class="ghin-public-note">Score history is only available for your own account via GHIN credentials.</div>
+          </div>
+          <div style="height:40px;"></div>
         </div>
       </div>
     </Teleport>
@@ -275,6 +354,7 @@
             <span v-if="p.email" class="player-email-dot" title="Has email">✓</span>
           </div>
         </div>
+        <button v-if="p.ghin_number" class="player-info-btn" @click.stop="openPlayerSheet(p)" title="GHIN info">⛳</button>
         <button v-if="p.email" class="player-invite-btn" @click.stop="invitePlayer(p)" title="Invite to GolfWizard">📨</button>
         <span class="player-fav-star">★</span>
       </div>
@@ -307,6 +387,7 @@
             <span v-if="p.email" class="player-email-dot" title="Has email">✓</span>
           </div>
         </div>
+        <button v-if="p.ghin_number" class="player-info-btn" @click.stop="openPlayerSheet(p)" title="GHIN info">⛳</button>
         <button v-if="p.email" class="player-invite-btn" @click.stop="invitePlayer(p)" title="Invite to GolfWizard">📨</button>
       </div>
     </div>
@@ -588,6 +669,8 @@ const ghinScoresFetched = ref(false)
 const ghinScoresError = ref('')
 const ghinScoresPosted = ref(null)
 const ghinScoreStats = ref(null)
+const playerSheetTarget = ref(null)
+function openPlayerSheet(p) { playerSheetTarget.value = p }
 const ghinLiveHI = ref(null)
 const ghinLiveLowHI = ref(null)
 
@@ -663,7 +746,7 @@ async function fetchGhinScores() {
 
     ghinScores.value = data.scores || []
     ghinScoresPosted.value = data.scores_posted ?? null
-    ghinScoreStats.value = data.score_stats ?? null
+    ghinScoreStats.value = data.aggregate_stats ?? data.score_stats ?? null
     ghinLiveHI.value = data.handicap_index ?? null
     ghinLiveLowHI.value = data.low_hi_display ?? null
     ghinScoresFetched.value = true
@@ -1587,5 +1670,42 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
   padding: 4px 5px; border-radius: 8px; -webkit-tap-highlight-color: transparent;
   flex-shrink: 0; opacity: .7; transition: opacity .15s;
 }
+/* ── Player info button ── */
+.player-info-btn {
+  background: var(--gw-neutral-800);
+  color: var(--gw-text-muted);
+  font-size: 14px; padding: 5px 8px;
+  border-radius: 8px; border: 1px solid var(--gw-card-border);
+  cursor: pointer; flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+  margin-right: 2px;
+}
+/* ── Aggregate stats grid ── */
+.ghin-agg-grid {
+  display: grid; grid-template-columns: repeat(4, minmax(0,1fr));
+  gap: 6px; padding: 10px 16px 0;
+}
+.ghin-agg-stat {
+  background: var(--gw-neutral-800); border-radius: 8px;
+  border: 1px solid var(--gw-card-border);
+  padding: 8px 4px; text-align: center;
+}
+.ghin-agg-val { font-size: 14px; font-weight: 700; color: var(--gw-text); font-family: var(--gw-font-mono); }
+.ghin-agg-label { font-size: 9px; color: var(--gw-text-muted); text-transform: uppercase; letter-spacing: 0.3px; margin-top: 2px; }
+/* ── HI star ── */
+.hi-star { color: var(--gw-birdie); font-size: 11px; margin-right: 2px; }
+/* ── Public player note ── */
+.ghin-player-sheet-note {
+  margin: 12px 16px 0;
+  background: var(--gw-neutral-800); border-radius: 10px;
+  border: 1px solid var(--gw-card-border); padding: 12px 14px;
+}
+.ghin-sync-row {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--gw-text-muted); margin-bottom: 6px;
+}
+.ghin-public-note { font-size: 11px; color: var(--gw-text-muted); line-height: 1.5; font-style: italic; }
+.cap-none { background: var(--gw-neutral-700); color: var(--gw-text-muted); font-size:12px; font-weight:700; padding:2px 8px; border-radius:8px; }
+
 .player-invite-btn:active { opacity: 1; transform: scale(.9); }
 </style>
