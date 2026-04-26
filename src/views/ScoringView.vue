@@ -90,9 +90,10 @@
           <button class="round-menu-item" @click="doShareRecap" :disabled="sharing">
             {{ sharing ? '⏳ Sharing…' : '📋 Share Recap' }}
           </button>
+          <!-- Simulate Scores: dev-only, hidden from production users
           <button v-if="isCaptain" class="round-menu-item" @click="doSimulateFill">
             🎲 Simulate Scores
-          </button>
+          </button> -->
           <button v-if="isCaptain" class="round-menu-item round-menu-danger" @click="showRoundMenu = false; confirmDeleteActive = true">
             🗑️ Delete Round
           </button>

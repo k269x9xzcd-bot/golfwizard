@@ -6,6 +6,7 @@
         <div class="header-version">v{{ appVersion }}</div>
       </div>
       <div class="header-actions">
+        <button class="help-btn" @click="showHelp = true" title="Help & Support">?</button>
         <button v-if="!authStore.isAuthenticated" class="btn-signin" @click="showAuth = true">
           Sign In
         </button>
@@ -116,6 +117,9 @@
     <!-- Auth modal -->
     <AuthModal v-if="showAuth" @close="showAuth = false" />
   </div>
+
+    <!-- Help sheet -->
+    <HelpView v-model="showHelp" :app-version="appVersion" />
 </template>
 
 <script setup>
@@ -126,6 +130,7 @@ import { useRoundsStore } from '../stores/rounds'
 import { useTournamentStore } from '../stores/tournament.js'
 import { useLinkedMatchesStore } from '../stores/linkedMatches'
 import AuthModal from '../components/AuthModal.vue'
+import HelpView from './HelpView.vue'
 import CrossMatchBanner from '../components/CrossMatchBanner.vue'
 
 const appVersion = __APP_VERSION__
@@ -136,6 +141,7 @@ const tournamentStore = useTournamentStore()
 const linkedStore = useLinkedMatchesStore()
 const router = useRouter()
 const showAuth = ref(false)
+const showHelp = ref(false)
 const openWizard = inject('openWizard', () => {})
 const showTournament = computed(() => {
   const email = authStore.user?.email
@@ -361,4 +367,13 @@ async function openRound(id) {
 .cm-home-title { font-family: var(--gw-font-display); font-size: 17px; font-weight: 700; color: #93c5fd; line-height: 1.2; }
 .cm-home-sub { font-size: 12px; color: rgba(240,237,224,.55); margin-top: 2px; }
 .cm-home-arrow { font-size: 28px; color: rgba(147,197,253,.6); font-weight: 300; flex-shrink: 0; }
+.help-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 50%;
+  background: rgba(212,175,55,.15); border: 1.5px solid rgba(212,175,55,.4);
+  color: #d4af37; font-size: 16px; font-weight: 700; line-height: 1;
+  cursor: pointer; transition: background .15s, border-color .15s, transform .1s;
+  flex-shrink: 0; -webkit-tap-highlight-color: transparent;
+}
+.help-btn:active { background: rgba(212,175,55,.28); border-color: #d4af37; transform: scale(.92); }
 </style>

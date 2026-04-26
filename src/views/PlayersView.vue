@@ -1,15 +1,31 @@
 <template>
   <div class="players-view">
+    <header class="view-header">
+      <h2>Players</h2>
+      <div class="header-actions">
+        <button class="btn-ghost btn-sm sort-btn" @click="toggleSort" :title="sortLabel">⇅ {{ sortLabel }}</button>
+        <button class="btn-ghost btn-sm sync-all-btn" @click="syncAllGhin" :disabled="ghinSyncing" title="Sync all handicaps from GHIN">
+          <span v-if="ghinSyncing" class="spin">⟳</span>
+          <span v-else>⟳</span> HCP
+        </button>
+        <button class="btn-ghost btn-sm invite-all-btn" @click="shareGroupInvite" title="Invite a player to GolfWizard">📨</button>
+        <button class="btn-ghost btn-sm" @click="showAdd = !showAdd">{{ showAdd ? 'Cancel' : '+ Add' }}</button>
+      </div>
+    </header>
 
     <!-- Sync status banner -->
     <div v-if="syncMsg" class="sync-banner" :class="syncMsgType">{{ syncMsg }}</div>
 
     <!-- Multiple matches modal -->
     <Teleport to="body">
-      <div v-if="multipleMatchPlayer" class="match-sheet-backdrop" @click.self="multipleMatchPlayer = null">
+      <div v-if="multipleMatchPlayer" class="match-backdrop" @click.self="advanceMultipleQueue">
         <div class="match-sheet">
-          <div class="match-sheet-title">Multiple Matches</div>
-          <div class="match-sheet-sub">Select the correct golfer for <strong>{{ multipleMatchPlayer.name }}</strong></div>
+          <div class="match-sheet-header">
+            <div class="match-sheet-title">Multiple matches</div>
+            <div class="match-sheet-sub">
+              {{ multipleMatchQueue.length > 1 ? `${multipleMatchQueue.indexOf(multipleMatchPlayer)+1} of ${multipleMatchQueue.length} · ` : '' }}"{{ multipleMatchPlayer.name }}" — tap the correct golfer
+            </div>
+          </div>
           <div class="match-list">
             <div v-for="m in multipleMatchPlayer.matches" :key="m.ghin_number" class="match-option" @click="selectMatch(multipleMatchPlayer.player_id, m)">
               <div class="match-name">{{ m.full_name }}</div>
@@ -17,7 +33,9 @@
             </div>
           </div>
           <div class="match-sheet-footer">
-            <button class="btn-ghost" @click="multipleMatchPlayer = null">Skip</button>
+            <button class="btn-ghost" style="width:100%" @click="advanceMultipleQueue">
+              {{ multipleMatchQueue.indexOf(multipleMatchPlayer) < multipleMatchQueue.length - 1 ? 'Skip → next player' : 'Skip' }}
+            </button>
           </div>
         </div>
       </div>
@@ -27,34 +45,22 @@
     <div v-if="inviteHint" class="invite-hint-banner">{{ inviteHint }}</div>
 
     <!-- Add form -->
-    <div class="view-header">
-      <h2>Players</h2>
-      <div class="header-actions">
-        <button class="btn-ghost btn-sm sort-btn" @click="toggleSort">{{ sortLabel }}</button>
-        <button class="btn-ghost btn-sm invite-all-btn" @click="shareGroupInvite" title="Invite a player to GolfWizard">📨</button>
-        <button class="btn-ghost btn-sm sync-all-btn" @click="syncAllGhin" :disabled="ghinSyncing" title="Sync all handicaps from GHIN">
-          <span v-if="ghinSyncing" class="spin">⟳</span>
-          <span v-else>⟳ Sync</span>
-        </button>
-      </div>
-    </div>
-
-    <div v-if="showAdd" class="add-form">
+    <div v-if="showAdd" class="add-form card">
       <div class="name-row">
-        <input v-model="newFirst" class="wiz-input" placeholder="First name" autocomplete="given-name" />
-        <input v-model="newLast" class="wiz-input" placeholder="Last name" autocomplete="family-name" />
+        <input v-model="newFirst" class="wiz-input" placeholder="First name"
+          @input="addGhinResults = []; addGhinMsg = ''"
+          @keydown.enter="addSearchGhin" />
+        <input v-model="newLast" class="wiz-input" placeholder="Last name (required)"
+          @input="addGhinResults = []; addGhinMsg = ''"
+          @keydown.enter="addSearchGhin" />
       </div>
-      <input v-model="newNickname" class="wiz-input" placeholder="Nickname (optional)" />
-      <input v-model="newEmail" class="wiz-input" placeholder="Email (optional)" type="email" autocomplete="email" />
       <div class="add-ghin-search-row">
         <input v-model="newGhin" class="wiz-input" placeholder="GHIN Index (e.g. 14.2)" type="number" step="0.1" />
         <button class="ghin-lookup-btn" @click="addSearchGhin" :disabled="addGhinSearching" type="button">
           {{ addGhinSearching ? "…" : "🔍 GHIN" }}
         </button>
       </div>
-      <div v-if="!newGhinNumber && newFirst && newLast" class="add-ghin-warning">
-        ⚠️ No GHIN linked — handicap won't auto-update. Tap 🔍 GHIN to search.
-      </div>
+      <!-- GHIN search results -->
       <div v-if="addGhinResults.length" class="ghin-search-results">
         <div class="ghin-search-label">Select the correct golfer:</div>
         <div v-for="r in addGhinResults" :key="r.ghin_number" class="ghin-search-option" @click="applyAddGhinResult(r)">
@@ -63,49 +69,299 @@
         </div>
       </div>
       <div v-if="addGhinMsg" class="ghin-search-msg">{{ addGhinMsg }}</div>
-      <div v-if="addError" class="edit-error">{{ addError }}</div>
-      <div class="edit-footer">
-        <button class="btn-ghost" @click="showAdd = false">Cancel</button>
-        <button class="btn-primary" :disabled="addingPlayer" @click="add">{{ addingPlayer ? 'Adding…' : 'Add Player' }}</button>
+      <input v-model="newNickname" class="wiz-input" placeholder="Nickname (optional)" />
+      <input v-model="newEmail" class="wiz-input" placeholder="Email address" type="email" autocomplete="email" />
+      <div v-if="!newGhinNumber && newFirst && newLast" class="add-ghin-warning">
+        ⚠️ No GHIN linked — handicap won't auto-update. Tap 🔍 GHIN to search.
       </div>
+      <div v-if="addError" class="edit-error">{{ addError }}</div>
+      <button class="btn-primary btn-sm" :disabled="addingPlayer" @click="add">
+        {{ addingPlayer ? 'Adding…' : 'Add Player' }}
+      </button>
     </div>
-    <button v-if="!showAdd" class="btn-ghost btn-sm" style="margin-bottom:12px;width:100%;" @click="showAdd = true">+ Add Player</button>
 
     <!-- You section -->
+    <div v-if="myRosterPlayer" class="section-label">You</div>
     <div v-if="myRosterPlayer" class="player-card player-card--you">
       <div class="player-info" @click="openGhinSheet">
         <div class="player-name">
           {{ myRosterPlayer.name }}
           <span class="you-badge">YOU</span>
           <span v-if="myRosterPlayer.ghin_index != null" class="player-hcp">
-            ({{ Number(myRosterPlayer.ghin_index).toFixed(1) }}<span class="ghin-dot-inline" :class="ghinSyncStatus(myRosterPlayer)" :title="ghinSyncTitle(myRosterPlayer)"></span>)
+            ({{ Number(myRosterPlayer.ghin_index).toFixed(1) }}<span class="trend-arrow" v-if="myRosterPlayer.ghin_trend" :class="'trend-' + myRosterPlayer.ghin_trend">{{ myRosterPlayer.ghin_trend === 'up' ? '↑' : myRosterPlayer.ghin_trend === 'down' ? '↓' : '' }}</span><span class="ghin-dot-inline" :class="ghinSyncStatus(myRosterPlayer)" :title="ghinSyncTitle(myRosterPlayer)"></span>)
           </span>
+          <span v-if="myRosterPlayer.hard_cap === 'true' || myRosterPlayer.hard_cap === true" class="cap-badge cap-hard" title="Hard Cap applied">HC</span>
+          <span v-else-if="myRosterPlayer.soft_cap === 'true' || myRosterPlayer.soft_cap === true" class="cap-badge cap-soft" title="Soft Cap applied">SC</span>
         </div>
       </div>
-      <button v-if="myRosterPlayer.ghin_number || authStore.profile?.ghin_number" class="ghin-sheet-btn" @click.stop="openGhinSheet">GHIN</button>
+      <button v-if="myRosterPlayer.ghin_number" class="ghin-sheet-btn" @click.stop="openGhinSheet">GHIN</button>
     </div>
 
-    <!-- GHIN score history sheet -->
-    <GhinSheet
-      v-model="showGhinSheet"
-      :player="myRosterPlayer"
-      :has-credentials="!!authStore.profile?.ghin_password"
-      :loading="ghinScoresLoading"
-      :error="ghinScoresError"
-      :scores-fetched="ghinScoresFetched"
-      :scores="ghinScores"
-      :scores-posted="ghinScoresPosted"
-      :score-stats="ghinScoreStats"
-      :agg-stats="ghinAggStats"
-      :live-h-i="ghinLiveHI"
-      :live-low-h-i="ghinLiveLowHI"
-      :computed-trend="ghinComputedTrend"
-      @refresh="fetchGhinScores(true)"
-      @go-settings="showGhinSheet = false; $router.push('/settings')"
-    />
+    <!-- GHIN score history sheet (logged-in user only) -->
+    <Teleport to="body">
+      <div v-if="showGhinSheet" class="ghin-sheet-backdrop" @click.self="showGhinSheet = false">
+        <div class="ghin-sheet-panel">
+          <div class="ghin-sheet-handle"></div>
+
+          <!-- ── Hero header (green gradient) ── -->
+          <div class="ghin-hero-header">
+            <!-- Close -->
+            <button class="ghin-close-btn" @click="showGhinSheet = false">✕</button>
+
+            <!-- Club logo + Name row -->
+            <div class="ghin-header-identity">
+              <div class="ghin-club-logo-wrap">
+                <img v-if="ghinIsBonnieBriar" :src="bbLogo" class="ghin-club-logo" alt="BB" />
+                <span v-else class="ghin-club-icon">⛳</span>
+              </div>
+              <div class="ghin-header-name-block">
+                <div class="ghin-header-name">{{ myRosterPlayer?.name }}</div>
+                <div class="ghin-header-sub">
+                  <span v-if="myRosterPlayer?.ghin_number">GHIN #{{ myRosterPlayer.ghin_number }}</span>
+                  <span v-if="myRosterPlayer?.club_name" class="ghin-header-club"> · {{ myRosterPlayer.club_name }}</span>
+                </div>
+              </div>
+
+              <!-- HI badge top-right -->
+              <div class="ghin-hi-badge">
+                <div class="ghin-hi-num">{{ ghinLiveHI ?? (myRosterPlayer?.ghin_index != null ? Number(myRosterPlayer.ghin_index).toFixed(1) : '—') }}</div>
+                <div class="ghin-hi-label">
+                  HI
+                  <span v-if="ghinScoresFetched" class="ghin-hi-trend" :class="'trend-' + ghinComputedTrend">
+                    {{ ghinComputedTrend === 'improving' ? '↓' : ghinComputedTrend === 'declining' ? '↑' : '→' }}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Sparkline (last 10 differentials) -->
+            <div v-if="ghinSparkBars.length" class="ghin-spark-row">
+              <div class="ghin-spark-label">Last {{ ghinSparkBars.length }} rounds</div>
+              <div class="ghin-spark-bars">
+                <div
+                  v-for="(bar, i) in ghinSparkBars"
+                  :key="i"
+                  class="ghin-spark-bar"
+                  :class="{ 'ghin-spark-bar--latest': bar.isLatest }"
+                  :style="{ height: bar.pct + '%' }"
+                ></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Stats pills row ── -->
+          <div class="ghin-stats-grid">
+            <div class="ghin-stat">
+              <div class="ghin-stat-label">Low HI</div>
+              <div class="ghin-stat-val">{{ ghinLiveLowHI ?? (myRosterPlayer?.ghin_low_hi != null ? Number(myRosterPlayer.ghin_low_hi).toFixed(1) : '—') }}</div>
+              <div class="ghin-stat-sub">career low</div>
+            </div>
+            <div class="ghin-stat">
+              <div class="ghin-stat-label">Posted</div>
+              <div class="ghin-stat-val">{{ ghinScoresPosted ?? myRosterPlayer?.ghin_scores_posted ?? '—' }}</div>
+              <div class="ghin-stat-sub">total rounds</div>
+            </div>
+            <div class="ghin-stat">
+              <div class="ghin-stat-label">Avg Score</div>
+              <div class="ghin-stat-val">{{ ghinScoreStats?.average != null ? Number(ghinScoreStats.average).toFixed(1) : '—' }}</div>
+              <div class="ghin-stat-sub">last 20</div>
+            </div>
+            <div class="ghin-stat">
+              <div class="ghin-stat-label">Used / Total</div>
+              <div class="ghin-stat-val" style="font-size:15px;">{{ ghinScores.filter(s => s.used_for_hi).length }}<span style="font-size:11px;color:var(--gw-text-muted)">/{{ ghinScores.length || (myRosterPlayer?.ghin_scores_posted ?? '—') }}</span></div>
+              <div class="ghin-stat-sub">HI rounds</div>
+            </div>
+          </div>
+
+          <!-- ── Scoring bar (birdie/par/bogey) ── -->
+          <div v-if="ghinScoreStats?.avg_birdie_pct != null" class="ghin-scoring-section">
+            <div class="ghin-scoring-labels">
+              <span class="ghin-scoring-lbl" style="color:var(--gw-birdie)">{{ Math.round((ghinScoreStats.avg_birdie_pct ?? 0) * 100) }}% Birdie</span>
+              <span class="ghin-scoring-lbl">{{ Math.round((ghinScoreStats.avg_par_pct ?? 0) * 100) }}% Par</span>
+              <span class="ghin-scoring-lbl" style="color:#f87171">{{ Math.round(((ghinScoreStats.avg_bogey_pct ?? 0) + (ghinScoreStats.avg_double_pct ?? 0) + (ghinScoreStats.avg_worse_pct ?? 0)) * 100) }}% Bogey+</span>
+              <span class="ghin-scoring-lbl" style="color:var(--gw-text-muted)">{{ Math.round((ghinScoreStats.avg_gir_pct ?? 0) * 100) }}% GIR</span>
+            </div>
+            <div class="ghin-scoring-bar-wrap">
+              <div class="ghin-scoring-bar">
+                <div class="ghin-bar-seg ghin-bar-seg--birdie" :style="{ width: Math.round((ghinScoreStats.avg_birdie_pct ?? 0) * 100) + '%' }">
+                  <div class="ghin-bar-gloss"></div>
+                </div>
+                <div class="ghin-bar-seg ghin-bar-seg--par" :style="{ width: Math.round((ghinScoreStats.avg_par_pct ?? 0) * 100) + '%' }">
+                  <div class="ghin-bar-gloss"></div>
+                </div>
+                <div class="ghin-bar-seg ghin-bar-seg--bogey" :style="{ width: Math.round((ghinScoreStats.avg_bogey_pct ?? 0) * 100) + '%' }">
+                  <div class="ghin-bar-gloss"></div>
+                </div>
+                <div class="ghin-bar-seg ghin-bar-seg--double" :style="{ width: Math.round(((ghinScoreStats.avg_double_pct ?? 0) + (ghinScoreStats.avg_worse_pct ?? 0)) * 100) + '%' }">
+                  <div class="ghin-bar-gloss"></div>
+                </div>
+                <div class="ghin-bar-overlay"></div>
+              </div>
+            </div>
+
+            <!-- Par 3/4/5 averages -->
+            <div class="ghin-par-grid">
+              <div class="ghin-par-cell">
+                <div class="ghin-par-val">{{ ghinScoreStats.avg_par3 != null ? Number(ghinScoreStats.avg_par3).toFixed(2) : '—' }}</div>
+                <div class="ghin-par-label">Par 3</div>
+              </div>
+              <div class="ghin-par-divider"></div>
+              <div class="ghin-par-cell">
+                <div class="ghin-par-val">{{ ghinScoreStats.avg_par4 != null ? Number(ghinScoreStats.avg_par4).toFixed(2) : '—' }}</div>
+                <div class="ghin-par-label">Par 4</div>
+              </div>
+              <div class="ghin-par-divider"></div>
+              <div class="ghin-par-cell">
+                <div class="ghin-par-val">{{ ghinScoreStats.avg_par5 != null ? Number(ghinScoreStats.avg_par5).toFixed(2) : '—' }}</div>
+                <div class="ghin-par-label">Par 5</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Score range strip ── -->
+          <div v-if="ghinScoreStats" class="ghin-range-strip">
+            <div class="ghin-range-item">
+              <span class="ghin-range-label">Low</span>
+              <span class="ghin-range-val ghin-range-val--low">{{ ghinScoreStats.lowest_score }}</span>
+            </div>
+            <div class="ghin-range-divider"></div>
+            <div class="ghin-range-item">
+              <span class="ghin-range-label">High</span>
+              <span class="ghin-range-val ghin-range-val--high">{{ ghinScoreStats.highest_score }}</span>
+            </div>
+            <div class="ghin-range-divider"></div>
+            <div class="ghin-range-item">
+              <span class="ghin-range-label">Trend</span>
+              <span class="ghin-range-val" :class="'trend-' + ghinComputedTrend">
+                {{ ghinComputedTrend === 'improving' ? '↓ Impr' : ghinComputedTrend === 'declining' ? '↑ Rising' : '→ Stable' }}
+              </span>
+            </div>
+          </div>
+
+          <!-- ── Cap badges ── -->
+          <div v-if="myRosterPlayer?.soft_cap === 'true' || myRosterPlayer?.hard_cap === 'true'" class="ghin-cap-row">
+            <div v-if="myRosterPlayer?.hard_cap === 'true'" class="ghin-cap-badge ghin-cap-badge--hard">⚠ Hard Cap Applied</div>
+            <div v-else-if="myRosterPlayer?.soft_cap === 'true'" class="ghin-cap-badge ghin-cap-badge--soft">Soft Cap Applied</div>
+          </div>
+
+          <!-- ── Score history ── -->
+          <div class="ghin-history-section">
+            <div class="ghin-history-header">
+              <span class="ghin-history-title">Score History</span>
+              <button class="ghin-refresh-btn" @click="fetchGhinScores" :disabled="ghinScoresLoading" title="Refresh">
+                <span :class="{ spin: ghinScoresLoading }">⟳</span>
+              </button>
+            </div>
+
+            <!-- No credentials -->
+            <div v-if="!authStore.profile?.ghin_password" class="ghin-no-creds">
+              <div class="ghin-scores-note">GHIN login required</div>
+              <div class="ghin-scores-sub">Add your GHIN password in Settings → Profile to load score history.</div>
+              <button class="btn-ghost btn-sm" style="margin-top:10px;" @click="showGhinSheet = false; $router.push('/settings')">Go to Settings →</button>
+            </div>
+
+            <!-- Loading -->
+            <div v-else-if="ghinScoresLoading" class="ghin-scores-loading">
+              <span class="spin" style="font-size:22px;">⟳</span>
+              <span style="margin-left:8px;color:var(--gw-text-muted)">Loading scores…</span>
+            </div>
+
+            <!-- Error -->
+            <div v-else-if="ghinScoresError" class="ghin-scores-error">{{ ghinScoresError }}</div>
+
+            <!-- Scores list -->
+            <div v-else-if="ghinScores.length" class="ghin-scores-list">
+              <div class="ghin-scores-cols">
+                <span>Date</span>
+                <span>Course / Tee</span>
+                <span class="col-center">Gross</span>
+                <span class="col-center">Net</span>
+                <span class="col-right">Diff</span>
+              </div>
+              <div
+                v-for="(s, i) in ghinScores"
+                :key="i"
+                class="ghin-score-row"
+                :class="{ 'ghin-score-row--used': s.used_for_hi }"
+              >
+                <span class="score-date">{{ formatScoreDate(s.date) }}</span>
+                <span class="score-course-wrap">
+                  <span class="score-course" :title="s.course_name">{{ s.course_name }}</span>
+                  <span class="score-tee" v-if="s.tee_name">{{ s.tee_name }}</span>
+                </span>
+                <span class="score-ags col-center">{{ s.adjusted_gross_score ?? '—' }}</span>
+                <span class="score-net col-center">{{ s.net_score ?? '—' }}</span>
+                <span class="score-diff col-right" :class="s.used_for_hi ? 'diff-used' : ''">
+                  <span v-if="s.used_for_hi" class="hi-star" title="Used for HI">★</span>{{ s.differential != null ? Number(s.differential).toFixed(1) : '—' }}
+                </span>
+              </div>
+              <div class="ghin-scores-legend">
+                <span class="hi-star" style="font-size:11px;">★</span>
+                Used for HI calculation ({{ ghinScores.filter(s => s.used_for_hi).length }} of {{ ghinScores.length }})
+              </div>
+            </div>
+
+            <!-- Empty after fetch -->
+            <div v-else-if="ghinScoresFetched" class="ghin-scores-empty">No scores found</div>
+
+            <!-- Prompt to load -->
+            <div v-else class="ghin-scores-prompt">
+              <button class="btn-primary btn-sm" @click="fetchGhinScores">Load Score History</button>
+            </div>
+          </div>
+
+          <div style="height:32px;"></div>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- Public player GHIN sheet -->
-    <PlayerSheet :player="playerSheetTarget" @close="playerSheetTarget = null" />
+    <Teleport to="body">
+      <div v-if="playerSheetTarget" class="ghin-sheet-backdrop" @click.self="playerSheetTarget = null">
+        <div class="ghin-sheet-panel">
+          <div class="ghin-sheet-handle"></div>
+          <div class="ghin-sheet-top">
+            <div>
+              <div class="ghin-sheet-name">{{ playerSheetTarget.name }}</div>
+              <div class="ghin-sheet-meta">
+                <span v-if="playerSheetTarget.ghin_number">GHIN #{{ playerSheetTarget.ghin_number }}</span>
+                <span v-if="playerSheetTarget.club_name"> · {{ playerSheetTarget.club_name }}</span>
+              </div>
+            </div>
+            <button class="close-btn" @click="playerSheetTarget = null">✕</button>
+          </div>
+          <div class="ghin-stats-grid">
+            <div class="ghin-stat">
+              <div class="ghin-stat-label">Index</div>
+              <div class="ghin-stat-val">{{ playerSheetTarget.ghin_index != null ? Number(playerSheetTarget.ghin_index).toFixed(1) : '—' }}</div>
+              <div class="ghin-stat-sub">current</div>
+            </div>
+            <div class="ghin-stat">
+              <div class="ghin-stat-label">Low HI</div>
+              <div class="ghin-stat-val">{{ playerSheetTarget.low_hi != null ? Number(playerSheetTarget.low_hi).toFixed(1) : '—' }}</div>
+              <div class="ghin-stat-sub">season low</div>
+            </div>
+            <div class="ghin-stat">
+              <div class="ghin-stat-label">Cap</div>
+              <div class="ghin-stat-val ghin-stat-val--sm">
+                <span v-if="playerSheetTarget.hard_cap === 'true' || playerSheetTarget.hard_cap === true" class="cap-badge cap-hard">Hard</span>
+                <span v-else-if="playerSheetTarget.soft_cap === 'true' || playerSheetTarget.soft_cap === true" class="cap-badge cap-soft">Soft</span>
+                <span v-else class="cap-badge cap-none">None</span>
+              </div>
+              <div class="ghin-stat-sub">cap status</div>
+            </div>
+          </div>
+          <div class="ghin-player-sheet-note">
+            <div class="ghin-sync-row">
+              <span class="ghin-dot-inline" :class="ghinSyncStatus(playerSheetTarget)"></span>
+              Synced {{ playerSheetTarget.ghin_synced_at ? ghinSyncDate(playerSheetTarget) : 'never' }}
+            </div>
+            <div class="ghin-public-note">Score history is only available for your own account via GHIN credentials.</div>
+          </div>
+          <div style="height:40px;"></div>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- Favorites section -->
     <div v-if="favoritePlayers.length" class="section-label">
@@ -198,31 +454,77 @@
       </div>
     </Teleport>
 
-    <!-- Edit modal -->
-    <PlayerEditModal
-      v-model="editTarget"
-      :searching="ghinSearching"
-      :search-results="ghinSearchResults"
-      :search-msg="ghinSearchMsg"
-      :saving="editSaving"
-      :edit-error="editError"
-      @search-ghin="handleEditGhinSearch"
-      @apply-result="handleApplyResult"
-      @save="handleSave"
-    />
+    <!-- Edit overlay -->
+    <Teleport to="body">
+      <div v-if="editTarget" class="edit-backdrop" @click.self="editTarget = null">
+        <div class="edit-sheet">
+          <div class="edit-header">
+            <span class="edit-title">Edit Player</span>
+            <button class="close-btn" @click="editTarget = null">✕</button>
+          </div>
+          <div class="name-row">
+            <input v-model="editFirst" class="wiz-input" placeholder="First name" />
+            <input v-model="editLast" class="wiz-input" placeholder="Last name" />
+          </div>
+          <input v-model="editGhin" class="wiz-input" placeholder="GHIN Index" type="number" step="0.1" />
+          <div v-if="editTarget?.club_name" class="edit-club-row">
+            <img
+              v-if="editTarget.club_name.toLowerCase().includes('bonnie briar')"
+              src="../assets/bonnie-briar-logo.png"
+              class="edit-club-logo"
+              alt=""
+            />
+            <span v-else class="edit-club-icon">⛳</span>
+            <span class="edit-club-name">{{ editTarget.club_name }}</span>
+          </div>
+          <div class="ghin-number-row">
+            <input v-model="editGhinNumber" class="wiz-input" placeholder="GHIN # (e.g. 1321498)" type="text" inputmode="numeric" style="flex:1" />
+            <button class="ghin-lookup-btn" @click="searchGhinForEdit" :disabled="ghinSearching" type="button">
+              {{ ghinSearching ? '…' : '🔍 GHIN' }}
+            </button>
+          </div>
+          <!-- First-name prefix hint for ambiguous names -->
+          <div class="ghin-prefix-row">
+            <input v-model="editGhinPrefix" class="wiz-input ghin-prefix-input" placeholder="Narrow by first name (e.g. &quot;Br&quot; for Brian)" />
+          </div>
+          <!-- In-app GHIN search results -->
+          <div v-if="ghinSearchResults.length" class="ghin-search-results">
+            <div class="ghin-search-label">Select the correct golfer:</div>
+            <div v-for="r in ghinSearchResults" :key="r.ghin_number" class="ghin-search-option" @click="applyGhinResult(r)">
+              <div class="ghin-search-name">{{ r.full_name }} <span v-if="r._source === 'bb'" class="bb-badge">BB</span></div>
+              <div class="ghin-search-meta">{{ r.club_name }} · HCP {{ r.handicap_index ?? 'NH' }} · #{{ r.ghin_number }}</div>
+            </div>
+          </div>
+          <div v-if="ghinSearchMsg" class="ghin-search-msg">{{ ghinSearchMsg }}</div>
+          <div class="edit-nickname-row">
+            <input v-model="editNickname" class="wiz-input" placeholder="Nickname (e.g. Spiels)" style="flex:1" />
+            <label class="nick-toggle-label">
+              <input type="checkbox" v-model="editUseNickname" class="nick-toggle-cb" />
+              <span class="nick-toggle-text">Use nickname</span>
+            </label>
+          </div>
+          <input v-model="editEmail" class="wiz-input" placeholder="Email address" type="email" autocomplete="email" />
+          <div v-if="editError" class="edit-error">{{ editError }}</div>
+          <div class="edit-footer">
+            <button class="btn-ghost" :disabled="editSaving" @click="editTarget = null">Cancel</button>
+            <button class="btn-primary" :disabled="editSaving" @click="saveEdit">
+              {{ editSaving ? 'Saving…' : 'Save' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, reactive } from 'vue'
 import { useRosterStore } from '../stores/roster'
 import { buildInviteUrl, buildInviteEmail } from '../modules/preset'
 import { useAuthStore } from '../stores/auth'
 import { supabase } from '../supabase'
-import GhinSheet from '../components/GhinSheet.vue'
-import PlayerSheet from '../components/PlayerSheet.vue'
-import PlayerEditModal from '../components/PlayerEditModal.vue'
+import bbLogo from '../assets/bonnie-briar-logo.png'
 
 const rosterStore = useRosterStore()
 const authStore = useAuthStore()
@@ -232,16 +534,17 @@ function ghinSyncStatus(p) {
   if (!p.ghin_synced_at) return 'dot-none'
   const hoursAgo = (Date.now() - new Date(p.ghin_synced_at).getTime()) / (1000 * 60 * 60)
   if (hoursAgo < 26) return 'dot-blue'
-  if (hoursAgo < 72) return 'dot-yellow'
-  return 'dot-red'
+  if (hoursAgo < 72) return 'dot-red'
+  return 'dot-none'
 }
+
 function ghinSyncTitle(p) {
   if (!p.ghin_synced_at) return 'Not synced'
   const hoursAgo = Math.round((Date.now() - new Date(p.ghin_synced_at).getTime()) / (1000 * 60 * 60))
-  if (hoursAgo < 2) return 'Synced recently'
+  if (hoursAgo < 2) return 'Synced just now'
   if (hoursAgo < 26) return `Synced ${hoursAgo}h ago`
-  const days = Math.floor(hoursAgo / 24)
-  return `Synced ${days}d ago`
+  const days = Math.round(hoursAgo / 24)
+  return `Last synced ${days} day${days > 1 ? 's' : ''} ago`
 }
 
 // ── Sync All GHIN ────────────────────────────────────────────────
@@ -252,85 +555,112 @@ const multipleMatchPlayer = ref(null)
 const multipleMatchQueue = ref([])
 
 async function syncAllGhin() {
-  const profile = authStore.profile
-  if (!profile?.ghin_number || !profile?.ghin_password) {
-    syncMsg.value = 'Add GHIN credentials in Settings → Profile to sync handicaps.'
-    syncMsgType.value = 'warn'
-    setTimeout(() => { syncMsg.value = '' }, 4000)
-    return
-  }
+  if (ghinSyncing.value) return
   ghinSyncing.value = true
-  syncMsg.value = ''
+  syncMsg.value = 'Syncing handicaps…'
+  syncMsgType.value = 'info'
+
   try {
-    const toSync = rosterStore.players.filter(p => p.ghin_number)
-    if (!toSync.length) { syncMsg.value = 'No players have GHIN numbers linked.'; syncMsgType.value = 'info'; return }
-    const { data, error } = await supabase.functions.invoke('ghin-roster-sync', {
-      body: {
-        ghin_number: profile.ghin_number,
-        password: profile.ghin_password,
-        state: 'NY',
-        players: toSync.map(p => ({ id: p.id, name: p.name, ghin_number: p.ghin_number })),
+    const { data: bbMembers, error: bbErr } = await supabase
+      .from('bb_member_index')
+      .select('ghin_number, handicap_index, updated_at')
+      .not('ghin_number', 'is', null)
+    if (bbErr) throw bbErr
+
+    const bbMap = {}
+    for (const m of bbMembers || []) {
+      bbMap[m.ghin_number] = m
+    }
+
+    let updated = 0
+    let notFound = 0
+
+    const updatePromises = []
+    for (const player of rosterStore.players) {
+      if (!player.ghin_number) continue
+      const bb = bbMap[player.ghin_number]
+      if (bb?.handicap_index != null) {
+        updatePromises.push(
+          rosterStore.updatePlayer(player.id, {
+            ghin_index: bb.handicap_index,
+            ghin_synced_at: bb.updated_at,
+          })
+        )
+        updated++
+      } else {
+        notFound++
       }
-    })
-    if (error) throw error
-    const results = data?.results || []
-    const updated = results.filter(r => r.status === 'updated' || r.status === 'found')
-    const multiple = results.filter(r => r.status === 'multiple_matches')
-    for (const r of updated) {
-      await rosterStore.updatePlayer(r.player_id, {
-        ghin_index: r.handicap_index,
-        ghin_synced_at: new Date().toISOString(),
-        low_hi: r.low_hi || undefined,
-        club_name: r.club_name || undefined,
-        soft_cap: r.soft_cap,
-        hard_cap: r.hard_cap,
-      })
     }
-    if (multiple.length) {
-      multipleMatchQueue.value = multiple
-      advanceMultipleQueue()
-    }
-    syncMsg.value = `✓ Synced ${updated.length} of ${toSync.length} players`
-    syncMsgType.value = updated.length === toSync.length ? 'success' : 'warn'
+    await Promise.all(updatePromises)
+
+    await rosterStore.fetchPlayers()
+
+    const parts = [`✓ ${updated} synced`]
+    if (notFound) parts.push(`${notFound} not in BB roster`)
+    syncMsg.value = parts.join(', ')
+    syncMsgType.value = 'success'
+    setTimeout(() => { syncMsg.value = '' }, 4000)
   } catch (e) {
-    syncMsg.value = e?.message || 'Sync failed'
+    syncMsg.value = `Sync failed: ${e?.message || e}`
     syncMsgType.value = 'error'
+    setTimeout(() => { syncMsg.value = '' }, 5000)
   } finally {
     ghinSyncing.value = false
-    setTimeout(() => { syncMsg.value = '' }, 5000)
   }
 }
 
 function advanceMultipleQueue() {
-  if (!multipleMatchQueue.value.length) { multipleMatchPlayer.value = null; return }
-  multipleMatchPlayer.value = multipleMatchQueue.value.shift()
+  const queue = multipleMatchQueue.value
+  const current = multipleMatchPlayer.value
+  const idx = queue.indexOf(current)
+  if (idx >= 0 && idx < queue.length - 1) {
+    multipleMatchPlayer.value = queue[idx + 1]
+  } else {
+    multipleMatchPlayer.value = null
+    multipleMatchQueue.value = []
+  }
 }
 
 async function selectMatch(playerId, golfer) {
+  const today = new Date().toISOString()
   await rosterStore.updatePlayer(playerId, {
     ghin_index: golfer.handicap_index,
     ghin_number: golfer.ghin_number,
-    ghin_synced_at: new Date().toISOString(),
+    ghin_synced_at: today,
+    low_hi: golfer.low_hi || undefined,
     club_name: golfer.club_name || undefined,
   })
+  showToast(`Updated ${golfer.full_name}`, 'gold')
   advanceMultipleQueue()
 }
 
 // ── Invite ───────────────────────────────────────────────────────
 const inviteHint = ref('')
+
 function invitePlayer(player) {
-  const mailto = buildInviteEmail(player)
-  window.open(mailto)
+  if (!player.email) return
+  const senderName = authStore.profile?.display_name?.split(' ')[0] || 'Jason'
+  const mailtoLink = buildInviteEmail(player, senderName)
+  window.location.href = mailtoLink
+  showInviteHint(`Invite sent to ${player.name.split(' ')[0]}!`)
 }
+
 async function shareGroupInvite() {
   const url = buildInviteUrl()
+  const senderName = authStore.profile?.display_name?.split(' ')[0] || 'Jason'
+  const text = `${senderName} invited you to GolfWizard — golf scoring with handicaps, Nassau, Skins, and more. Open this link to get started with our group already loaded:\n${url}`
   if (navigator.share) {
-    await navigator.share({ title: 'GolfWizard', text: 'Join our golf group!', url })
+    try { await navigator.share({ title: 'Join GolfWizard', text, url }) } catch {}
   } else {
-    await navigator.clipboard.writeText(url)
-    showInviteHint('Link copied!')
+    try {
+      await navigator.clipboard.writeText(url)
+      showInviteHint('Invite link copied to clipboard!')
+    } catch {
+      showInviteHint(`Share this link: ${url}`)
+    }
   }
 }
+
 function showInviteHint(msg) {
   inviteHint.value = msg
   setTimeout(() => { inviteHint.value = '' }, 3000)
@@ -345,25 +675,31 @@ const newNickname = ref('')
 const newEmail = ref('')
 const addError = ref('')
 const addingPlayer = ref(false)
+
 const addGhinSearching = ref(false)
 const addGhinResults = ref([])
 const addGhinMsg = ref('')
 const newGhinNumber = ref(null)
+const newClubName = ref(null)
 const sortMode = ref('name')
 const sortLabel = computed(() => sortMode.value === 'name' ? 'A–Z' : 'Added')
-function toggleSort() { sortMode.value = sortMode.value === 'name' ? 'added' : 'name' }
+
+function toggleSort() {
+  sortMode.value = sortMode.value === 'name' ? 'added' : 'name'
+}
+
 function sortByLastName(arr) {
   if (sortMode.value !== 'name') return arr
   return [...arr].sort((a, b) => {
-    const la = (a.last_name || a.name?.split(' ').pop() || '').toLowerCase()
-    const lb = (b.last_name || b.name?.split(' ').pop() || '').toLowerCase()
-    return la.localeCompare(lb)
+    const lastName = n => { const parts = (n.name || '').trim().split(' '); return (parts[parts.length - 1] || '').toLowerCase() }
+    return lastName(a).localeCompare(lastName(b))
   })
 }
+
 const favoritePlayers = computed(() => sortByLastName(rosterStore.players.filter(p => p.is_favorite)))
 const otherPlayers = computed(() => sortByLastName(rosterStore.players.filter(p => !p.is_favorite)))
 
-// ── You section + GHIN sheet ─────────────────────────────────────
+// ── You section + GHIN sheet (logged-in user only) ──────────────
 const showGhinSheet = ref(false)
 const ghinScores = ref([])
 const ghinScoresLoading = ref(false)
@@ -371,12 +707,12 @@ const ghinScoresFetched = ref(false)
 const ghinScoresError = ref('')
 const ghinScoresPosted = ref(null)
 const ghinScoreStats = ref(null)
-const ghinAggStats = ref(null)
 const playerSheetTarget = ref(null)
 function openPlayerSheet(p) { playerSheetTarget.value = p }
 const ghinLiveHI = ref(null)
 const ghinLiveLowHI = ref(null)
 
+// Compute trend from differentials: lower = improving = 'down' (good in golf)
 const ghinComputedTrend = computed(() => {
   const scores = ghinScores.value
   if (!scores || scores.length < 4) return 'neutral'
@@ -390,69 +726,70 @@ const ghinComputedTrend = computed(() => {
   return 'neutral'
 })
 
+// Sparkline bars from last 10 score differentials
+const ghinSparkBars = computed(() => {
+  const s = ghinScores.value.slice(0, 10).reverse()
+  if (s.length < 2) return []
+  const diffs = s.map(r => r.differential ?? 0)
+  const mn = Math.min(...diffs)
+  const mx = Math.max(...diffs)
+  const range = mx - mn || 1
+  return diffs.map((d, i) => ({
+    pct: 20 + ((d - mn) / range) * 75,
+    isLatest: i === diffs.length - 1
+  }))
+})
+
+const ghinIsBonnieBriar = computed(() =>
+  myRosterPlayer.value?.club_name?.toLowerCase().includes('bonnie briar') ?? false
+)
+
 const myRosterPlayer = computed(() => {
   const profile = authStore.profile
   if (!profile) return null
   const name = profile.display_name || ''
   const ghinNum = profile.ghin_number
-  const email = authStore.user?.email?.toLowerCase().trim()
   return rosterStore.players.find(p =>
     (ghinNum && p.ghin_number && String(p.ghin_number) === String(ghinNum)) ||
-    (email && p.email?.toLowerCase().trim() === email) ||
-    (name && name.includes(' ') && p.name?.toLowerCase() === name.toLowerCase())
+    (name && p.name?.toLowerCase() === name.toLowerCase())
   ) || null
 })
 
 function ghinSyncDate(p) {
   if (!p.ghin_synced_at) return '—'
   const d = new Date(p.ghin_synced_at)
-  const diffDays = Math.floor((Date.now() - d) / (1000 * 60 * 60 * 24))
+  const now = new Date()
+  const diffDays = Math.floor((now - d) / (1000 * 60 * 60 * 24))
   if (diffDays === 0) return 'Today'
   if (diffDays === 1) return 'Yesterday'
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
+function formatScoreDate(dateStr) {
+  if (!dateStr) return '—'
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return dateStr.slice(0, 10)
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })
+}
+
 function openGhinSheet() {
   showGhinSheet.value = true
-  if (!ghinScores.value.length && !ghinScoresLoading.value) fetchGhinScores(false)
+  // Auto-load if we have creds and haven't fetched yet
+  const profile = authStore.profile
+  if (profile?.ghin_password && !ghinScoresFetched.value && !ghinScoresLoading.value) {
+    fetchGhinScores()
+  }
 }
 
-// Cache is considered fresh if populated today after 6am local time
-function isCacheFresh(cachedAt) {
-  if (!cachedAt) return false
-  const cacheTime = new Date(cachedAt)
-  const now = new Date()
-  const sixAmToday = new Date(now)
-  sixAmToday.setHours(6, 0, 0, 0)
-  // Cache is fresh if: it was populated after 6am today
-  return cacheTime >= sixAmToday
-}
-
-function applyScoreCache(cache) {
-  ghinScores.value = cache.scores || []
-  ghinScoresPosted.value = cache.scores_posted ?? null
-  ghinScoreStats.value = cache.score_stats ?? null
-  ghinAggStats.value = cache.aggregate_stats ?? null
-  ghinLiveHI.value = cache.handicap_index ?? null
-  ghinLiveLowHI.value = cache.low_hi_display ?? null
-  ghinScoresFetched.value = true
-}
-
-async function fetchGhinScores(force = false) {
+async function fetchGhinScores() {
   const profile = authStore.profile
   if (!profile?.ghin_number || !profile?.ghin_password) return
 
-  const player = myRosterPlayer.value
-
-  // Serve from cache if fresh and not a forced refresh
-  if (!force && player?.score_cache && isCacheFresh(player?.score_cache_at)) {
-    applyScoreCache(player.score_cache)
-    return
-  }
-
   ghinScoresLoading.value = true
   ghinScoresError.value = ''
+
   try {
+    const player = myRosterPlayer.value
     const { data, error } = await supabase.functions.invoke('ghin-scores', {
       body: {
         ghin_number: String(profile.ghin_number),
@@ -463,25 +800,16 @@ async function fetchGhinScores(force = false) {
     if (error) throw error
     if (data?.error) throw new Error(data.error)
 
-    applyScoreCache(data)
+    ghinScores.value = data.scores || []
+    ghinScoresPosted.value = data.scores_posted ?? null
+    ghinScoreStats.value = data.aggregate_stats ?? data.score_stats ?? null
+    ghinLiveHI.value = data.handicap_index ?? null
+    ghinLiveLowHI.value = data.low_hi_display ?? null
+    ghinScoresFetched.value = true
 
-    // Write cache back to roster_players row
-    if (player?.id && !String(player.id).startsWith('default_')) {
-      const cachePayload = {
-        scores: data.scores || [],
-        scores_posted: data.scores_posted ?? null,
-        score_stats: data.score_stats ?? null,
-        aggregate_stats: data.aggregate_stats ?? null,
-        handicap_index: data.handicap_index ?? null,
-        low_hi_display: data.low_hi_display ?? null,
-      }
-      await supabase.from('roster_players').update({
-        score_cache: cachePayload,
-        score_cache_at: new Date().toISOString(),
-      }).eq('id', player.id)
+    if (player?.id) {
+      await rosterStore.fetchPlayers()
     }
-
-    if (player?.id) await rosterStore.fetchPlayers()
   } catch (e) {
     ghinScoresError.value = e?.message || 'Failed to load scores'
   } finally {
@@ -497,15 +825,16 @@ async function addSearchGhin() {
   addGhinResults.value = []
   addGhinMsg.value = ''
   try {
-    const { data: bbRows } = await supabase
+    const query = supabase
       .from('bb_member_index')
       .select('ghin_number, first_name, last_name, handicap_index')
       .ilike('last_name', `%${last}%`)
       .order('last_name').limit(15)
+    const { data: bbRows } = await query
     let filtered = bbRows || []
     if (first && filtered.length > 0) {
-      const fl = first.toLowerCase()
-      const exact = filtered.filter(p => p.first_name?.toLowerCase().startsWith(fl))
+      const firstLower = first.toLowerCase()
+      const exact = filtered.filter(p => p.first_name?.toLowerCase().startsWith(firstLower))
       if (exact.length > 0) filtered = exact
     }
     if (filtered.length > 0) {
@@ -534,7 +863,12 @@ async function addSearchGhin() {
     if (error) throw error
     const results = data?.results?.filter(r => r.status === 'updated') || []
     if (results.length) {
-      addGhinResults.value = results.map(r => ({ ghin_number: r.ghin_number, full_name: r.full_name, handicap_index: r.handicap_index, club_name: r.club_name || '' }))
+      addGhinResults.value = results.map(r => ({
+        ghin_number: r.ghin_number,
+        full_name: r.full_name,
+        handicap_index: r.handicap_index,
+        club_name: r.club_name || '',
+      }))
     } else {
       addGhinMsg.value = `No golfer found for "${first ? first + ' ' : ''}${last}". Enter HCP manually or type their GHIN # directly.`
     }
@@ -551,6 +885,7 @@ function applyAddGhinResult(r) {
   newLast.value = parts.slice(1).join(' ') || newLast.value
   newGhin.value = r.handicap_index != null ? String(r.handicap_index) : newGhin.value
   newGhinNumber.value = r.ghin_number
+  newClubName.value = r.club_name || null
   addGhinResults.value = []
   addGhinMsg.value = `✓ ${r.full_name} selected`
 }
@@ -564,15 +899,19 @@ async function add() {
   try {
     const fullName = last ? `${first} ${last}` : first
     await rosterStore.addPlayer({
-      name: fullName, first_name: first, last_name: last || null,
+      name: fullName,
+      first_name: first,
+      last_name: last || null,
       short_name: last || first.slice(0, 8),
       ghin_index: newGhin.value !== '' ? parseFloat(newGhin.value) : null,
       ghin_number: newGhinNumber.value || null,
+      club_name: newClubName.value || null,
       nickname: newNickname.value.trim() || null,
       email: newEmail.value.trim() || null,
-      use_nickname: false, is_favorite: true,
+      use_nickname: false,
+      is_favorite: true,
     })
-    newFirst.value = ''; newLast.value = ''; newGhin.value = ''; newNickname.value = ''; newEmail.value = ''; newGhinNumber.value = null
+    newFirst.value = ''; newLast.value = ''; newGhin.value = ''; newNickname.value = ''; newEmail.value = ''; newGhinNumber.value = null; newClubName.value = null
     showAdd.value = false
     showToast(`${fullName} added`, 'gold')
   } catch (err) {
@@ -583,102 +922,172 @@ async function add() {
 }
 
 // ── Swipe ────────────────────────────────────────────────────────
+const swipeX = reactive({})
 const swiping = ref(null)
-const swipeX = ref({})
 const swipeStartX = ref(0)
+const swipeStartY = ref(0)
 const SWIPE_THRESHOLD = 80
 
 function swipeContainerStyle(id) { return {} }
+
 function swipeCardStyle(id) {
-  const x = swipeX.value[id] || 0
-  return x !== 0 ? { transform: `translateX(${x}px)` } : {}
+  const dx = swipeX[id] || 0
+  if (dx < -10) {
+    const t = Math.min(1, Math.abs(dx) / SWIPE_THRESHOLD)
+    return { transform: `translateX(${dx}px)`, background: `rgba(185,28,28,${0.08 + t * 0.55})`, borderColor: `rgba(248,113,113,${t * 0.6})` }
+  } else if (dx > 10) {
+    const t = Math.min(1, dx / SWIPE_THRESHOLD)
+    return { transform: `translateX(${dx}px)`, background: `rgba(161,98,7,${0.08 + t * 0.55})`, borderColor: `rgba(212,175,55,${t * 0.6})` }
+  }
+  return { transform: `translateX(${dx}px)` }
 }
+
 function swipeRevealOpacity(id, side) {
-  const x = swipeX.value[id] || 0
-  if (side === 'left' && x < 0) return Math.min(1, Math.abs(x) / SWIPE_THRESHOLD)
-  if (side === 'right' && x > 0) return Math.min(1, x / SWIPE_THRESHOLD)
+  const dx = swipeX[id] || 0
+  if (side === 'left' && dx < -20) return Math.min(1, (Math.abs(dx) - 20) / 40)
+  if (side === 'right' && dx > 20) return Math.min(1, (dx - 20) / 40)
   return 0
 }
+
 function onSwipeStart(e, id) {
-  swiping.value = id
   swipeStartX.value = e.touches[0].clientX
-  if (!swipeX.value[id]) swipeX.value[id] = 0
+  swipeStartY.value = e.touches[0].clientY
+  swiping.value = id
 }
+
 function onSwipeMove(e, id) {
   if (swiping.value !== id) return
   const dx = e.touches[0].clientX - swipeStartX.value
-  swipeX.value = { ...swipeX.value, [id]: dx }
+  const dy = e.touches[0].clientY - swipeStartY.value
+  if (Math.abs(dy) > Math.abs(dx) * 0.8) return
+  swipeX[id] = Math.max(-120, Math.min(120, dx))
 }
+
 async function onSwipeEnd(e, player) {
   const id = player.id
-  const x = swipeX.value[id] || 0
-  if (x < -SWIPE_THRESHOLD) {
-    confirmDelete(id, player.name)
-  } else if (x > SWIPE_THRESHOLD) {
-    const wasFav = player.is_favorite
-    await rosterStore.updatePlayer(id, { is_favorite: !wasFav })
-    showToast(wasFav ? 'Removed from favorites' : '★ Added to favorites!', wasFav ? 'neutral' : 'gold')
-  }
-  swipeX.value = { ...swipeX.value, [id]: 0 }
+  const dx = swipeX[id] || 0
   swiping.value = null
+  if (dx < -SWIPE_THRESHOLD) {
+    swipeX[id] = 0
+    confirmDelete(id, player.name)
+  } else if (dx > SWIPE_THRESHOLD) {
+    const wasFav = player.is_favorite
+    swipeX[id] = 0
+    await rosterStore.toggleFavorite(id)
+    showToast(wasFav ? 'Removed from favorites' : '★ Added to favorites!', wasFav ? 'neutral' : 'gold')
+  } else {
+    swipeX[id] = 0
+  }
 }
 
 // ── Toast ────────────────────────────────────────────────────────
 const toastMsg = ref('')
-const toastType = ref('neutral')
+const toastType = ref('')
 let toastTimer = null
+
 function showToast(msg, type = 'neutral') {
-  toastMsg.value = msg; toastType.value = type
+  toastMsg.value = msg
+  toastType.value = type
   clearTimeout(toastTimer)
-  toastTimer = setTimeout(() => { toastMsg.value = '' }, 2500)
+  toastTimer = setTimeout(() => { toastMsg.value = '' }, 1800)
 }
 
 // ── Delete ───────────────────────────────────────────────────────
 const deleteConfirmId = ref(null)
 const deleteConfirmName = ref('')
-function confirmDelete(id, name) { deleteConfirmId.value = id; deleteConfirmName.value = name }
-async function performDelete() {
-  const id = deleteConfirmId.value
-  deleteConfirmId.value = null
-  await rosterStore.deletePlayer(id)
-  showToast('Player deleted', 'neutral')
+
+function confirmDelete(id, name) {
+  deleteConfirmId.value = id
+  deleteConfirmName.value = name
 }
 
-// ── Edit (delegated to PlayerEditModal) ──────────────────────────
+async function performDelete() {
+  if (!deleteConfirmId.value) return
+  try {
+    await rosterStore.deletePlayer(deleteConfirmId.value)
+    showToast('Player deleted', 'neutral')
+  } catch (err) {
+    console.error('Failed to delete player:', err)
+  }
+  deleteConfirmId.value = null
+}
+
+// ── Edit ─────────────────────────────────────────────────────────
 const editTarget = ref(null)
+const editFirst = ref('')
+const editLast = ref('')
+const editGhin = ref('')
+const editGhinNumber = ref('')
+const editGhinPrefix = ref('')
+const editClubName = ref('')
+const editNickname = ref('')
+const editUseNickname = ref(false)
 const ghinSearching = ref(false)
 const ghinSearchResults = ref([])
 const ghinSearchMsg = ref('')
-const editSaving = ref(false)
+const editEmail = ref('')
 const editError = ref('')
+const editSaving = ref(false)
 
 function startEdit(p) {
   ghinSearchResults.value = []
   ghinSearchMsg.value = ''
-  editError.value = ''
+  editGhinPrefix.value = ''
   editTarget.value = p
+  if (p.first_name) {
+    editFirst.value = p.first_name
+    editLast.value = p.last_name || ''
+  } else {
+    const parts = p.name.trim().split(' ')
+    editFirst.value = parts[0] || ''
+    editLast.value = parts.slice(1).join(' ')
+  }
+  editGhin.value = p.ghin_index ?? ''
+  editGhinNumber.value = p.ghin_number || ''
+  editClubName.value = p.club_name || ''
+  editNickname.value = p.nickname || ''
+  editUseNickname.value = p.use_nickname || false
+  editEmail.value = p.email || ''
+  editError.value = ''
+  editSaving.value = false
 }
 
-async function handleEditGhinSearch({ first, last, ghinNumber, prefix }) {
+async function searchGhinForEdit() {
   if (ghinSearching.value) return
   ghinSearching.value = true
   ghinSearchResults.value = []
   ghinSearchMsg.value = ''
+
+  const typedGhinNumber = editGhinNumber.value.trim()
+  const first = editFirst.value.trim()
+  const last = editLast.value.trim()
+
   try {
-    if (ghinNumber) {
-      const { data: bbRows } = await supabase.from('bb_member_index')
+    if (typedGhinNumber) {
+      const { data: bbRows } = await supabase
+        .from('bb_member_index')
         .select('ghin_number, first_name, last_name, handicap_index')
-        .eq('ghin_number', ghinNumber).limit(1)
+        .eq('ghin_number', typedGhinNumber)
+        .limit(1)
       if (bbRows?.length) {
         const bb = bbRows[0]
-        ghinSearchResults.value = [{ ghin_number: bb.ghin_number, full_name: `${bb.first_name} ${bb.last_name}`, handicap_index: bb.handicap_index, club_name: 'Bonnie Briar Country Club', _source: 'bb' }]
+        ghinSearchResults.value = [{
+          ghin_number: bb.ghin_number,
+          full_name: `${bb.first_name} ${bb.last_name}`,
+          handicap_index: bb.handicap_index,
+          club_name: 'Bonnie Briar Country Club',
+          _source: 'bb',
+        }]
         ghinSearchMsg.value = '🏌️ Found in Bonnie Briar directory'
         return
       }
     } else if (last) {
-      const { data: bbRows } = await supabase.from('bb_member_index')
+      const { data: bbRows } = await supabase
+        .from('bb_member_index')
         .select('ghin_number, first_name, last_name, handicap_index')
-        .ilike('last_name', `%${last}%`).order('last_name').limit(15)
+        .ilike('last_name', `%${last}%`)
+        .order('last_name')
+        .limit(15)
       let filtered = bbRows || []
       if (first && filtered.length > 0) {
         const fl = first.toLowerCase()
@@ -686,43 +1095,77 @@ async function handleEditGhinSearch({ first, last, ghinNumber, prefix }) {
         if (exact.length > 0) filtered = exact
       }
       if (filtered.length > 0) {
-        ghinSearchResults.value = filtered.map(bb => ({ ghin_number: bb.ghin_number, full_name: `${bb.first_name} ${bb.last_name}`, handicap_index: bb.handicap_index, club_name: 'Bonnie Briar Country Club', _source: 'bb' }))
+        ghinSearchResults.value = filtered.map(bb => ({
+          ghin_number: bb.ghin_number,
+          full_name: `${bb.first_name} ${bb.last_name}`,
+          handicap_index: bb.handicap_index,
+          club_name: 'Bonnie Briar Country Club',
+          _source: 'bb',
+        }))
         ghinSearchMsg.value = `🏌️ ${filtered.length} match${filtered.length > 1 ? 'es' : ''} in Bonnie Briar directory`
         return
       }
     }
+
     const profile = authStore.profile
     if (!profile?.ghin_number || !profile?.ghin_password) {
-      ghinSearchMsg.value = first && last ? 'Not found in BB directory. Add GHIN credentials in Profile to search the full GHIN database.' : 'Enter a GHIN # or first + last name'
+      ghinSearchMsg.value = first && last
+        ? 'Not found in BB directory. Add GHIN credentials in Profile to search the full GHIN database.'
+        : 'Enter a GHIN # or first + last name'
       return
     }
-    if (ghinNumber) {
+
+    if (typedGhinNumber) {
       const { data, error } = await supabase.functions.invoke('ghin-roster-sync', {
-        body: { ghin_number: profile.ghin_number, password: profile.ghin_password, players: [{ id: 'lookup', name: `${first} ${last}`.trim() || 'Unknown', ghin_number: ghinNumber }] }
+        body: {
+          ghin_number: profile.ghin_number,
+          password: profile.ghin_password,
+          players: [{ id: 'lookup', name: `${first} ${last}`.trim() || 'Unknown', ghin_number: typedGhinNumber }],
+        }
       })
       if (error) throw error
       const r = data?.results?.[0]
       if (r?.status === 'updated') {
-        ghinSearchResults.value = [{ ghin_number: r.ghin_number, full_name: r.full_name, handicap_index: r.handicap_index, club_name: r.club_name }]
+        ghinSearchResults.value = [{
+          ghin_number: r.ghin_number,
+          full_name: r.full_name,
+          handicap_index: r.handicap_index,
+          club_name: r.club_name,
+        }]
       } else {
-        ghinSearchMsg.value = `No golfer found for GHIN # ${ghinNumber}`
+        ghinSearchMsg.value = `No golfer found for GHIN # ${typedGhinNumber}`
       }
       return
     }
-    if (!first || !last) { ghinSearchMsg.value = 'Enter a GHIN # or first + last name'; return }
+
+    if (!first || !last) {
+      ghinSearchMsg.value = 'Enter a GHIN # or first + last name'
+      return
+    }
+    const prefix = editGhinPrefix.value.trim() || first
     const { data, error } = await supabase.functions.invoke('ghin-roster-sync', {
-      body: { ghin_number: profile.ghin_number, password: profile.ghin_password, players: [{ id: 'lookup', name: `${first} ${last}`, first_name_prefix: prefix || first }] }
+      body: {
+        ghin_number: profile.ghin_number,
+        password: profile.ghin_password,
+        players: [{ id: 'lookup', name: `${first} ${last}`, first_name_prefix: prefix }],
+      }
     })
     if (error) throw error
     const r = data?.results?.[0]
     if (!r) throw new Error('No response')
     if (r.status === 'updated') {
-      ghinSearchResults.value = [{ ghin_number: r.ghin_number, full_name: r.full_name, handicap_index: r.handicap_index, club_name: r.club_name }]
+      ghinSearchResults.value = [{
+        ghin_number: r.ghin_number,
+        full_name: r.full_name,
+        handicap_index: r.handicap_index,
+        club_name: r.club_name,
+      }]
     } else if (r.status === 'multiple_matches') {
       ghinSearchResults.value = r.matches ?? []
-      ghinSearchMsg.value = ghinSearchResults.value.length ? `Found ${ghinSearchResults.value.length} golfers named "${last}" — select one:` : `No GHIN record found for "${first} ${last}".`
+      if (ghinSearchResults.value.length) ghinSearchMsg.value = `Found ${ghinSearchResults.value.length} golfer${ghinSearchResults.value.length > 1 ? 's' : ''} named "${last}" — select one:`
+      if (!ghinSearchResults.value.length) ghinSearchMsg.value = `No GHIN record found for "${first} ${last}". Check spelling or enter their GHIN # directly.`
     } else {
-      ghinSearchMsg.value = `No GHIN record found for "${first} ${last}". Try entering their GHIN # directly.`
+      ghinSearchMsg.value = `No GHIN record found for "${first} ${last}". Try clearing the prefix field, or enter their GHIN # directly.`
     }
   } catch (e) {
     ghinSearchMsg.value = e?.message || 'Search failed'
@@ -731,31 +1174,49 @@ async function handleEditGhinSearch({ first, last, ghinNumber, prefix }) {
   }
 }
 
-function handleApplyResult(r) {
+function applyGhinResult(r) {
+  editGhinNumber.value = r.ghin_number
+  editGhin.value = r.handicap_index != null ? String(r.handicap_index) : editGhin.value
+  editClubName.value = r.club_name || editClubName.value
   ghinSearchResults.value = []
   ghinSearchMsg.value = `✓ Selected ${r.full_name}`
 }
 
-async function handleSave({ id, first, last, ghinIndex, ghinNumber, nickname, useNickname, email, prevGhinNumber }) {
+async function saveEdit() {
   editError.value = ''
-  if (!first) { editError.value = 'First name is required.'; return }
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { editError.value = 'Email looks invalid.'; return }
-  const fullName = last ? `${first} ${last}` : first
-  const ghinNumberChanged = ghinNumber && ghinNumber !== prevGhinNumber
+  if (!editFirst.value.trim()) { editError.value = 'First name is required.'; return }
+  const emailTrimmed = editEmail.value.trim()
+  if (emailTrimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
+    editError.value = 'Email looks invalid.'
+    return
+  }
+  const fullName = editLast.value.trim() ? `${editFirst.value.trim()} ${editLast.value.trim()}` : editFirst.value.trim()
+  const newGhinNumber = editGhinNumber.value.trim() || null
+  const prevGhinNumber = editTarget.value?.ghin_number || null
+  const ghinNumberChanged = newGhinNumber && newGhinNumber !== prevGhinNumber
+  const playerId = editTarget.value.id
+
   editSaving.value = true
   try {
-    await rosterStore.updatePlayer(id, {
-      name: fullName, first_name: first, last_name: last || null,
-      short_name: last || first.slice(0, 8),
-      ghin_index: ghinIndex !== '' ? parseFloat(ghinIndex) : null,
-      ghin_number: ghinNumber,
-      nickname: nickname || null, use_nickname: useNickname,
-      email: email || null,
+    await rosterStore.updatePlayer(playerId, {
+      name: fullName,
+      first_name: editFirst.value.trim(),
+      last_name: editLast.value.trim() || null,
+      short_name: editLast.value.trim() || editFirst.value.trim().slice(0, 8),
+      ghin_index: editGhin.value !== '' ? parseFloat(editGhin.value) : null,
+      ghin_number: newGhinNumber,
+      club_name: editClubName.value.trim() || null,
+      nickname: editNickname.value.trim() || null,
+      use_nickname: editUseNickname.value,
+      email: emailTrimmed || null,
     })
     editTarget.value = null
+
     if (ghinNumberChanged) {
       const profile = authStore.profile
-      if (profile?.ghin_number && profile?.ghin_password) _autoSyncGhinNumber(id, ghinNumber, profile)
+      if (profile?.ghin_number && profile?.ghin_password) {
+        _autoSyncGhinNumber(playerId, newGhinNumber, profile)
+      }
     }
   } catch (e) {
     editError.value = e?.message || 'Could not save.'
@@ -767,12 +1228,22 @@ async function handleSave({ id, first, last, ghinIndex, ghinNumber, nickname, us
 async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
   try {
     const { data, error } = await supabase.functions.invoke('ghin-roster-sync', {
-      body: { ghin_number: profile.ghin_number, password: profile.ghin_password, state: 'NY', players: [{ id: playerId, name: '', ghin_number: ghinNumber }] }
+      body: {
+        ghin_number: profile.ghin_number,
+        password: profile.ghin_password,
+        state: 'NY',
+        players: [{ id: playerId, name: '', ghin_number: ghinNumber }],
+      }
     })
     if (error || data?.error) return
     const r = data?.results?.[0]
     if (r?.status === 'found') {
-      await rosterStore.updatePlayer(playerId, { ghin_index: r.handicap_index, ghin_synced_at: new Date().toISOString(), low_hi: r.low_hi || undefined, club_name: r.club_name || undefined })
+      await rosterStore.updatePlayer(playerId, {
+        ghin_index: r.handicap_index,
+        ghin_synced_at: new Date().toISOString(),
+        low_hi: r.low_hi || undefined,
+        club_name: r.club_name || undefined,
+      })
       showToast(`HCP synced: ${r.handicap_index}`, 'green')
     }
   } catch { /* silent */ }
@@ -780,6 +1251,319 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 </script>
 
 <style scoped>
+.players-view { padding: 16px; padding-bottom: 80px; }
+
+/* ── Trend arrows ───────────────────────────────────────────── */
+.trend-arrow {
+  font-size: 11px; font-weight: 800; margin-left: 1px;
+  vertical-align: middle; line-height: 1;
+}
+.trend-up { color: var(--gw-bogey); }      /* going up = harder = red */
+.trend-down { color: var(--gw-birdie); }   /* going down = easier = green */
+
+/* ── You card ───────────────────────────────────────────────── */
+.player-card--you {
+  border: 1.5px solid var(--gw-green-400);
+  background: rgba(34, 160, 107, 0.06);
+  margin-bottom: 4px;
+}
+.you-badge {
+  font-size: 9px; font-weight: 800; color: var(--gw-green-400);
+  letter-spacing: 0.5px; margin-left: 6px; vertical-align: middle;
+  text-transform: uppercase;
+}
+.you-meta { margin-top: 3px; font-size: 12px; color: var(--gw-text-muted); }
+.you-no-ghin { color: var(--gw-text-muted); font-style: italic; }
+.you-sync-time { color: var(--gw-green-400); }
+.ghin-sheet-btn {
+  background: var(--gw-green-800);
+  color: var(--gw-green-300);
+  font-size: 11px; font-weight: 700;
+  padding: 5px 11px; border-radius: 8px;
+  border: 1px solid var(--gw-green-700);
+  cursor: pointer; flex-shrink: 0;
+  letter-spacing: 0.3px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── GHIN sheet ─────────────────────────────────────────────── */
+.ghin-sheet-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+  display: flex; align-items: flex-end; z-index: 200;
+}
+.ghin-sheet-panel {
+  background: var(--gw-neutral-900);
+  border-radius: 24px 24px 0 0;
+  width: 100%; max-height: 92vh; overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  border-top: 1px solid var(--gw-card-border);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.ghin-sheet-handle {
+  width: 36px; height: 4px;
+  background: rgba(255,255,255,.15);
+  border-radius: 2px; margin: 12px auto 0;
+  position: relative; z-index: 1;
+}
+
+/* ── Hero header ── */
+.ghin-hero-header {
+  background: linear-gradient(150deg, #0f3d28 0%, #0c1810 60%, #0a0d0b 100%);
+  padding: 0 16px 14px;
+  position: relative;
+  border-radius: 24px 24px 0 0;
+}
+.ghin-close-btn {
+  position: absolute; top: 14px; right: 16px;
+  background: rgba(255,255,255,.1); border: none;
+  color: rgba(255,255,255,.6); font-size: 14px;
+  width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.ghin-header-identity {
+  display: flex; align-items: center; gap: 12px;
+  padding-top: 8px;
+}
+.ghin-club-logo-wrap {
+  flex-shrink: 0;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.12);
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.ghin-club-logo { width: 100%; height: 100%; object-fit: cover; }
+.ghin-club-icon { font-size: 22px; line-height: 1; }
+.ghin-header-name-block { flex: 1; min-width: 0; }
+.ghin-header-name {
+  font-size: 18px; font-weight: 700; color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ghin-header-sub { font-size: 11px; color: rgba(255,255,255,.5); margin-top: 2px; }
+.ghin-header-club { color: rgba(255,255,255,.35); }
+
+/* HI badge */
+.ghin-hi-badge {
+  flex-shrink: 0; text-align: center;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 12px; padding: 6px 12px;
+  min-width: 62px;
+}
+.ghin-hi-num {
+  font-size: 30px; font-weight: 700; line-height: 1;
+  font-family: var(--gw-font-mono); color: #fff;
+  letter-spacing: -1px;
+  text-shadow: 0 1px 0 rgba(255,255,255,.07), 0 2px 0 rgba(0,0,0,.5), 0 4px 8px rgba(0,0,0,.4);
+}
+.ghin-hi-label {
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .06em; color: rgba(255,255,255,.45); margin-top: 2px;
+}
+.ghin-hi-trend { font-size: 11px; margin-left: 3px; }
+
+/* Sparkline */
+.ghin-spark-row {
+  margin-top: 14px;
+}
+.ghin-spark-label {
+  font-size: 9px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .07em; color: rgba(255,255,255,.3); margin-bottom: 6px;
+}
+.ghin-spark-bars {
+  display: flex; align-items: flex-end; gap: 3px; height: 32px;
+}
+.ghin-spark-bar {
+  flex: 1; border-radius: 3px 3px 0 0;
+  background: rgba(255,255,255,.2);
+  min-height: 4px;
+  position: relative;
+  transition: height .3s ease;
+}
+.ghin-spark-bar::after {
+  content: ''; position: absolute; inset: 0 0 50% 0;
+  background: rgba(255,255,255,.12); border-radius: 3px 3px 0 0;
+}
+.ghin-spark-bar--latest {
+  background: #34c77e;
+  box-shadow: 0 0 8px rgba(52,199,126,.5);
+}
+.ghin-spark-bar--latest::after { background: rgba(255,255,255,.2); }
+
+/* Stats pills */
+.ghin-stats-grid {
+  display: grid; grid-template-columns: repeat(4, minmax(0,1fr));
+  gap: 6px; padding: 10px 16px 0;
+}
+.ghin-stat {
+  background: var(--gw-neutral-800);
+  border-radius: 10px; border: 1px solid var(--gw-card-border);
+  padding: 9px 8px; text-align: center;
+}
+.ghin-stat-label {
+  font-size: 9px; color: var(--gw-text-muted); font-weight: 600;
+  letter-spacing: 0.3px; text-transform: uppercase; margin-bottom: 4px;
+}
+.ghin-stat-val {
+  font-size: 18px; font-weight: 700;
+  color: var(--gw-text); font-family: var(--gw-font-mono);
+}
+.ghin-stat-sub { font-size: 9px; color: var(--gw-text-muted); margin-top: 2px; }
+
+/* Scoring section */
+.ghin-scoring-section { margin: 10px 16px 0; }
+.ghin-scoring-labels {
+  display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px;
+}
+.ghin-scoring-lbl { font-size: 10px; font-weight: 600; }
+.ghin-scoring-bar-wrap { position: relative; }
+.ghin-scoring-bar {
+  display: flex; height: 14px; border-radius: 7px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,.6), 0 1px 0 rgba(255,255,255,.04);
+  background: var(--gw-neutral-800);
+}
+.ghin-bar-seg { position: relative; overflow: hidden; }
+.ghin-bar-seg--birdie { background: #22a06b; }
+.ghin-bar-seg--par    { background: #4a9eff; }
+.ghin-bar-seg--bogey  { background: #f59e0b; }
+.ghin-bar-seg--double { background: #ef4444; }
+.ghin-bar-gloss {
+  position: absolute; top: 0; left: 0; right: 0; height: 5px;
+  background: rgba(255,255,255,.22);
+}
+.ghin-bar-overlay {
+  position: absolute; inset: 0;
+  background: linear-gradient(to bottom, rgba(255,255,255,.06) 0%, rgba(0,0,0,.12) 100%);
+  border-radius: 7px;
+  pointer-events: none;
+}
+
+/* Par 3/4/5 grid */
+.ghin-par-grid {
+  display: flex; align-items: center; justify-content: space-around;
+  background: var(--gw-neutral-800);
+  border-radius: 10px; border: 1px solid var(--gw-card-border);
+  padding: 8px 16px; margin-top: 8px;
+}
+.ghin-par-cell { text-align: center; }
+.ghin-par-val { font-size: 16px; font-weight: 700; font-family: var(--gw-font-mono); color: var(--gw-text); }
+.ghin-par-label { font-size: 9px; text-transform: uppercase; letter-spacing: .06em; color: var(--gw-text-muted); margin-top: 2px; font-weight: 600; }
+.ghin-par-divider { width: 1px; height: 24px; background: var(--gw-card-border); }
+
+/* Score range strip */
+.ghin-range-strip {
+  display: flex; align-items: center; justify-content: space-around;
+  margin: 8px 16px 0;
+  background: var(--gw-neutral-800);
+  border-radius: 10px; border: 1px solid var(--gw-card-border);
+  padding: 10px 16px;
+}
+.ghin-range-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.ghin-range-label { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--gw-text-muted); font-weight: 600; }
+.ghin-range-val { font-size: 16px; font-weight: 700; font-family: var(--gw-font-mono); color: var(--gw-text); }
+.ghin-range-val--low  { color: var(--gw-green-400); }
+.ghin-range-val--high { color: #f87171; }
+.ghin-range-divider { width: 1px; height: 28px; background: var(--gw-card-border); }
+
+.trend-improving { color: var(--gw-green-400); font-weight: 600; }
+.trend-declining  { color: #f87171; font-weight: 600; }
+.trend-neutral    { color: var(--gw-text-muted); }
+
+/* Cap badges */
+.ghin-cap-row {
+  display: flex; gap: 8px; padding: 8px 16px 0;
+}
+.ghin-cap-badge {
+  font-size: 11px; font-weight: 700; padding: 4px 10px;
+  border-radius: 6px; letter-spacing: .03em;
+}
+.ghin-cap-badge--hard {
+  background: rgba(239,68,68,.15); color: #fca5a5;
+  border: 1px solid rgba(239,68,68,.3);
+}
+.ghin-cap-badge--soft {
+  background: rgba(251,191,36,.12); color: #fcd34d;
+  border: 1px solid rgba(251,191,36,.25);
+}
+
+/* Score history section */
+.ghin-history-section { margin: 10px 16px 0; }
+.ghin-history-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px;
+}
+.ghin-history-title {
+  font-size: 13px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--gw-text-muted);
+}
+.ghin-refresh-btn {
+  background: none; border: none; cursor: pointer;
+  color: var(--gw-green-400); font-size: 18px; padding: 4px 6px;
+  border-radius: 6px; -webkit-tap-highlight-color: transparent;
+}
+.ghin-refresh-btn:disabled { opacity: 0.4; }
+
+.ghin-no-creds, .ghin-scores-empty, .ghin-scores-prompt {
+  background: var(--gw-neutral-800);
+  border-radius: 12px; border: 1px solid var(--gw-card-border);
+  padding: 14px 16px; text-align: center;
+}
+.ghin-scores-note { font-size: 15px; font-weight: 600; color: var(--gw-text); margin-bottom: 6px; }
+.ghin-scores-sub { font-size: 13px; color: var(--gw-text-muted); line-height: 1.5; }
+.ghin-scores-loading {
+  display: flex; align-items: center; justify-content: center; padding: 24px 0;
+}
+.ghin-scores-error {
+  background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.3);
+  border-radius: 10px; padding: 10px 14px;
+  color: #fca5a5; font-size: 13px;
+}
+
+/* Score rows — 5 columns: date | course+tee | gross | net | diff */
+.ghin-scores-list {
+  background: var(--gw-neutral-800);
+  border-radius: 12px; border: 1px solid var(--gw-card-border);
+  overflow: hidden;
+}
+.ghin-scores-cols {
+  display: grid;
+  grid-template-columns: 62px 1fr 34px 34px 46px;
+  gap: 4px; padding: 7px 10px;
+  background: var(--gw-neutral-700);
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--gw-text-muted);
+}
+.ghin-score-row {
+  display: grid;
+  grid-template-columns: 62px 1fr 34px 34px 46px;
+  gap: 4px; padding: 8px 10px;
+  border-top: 1px solid var(--gw-card-border);
+  font-size: 13px; color: var(--gw-text);
+  align-items: center;
+}
+.ghin-score-row--used { background: rgba(34,160,107,0.07); }
+.score-date { font-size: 11px; color: var(--gw-text-muted); white-space: nowrap; }
+.score-course-wrap { display: flex; flex-direction: column; min-width: 0; }
+.score-course {
+  font-size: 12px; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.score-tee { font-size: 10px; color: var(--gw-text-muted); white-space: nowrap; }
+.score-ags { font-weight: 700; font-family: var(--gw-font-mono); }
+.score-net { font-family: var(--gw-font-mono); font-size: 12px; color: var(--gw-text-muted); }
+.score-diff { font-family: var(--gw-font-mono); font-size: 12px; color: var(--gw-text-muted); display: flex; align-items: center; gap: 3px; }
+.col-center { text-align: center; }
+.col-right  { text-align: right; justify-content: flex-end; }
+.diff-used { color: var(--gw-green-400); font-weight: 700; }
+.hi-dot { color: var(--gw-green-400); font-size: 7px; line-height: 1; }
+.ghin-scores-legend {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 10px; font-size: 11px; color: var(--gw-text-muted);
+  border-top: 1px solid var(--gw-card-border);
+}
+
 /* ── Rest of styles (unchanged) ─────────────────────────────── */
 .view-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .view-header h2 { font-size: 22px; font-weight: 700; margin: 0; color: var(--gw-text); }
@@ -1044,35 +1828,42 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
   padding: 4px 5px; border-radius: 8px; -webkit-tap-highlight-color: transparent;
   flex-shrink: 0; opacity: .7; transition: opacity .15s;
 }
-
-.player-card--you {
-  border-color: rgba(34,160,107,.4);
-  background: rgba(34,160,107,.06);
-}
-.you-badge {
-  font-size: 10px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
-  background: rgba(34,160,107,.2); color: #4ade80;
-  padding: 1px 6px; border-radius: 4px; margin-left: 6px; vertical-align: middle;
-}
-.you-meta {
-  font-size: 12px; color: var(--gw-text-muted, rgba(240,237,224,.5)); margin-top: 2px;
-}
-.you-sync-time { opacity: .7; }
-.you-no-ghin { opacity: .5; font-style: italic; }
-.player-card--you .player-info { min-width: 0; overflow: hidden; }
-.player-card--you .player-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.ghin-sheet-btn {
-  flex-shrink: 0; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;
-  border: 1px solid rgba(34,160,107,.5); background: rgba(34,160,107,.15);
-  color: #4ade80; cursor: pointer; -webkit-tap-highlight-color: transparent;
-}
-.ghin-sheet-btn:active { background: rgba(34,160,107,.3); }
+/* ── Player info button ── */
 .player-info-btn {
-  flex-shrink: 0; width: 36px; height: 36px; border-radius: 10px;
-  background: rgba(34,160,107,.15); border: 1px solid rgba(34,160,107,.3);
-  font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  background: var(--gw-neutral-800);
+  color: var(--gw-text-muted);
+  font-size: 14px; padding: 5px 8px;
+  border-radius: 8px; border: 1px solid var(--gw-card-border);
+  cursor: pointer; flex-shrink: 0;
   -webkit-tap-highlight-color: transparent;
+  margin-right: 2px;
 }
-.player-info-btn:active { background: rgba(34,160,107,.3); }
+/* ── Aggregate stats grid ── */
+.ghin-agg-grid {
+  display: grid; grid-template-columns: repeat(4, minmax(0,1fr));
+  gap: 6px; padding: 10px 16px 0;
+}
+.ghin-agg-stat {
+  background: var(--gw-neutral-800); border-radius: 8px;
+  border: 1px solid var(--gw-card-border);
+  padding: 8px 4px; text-align: center;
+}
+.ghin-agg-val { font-size: 14px; font-weight: 700; color: var(--gw-text); font-family: var(--gw-font-mono); }
+.ghin-agg-label { font-size: 9px; color: var(--gw-text-muted); text-transform: uppercase; letter-spacing: 0.3px; margin-top: 2px; }
+/* ── HI star ── */
+.hi-star { color: var(--gw-birdie); font-size: 11px; margin-right: 2px; }
+/* ── Public player note ── */
+.ghin-player-sheet-note {
+  margin: 12px 16px 0;
+  background: var(--gw-neutral-800); border-radius: 10px;
+  border: 1px solid var(--gw-card-border); padding: 12px 14px;
+}
+.ghin-sync-row {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--gw-text-muted); margin-bottom: 6px;
+}
+.ghin-public-note { font-size: 11px; color: var(--gw-text-muted); line-height: 1.5; font-style: italic; }
+.cap-none { background: var(--gw-neutral-700); color: var(--gw-text-muted); font-size:12px; font-weight:700; padding:2px 8px; border-radius:8px; }
 
+.player-invite-btn:active { opacity: 1; transform: scale(.9); }
 </style>
