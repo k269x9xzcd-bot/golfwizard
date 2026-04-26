@@ -75,15 +75,11 @@
     <div v-if="myRosterPlayer" class="player-card player-card--you">
       <div class="player-info" @click="openGhinSheet">
         <div class="player-name">
-          {{ myRosterPlayer.name }} <span class="you-badge">YOU</span>
+          {{ myRosterPlayer.name }}
+          <span class="you-badge">YOU</span>
           <span v-if="myRosterPlayer.ghin_index != null" class="player-hcp">
             ({{ Number(myRosterPlayer.ghin_index).toFixed(1) }}<span class="ghin-dot-inline" :class="ghinSyncStatus(myRosterPlayer)" :title="ghinSyncTitle(myRosterPlayer)"></span>)
           </span>
-        </div>
-        <div class="you-meta">
-          <span v-if="myRosterPlayer.ghin_number">GHIN #{{ myRosterPlayer.ghin_number }}</span>
-          <span v-else class="you-no-ghin">No GHIN linked</span>
-          <span v-if="myRosterPlayer.ghin_synced_at" class="you-sync-time"> · Synced {{ ghinSyncTitle(myRosterPlayer) }}</span>
         </div>
       </div>
       <button v-if="myRosterPlayer.ghin_number" class="ghin-sheet-btn" @click.stop="openGhinSheet">GHIN</button>
@@ -1021,6 +1017,8 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 }
 .you-sync-time { opacity: .7; }
 .you-no-ghin { opacity: .5; font-style: italic; }
+.player-card--you .player-info { min-width: 0; overflow: hidden; }
+.player-card--you .player-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .ghin-sheet-btn {
   flex-shrink: 0; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;
   border: 1px solid rgba(34,160,107,.5); background: rgba(34,160,107,.15);
