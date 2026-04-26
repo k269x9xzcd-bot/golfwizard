@@ -2259,7 +2259,7 @@ function _computeSideBets(sideBets, ctx) {
 }
 
 function formatVsParEngine(v) {
-  if (v == null) return '—'
+  if (v == null) return '\u2014'
   if (v === 0) return 'E'
   return v > 0 ? `+${v}` : `${v}`
 }
@@ -2275,7 +2275,7 @@ export const DEFAULT_SIDE_BETS = [
   { type: 'fewestDoubles', label: 'Fewest Doubles',   stake: 4,  enabled: true,  description: 'Team with fewest double-bogeys or worse wins.' },
 ]
 
-// ─────────────────────────────────────────────────────────────────
+// ───────────────────────────────────────���─────────────────────────
 // MAIN EXPORT
 // ─────────────────────────────────────────────────────────────────
 
@@ -2287,7 +2287,7 @@ export const DEFAULT_SIDE_BETS = [
  * @param {object} config   - match_config from linked_matches row
  *   config.ballsToCount    - 1 or 2 (default 1)
  *   config.stake           - main match stake per player (default 20)
- *   config.hcpPct          - handicap allowance 0–1 (default 0.90)
+ *   config.hcpPct          - handicap allowance 0\u20131 (default 0.90)
  *   config.sideBets        - array of { type, stake, enabled } (default DEFAULT_SIDE_BETS)
  * @returns result object
  */
@@ -2296,8 +2296,11 @@ export function computeCrossBestBall(roundA, roundB, config = {}) {
     ballsToCount = 1,
     stake = 20,
     hcpPct = 0.90,
-    sideBets = DEFAULT_SIDE_BETS,
+    sideBets: rawSideBets,
   } = config
+  // sideBets may be explicitly null (not undefined), so default-value
+  // destructuring won't catch it — coalesce separately.
+  const sideBets = rawSideBets ?? DEFAULT_SIDE_BETS
 
   const holesMode = roundA?.holes_mode || '18'
   const { from, to } = _crossHoleRange(holesMode)
@@ -2367,7 +2370,7 @@ export function computeCrossBestBall(roundA, roundB, config = {}) {
       // Foursome-to-foursome: each losing player pays each winning player
       description: winner
         ? `Foursome ${loser}: each player pays $${stakePerPlayer} to their Foursome ${winner} counterpart ($${totalPot} total)`
-        : 'All square — no main match payment',
+        : 'All square \u2014 no main match payment',
     }
   }
 
@@ -2402,7 +2405,7 @@ export function computeCrossBestBall(roundA, roundB, config = {}) {
     }
 
     netSettlement = {
-      netPerPlayer: netA, // positive → each B player pays each A player $netA; negative → reverse
+      netPerPlayer: netA, // positive \u2192 each B player pays each A player $netA; negative \u2192 reverse
       winningTeam: netA > 0 ? 'A' : netA < 0 ? 'B' : null,
       totalNetPerPlayer: Math.abs(netA),
       summary: netA > 0
