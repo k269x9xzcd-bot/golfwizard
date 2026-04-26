@@ -100,6 +100,9 @@ export const useRosterStore = defineStore('roster', () => {
       if (!fetchError && data) {
         if (data.length > 0) {
           players.value = data
+          // Cache the real Supabase data so future network failures show
+          // correct values instead of stale DEFAULT_PLAYERS.
+          try { localStorage.setItem('gw_roster', JSON.stringify(data)) } catch {}
         } else {
           // Supabase roster is empty — seed with self (bootstrapped from profile).
           const seedKey = `gw_roster_seeded_${auth.user.id}`
@@ -146,12 +149,24 @@ export const useRosterStore = defineStore('roster', () => {
             players.value = []
           }
         }
+      } else {
+        // Both SJS and supaRaw failed. Fall back to gw_roster localStorage —
+        // this may be slightly stale but is far better than an empty roster.
+        // Once connectivity recovers, the next fetchPlayers() will overwrite
+        // gw_roster with fresh Supabase data.
+        const saved = JSON.parse(localStorage.getItem('gw_roster') || '[]')
+        if (saved.length > 0) {
+          players.value = saved
+        }
+        // If localStorage is also empty: keep players.value as-is (may already
+        // have correct data from a prior fetch in this session).
       }
-      // If both fetch paths failed: keep whatever players.value already has.
-      // This prevents stale DEFAULT_PLAYERS from replacing correct data that
-      // was loaded on a previous successful fetch.
     } catch {
-      // Outer guard — also don't clobber on unexpected errors
+      // Outer guard — fall back to localStorage if available
+      try {
+        const saved = JSON.parse(localStorage.getItem('gw_roster') || '[]')
+        if (saved.length > 0) players.value = saved
+      } catch {}
     }
     loading.value = false
   }
