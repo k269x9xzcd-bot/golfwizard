@@ -110,8 +110,8 @@
             <span v-if="round.is_complete" class="round-badge round-badge--done">Final</span>
             <span v-else class="round-badge round-badge--live">In Progress</span>
           </div>
-          <div class="round-meta">{{ round.date }} · {{ round.round_members?.length ?? 0 }} players</div>
-          <div v-if="round.room_code" class="round-code">🔗 {{ round.room_code }}</div>
+          <div class="round-players">{{ roundPlayerNames(round) }}</div>
+          <div class="round-date">{{ round.date }}</div>
         </div>
       </div>
     </section>
@@ -191,6 +191,16 @@ watch(() => authStore.isAuthenticated, async (authed) => {
     linkedStore.fetchPendingInvites()
   }
 })
+
+function roundPlayerNames(round) {
+  const members = round.round_members || []
+  if (!members.length) return '—'
+  return members.map(m => {
+    const full = m.guest_name || ''
+    const parts = full.trim().split(/\s+/)
+    return parts.length >= 2 ? parts[parts.length - 1] : (m.short_name || full || '?')
+  }).join(' · ')
+}
 
 async function openRound(id) {
   const r = roundsStore.rounds.find(x => x.id === id)
@@ -347,6 +357,20 @@ async function openRound(id) {
   transition: transform .12s, border-color .12s, background .12s;
 }
 .round-card:active { transform: scale(.985); background: rgba(255,255,255,.03); }
+.round-players {
+  font-size: 13px;
+  color: rgba(240,237,224,.75);
+  font-weight: 500;
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.round-date {
+  font-size: 11px;
+  color: rgba(240,237,224,.4);
+  margin-top: 2px;
+}
 .round-badge {
   display: inline-block;
   margin-left: 8px;

@@ -198,6 +198,7 @@
     <!-- Step 3: WizardOverlay -->
     <WizardOverlay
       v-if="step === 'wizard'"
+      :skipOpponents="true"
       @close="step = 'foursome-b'"
       @created="onRoundACreated"
     />
