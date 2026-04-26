@@ -161,8 +161,10 @@ function onAuthClose() {
 }
 
 function skipGhin() {
-  showGhinStep.value = false
-  ghinDone.value = true
+  if (confirm('Skip GHIN setup? Your handicap won\'t sync automatically until you add it in Settings → Profile.')) {
+    showGhinStep.value = false
+    ghinDone.value = true
+  }
 }
 
 async function syncGhin() {
