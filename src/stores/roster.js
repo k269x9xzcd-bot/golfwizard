@@ -74,7 +74,8 @@ export const useRosterStore = defineStore('roster', () => {
           }
           // Seed roster (new user, or retry after failed prior seed)
           try {
-            const seedPlayers = DEFAULT_PLAYERS.filter(p => p.is_favorite)
+            const userEmail = auth.user.email?.toLowerCase().trim()
+            const seedPlayers = DEFAULT_PLAYERS.filter(p => p.is_favorite && p.email?.toLowerCase().trim() !== userEmail)
             const rows = seedPlayers.map(p => ({
               owner_id: auth.user.id,
               name: p.name,
