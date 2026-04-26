@@ -233,6 +233,17 @@ onMounted(async () => {
     } catch (e) { console.warn('Migration error:', e) }
   }
 
+  // v3.10.107: one-time purge of stale default_* roster cache
+  const rosterPurgeKey = 'gw_roster_purge_107'
+  if (!localStorage.getItem(rosterPurgeKey)) {
+    try {
+      const cached = JSON.parse(localStorage.getItem('gw_roster') || '[]')
+      const cleaned = cached.filter(p => !String(p.id).startsWith('default_'))
+      localStorage.setItem('gw_roster', JSON.stringify(cleaned))
+    } catch {}
+    localStorage.setItem(rosterPurgeKey, '1')
+  }
+
   try {
     await Promise.all([
       rosterStore.fetchPlayers(),

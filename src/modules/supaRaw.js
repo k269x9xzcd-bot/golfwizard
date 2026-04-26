@@ -81,20 +81,29 @@ async function _refreshTokenRaw(refreshToken) {
   if (!refreshToken) return null
   try {
     _debugLog('[auth] refreshing expired JWT via raw fetch...')
-    const res = await fetch(
-      `${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,
-      {
-        method: 'POST',
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ refresh_token: refreshToken }),
-        cache: 'no-store',
-        keepalive: false,
-        signal: AbortSignal.timeout(8000),
-      }
-    )
+    // Use AbortController+setTimeout instead of AbortSignal.timeout() —
+    // AbortSignal.timeout() is not available on iOS < 15.4 and throws TypeError.
+    const refreshCtrl = new AbortController()
+    const refreshTimer = setTimeout(() => refreshCtrl.abort(), 8000)
+    let res
+    try {
+      res = await fetch(
+        `${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,
+        {
+          method: 'POST',
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ refresh_token: refreshToken }),
+          cache: 'no-store',
+          keepalive: false,
+          signal: refreshCtrl.signal,
+        }
+      )
+    } finally {
+      clearTimeout(refreshTimer)
+    }
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
       _debugLog(`[auth] refresh failed HTTP ${res.status}: ${JSON.stringify(body)}`)

@@ -644,28 +644,40 @@ async function syncAllGhin() {
   syncMsgType.value = 'info'
 
   try {
-    // Refresh roster before syncing so ghin_number fields are populated.
-    // On iOS, the roster may have loaded from a stale cache before auth resolved.
+    // ── Step 1: fresh roster read via fetchPlayers (supaRaw-first inside) ────
+    // fetchPlayers() now tries supaRaw before SJS, clearing stale localStorage
+    // caches via the CACHE_VER eviction. This is what actually updates the
+    // displayed handicap values from Supabase.
     await rosterStore.fetchPlayers().catch(() => {})
 
-    const { data: bbMembers, error: bbErr } = await supabase
-      .from('bb_member_index')
-      .select('ghin_number, handicap_index, updated_at')
-      .not('ghin_number', 'is', null)
-    if (bbErr) throw bbErr
-
-    const bbMap = {}
-    for (const m of bbMembers || []) {
-      bbMap[m.ghin_number] = m
+    // ── Step 2: query bb_member_index for BB-member updates ───────────────
+    // Wrapped in supaCall so it never hangs on iOS WKWebView zombie socket.
+    let bbMap = {}
+    try {
+      const { supaCall } = await import('../modules/supabaseOps')
+      const bbRes = await supaCall(
+        'bb_member_index.select',
+        supabase
+          .from('bb_member_index')
+          .select('ghin_number, handicap_index, updated_at')
+          .not('ghin_number', 'is', null),
+        8000,
+      )
+      if (!bbRes.error) {
+        for (const m of bbRes.data || []) {
+          bbMap[m.ghin_number] = m
+        }
+      }
+    } catch {
+      // bb_member_index unavailable — BB sync skipped, roster display already refreshed
     }
 
     let updated = 0
     let notFound = 0
-
     const updatePromises = []
+
     for (const player of rosterStore.players) {
       if (!player.ghin_number) continue
-      // Skip default_* fallback entries for authenticated users — they don't exist in Supabase.
       if (authStore.isAuthenticated && String(player.id).startsWith('default_')) continue
       const bb = bbMap[player.ghin_number]
       if (bb?.handicap_index != null) {
@@ -682,9 +694,20 @@ async function syncAllGhin() {
     }
     await Promise.all(updatePromises)
 
-    const parts = [`✓ ${updated} synced`]
-    if (notFound) parts.push(`${notFound} not in BB roster`)
-    syncMsg.value = parts.join(', ')
+    // Show a useful message based on what actually happened
+    const withGhin = rosterStore.players.filter(
+      p => p.ghin_number && !(authStore.isAuthenticated && String(p.id).startsWith('default_'))
+    ).length
+
+    if (withGhin === 0) {
+      syncMsg.value = '✓ Roster refreshed from server'
+    } else if (updated > 0) {
+      const parts = [`✓ ${updated} updated from BB`]
+      if (notFound) parts.push(`${notFound} not in BB`)
+      syncMsg.value = parts.join(', ')
+    } else {
+      syncMsg.value = `✓ Roster refreshed · ${notFound} not in BB roster`
+    }
     syncMsgType.value = 'success'
     setTimeout(() => { syncMsg.value = '' }, 4000)
   } catch (e) {

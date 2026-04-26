@@ -38,10 +38,18 @@ export const useRosterStore = defineStore('roster', () => {
     { id: 'default_26', name: 'Todd Boccabella',    short_name: 'ToddB',   ghin_index: 6.5,  is_favorite: false, email: null, nickname: null, use_nickname: false },
   ]
 
+  // Bump to invalidate every client's stale gw_roster localStorage on next load.
+  const CACHE_VER = 'v5'
+
   async function fetchPlayers() {
     const auth = useAuthStore()
+
+    // Always evict stale cache first — this clears old data that lacks ghin_number
+    // fields and other columns added in later schema versions.
+    _evictStaleCache()
+
     if (!auth.isAuthenticated) {
-      // Load from localStorage for guests; seed defaults if empty
+      // Guest path — load from localStorage, seed defaults if empty
       const saved = JSON.parse(localStorage.getItem('gw_roster') || '[]')
       if (saved.length === 0) {
         players.value = [...DEFAULT_PLAYERS]
@@ -51,124 +59,164 @@ export const useRosterStore = defineStore('roster', () => {
       }
       return
     }
+    // For authenticated users, purge default_* entries from localStorage cache.
+    // These are guest-mode fallbacks that carry stale handicap values.
+    try {
+      const cached = JSON.parse(localStorage.getItem('gw_roster') || '[]')
+      const cleaned = cached.filter(p => !String(p.id).startsWith('default_'))
+      if (cleaned.length !== cached.length) {
+        localStorage.setItem('gw_roster', JSON.stringify(cleaned))
+      }
+    } catch {}
+
     loading.value = true
     try {
-      // ── Step 1: try Supabase JS client with a 7s timeout ──────
-      // On iOS PWA, the HTTP/2 connection pool can have a stuck ("zombie")
-      // socket. The SJS client reuses pooled connections, so a zombie socket
-      // causes every call to hang until the OS eventually closes it. We race
-      // against a timeout so we fail fast instead of hanging indefinitely.
-      let data = null
-      let fetchError = null
+      let data = null   // null = both paths failed; [] = confirmed empty; [...] = real rows
+
+      // ── Step 1: supaRaw first — bypasses iOS HTTP/2 zombie socket pool ─────
+      // supaRaw opens a fresh TCP/TLS connection (keepalive:false, cache:no-store)
+      // via AbortController timeout so it always fails fast when the network is bad.
+      // The SJS client (below) reuses pooled connections — on iOS PWA any zombie
+      // socket causes it to hang indefinitely, so we try supaRaw first.
       try {
-        const { supaCall } = await import('../modules/supabaseOps')
-        const res = await supaCall(
-          'roster.fetch',
-          supabase.from('roster_players').select('*')
-            .eq('owner_id', auth.user.id)
-            .order('is_favorite', { ascending: false })
-            .order('name'),
-          7000,
+        const { supaRawSelect } = await import('../modules/supaRaw')
+        const uid = encodeURIComponent(auth.user.id)
+        const rows = await supaRawSelect(
+          'roster_players',
+          `select=*&owner_id=eq.${uid}&order=is_favorite.desc,name.asc`,
+          8000,
         )
-        data = res.data ?? null
-        fetchError = res.error ?? null
-      } catch (sjsErr) {
-        fetchError = sjsErr
-      }
-
-      // ── Step 2: supaRaw fallback if SJS timed out or errored ──
-      // supaRaw bypasses the stuck connection pool by using raw fetch()
-      // with keepalive:false, forcing a fresh TCP/TLS connection.
-      if (fetchError || !data) {
-        try {
-          const { supaRawSelect } = await import('../modules/supaRaw')
-          const uid = encodeURIComponent(auth.user.id)
-          const rows = await supaRawSelect(
-            'roster_players',
-            `select=*&owner_id=eq.${uid}&order=is_favorite.desc,name.asc`,
-            10000,
-          )
-          if (Array.isArray(rows)) {
-            data = rows
-            fetchError = null
-          }
-        } catch (rawErr) {
-          // Both paths failed — keep fetchError set, don't clobber existing data
+        // Non-empty result: we have real data — use it immediately.
+        // Empty result is ambiguous (genuine empty roster vs. RLS block with anon
+        // key).  We only trust empty after SJS also confirms it below.
+        if (Array.isArray(rows) && rows.length > 0) {
+          data = rows
         }
+      } catch {
+        // supaRaw failed — fall through to SJS
       }
 
-      if (!fetchError && data) {
-        if (data.length > 0) {
-          players.value = data
-          // Cache the real Supabase data so future network failures show
-          // correct values instead of stale DEFAULT_PLAYERS.
-          try { localStorage.setItem('gw_roster', JSON.stringify(data)) } catch {}
-        } else {
-          // Supabase roster is empty — seed with self (bootstrapped from profile).
-          const seedKey = `gw_roster_seeded_${auth.user.id}`
-          const alreadySeeded = localStorage.getItem(seedKey)
-          if (alreadySeeded) localStorage.removeItem(seedKey)
-          try {
-            const { useAuthStore } = await import('./auth')
-            const authStore = useAuthStore()
-            const p = authStore.profile
-            const email = auth.user.email?.toLowerCase().trim()
-            const fullName = p?.display_name
-              || (p?.first_name && p?.last_name
-                ? [p.first_name, p.last_name].filter(Boolean).join(' ')
-                : null)
-
-            if (fullName) {
-              const nameParts = fullName.trim().split(/\s+/)
-              const short_name = nameParts.length >= 2
-                ? nameParts[nameParts.length - 1].slice(0, 8)
-                : fullName.slice(0, 8)
-              const selfRow = {
-                owner_id: auth.user.id,
-                name: fullName,
-                short_name,
-                email,
-                ghin_number: p?.ghin_number ?? null,
-                ghin_index: null,
-                is_favorite: true,
-                nickname: null,
-                use_nickname: false,
-              }
-              const { error: insertErr } = await supabase.from('roster_players').insert([selfRow])
-              if (!insertErr) localStorage.setItem(seedKey, '1')
-            }
-
-            const { data: freshData } = await supabase
-              .from('roster_players')
-              .select('*')
+      // ── Step 2: SJS with 5s timeout (fallback or empty-roster confirmation) ─
+      if (!data) {
+        try {
+          const { supaCall } = await import('../modules/supabaseOps')
+          const res = await supaCall(
+            'roster.fetch',
+            supabase.from('roster_players').select('*')
               .eq('owner_id', auth.user.id)
               .order('is_favorite', { ascending: false })
-              .order('name')
-            players.value = freshData ?? []
-          } catch {
+              .order('name'),
+            5000,
+          )
+          if (!res.error && res.data && res.data.length > 0) {
+            data = res.data
+          } else if (!res.error && res.data) {
+            data = []   // SJS confirmed empty — safe to seed
+          }
+          // res.error or res.data null → data stays null → use cache below
+        } catch {
+          // SJS also failed — data stays null
+        }
+      }
+
+      if (data && data.length > 0) {
+        // ── Got real rows from Supabase ────────────────────────────────────
+        players.value = data
+        try {
+          localStorage.setItem('gw_roster', JSON.stringify(data))
+          localStorage.setItem('gw_roster_ts', String(Date.now()))
+          localStorage.setItem('gw_roster_ver', CACHE_VER)
+        } catch {}
+
+      } else if (data !== null) {
+        // ── Both paths returned confirmed-empty roster — seed with self ─────
+        const seedKey = `gw_roster_seeded_${auth.user.id}`
+        try {
+          const p = auth.profile
+          const email = auth.user.email?.toLowerCase().trim()
+          const fullName = p?.display_name
+            || (p?.first_name && p?.last_name
+              ? [p.first_name, p.last_name].filter(Boolean).join(' ')
+              : null)
+
+          if (fullName && !localStorage.getItem(seedKey)) {
+            const nameParts = fullName.trim().split(/\s+/)
+            const short_name = nameParts.length >= 2
+              ? nameParts[nameParts.length - 1].slice(0, 8)
+              : fullName.slice(0, 8)
+            const selfRow = {
+              owner_id: auth.user.id,
+              name: fullName,
+              short_name,
+              email,
+              ghin_number: p?.ghin_number ?? null,
+              ghin_index: null,
+              is_favorite: true,
+              nickname: null,
+              use_nickname: false,
+            }
+            // Use supaCall with timeout — never a bare SJS call here (iOS hangs)
+            const { supaCall: _supaCall } = await import('../modules/supabaseOps')
+            const ins = await _supaCall(
+              'roster.seed',
+              supabase.from('roster_players').insert([selfRow]),
+              5000,
+            )
+            if (!ins.error) localStorage.setItem(seedKey, '1')
+          }
+
+          // Re-fetch after seed via supaRaw (iOS-safe)
+          const { supaRawSelect: _supaRawSelect } = await import('../modules/supaRaw')
+          const uid = encodeURIComponent(auth.user.id)
+          const freshRows = await _supaRawSelect(
+            'roster_players',
+            `select=*&owner_id=eq.${uid}&order=is_favorite.desc,name.asc`,
+            8000,
+          )
+          if (Array.isArray(freshRows) && freshRows.length > 0) {
+            players.value = freshRows
+            try {
+              localStorage.setItem('gw_roster', JSON.stringify(freshRows))
+              localStorage.setItem('gw_roster_ts', String(Date.now()))
+              localStorage.setItem('gw_roster_ver', CACHE_VER)
+            } catch {}
+          } else {
             players.value = []
           }
+        } catch {
+          players.value = []
         }
+
       } else {
-        // Both SJS and supaRaw failed. Fall back to gw_roster localStorage —
-        // this may be slightly stale but is far better than an empty roster.
-        // Once connectivity recovers, the next fetchPlayers() will overwrite
-        // gw_roster with fresh Supabase data.
+        // ── Both paths threw — network/auth failure — use localStorage cache ─
         const saved = JSON.parse(localStorage.getItem('gw_roster') || '[]')
+        console.warn('[roster] Both SJS and supaRaw failed. Falling back to localStorage cache.',
+          'User:', auth.user?.id, 'Cache size:', saved.length)
         if (saved.length > 0) {
           players.value = saved
         }
-        // If localStorage is also empty: keep players.value as-is (may already
-        // have correct data from a prior fetch in this session).
       }
     } catch {
-      // Outer guard — fall back to localStorage if available
+      // Outer guard
       try {
         const saved = JSON.parse(localStorage.getItem('gw_roster') || '[]')
         if (saved.length > 0) players.value = saved
       } catch {}
     }
     loading.value = false
+  }
+
+  // Clear gw_roster localStorage if the cache version is outdated.
+  // This forces a fresh Supabase fetch, discarding stale cached values
+  // (e.g., entries that predate the ghin_number column or old handicap values).
+  function _evictStaleCache() {
+    try {
+      if (localStorage.getItem('gw_roster_ver') !== CACHE_VER) {
+        localStorage.removeItem('gw_roster')
+        localStorage.removeItem('gw_roster_ts')
+        localStorage.setItem('gw_roster_ver', CACHE_VER)
+      }
+    } catch {}
   }
 
   async function addPlayer(player) {
