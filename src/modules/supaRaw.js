@@ -283,6 +283,60 @@ export async function supaPreflightOk(timeoutMs = 3500) {
 }
 
 /**
+ * Direct raw POST to a Supabase Edge Function — same iOS stuck-socket workaround
+ * as supaRawRequest but targets /functions/v1/ instead of /rest/v1/.
+ *
+ * Use as a fallback when supabase.functions.invoke() times out: the JS client
+ * reuses the stuck HTTP/2 connection pool, while this opens a fresh socket.
+ */
+export async function supaRawEdgeFunction(functionName, body, timeoutMs = 15000) {
+  const bearer = await _getBearerAsync()
+  const url = `${SUPABASE_URL}/functions/v1/${functionName}`
+  _debugLog(`→ raw edge ${functionName}`)
+  const t0 = Date.now()
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${bearer}`,
+        'Content-Type': 'application/json',
+        'x-gw-ts': String(Date.now()),
+      },
+      body: JSON.stringify(body),
+      cache: 'no-store',
+      keepalive: false,
+      signal: controller.signal,
+    })
+    clearTimeout(timer)
+
+    if (!res.ok) {
+      let errBody = null
+      try { errBody = await res.json() } catch {}
+      const detail = errBody ? JSON.stringify(errBody) : '(no body)'
+      _debugLog(`✗ raw edge ${functionName} HTTP ${res.status} ${detail} (${Date.now() - t0}ms)`)
+      throw new Error(errBody?.message || errBody?.error || `Edge function failed (${res.status})`)
+    }
+
+    const data = await res.json()
+    _debugLog(`✓ raw edge ${functionName} (${Date.now() - t0}ms)`)
+    return data
+  } catch (e) {
+    clearTimeout(timer)
+    if (e.name === 'AbortError') {
+      _debugLog(`✗ raw edge ${functionName} aborted after ${timeoutMs}ms`)
+      throw new Error(`${functionName} timed out after ${timeoutMs}ms`)
+    }
+    _debugLog(`✗ raw edge ${functionName} (${Date.now() - t0}ms): ${e.message}`)
+    throw e
+  }
+}
+
+/**
  * How many times in the last minute has any Supabase call timed out completely?
  * Used to decide when to surface a "reload the app" prompt.
  */

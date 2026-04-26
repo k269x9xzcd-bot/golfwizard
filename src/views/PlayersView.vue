@@ -608,6 +608,8 @@ import { buildInviteUrl, buildInviteEmail } from '../modules/preset'
 import { useAuthStore } from '../stores/auth'
 import { supabase } from '../supabase'
 import bbLogo from '../assets/bonnie-briar-logo.png'
+import { supaCall } from '../modules/supabaseOps'
+import { supaRawEdgeFunction } from '../modules/supaRaw'
 
 const rosterStore = useRosterStore()
 const authStore = useAuthStore()
@@ -934,33 +936,51 @@ async function fetchGhinScores() {
   ghinScoresLoading.value = true
   ghinScoresError.value = ''
 
-  try {
-    const player = myRosterPlayer.value
-    const { data, error } = await supabase.functions.invoke('ghin-scores', {
-      body: {
-        ghin_number: String(profile.ghin_number),
-        password: profile.ghin_password,
-        player_id: player?.id || undefined,
-      }
-    })
-    if (error) throw error
-    if (data?.error) throw new Error(data.error)
-
-    ghinScores.value = data.scores || []
-    ghinScoresPosted.value = data.scores_posted ?? null
-    ghinScoreStats.value = data.aggregate_stats ?? data.score_stats ?? null
-    ghinLiveHI.value = data.handicap_index ?? null
-    ghinLiveLowHI.value = data.low_hi_display ?? null
-    ghinScoresFetched.value = true
-
-    if (player?.id) {
-      await rosterStore.fetchPlayers()
-    }
-  } catch (e) {
-    ghinScoresError.value = e?.message || 'Failed to load scores'
-  } finally {
-    ghinScoresLoading.value = false
+  const body = {
+    ghin_number: String(profile.ghin_number),
+    password: profile.ghin_password,
+    player_id: myRosterPlayer.value?.id || undefined,
   }
+
+  let data
+  try {
+    // Try via SJS client with 6s timeout — if stuck socket, this times out fast
+    const result = await supaCall(
+      'ghin-scores.invoke',
+      supabase.functions.invoke('ghin-scores', { body }),
+      6000,
+    )
+    if (result.error) throw result.error
+    if (result.data?.error) throw new Error(result.data.error)
+    data = result.data
+  } catch (e) {
+    if (!e.message?.includes('timed out')) {
+      ghinScoresError.value = e?.message || 'Failed to load scores'
+      ghinScoresLoading.value = false
+      return
+    }
+    // Timeout: retry via raw fetch — opens a fresh socket, bypassing the stuck pool
+    try {
+      data = await supaRawEdgeFunction('ghin-scores', body, 15000)
+      if (data?.error) throw new Error(data.error)
+    } catch (e2) {
+      ghinScoresError.value = e2?.message || 'Failed to load scores'
+      ghinScoresLoading.value = false
+      return
+    }
+  }
+
+  ghinScores.value = data.scores || []
+  ghinScoresPosted.value = data.scores_posted ?? null
+  ghinScoreStats.value = data.aggregate_stats ?? data.score_stats ?? null
+  ghinLiveHI.value = data.handicap_index ?? null
+  ghinLiveLowHI.value = data.low_hi_display ?? null
+  ghinScoresFetched.value = true
+
+  if (myRosterPlayer.value?.id) {
+    await rosterStore.fetchPlayers()
+  }
+  ghinScoresLoading.value = false
 }
 
 async function addSearchGhin() {
