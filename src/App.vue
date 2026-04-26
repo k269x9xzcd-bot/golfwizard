@@ -27,7 +27,7 @@
         <RouterView />
       </div>
 
-      <!-- First-time name prompt for OTP users who have no last name set -->
+      <!-- First-time name prompt — only for users missing a last name, never on invite URLs -->
       <div v-if="namePrompt" class="name-prompt-backdrop">
         <div class="name-prompt-modal">
           <div class="name-prompt-icon">⛳</div>
@@ -120,20 +120,27 @@ const namePromptSaving = ref(false)
 
 provide('openWizard', () => { showWizard.value = true })
 
+function shouldShowNamePrompt() {
+  if (!authStore.isAuthenticated || !authStore.profile) return false
+
+  // Never prompt on invite URLs — InviteWelcome.vue handles name collection there
+  // (invite URLs carry ?first= and/or ?last= params)
+  if (route.query.first || route.query.last || route.query.email) return false
+  // Also suppress on the invite route itself
+  if (route.name === 'invite' || route.path?.includes('/invite')) return false
+
+  // Only prompt if last_name is missing
+  const hasLast = !!(authStore.profile.last_name || '').trim()
+  return !hasLast
+}
+
 onMounted(async () => {
   try { await authStore.init() } catch (e) { console.warn('Auth init failed:', e) }
 
-  // Only prompt if authenticated AND last_name is missing
-  // (first_name alone is fine — don't re-prompt users who have their name set)
-  if (authStore.isAuthenticated && authStore.profile) {
-    const hasFirst = !!(authStore.profile.first_name || '').trim()
-    const hasLast  = !!(authStore.profile.last_name  || '').trim()
-    if (!hasLast) {
-      // Pre-fill first name if we already have it
-      namePromptFirst.value = authStore.profile.first_name || ''
-      namePromptLast.value = ''
-      namePrompt.value = true
-    }
+  if (shouldShowNamePrompt()) {
+    namePromptFirst.value = authStore.profile.first_name || ''
+    namePromptLast.value = ''
+    namePrompt.value = true
   }
 
   if (authStore.isAuthenticated) {
