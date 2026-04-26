@@ -7,6 +7,15 @@ const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'))
 const BUILD_TS = Date.now()
 const BUILD_STAMP = `${pkg.version}-${BUILD_TS}`
 
+// Inject git commit SHA at build time
+let COMMIT_SHA = 'dev'
+try {
+  const { execSync } = require('child_process')
+  COMMIT_SHA = execSync('git rev-parse --short HEAD').toString().trim()
+} catch {}
+const BUILD_DATE = new Date(BUILD_TS).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+const BUILD_TIME = new Date(BUILD_TS).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
+
 // Plugin to stamp the build version into sw.js after build
 // Also writes a _version.json file to dist/ for post-deploy validation
 function stampServiceWorker() {
@@ -48,6 +57,9 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
     __BUILD_STAMP__: JSON.stringify(BUILD_STAMP),
+    __COMMIT_SHA__: JSON.stringify(COMMIT_SHA),
+    __BUILD_DATE__: JSON.stringify(BUILD_DATE),
+    __BUILD_TIME__: JSON.stringify(BUILD_TIME),
   },
   // Set base to repo name for GitHub Pages — update if your repo is named differently
   // e.g. if hosted at jtspieler.github.io/GolfWizard set base: '/GolfWizard/'

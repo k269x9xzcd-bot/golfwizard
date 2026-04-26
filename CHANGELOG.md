@@ -308,3 +308,9 @@ Convention: add a block here before every `git push`.
 ## v3.10.109 — 2026-04-25
 ### Fixed
 - `syncRoundMembersToRoster` now waits 2s before running so preset seed always wins the race on first sign-in — preset owns `is_favorite: true`, round sync only fills gaps for players not in preset
+
+## v3.10.110 — 2026-04-25
+### Changed
+- Settings footer now shows: `GolfWizard v3.10.110 · Apr 25, 2026 4:32 PM EST · abc1234`
+- Removed "build" label; added build date, time, and git commit SHA injected at build time via Vite defines
+- `__COMMIT_SHA__`, `__BUILD_DATE__`, `__BUILD_TIME__` added to vite.config.js

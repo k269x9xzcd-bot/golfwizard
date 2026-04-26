@@ -109,7 +109,7 @@
       </div>
     </template>
 
-    <div class="settings-version">GolfWizard v{{ appVersion }} <span class="settings-build-stamp">build {{ buildStamp }}</span></div>
+    <div class="settings-version">GolfWizard v{{ appVersion }} · {{ buildDate }} {{ buildTime }} · <span class="settings-commit">{{ commitSha }}</span></div>
     <AuthModal v-if="showAuth" @close="showAuth = false" />
   </div>
 </template>
@@ -143,6 +143,9 @@ const ghinSyncErr = ref('')
 
 const appVersion = __APP_VERSION__
 const buildStamp = __BUILD_STAMP__
+const commitSha = __COMMIT_SHA__
+const buildDate = __BUILD_DATE__
+const buildTime = __BUILD_TIME__
 
 const avatarInitials = computed(() => {
   const f = firstName.value.trim()
@@ -445,11 +448,10 @@ async function syncGhin() {
 
 .settings-version {
   text-align: center; margin-top: 24px;
-  font-size: 11px; color: rgba(240,237,224,.2); letter-spacing: .05em;
+  font-size: 11px; color: rgba(240,237,224,.25); letter-spacing: .04em; line-height: 1.6;
 }
-.settings-build-stamp {
-  display: block; font-size: 9px; color: rgba(240,237,224,.12);
-  letter-spacing: .03em; margin-top: 2px; font-family: monospace;
+.settings-commit {
+  font-family: monospace; font-size: 10px; color: rgba(240,237,224,.15);
 }
 .field-row-split {
   display: grid;
