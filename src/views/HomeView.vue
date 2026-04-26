@@ -6,7 +6,6 @@
         <div class="header-version">v{{ appVersion }}</div>
       </div>
       <div class="header-actions">
-        <button class="help-btn" @click="showHelp = true" title="Help & Support">?</button>
         <button v-if="!authStore.isAuthenticated" class="btn-signin" @click="showAuth = true">
           Sign In
         </button>
@@ -47,10 +46,10 @@
       <div class="mib-arrow">›</div>
     </div>
 
-    <button v-if="roundsStore.activeRound || roundsStore.rounds.length" class="new-round-pill" @click="openWizard()">+ New Round</button>
+    <button class="new-round-pill" @click="openWizard()">+ New Round</button>
 
-    <!-- 4v4 Cross Match entry card -->
-    <RouterLink to="/cross-match/new" class="cm-home-card" v-if="authStore.isAuthenticated">
+    <!-- 4v4 Cross Match entry (authenticated users) -->
+    <RouterLink v-if="authStore.isAuthenticated" to="/cross-match/new" class="cm-home-card">
       <div class="cm-home-icon">⚔️</div>
       <div class="cm-home-body">
         <div class="cm-home-title">4v4 Cross Match</div>
@@ -85,7 +84,7 @@
         <div class="cup-home-icon">🏆</div>
         <div class="cup-home-body">
           <div class="cup-home-title">The Cup</div>
-          <div class="cup-home-sub">Tournament standings & matches</div>
+          <div class="cup-home-sub">Tournament standings &amp; matches</div>
         </div>
         <div class="cup-home-arrow">›</div>
       </RouterLink>
@@ -127,9 +126,6 @@
     <!-- Auth modal -->
     <AuthModal v-if="showAuth" @close="showAuth = false" />
   </div>
-
-    <!-- Help sheet -->
-    <HelpView v-model="showHelp" :app-version="appVersion" />
 </template>
 
 <script setup>
@@ -140,7 +136,6 @@ import { useRoundsStore } from '../stores/rounds'
 import { useTournamentStore } from '../stores/tournament.js'
 import { useLinkedMatchesStore } from '../stores/linkedMatches'
 import AuthModal from '../components/AuthModal.vue'
-import HelpView from './HelpView.vue'
 import CrossMatchBanner from '../components/CrossMatchBanner.vue'
 
 const appVersion = __APP_VERSION__
@@ -151,7 +146,6 @@ const tournamentStore = useTournamentStore()
 const linkedStore = useLinkedMatchesStore()
 const router = useRouter()
 const showAuth = ref(false)
-const showHelp = ref(false)
 const openWizard = inject('openWizard', () => {})
 const showTournament = computed(() => {
   const email = authStore.user?.email
@@ -235,8 +229,9 @@ async function openRound(id) {
 
 .new-round-pill {
   display: block;
-  margin: 16px auto 0;
-  padding: 14px 32px;
+  width: calc(100% - 32px);
+  margin: 16px 16px 0;
+  padding: 14px 20px;
   background: linear-gradient(145deg, #edd655 0%, #d4af37 50%, #b8961e 100%);
   color: #0c0f0d;
   font-family: var(--gw-font-body);
@@ -259,7 +254,7 @@ async function openRound(id) {
   display: flex;
   align-items: center;
   gap: 14px;
-  margin: 20px var(--gw-space-4) 0;
+  margin: 10px 16px 0;
   padding: 14px 16px;
   border-radius: 16px;
   background: linear-gradient(135deg, rgba(212,175,55,.12) 0%, rgba(212,175,55,.04) 100%);
@@ -363,27 +358,19 @@ async function openRound(id) {
 
 .cm-home-card {
   display: flex; align-items: center; gap: 14px;
-  margin: 12px var(--gw-space-4) 0; padding: 14px 16px;
+  margin: 10px 16px 0; padding: 14px 16px;
   border-radius: 16px;
-  background: linear-gradient(135deg, rgba(96,165,250,.1) 0%, rgba(96,165,250,.03) 100%);
-  border: 1px solid rgba(96,165,250,.3);
+  background: rgba(17,74,53,.5);
+  border: 1px solid rgba(34,160,107,.3);
   text-decoration: none; color: var(--gw-text);
+  cursor: pointer;
   transition: transform .12s, border-color .12s;
   -webkit-tap-highlight-color: transparent;
 }
-.cm-home-card:active { transform: scale(.98); border-color: rgba(96,165,250,.6); }
+.cm-home-card:active { transform: scale(.98); border-color: rgba(34,160,107,.6); }
 .cm-home-icon { font-size: 28px; flex-shrink: 0; }
 .cm-home-body { flex: 1; min-width: 0; }
-.cm-home-title { font-family: var(--gw-font-display); font-size: 17px; font-weight: 700; color: #93c5fd; line-height: 1.2; }
+.cm-home-title { font-family: var(--gw-font-display); font-size: 17px; font-weight: 700; color: #6edba0; line-height: 1.2; }
 .cm-home-sub { font-size: 12px; color: rgba(240,237,224,.55); margin-top: 2px; }
-.cm-home-arrow { font-size: 28px; color: rgba(147,197,253,.6); font-weight: 300; flex-shrink: 0; }
-.help-btn {
-  display: flex; align-items: center; justify-content: center;
-  width: 32px; height: 32px; border-radius: 50%;
-  background: rgba(212,175,55,.15); border: 1.5px solid rgba(212,175,55,.4);
-  color: #d4af37; font-size: 16px; font-weight: 700; line-height: 1;
-  cursor: pointer; transition: background .15s, border-color .15s, transform .1s;
-  flex-shrink: 0; -webkit-tap-highlight-color: transparent;
-}
-.help-btn:active { background: rgba(212,175,55,.28); border-color: #d4af37; transform: scale(.92); }
+.cm-home-arrow { font-size: 28px; color: rgba(110,219,160,.6); font-weight: 300; flex-shrink: 0; }
 </style>
