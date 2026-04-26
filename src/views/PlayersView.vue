@@ -396,9 +396,11 @@ const myRosterPlayer = computed(() => {
   if (!profile) return null
   const name = profile.display_name || ''
   const ghinNum = profile.ghin_number
+  const email = authStore.user?.email?.toLowerCase().trim()
   return rosterStore.players.find(p =>
     (ghinNum && p.ghin_number && String(p.ghin_number) === String(ghinNum)) ||
-    (name && p.name?.toLowerCase() === name.toLowerCase())
+    (email && p.email?.toLowerCase().trim() === email) ||
+    (name && name.includes(' ') && p.name?.toLowerCase() === name.toLowerCase())
   ) || null
 })
 

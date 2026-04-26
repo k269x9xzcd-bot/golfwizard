@@ -194,14 +194,11 @@ async function saveGhinCredentials() {
   const num = ghinNumber.value.trim()
   const pwd = ghinPassword.value.trim()
   try {
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        ghin_number: num || null,
-        ghin_password: pwd || null,
-      })
-      .eq('id', authStore.user.id)
-    if (error) throw error
+    // Use upsert via updateProfile so it works even if profile row is incomplete
+    await authStore.updateProfile({
+      ghin_number: num || null,
+      ghin_password: pwd || null,
+    })
 
     // Auto-sync handicap if both credentials present
     if (num && pwd) {
@@ -212,19 +209,23 @@ async function saveGhinCredentials() {
       if (syncErr) throw syncErr
       if (syncData?.error) throw new Error(syncData.error)
 
-      // Update profile ghin_index
+      // Update ghin_index in profile
       await authStore.updateProfile({ ghin_index: syncData.handicap_index })
       ghinIndex.value = String(syncData.handicap_index)
 
-      // Update matching roster_players row (match by profile_id)
-      await supabase
-        .from('roster_players')
-        .update({
-          ghin_index: syncData.handicap_index,
-          ghin_number: num,
-          ghin_synced_at: new Date().toISOString(),
-        })
-        .eq('profile_id', authStore.user.id)
+      // Update user's own roster_players row — match by email (profile_id may not be linked yet)
+      const userEmail = authStore.user?.email?.toLowerCase().trim()
+      if (userEmail) {
+        await supabase
+          .from('roster_players')
+          .update({
+            ghin_index: syncData.handicap_index,
+            ghin_number: num,
+            ghin_synced_at: new Date().toISOString(),
+          })
+          .eq('owner_id', authStore.user.id)
+          .eq('email', userEmail)
+      }
 
       ghinSyncMsg.value = `✓ Saved & synced: ${syncData.hi_display} (${syncData.full_name})`
     } else {

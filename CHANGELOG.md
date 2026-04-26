@@ -233,3 +233,10 @@ Convention: add a block here before every `git push`.
 ### Fixed
 - Metrics Lab hang: settlements prefetch now has 8s hard timeout; fetchRounds errors no longer block loading spinner from clearing
 - Metrics Lab: defaults to logged-in user's stats instead of first player in list
+
+## [3.10.101] - 2026-04-25
+### Added
+- First-time name prompt for OTP users whose display_name is an email prefix (e.g. "jcourt93") — modal appears on login, saves real name to profile
+### Fixed
+- YOU card now matches on email, not just name/GHIN# — works for all users regardless of display_name format
+- GHIN credential save now uses upsert (not raw update) so it works even if profile row is incomplete; roster_players sync matches by email not profile_id

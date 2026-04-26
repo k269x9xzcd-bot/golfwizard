@@ -27,6 +27,26 @@
         <RouterView />
       </div>
 
+      <!-- First-time name prompt for OTP users -->
+      <div v-if="namePrompt" class="name-prompt-backdrop">
+        <div class="name-prompt-modal">
+          <div class="name-prompt-icon">⛳</div>
+          <div class="name-prompt-title">What's your name?</div>
+          <div class="name-prompt-sub">So your group knows who you are in the app.</div>
+          <input
+            v-model="namePromptValue"
+            class="name-prompt-input"
+            placeholder="e.g. Jeremy Court"
+            @keyup.enter="saveNamePrompt"
+            autofocus
+          />
+          <button class="name-prompt-btn" :disabled="!namePromptValue.trim() || namePromptSaving" @click="saveNamePrompt">
+            {{ namePromptSaving ? 'Saving…' : 'Save' }}
+          </button>
+          <button class="name-prompt-skip" @click="namePrompt = false">Skip for now</button>
+        </div>
+      </div>
+
       <nav v-if="!showWizard && !isWizardRoute" class="bottom-nav">
         <RouterLink to="/" class="nav-item" :class="{ active: $route.name === 'home' }">
           <span class="nav-icon">🏠</span>
@@ -85,11 +105,23 @@ const isWizardRoute = computed(() => WIZARD_ROUTES.has(route.name))
 const showWizard = ref(false)
 const showJoin = ref(false)
 const inviteModal = ref(null)
+const namePrompt = ref(false)
+const namePromptValue = ref('')
+const namePromptSaving = ref(false)
 
 provide('openWizard', () => { showWizard.value = true })
 
 onMounted(async () => {
   try { await authStore.init() } catch (e) { console.warn('Auth init failed:', e) }
+
+  // Prompt for real name if display_name looks like an email prefix (no space = not a full name)
+  if (authStore.isAuthenticated && authStore.profile) {
+    const dn = authStore.profile.display_name || ''
+    if (dn && !dn.includes(' ')) {
+      namePromptValue.value = ''
+      namePrompt.value = true
+    }
+  }
 
   if (authStore.isAuthenticated) {
     try {
@@ -153,6 +185,20 @@ onMounted(async () => {
     router.replace({ query: {} })
   }
 })
+
+async function saveNamePrompt() {
+  const name = namePromptValue.value.trim()
+  if (!name || namePromptSaving.value) return
+  namePromptSaving.value = true
+  try {
+    await authStore.updateProfile({ display_name: name })
+    namePrompt.value = false
+  } catch (e) {
+    console.warn('saveNamePrompt failed:', e)
+  } finally {
+    namePromptSaving.value = false
+  }
+}
 
 async function onRoundCreated(round, meta) {
   showWizard.value = false
@@ -244,5 +290,42 @@ function onSetupCourse(courseName, apiId) {
 .invite-modal-dismiss {
   background: transparent; color: #7d9283; border: none;
   font-size: 14px; cursor: pointer; padding: 4px;
+}
+
+.name-prompt-backdrop {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,0.8);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.name-prompt-modal {
+  background: #1e2720;
+  border: 1px solid #2a3d31;
+  border-radius: 20px;
+  padding: 32px 24px;
+  max-width: 340px;
+  width: 100%;
+  display: flex; flex-direction: column; gap: 14px;
+  text-align: center;
+}
+.name-prompt-icon { font-size: 40px; }
+.name-prompt-title { font-size: 22px; font-weight: 700; color: #fff; }
+.name-prompt-sub { font-size: 14px; color: #a3b8aa; }
+.name-prompt-input {
+  background: #111c14; border: 1px solid #2a3d31;
+  border-radius: 10px; padding: 12px 14px;
+  color: #fff; font-size: 16px; width: 100%;
+  box-sizing: border-box; text-align: center;
+}
+.name-prompt-input:focus { outline: none; border-color: #34c77e; }
+.name-prompt-btn {
+  background: #1a7a55; color: #fff; border: none;
+  border-radius: 12px; padding: 14px; font-size: 16px;
+  font-weight: 600; cursor: pointer; width: 100%;
+}
+.name-prompt-btn:disabled { opacity: 0.5; cursor: default; }
+.name-prompt-skip {
+  background: transparent; color: #7d9283; border: none;
+  font-size: 13px; cursor: pointer; padding: 2px;
 }
 </style>
