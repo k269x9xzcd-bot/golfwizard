@@ -152,6 +152,8 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { supabase } from '../supabase'
 import { useAuthStore } from '../stores/auth'
+import { supaCall } from '../modules/supabaseOps'
+import { supaRawInsert } from '../modules/supaRaw'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -276,19 +278,23 @@ async function submitFeedback() {
   if (!feedbackMessage.value.trim()) return
   submitting.value = true
   try {
-    // Upload screenshot if attached
+    // Upload screenshot if attached — 5s timeout, skip on failure (iOS socket safety)
     let screenshotUrl = null
     if (screenshotFile.value) {
       const ext = screenshotFile.value.name.split('.').pop() || 'png'
       const path = `${authStore.user?.id || 'anon'}/${Date.now()}.${ext}`
-      const { error: upErr } = await supabase.storage
-        .from('feedback-screenshots')
-        .upload(path, screenshotFile.value, { upsert: false })
-      if (!upErr) {
-        const { data: urlData } = supabase.storage
-          .from('feedback-screenshots')
-          .getPublicUrl(path)
-        screenshotUrl = urlData?.publicUrl || null
+      try {
+        const { error: upErr } = await supaCall(
+          'storage.upload',
+          supabase.storage.from('feedback-screenshots').upload(path, screenshotFile.value, { upsert: false }),
+          5000,
+        )
+        if (!upErr) {
+          const { data: urlData } = supabase.storage.from('feedback-screenshots').getPublicUrl(path)
+          screenshotUrl = urlData?.publicUrl || null
+        }
+      } catch {
+        // Storage timed out or failed — continue without screenshot
       }
     }
 
@@ -305,14 +311,26 @@ async function submitFeedback() {
         platform: navigator.platform,
       },
     }
-    const { error } = await supabase.from('feedback').insert(payload)
-    if (error) throw error
+
+    // 2s timeout on SJS client, raw fetch fallback for iOS WKWebView stuck socket
+    let inserted = false
+    try {
+      const res = await supaCall('feedback.insert', supabase.from('feedback').insert(payload), 2000)
+      if (res?.error) throw res.error
+      inserted = true
+    } catch (e) {
+      if (!e?.message?.includes('timed out')) throw e
+    }
+    if (!inserted) {
+      await supaRawInsert('feedback', payload, 8000)
+    }
+
     feedbackSent.value = true
     feedbackMessage.value = ''
     clearScreenshot()
   } catch (e) {
-    feedbackError.value = e?.message?.includes('auth') 
-      ? 'Please sign in to submit feedback.' 
+    feedbackError.value = e?.message?.includes('auth')
+      ? 'Please sign in to submit feedback.'
       : 'Could not send — try again in a moment.'
   } finally {
     submitting.value = false

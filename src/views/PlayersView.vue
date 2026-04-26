@@ -603,7 +603,7 @@
 
 <script setup>
 import { ref, computed, reactive } from 'vue'
-import { useRosterStore } from '../stores/roster'
+import { useRosterStore, displayInitials } from '../stores/roster'
 import { buildInviteUrl, buildInviteEmail } from '../modules/preset'
 import { useAuthStore } from '../stores/auth'
 import { supabase } from '../supabase'
