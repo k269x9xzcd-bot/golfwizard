@@ -119,6 +119,8 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { supabase } from '../supabase'
 import AuthModal from '../components/AuthModal.vue'
+import { supaCall } from '../modules/supabaseOps'
+import { supaRawRequest, supaRawUpdate } from '../modules/supaRaw'
 
 const authStore = useAuthStore()
 const showAuth = ref(false)
@@ -187,7 +189,7 @@ async function save() {
   try {
     const fullName = [f, l].join(' ')
     const trimmedNick = nickname.value.trim() || null
-    await authStore.updateProfile({
+    const profileData = {
       first_name: f,
       last_name: l,
       display_name: fullName,
@@ -195,14 +197,38 @@ async function save() {
       nickname: trimmedNick,
       use_nickname: useNickname.value,
       ghin_index: ghinIndex.value !== '' ? parseFloat(ghinIndex.value) : null,
-    })
-    await authStore.upsertRosterEntry({
+    }
+    try {
+      await supaCall('profiles.upsert', authStore.updateProfile(profileData), 3000)
+    } catch (e) {
+      if (!e.message?.includes('timed out')) throw e
+      await supaRawRequest('PATCH', `profiles?id=eq.${authStore.user.id}`, profileData, 8000)
+      authStore.fetchProfile().catch(() => {})
+    }
+
+    const rosterData = {
       firstName: f,
       lastName: l,
       name: fullName,
       nickname: trimmedNick,
       useNickname: useNickname.value,
-    })
+    }
+    try {
+      await supaCall('roster.upsert', authStore.upsertRosterEntry(rosterData), 3000)
+    } catch (e) {
+      if (!e.message?.includes('timed out')) throw e
+      const email = authStore.user?.email?.toLowerCase().trim()
+      if (email) {
+        const parts = fullName.split(/\s+/)
+        const short_name = parts.length >= 2 ? parts[parts.length - 1].slice(0, 8) : fullName.slice(0, 8)
+        await supaRawRequest('POST', 'roster_players', {
+          name: fullName, short_name, email,
+          nickname: trimmedNick || null,
+          use_nickname: useNickname.value || false,
+        }, 8000, { Prefer: 'resolution=merge-duplicates,return=minimal' }).catch(() => {})
+      }
+    }
+
     saveSuccess.value = true
     setTimeout(() => { saveSuccess.value = false }, 2500)
   } catch (err) {
@@ -219,11 +245,20 @@ async function saveGhinCredentials() {
   const num = ghinNumber.value.trim()
   const pwd = ghinPassword.value.trim()
   try {
-    // Use upsert via updateProfile so it works even if profile row is incomplete
-    await authStore.updateProfile({
-      ghin_number: num || null,
-      ghin_password: pwd || null,
-    })
+    // Save GHIN credentials — 3s timeout, fall back to raw fetch on iOS stuck-socket
+    try {
+      await supaCall('profiles.upsert-ghin-creds', authStore.updateProfile({
+        ghin_number: num || null,
+        ghin_password: pwd || null,
+      }), 3000)
+    } catch (e) {
+      if (!e.message?.includes('timed out')) throw e
+      await supaRawRequest('PATCH', `profiles?id=eq.${authStore.user.id}`, {
+        ghin_number: num || null,
+        ghin_password: pwd || null,
+      }, 8000)
+      authStore.fetchProfile().catch(() => {})
+    }
 
     // Auto-sync handicap if both credentials present
     if (num && pwd) {
@@ -234,22 +269,36 @@ async function saveGhinCredentials() {
       if (syncErr) throw syncErr
       if (syncData?.error) throw new Error(syncData.error)
 
-      // Update ghin_index in profile
-      await authStore.updateProfile({ ghin_index: syncData.handicap_index })
+      // Update ghin_index in profile — same timeout + raw fallback
+      try {
+        await supaCall('profiles.upsert-ghin-index', authStore.updateProfile({ ghin_index: syncData.handicap_index }), 3000)
+      } catch (e) {
+        if (!e.message?.includes('timed out')) throw e
+        await supaRawRequest('PATCH', `profiles?id=eq.${authStore.user.id}`, { ghin_index: syncData.handicap_index }, 8000)
+        authStore.fetchProfile().catch(() => {})
+      }
       ghinIndex.value = String(syncData.handicap_index)
 
       // Update user's own roster_players row — match by email (profile_id may not be linked yet)
       const userEmail = authStore.user?.email?.toLowerCase().trim()
       if (userEmail) {
-        await supabase
-          .from('roster_players')
-          .update({
-            ghin_index: syncData.handicap_index,
-            ghin_number: num,
-            ghin_synced_at: new Date().toISOString(),
-          })
-          .eq('owner_id', authStore.user.id)
-          .eq('email', userEmail)
+        const rosterPatch = {
+          ghin_index: syncData.handicap_index,
+          ghin_number: num,
+          ghin_synced_at: new Date().toISOString(),
+        }
+        try {
+          await supaCall('roster.update-ghin', supabase
+            .from('roster_players')
+            .update(rosterPatch)
+            .eq('owner_id', authStore.user.id)
+            .eq('email', userEmail), 3000)
+        } catch (e) {
+          if (!e.message?.includes('timed out')) throw e
+          await supaRawUpdate('roster_players',
+            `owner_id=eq.${authStore.user.id}&email=eq.${userEmail}`,
+            rosterPatch, 8000).catch(() => {})
+        }
       }
 
       ghinSyncMsg.value = `✓ Saved & synced: ${syncData.hi_display} (${syncData.full_name})`
