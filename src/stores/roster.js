@@ -189,11 +189,14 @@ export const useRosterStore = defineStore('roster', () => {
 
       } else {
         // ── Both paths threw — network/auth failure — use localStorage cache ─
+        console.warn('[roster] Both fetch paths failed. Falling back to cache/defaults.')
         const saved = JSON.parse(localStorage.getItem('gw_roster') || '[]')
-        console.warn('[roster] Both SJS and supaRaw failed. Falling back to localStorage cache.',
-          'User:', auth.user?.id, 'Cache size:', saved.length)
         if (saved.length > 0) {
           players.value = saved
+        } else if (players.value.length === 0) {
+          // Last resort: show DEFAULT_PLAYERS so the roster is never empty
+          players.value = [...DEFAULT_PLAYERS]
+          _saveLocal()
         }
       }
     } catch {
@@ -270,6 +273,14 @@ export const useRosterStore = defineStore('roster', () => {
   async function updatePlayer(id, updates) {
     const auth = useAuthStore()
     if (!auth.isAuthenticated) {
+      const idx = players.value.findIndex(p => p.id === id)
+      if (idx >= 0) players.value[idx] = { ...players.value[idx], ...updates }
+      _saveLocal()
+      return
+    }
+
+    // default_* and local_* IDs are local-only fallback entries — they don't exist in Supabase
+    if (String(id).startsWith('default_') || String(id).startsWith('local_')) {
       const idx = players.value.findIndex(p => p.id === id)
       if (idx >= 0) players.value[idx] = { ...players.value[idx], ...updates }
       _saveLocal()

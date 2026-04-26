@@ -678,7 +678,6 @@ async function syncAllGhin() {
 
     for (const player of rosterStore.players) {
       if (!player.ghin_number) continue
-      if (authStore.isAuthenticated && String(player.id).startsWith('default_')) continue
       const bb = bbMap[player.ghin_number]
       if (bb?.handicap_index != null) {
         updatePromises.push(
