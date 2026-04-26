@@ -146,12 +146,14 @@ export function clearPresetForAuthUser() {
 /**
  * Build a shareable invite URL that opens GolfWizard with the preset.
  */
-export function buildInviteUrl(email = '', ghinNumber = '') {
+export function buildInviteUrl(email = '', ghinNumber = '', name = '', rid = '') {
   if (typeof window === 'undefined') return `#/invite?preset=${PRESET_ID}`
   const origin = window.location.origin + window.location.pathname.replace(/\/+$/, '')
   const emailParam = email ? `&email=${encodeURIComponent(email)}` : ''
   const ghinParam = ghinNumber ? `&ghin=${encodeURIComponent(ghinNumber)}` : ''
-  return `${origin}#/invite?preset=${PRESET_ID}${emailParam}${ghinParam}`
+  const nameParam = name ? `&name=${encodeURIComponent(name)}` : ''
+  const ridParam = rid ? `&rid=${encodeURIComponent(rid)}` : ''
+  return `${origin}#/invite?preset=${PRESET_ID}${emailParam}${ghinParam}${nameParam}${ridParam}`
 }
 
 /**
@@ -160,7 +162,7 @@ export function buildInviteUrl(email = '', ghinNumber = '') {
  * @param {string} senderName — display name of the host
  */
 export function buildInviteEmail(player, senderName = 'Jason') {
-  const url = buildInviteUrl(player.email || '', player.ghin_number || '')
+  const url = buildInviteUrl(player.email || '', player.ghin_number || '', player.name || '', player.id || '')
   const first = player.name.split(' ')[0]
   const subject = `${senderName} invited you to GolfWizard`
   const body = [

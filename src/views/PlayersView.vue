@@ -319,9 +319,8 @@ async function selectMatch(playerId, golfer) {
 // ── Invite ───────────────────────────────────────────────────────
 const inviteHint = ref('')
 function invitePlayer(player) {
-  const url = buildInviteUrl(player.id)
-  const body = buildInviteEmail(player.name, url)
-  window.open(`mailto:${player.email}?subject=Join me on GolfWizard&body=${encodeURIComponent(body)}`)
+  const mailto = buildInviteEmail(player)
+  window.open(mailto)
 }
 async function shareGroupInvite() {
   const url = buildInviteUrl()

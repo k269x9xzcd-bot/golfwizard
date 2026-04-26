@@ -262,3 +262,16 @@ Convention: add a block here before every `git push`.
 - Force-refresh: tap ⟳ in GHIN sheet to bypass cache and pull live data
 ### Fixed
 - DB: added score_cache (jsonb) + score_cache_at columns to roster_players
+
+## v3.10.105 — 2026-04-25
+### Fixed
+- `invitePlayer()` was passing `player.id` (UUID) as email param to `buildInviteUrl` — invite URL had no email or GHIN pre-fill
+- `buildInviteEmail` was receiving `player.name` (string) instead of player object — URL in email body also broken
+
+### Changed
+- `buildInviteUrl(email, ghin, name, rid)` — now accepts `name` and `rid` (roster_players PK)
+- `buildInviteEmail(player)` — builds full URL internally; callers no longer construct URL separately
+- `invitePlayer(player)` simplified to single `buildInviteEmail(player)` call
+- `InviteWelcome`: reads `?name=` and `?rid=` params; on auth binds `profile_id` directly via `rid` (no fuzzy match); pre-fills display_name from `?name=` if profile has no full name
+- Email mismatch warning banner (yellow, non-blocking) if signed-in email ≠ invite email
+- `docs/INVITE_FLOW.md` added — living doc covering both invite paths, URL params, field handling, edge cases

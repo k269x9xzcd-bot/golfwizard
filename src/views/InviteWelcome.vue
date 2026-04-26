@@ -16,6 +16,11 @@
         <div class="invite-sub">Your group's players and courses are ready to go.</div>
       </div>
 
+      <!-- Email mismatch warning -->
+      <div v-if="emailMismatch" class="invite-mismatch-banner">
+        ⚠️ This invite was sent to <strong>{{ inviteEmail }}</strong> — you're signed in as <strong>{{ authStore.user?.email }}</strong>. Round history may not link correctly.
+      </div>
+
       <!-- What was loaded -->
       <div class="invite-seeded-card">
         <div class="invite-seeded-title">✓ Pre-loaded for you</div>
@@ -148,14 +153,44 @@ const inviteEmail = computed(() => {
   return typeof e === 'string' ? decodeURIComponent(e) : ''
 })
 
+const inviteName = computed(() => {
+  const n = route.query.name
+  return typeof n === 'string' ? decodeURIComponent(n) : ''
+})
+
+const inviteRid = computed(() => {
+  const r = route.query.rid
+  return typeof r === 'string' ? decodeURIComponent(r) : ''
+})
+
+const emailMismatch = computed(() => {
+  if (!authStore.isAuthenticated || !inviteEmail.value) return false
+  return authStore.user?.email?.toLowerCase() !== inviteEmail.value.toLowerCase()
+})
+
 const playerNames = computed(() =>
   PRESET_PLAYERS.map(p => p.nickname || p.name.split(' ')[0]).join(', ')
 )
 
-function onAuthClose() {
+async function onAuthClose() {
   showAuth.value = false
-  // After signing in, prompt GHIN setup if they don't have it yet
-  if (authStore.isAuthenticated && !authStore.profile?.ghin_number) {
+  if (!authStore.isAuthenticated) return
+
+  // Bind this profile_id directly to the roster row from the invite
+  if (inviteRid.value) {
+    await supabase.from('roster_players')
+      .update({ profile_id: authStore.user.id })
+      .eq('id', inviteRid.value)
+      .is('profile_id', null)
+  }
+
+  // Pre-fill display_name from invite if profile has no full name yet
+  if (inviteName.value && authStore.profile?.display_name && !authStore.profile.display_name.includes(' ')) {
+    await authStore.updateProfile({ display_name: inviteName.value })
+  }
+
+  // Prompt GHIN setup if they don't have it yet
+  if (!authStore.profile?.ghin_number) {
     showGhinStep.value = true
   }
 }
@@ -214,7 +249,7 @@ async function syncGhin() {
 }
 
 onMounted(async () => {
-  // Pre-fill GHIN # from invite URL if provided
+  // Pre-fill GHIN # and name from invite URL if provided
   const g = route.query.ghin
   if (g && typeof g === 'string') ghinNum.value = decodeURIComponent(g)
 
@@ -224,8 +259,8 @@ onMounted(async () => {
 
   if (inviteEmail.value && !authStore.isAuthenticated) {
     showAuth.value = true
-  } else if (authStore.isAuthenticated && !authStore.profile?.ghin_number) {
-    showGhinStep.value = true
+  } else if (authStore.isAuthenticated) {
+    await onAuthClose()
   }
 })
 </script>
@@ -451,4 +486,15 @@ onMounted(async () => {
 .ghin-success-msg { font-size: 13px; color: #34d399; font-weight: 600; background: rgba(52,211,153,.1); border: 1px solid rgba(52,211,153,.2); border-radius: 8px; padding: 10px 12px; }
 .ghin-error-msg { font-size: 13px; color: #f87171; background: rgba(248,113,113,.1); border: 1px solid rgba(248,113,113,.2); border-radius: 8px; padding: 10px 12px; }
 .ghin-step-note { font-size: 11px; color: rgba(240,237,224,.3); text-align: center; }
+
+.invite-mismatch-banner {
+  background: rgba(251,191,36,.1);
+  border: 1px solid rgba(251,191,36,.35);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 13px;
+  color: rgba(240,237,224,.85);
+  line-height: 1.5;
+}
+.invite-mismatch-banner strong { color: #fbbf24; }
 </style>
