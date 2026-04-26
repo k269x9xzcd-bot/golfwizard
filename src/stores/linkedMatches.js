@@ -46,7 +46,7 @@ export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
     }
   }
 
-  async function createLinkedMatch({ name, roundAId, ballsToCount, stake, courseName, tee, holesMode, courseSnapshot, foursomeBPlayers }) {
+  async function createLinkedMatch({ name, roundAId, ballsToCount, stake, hcpPct, sideBets, courseName, tee, holesMode, courseSnapshot, foursomeBPlayers }) {
     const auth = useAuthStore()
     if (!auth.isAuthenticated) throw new Error('Sign in required to create a linked match.')
 
@@ -68,6 +68,8 @@ export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
       match_config: {
         ballsToCount: ballsToCount ?? 1,
         stake: stake ?? 20,
+        hcpPct: hcpPct ?? 0.90,
+        sideBets: sideBets?.length ? sideBets : null,
         courseName: courseName ?? null,
         tee: tee ?? null,
         holesMode: holesMode ?? '18',

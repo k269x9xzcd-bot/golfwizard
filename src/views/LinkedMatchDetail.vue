@@ -97,17 +97,47 @@
         </div>
       </div>
 
-      <!-- Final settlement -->
-      <div v-if="result?.settlement" class="lmd-settlement">
+      <!-- Final settlement + side bets -->
+      <div v-if="result?.allHolesComplete || result?.sideBetResults?.length" class="lmd-settlement">
         <div class="lmd-section-label">Settlement</div>
-        <div v-if="result.settlement.winner" class="lmd-settlement-card lmd-settlement-card--payout">
-          <span class="lmd-settlement-icon">💰</span>
-          <span>{{ result.settlement.description }}</span>
+
+        <!-- Net summary (main + all side bets combined) -->
+        <div v-if="result?.netSettlement" class="lmd-net-card" :class="result.netSettlement.winningTeam ? 'lmd-net-card--winner' : 'lmd-net-card--tied'">
+          <span class="lmd-net-icon">{{ result.netSettlement.winningTeam ? '🏆' : '🤝' }}</span>
+          <div class="lmd-net-body">
+            <div class="lmd-net-summary">{{ result.netSettlement.summary }}</div>
+            <div class="lmd-net-perplayer" v-if="result.netSettlement.winningTeam">
+              ${{ result.netSettlement.totalNetPerPlayer.toFixed(0) }} / player · all bets included
+            </div>
+          </div>
         </div>
-        <div v-else class="lmd-settlement-card">
-          <span class="lmd-settlement-icon">🤝</span>
-          <span>Match tied — no payment.</span>
+        <div v-else-if="result?.settlement && !result?.netSettlement" class="lmd-settlement-card" :class="result.settlement.winner ? 'lmd-settlement-card--payout' : ''">
+          <span class="lmd-settlement-icon">{{ result.settlement.winner ? '💰' : '🤝' }}</span>
+          <span>{{ result.settlement.winner ? result.settlement.description : 'All square — no payment.' }}</span>
         </div>
+
+        <!-- Main match line -->
+        <div v-if="result?.settlement" class="lmd-settle-line">
+          <span class="lmd-settle-line-label">Main match (${{ result.settlement.stakePerPlayer }}/player)</span>
+          <span class="lmd-settle-line-val" :class="result.settlement.winner ? 'lmd-val--win' : 'lmd-val--tie'">
+            {{ result.settlement.winner ? `Foursome ${result.settlement.winner} wins` : 'Tied' }}
+          </span>
+        </div>
+
+        <!-- Side bet lines -->
+        <template v-if="result?.sideBetResults?.length">
+          <div class="lmd-settle-divider">Side bets</div>
+          <div v-for="sb in result.sideBetResults" :key="sb.type" class="lmd-settle-line">
+            <span class="lmd-settle-line-label">
+              {{ sideBetLabel(sb.type) }}
+              <span class="lmd-sb-stake-tag">${{ sb.stake }}/player</span>
+            </span>
+            <span class="lmd-settle-line-val"
+              :class="sb.settled ? (sb.winner || sb.netA !== 0 ? 'lmd-val--win' : 'lmd-val--tie') : 'lmd-val--pending'">
+              {{ sideBetStatus(sb) }}
+            </span>
+          </div>
+        </template>
       </div>
 
 
@@ -202,6 +232,27 @@ function formatVsPar(v) {
   if (v == null) return '—'
   if (v === 0) return 'E'
   return v > 0 ? `+${v}` : `${v}`
+}
+
+function sideBetLabel(type) {
+  const labels = {
+    mostBirdies: 'Most Birdies',
+    front9: 'Front 9',
+    back9: 'Back 9',
+    eagleBounty: 'Eagle Bounty',
+    fewestDoubles: 'Fewest Doubles',
+  }
+  return labels[type] || type
+}
+
+function sideBetStatus(sb) {
+  if (!sb.settled) return 'In progress'
+  if (sb.type === 'eagleBounty') {
+    if (sb.netA > 0) return 'A leads'
+    if (sb.netA < 0) return 'B leads'
+    return 'Even'
+  }
+  return sb.winner ? `Foursome ${sb.winner} wins` : 'Tied'
 }
 
 async function load() {
@@ -454,4 +505,49 @@ watch(() => route.params.id, (id) => { if (id) load() })
   -webkit-tap-highlight-color: transparent;
 }
 .lmd-btn-override:active { transform: scale(.98); }
+
+/* Net settlement card */
+.lmd-net-card {
+  margin: 0 16px 6px; padding: 14px 16px; border-radius: 14px;
+  display: flex; align-items: flex-start; gap: 12px;
+  border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.04);
+}
+.lmd-net-card--winner {
+  background: linear-gradient(135deg, rgba(212,175,55,.14), rgba(212,175,55,.04));
+  border-color: rgba(212,175,55,.4);
+}
+.lmd-net-card--tied {
+  background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.1);
+}
+.lmd-net-icon { font-size: 22px; flex-shrink: 0; margin-top: 1px; }
+.lmd-net-body { display: flex; flex-direction: column; gap: 3px; }
+.lmd-net-summary { font-size: 14px; font-weight: 700; color: var(--gw-text); line-height: 1.3; }
+.lmd-net-perplayer { font-size: 11px; color: var(--gw-text-muted); }
+
+/* Settle breakdown lines */
+.lmd-settle-line {
+  display: flex; justify-content: space-between; align-items: center;
+  margin: 0 16px; padding: 6px 0;
+  border-bottom: 1px solid rgba(255,255,255,.05);
+  font-size: 13px;
+}
+.lmd-settle-line:last-child { border-bottom: none; }
+.lmd-settle-line-label {
+  color: rgba(240,237,224,.6); display: flex; align-items: center; gap: 6px;
+}
+.lmd-sb-stake-tag {
+  font-size: 10px; padding: 1px 6px; border-radius: 8px;
+  background: rgba(255,255,255,.07); color: var(--gw-text-muted); font-weight: 600;
+}
+.lmd-settle-line-val { font-weight: 700; font-size: 12px; }
+.lmd-val--win { color: #4ade80; }
+.lmd-val--tie { color: var(--gw-text-muted); }
+.lmd-val--pending { color: #fbbf24; font-style: italic; }
+
+.lmd-settle-divider {
+  margin: 6px 16px 2px;
+  font-size: 10px; font-weight: 800; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--gw-text-muted);
+}
+
 </style>

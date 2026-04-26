@@ -2001,65 +2001,89 @@ export const computeFiveThreeOne = computeNines
 
 
 // ─────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────
 // ── CROSS BEST BALL (4v4 linked match engine) ────────────────────
 // Takes two full round bundles (each with .round_members + .scores[])
-// and a match config. Returns structured result used by linkedMatch.js.
+// and computes aggregate best-ball net vs par for each foursome,
+// with optional side bets.
 //
-// Net strokes computed within each foursome independently (low-man).
-// holes_mode respected: '9f'=1-9, '9b'=10-18, '18'=all.
-// Settlement: captain-to-captain (one payment per side, not N²).
+// Handicap method: USGA stroke play four-ball
+//   Each player gets 90% of their full Course Handicap off the course.
+//   (Not low-man relative — that's match play.)
+//   courseHandicap = round(ghin_index * slope/113 + (rating - par))
+//   playingHandicap = round(courseHandicap * hcpPct)
+//   Strokes given on holes per SI ranking up to playingHandicap.
 // ─────────────────────────────────────────────────────────────────
-import { COURSES as _CROSS_COURSES } from './courses.js'
 
 function _crossParFor(round) {
-  const snap = round?.course_snapshot
-  if (snap?.par?.length >= 18) return snap.par.slice(0, 18)
-  const live = round?.course_name ? _CROSS_COURSES[round.course_name] : null
-  if (live?.par) return live.par.slice(0, 18)
+  const par = round?.course_snapshot?.par || round?.par || []
+  if (Array.isArray(par) && par.length >= 18) return par
   return Array(18).fill(4)
 }
 
 function _crossSiFor(round) {
-  const snap = round?.course_snapshot
-  if (snap?.si?.length >= 18) return snap.si.slice(0, 18)
-  const live = round?.course_name ? _CROSS_COURSES[round.course_name] : null
-  if (live?.si) return live.si.slice(0, 18)
+  const si = round?.course_snapshot?.handicap_stroke_index || round?.stroke_index || []
+  if (Array.isArray(si) && si.length >= 18) return si
   return Array.from({ length: 18 }, (_, i) => i + 1)
+}
+
+function _crossCourseInfo(round) {
+  const snap = round?.course_snapshot
+  const slope = snap?.slope ?? 113
+  const rating = snap?.rating ?? 72
+  const par = (_crossParFor(round)).reduce((s, p) => s + p, 0) || 72
+  return { slope, rating, par }
 }
 
 function _crossScoreMap(round) {
   const map = {}
+  for (const m of (round?.round_members || [])) map[m.id] = {}
   for (const s of (round?.scores || [])) {
-    if (s.score == null) continue
     if (!map[s.member_id]) map[s.member_id] = {}
     map[s.member_id][s.hole] = s.score
   }
   return map
 }
 
-function _crossLowIndex(members) {
-  const vals = (members || []).map(m => m?.ghin_index ?? m?.round_hcp).filter(v => v != null)
-  return vals.length ? Math.min(...vals) : 0
+/**
+ * Compute a player's playing handicap for stroke-play four-ball.
+ * @param {object} member  - round_member row (ghin_index or round_hcp)
+ * @param {object} courseInfo - { slope, rating, par }
+ * @param {number} hcpPct  - e.g. 0.90 for 90%
+ */
+function _crossPlayingHcp(member, courseInfo, hcpPct) {
+  const raw = member?.ghin_index ?? member?.round_hcp ?? 0
+  const { slope, rating, par } = courseInfo
+  const ch = Math.round(raw * (slope / 113) + (rating - par))
+  return Math.round(ch * hcpPct)
 }
 
-function _crossStrokes(member, hole, si, lowIdx) {
-  const idx = member?.ghin_index ?? member?.round_hcp
-  if (idx == null) return 0
-  const over = Math.round(idx - lowIdx)
-  if (over <= 0) return 0
-  const holeSI = si?.[hole - 1] ?? 18
+/**
+ * Strokes given to a player on a specific hole.
+ * Standard USGA method: player gets 1 stroke on holes whose SI <= playingHcp,
+ * and 2 strokes on holes whose SI <= (playingHcp - 18) for high-hcp players.
+ */
+function _crossStrokes(playingHcp, holeSI) {
+  if (playingHcp <= 0) return 0
   let s = 0
-  if (over >= holeSI) s++
-  if (over >= 18 + holeSI) s++
+  if (playingHcp >= holeSI) s++
+  if (playingHcp >= 18 + holeSI) s++
   return s
 }
 
-function _crossTeamHole(members, hole, scoreMap, si, lowIdx, ballsToCount) {
+/**
+ * Compute the best-ball net result for a team on one hole.
+ * Returns { nets, counted, sum } or null if not enough scores.
+ */
+function _crossTeamHole(members, hole, scoreMap, si, hcpMap, ballsToCount) {
   const nets = []
   for (const m of members) {
     const gross = scoreMap[m.id]?.[hole]
     if (gross == null) continue
-    nets.push(gross - _crossStrokes(m, hole, si, lowIdx))
+    const holeSI = si?.[hole - 1] ?? 18
+    const strokes = _crossStrokes(hcpMap[m.id] ?? 0, holeSI)
+    nets.push(gross - strokes)
   }
   if (nets.length < ballsToCount) return null
   nets.sort((a, b) => a - b)
@@ -2079,36 +2103,234 @@ function _crossTeamName(members) {
     .join('+')
 }
 
+// ── Side bet helpers ──────────────────────────────────────────────
+
+/**
+ * Count birdies (gross < par) for a team across played holes.
+ * Returns { A: n, B: n }.
+ */
+function _countBirdies(membersA, membersB, smA, smB, parA, parB, from, to) {
+  let a = 0; let b = 0
+  for (let h = from; h <= to; h++) {
+    const p = parA[h - 1] ?? 4
+    const pb = parB[h - 1] ?? 4
+    for (const m of membersA) { const g = smA[m.id]?.[h]; if (g != null && g < p) a++ }
+    for (const m of membersB) { const g = smB[m.id]?.[h]; if (g != null && g < pb) b++ }
+  }
+  return { A: a, B: b }
+}
+
+/**
+ * Count eagles (gross <= par - 2) for a team.
+ */
+function _countEagles(membersA, membersB, smA, smB, parA, parB, from, to) {
+  let a = 0; let b = 0
+  for (let h = from; h <= to; h++) {
+    const p = parA[h - 1] ?? 4
+    const pb = parB[h - 1] ?? 4
+    for (const m of membersA) { const g = smA[m.id]?.[h]; if (g != null && g <= p - 2) a++ }
+    for (const m of membersB) { const g = smB[m.id]?.[h]; if (g != null && g <= pb - 2) b++ }
+  }
+  return { A: a, B: b }
+}
+
+/**
+ * Count double-bogeys or worse (gross >= par + 2) for a team.
+ * Fewest doubles wins.
+ */
+function _countDoubles(membersA, membersB, smA, smB, parA, parB, from, to) {
+  let a = 0; let b = 0
+  for (let h = from; h <= to; h++) {
+    const p = parA[h - 1] ?? 4
+    const pb = parB[h - 1] ?? 4
+    for (const m of membersA) { const g = smA[m.id]?.[h]; if (g != null && g >= p + 2) a++ }
+    for (const m of membersB) { const g = smB[m.id]?.[h]; if (g != null && g >= pb + 2) b++ }
+  }
+  return { A: a, B: b }
+}
+
+/**
+ * Aggregate vsPar for holes in a range subset.
+ */
+function _subsetVsPar(perHole, from, to) {
+  let a = null; let b = null; let aScored = 0; let bScored = 0
+  const total = to - from + 1
+  for (const row of perHole) {
+    if (row.hole < from || row.hole > to) continue
+    if (row.a?.vsPar != null) { a = (a ?? 0) + row.a.vsPar; aScored++ }
+    if (row.b?.vsPar != null) { b = (b ?? 0) + row.b.vsPar; bScored++ }
+  }
+  const complete = aScored === total && bScored === total
+  return { a, b, aScored, bScored, complete }
+}
+
+/**
+ * Compute all active side bets from perHole + raw score maps.
+ * @param {Array}  sideBets   - [{ type, stake, enabled }]
+ * @param {object} ctx        - { membersA, membersB, smA, smB, parA, parB, perHole, from, to, allComplete }
+ * @returns Array of side bet result objects
+ */
+function _computeSideBets(sideBets, ctx) {
+  const { membersA, membersB, smA, smB, parA, parB, perHole, from, to, allComplete, holesMode } = ctx
+  const results = []
+
+  for (const bet of sideBets) {
+    if (bet.enabled === false) continue
+    const stake = bet.stake ?? 0
+    const type = bet.type
+
+    if (type === 'mostBirdies') {
+      const birds = _countBirdies(membersA, membersB, smA, smB, parA, parB, from, to)
+      const winner = birds.A > birds.B ? 'A' : birds.B > birds.A ? 'B' : null
+      const settled = allComplete
+      results.push({
+        type, stake, settled,
+        counts: birds,
+        winner: settled ? winner : null,
+        payout: settled && winner ? stake * membersA.length : 0,
+        description: settled
+          ? (winner ? `Foursome ${winner} wins Most Birdies (${birds[winner]} vs ${birds[winner === 'A' ? 'B' : 'A']})` : 'Most Birdies tied')
+          : `Most Birdies: A=${birds.A} B=${birds.B}`,
+      })
+    }
+
+    else if (type === 'front9') {
+      if (holesMode === '9b') continue  // no front 9 in back-9-only round
+      const f = _subsetVsPar(perHole, 1, 9)
+      const winner = f.complete ? (f.a < f.b ? 'A' : f.b < f.a ? 'B' : null) : null
+      results.push({
+        type, stake, settled: f.complete,
+        scores: { A: f.a, B: f.b },
+        winner,
+        payout: f.complete && winner ? stake * membersA.length : 0,
+        description: f.complete
+          ? (winner ? `Front 9: Foursome ${winner} wins ($${stake * membersA.length})` : 'Front 9: Tied')
+          : `Front 9: A=${formatVsParEngine(f.a)} B=${formatVsParEngine(f.b)} (thru ${f.aScored}/9)`,
+      })
+    }
+
+    else if (type === 'back9') {
+      if (holesMode === '9f') continue  // no back 9 in front-9-only round
+      const b = _subsetVsPar(perHole, 10, 18)
+      const winner = b.complete ? (b.a < b.b ? 'A' : b.b < b.a ? 'B' : null) : null
+      results.push({
+        type, stake, settled: b.complete,
+        scores: { A: b.a, B: b.b },
+        winner,
+        payout: b.complete && winner ? stake * membersA.length : 0,
+        description: b.complete
+          ? (winner ? `Back 9: Foursome ${winner} wins ($${stake * membersA.length})` : 'Back 9: Tied')
+          : `Back 9: A=${formatVsParEngine(b.a)} B=${formatVsParEngine(b.b)} (thru ${b.bScored}/9)`,
+      })
+    }
+
+    else if (type === 'eagleBounty') {
+      // Each eagle by any player in winning team earns stake from losing team
+      // Settled at end — count total eagles per team
+      const eagles = _countEagles(membersA, membersB, smA, smB, parA, parB, from, to)
+      const aEarned = eagles.A * stake * membersB.length
+      const bEarned = eagles.B * stake * membersA.length
+      const net = aEarned - bEarned // positive = A earns
+      results.push({
+        type, stake, settled: allComplete,
+        counts: eagles,
+        netA: net,
+        description: allComplete
+          ? `Eagle Bounty: A=${eagles.A} eagle${eagles.A !== 1 ? 's' : ''} B=${eagles.B} eagle${eagles.B !== 1 ? 's' : ''} · net ${net > 0 ? 'A +$' + net : net < 0 ? 'B +$' + Math.abs(net) : 'even'}`
+          : `Eagle Bounty: A=${eagles.A} B=${eagles.B}`,
+      })
+    }
+
+    else if (type === 'fewestDoubles') {
+      const doubles = _countDoubles(membersA, membersB, smA, smB, parA, parB, from, to)
+      const winner = allComplete ? (doubles.A < doubles.B ? 'A' : doubles.B < doubles.A ? 'B' : null) : null
+      results.push({
+        type, stake, settled: allComplete,
+        counts: doubles,
+        winner,
+        payout: allComplete && winner ? stake * membersA.length : 0,
+        description: allComplete
+          ? (winner ? `Fewest Doubles: Foursome ${winner} wins (${doubles[winner]} vs ${doubles[winner === 'A' ? 'B' : 'A']})` : 'Fewest Doubles: Tied')
+          : `Fewest Doubles: A=${doubles.A} B=${doubles.B}`,
+      })
+    }
+  }
+  return results
+}
+
+function formatVsParEngine(v) {
+  if (v == null) return '—'
+  if (v === 0) return 'E'
+  return v > 0 ? `+${v}` : `${v}`
+}
+
+// ─────────────────────────────────────────────────────────────────
+// DEFAULT SIDE BETS CONFIG
+// ─────────────────────────────────────────────────────────────────
+export const DEFAULT_SIDE_BETS = [
+  { type: 'mostBirdies',   label: 'Most Birdies',    stake: 4,  enabled: true,  description: 'Team with most birdies wins the pot.' },
+  { type: 'front9',        label: 'Front 9',          stake: 5,  enabled: true,  description: 'Best-ball net on the front 9.' },
+  { type: 'back9',         label: 'Back 9',           stake: 5,  enabled: true,  description: 'Best-ball net on the back 9.' },
+  { type: 'eagleBounty',   label: 'Eagle Bounty',     stake: 3,  enabled: true,  description: 'Per eagle made, the other team pays $stake/player.' },
+  { type: 'fewestDoubles', label: 'Fewest Doubles',   stake: 4,  enabled: true,  description: 'Team with fewest double-bogeys or worse wins.' },
+]
+
+// ─────────────────────────────────────────────────────────────────
+// MAIN EXPORT
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * computeCrossBestBall — 4v4 linked match engine
+ *
+ * @param {object} roundA   - full round bundle { round_members[], scores[], course_snapshot, holes_mode, ... }
+ * @param {object} roundB   - full round bundle for the other foursome
+ * @param {object} config   - match_config from linked_matches row
+ *   config.ballsToCount    - 1 or 2 (default 1)
+ *   config.stake           - main match stake per player (default 20)
+ *   config.hcpPct          - handicap allowance 0–1 (default 0.90)
+ *   config.sideBets        - array of { type, stake, enabled } (default DEFAULT_SIDE_BETS)
+ * @returns result object
+ */
 export function computeCrossBestBall(roundA, roundB, config = {}) {
-  const { ballsToCount = 1, stake = 20 } = config
+  const {
+    ballsToCount = 1,
+    stake = 20,
+    hcpPct = 0.90,
+    sideBets = DEFAULT_SIDE_BETS,
+  } = config
+
   const holesMode = roundA?.holes_mode || '18'
   const { from, to } = _crossHoleRange(holesMode)
 
   const parA = _crossParFor(roundA)
-  const siA = _crossSiFor(roundA)
+  const siA  = _crossSiFor(roundA)
   const parB = roundB ? _crossParFor(roundB) : parA
-  const siB = roundB ? _crossSiFor(roundB) : siA
+  const siB  = roundB ? _crossSiFor(roundB)  : siA
+
+  const ciA  = _crossCourseInfo(roundA)
+  const ciB  = roundB ? _crossCourseInfo(roundB) : ciA
 
   const membersA = roundA?.round_members || []
   const membersB = roundB?.round_members || []
   const smA = _crossScoreMap(roundA)
   const smB = roundB ? _crossScoreMap(roundB) : {}
-  const lowA = _crossLowIndex(membersA)
-  const lowB = _crossLowIndex(membersB)
+
+  // Build playing-hcp map per member (keyed by member.id)
+  const hcpMapA = {}
+  for (const m of membersA) hcpMapA[m.id] = _crossPlayingHcp(m, ciA, hcpPct)
+  const hcpMapB = {}
+  for (const m of membersB) hcpMapB[m.id] = _crossPlayingHcp(m, ciB, hcpPct)
 
   const perHole = []
-  let vsParA = 0
-  let vsParB = 0
-  let scoredA = 0
-  let scoredB = 0
-  let scoredBoth = 0
+  let vsParA = 0; let vsParB = 0
+  let scoredA = 0; let scoredB = 0; let scoredBoth = 0
 
   for (let h = from; h <= to; h++) {
-    const ph = parA[h - 1] ?? 4
+    const ph    = parA[h - 1] ?? 4
     const basis = ph * ballsToCount
 
-    const resA = _crossTeamHole(membersA, h, smA, siA, lowA, ballsToCount)
-    const resB = roundB ? _crossTeamHole(membersB, h, smB, siB, lowB, ballsToCount) : null
+    const resA = _crossTeamHole(membersA, h, smA, siA, hcpMapA, ballsToCount)
+    const resB = roundB ? _crossTeamHole(membersB, h, smB, siB, hcpMapB, ballsToCount) : null
 
     const aVs = resA ? resA.sum - basis : null
     const bVs = resB ? resB.sum - (parB[h - 1] ?? 4) * ballsToCount : null
@@ -2125,38 +2347,96 @@ export function computeCrossBestBall(roundA, roundB, config = {}) {
     })
   }
 
-  const totalHoles = to - from + 1
+  const totalHoles  = to - from + 1
   const allComplete = scoredA === totalHoles && scoredB === totalHoles
-  const delta = vsParA - vsParB
+  const delta       = vsParA - vsParB
+  const currentLeader = scoredBoth === 0 ? null : delta < 0 ? 'A' : delta > 0 ? 'B' : null
 
-  const currentLeader = scoredBoth === 0 ? null
-    : delta < 0 ? 'A' : delta > 0 ? 'B' : null
-
-  // Captain-to-captain: one payment, not N individual payments
+  // ── Main match settlement (foursome-to-foursome) ──────────────
   let settlement = null
   if (allComplete) {
     const winner = delta < 0 ? 'A' : delta > 0 ? 'B' : null
-    const totalPot = stake * membersA.length
+    const loser  = winner === 'A' ? 'B' : winner === 'B' ? 'A' : null
+    const stakePerPlayer = stake
+    const totalPot = winner ? stakePerPlayer * membersA.length : 0
+
     settlement = {
       winner,
-      stakePerPlayer: stake,
-      totalPot: winner ? totalPot : 0,
+      stakePerPlayer,
+      totalPot,
+      // Foursome-to-foursome: each losing player pays each winning player
       description: winner
-        ? `Foursome ${winner === 'A' ? 'B' : 'A'} captain pays $${totalPot} to Foursome ${winner} captain`
-        : 'All square — no payment',
+        ? `Foursome ${loser}: each player pays $${stakePerPlayer} to their Foursome ${winner} counterpart ($${totalPot} total)`
+        : 'All square — no main match payment',
+    }
+  }
+
+  // ── Side bets ──────────────────────────────────────────────────
+  const sideBetResults = _computeSideBets(sideBets, {
+    membersA, membersB, smA, smB, parA, parB, perHole, from, to, allComplete, holesMode,
+  })
+
+  // ── Net settlement summary (main + side bets combined) ─────────
+  let netSettlement = null
+  if (allComplete && settlement) {
+    // Compute net per-player amounts (positive = A wins from B, negative = B wins from A)
+    let netA = 0 // net $ each A player collects from each B player
+    if (settlement.winner === 'A') netA += settlement.stakePerPlayer
+    else if (settlement.winner === 'B') netA -= settlement.stakePerPlayer
+
+    const sideBetLines = []
+    for (const sb of sideBetResults) {
+      if (!sb.settled) continue
+      if (sb.type === 'eagleBounty') {
+        // Eagle bounty: netA is already per-player (net / membersA.length)
+        const perPlayer = membersA.length ? sb.netA / membersA.length : 0
+        netA += perPlayer
+        if (sb.netA !== 0) sideBetLines.push(sb.description)
+      } else if (sb.winner) {
+        if (sb.winner === 'A') netA += sb.stake
+        else netA -= sb.stake
+        sideBetLines.push(sb.description)
+      } else {
+        sideBetLines.push(`${sb.description} (tied)`)
+      }
+    }
+
+    netSettlement = {
+      netPerPlayer: netA, // positive → each B player pays each A player $netA; negative → reverse
+      winningTeam: netA > 0 ? 'A' : netA < 0 ? 'B' : null,
+      totalNetPerPlayer: Math.abs(netA),
+      summary: netA > 0
+        ? `Each Foursome B player owes each Foursome A player $${Math.abs(netA).toFixed(0)}`
+        : netA < 0
+          ? `Each Foursome A player owes each Foursome B player $${Math.abs(netA).toFixed(0)}`
+          : 'All square across all bets',
+      sideBetLines,
     }
   }
 
   return {
     perHole,
-    teamA: { vsPar: vsParA, holesFullyScored: scoredA, name: _crossTeamName(membersA) || 'Foursome A' },
-    teamB: { vsPar: vsParB, holesFullyScored: scoredB, name: _crossTeamName(membersB) || 'Foursome B' },
+    teamA: {
+      vsPar: vsParA,
+      holesFullyScored: scoredA,
+      name: _crossTeamName(membersA) || 'Foursome A',
+      hcpMap: hcpMapA,
+    },
+    teamB: {
+      vsPar: vsParB,
+      holesFullyScored: scoredB,
+      name: _crossTeamName(membersB) || 'Foursome B',
+      hcpMap: hcpMapB,
+    },
     allHolesComplete: allComplete,
     holesBoth: scoredBoth,
     currentLeader,
     delta,
     settlement,
+    sideBetResults,
+    netSettlement,
     ballsToCount,
     holesMode,
+    hcpPct,
   }
 }
