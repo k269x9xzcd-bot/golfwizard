@@ -253,3 +253,12 @@ Convention: add a block here before every `git push`.
 - DB function `backfill_roster_ghin_for_user`: copies GHIN numbers + HCPs to new user's seeded roster by email then name match — runs automatically on first seed so new users never see stale default HCPs
 ### Fixed
 - Roster seed now calls backfill function after insert so future signups get current GHIN data immediately
+
+## [3.10.104] - 2026-04-25
+### Added
+- GHIN score history cache: scores stored in roster_players.score_cache after first fetch — subsequent opens are instant (no API call)
+- Cache freshness: served from cache if populated after 6am today; stale cache triggers live API pull
+- Nightly sync (v8): now also refreshes score_cache for each user with GHIN credentials after updating HCP
+- Force-refresh: tap ⟳ in GHIN sheet to bypass cache and pull live data
+### Fixed
+- DB: added score_cache (jsonb) + score_cache_at columns to roster_players

@@ -100,7 +100,7 @@
       :live-h-i="ghinLiveHI"
       :live-low-h-i="ghinLiveLowHI"
       :computed-trend="ghinComputedTrend"
-      @refresh="fetchGhinScores"
+      @refresh="fetchGhinScores(true)"
       @go-settings="showGhinSheet = false; $router.push('/settings')"
     />
 
@@ -415,16 +415,45 @@ function ghinSyncDate(p) {
 
 function openGhinSheet() {
   showGhinSheet.value = true
-  if (!ghinScores.value.length && !ghinScoresLoading.value) fetchGhinScores()
+  if (!ghinScores.value.length && !ghinScoresLoading.value) fetchGhinScores(false)
 }
 
-async function fetchGhinScores() {
+// Cache is considered fresh if populated today after 6am local time
+function isCacheFresh(cachedAt) {
+  if (!cachedAt) return false
+  const cacheTime = new Date(cachedAt)
+  const now = new Date()
+  const sixAmToday = new Date(now)
+  sixAmToday.setHours(6, 0, 0, 0)
+  // Cache is fresh if: it was populated after 6am today
+  return cacheTime >= sixAmToday
+}
+
+function applyScoreCache(cache) {
+  ghinScores.value = cache.scores || []
+  ghinScoresPosted.value = cache.scores_posted ?? null
+  ghinScoreStats.value = cache.score_stats ?? null
+  ghinAggStats.value = cache.aggregate_stats ?? null
+  ghinLiveHI.value = cache.handicap_index ?? null
+  ghinLiveLowHI.value = cache.low_hi_display ?? null
+  ghinScoresFetched.value = true
+}
+
+async function fetchGhinScores(force = false) {
   const profile = authStore.profile
   if (!profile?.ghin_number || !profile?.ghin_password) return
+
+  const player = myRosterPlayer.value
+
+  // Serve from cache if fresh and not a forced refresh
+  if (!force && player?.score_cache && isCacheFresh(player?.score_cache_at)) {
+    applyScoreCache(player.score_cache)
+    return
+  }
+
   ghinScoresLoading.value = true
   ghinScoresError.value = ''
   try {
-    const player = myRosterPlayer.value
     const { data, error } = await supabase.functions.invoke('ghin-scores', {
       body: {
         ghin_number: String(profile.ghin_number),
@@ -434,13 +463,25 @@ async function fetchGhinScores() {
     })
     if (error) throw error
     if (data?.error) throw new Error(data.error)
-    ghinScores.value = data.scores || []
-    ghinScoresPosted.value = data.scores_posted ?? null
-    ghinScoreStats.value = data.score_stats ?? null
-    ghinAggStats.value  = data.aggregate_stats ?? null
-    ghinLiveHI.value = data.handicap_index ?? null
-    ghinLiveLowHI.value = data.low_hi_display ?? null
-    ghinScoresFetched.value = true
+
+    applyScoreCache(data)
+
+    // Write cache back to roster_players row
+    if (player?.id && !String(player.id).startsWith('default_')) {
+      const cachePayload = {
+        scores: data.scores || [],
+        scores_posted: data.scores_posted ?? null,
+        score_stats: data.score_stats ?? null,
+        aggregate_stats: data.aggregate_stats ?? null,
+        handicap_index: data.handicap_index ?? null,
+        low_hi_display: data.low_hi_display ?? null,
+      }
+      await supabase.from('roster_players').update({
+        score_cache: cachePayload,
+        score_cache_at: new Date().toISOString(),
+      }).eq('id', player.id)
+    }
+
     if (player?.id) await rosterStore.fetchPlayers()
   } catch (e) {
     ghinScoresError.value = e?.message || 'Failed to load scores'
