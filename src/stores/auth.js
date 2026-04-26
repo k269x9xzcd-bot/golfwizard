@@ -232,23 +232,18 @@ export const useAuthStore = defineStore('auth', () => {
 
   // Backfill profile_id on round_members rows that belong to this user
   // but were created before they had an account.
-  // Matches on: (1) ghin_number if user has one, (2) email.
+  // Matches on email.
   // Fire-and-forget — called after login, non-blocking.
   async function backfillRoundMembership() {
     if (!user.value) return
     const email = user.value.email?.toLowerCase().trim()
-    const ghinNumber = profile.value?.ghin_number
     try {
-      // Build OR filter: email match, or ghin_number match if available
+      // Match on email only — round_members doesn't have a ghin_number column
       let query = supabase
         .from('round_members')
         .update({ profile_id: user.value.id })
         .is('profile_id', null)
-      if (ghinNumber) {
-        query = query.or(`email.eq.${email},ghin_number.eq.${ghinNumber}`)
-      } else {
-        query = query.eq('email', email)
-      }
+        .eq('email', email)
       const { error } = await query
       if (error) console.warn('[auth] backfillRoundMembership error:', error.message)
     } catch (e) {
@@ -277,7 +272,7 @@ export const useAuthStore = defineStore('auth', () => {
       // Get all members from those rounds
       const { data: allMembers, error: aErr } = await supabase
         .from('round_members')
-        .select('guest_name, short_name, ghin_number, ghin_index, email, profile_id, nickname, use_nickname')
+        .select('guest_name, short_name, ghin_index, email, profile_id, nickname, use_nickname')
         .in('round_id', roundIds)
       if (aErr || !allMembers?.length) return
 
@@ -301,15 +296,13 @@ export const useAuthStore = defineStore('auth', () => {
         const name = (m.guest_name || '').trim()
         if (!name) continue
 
-        const ghin = m.ghin_number ? String(m.ghin_number) : null
         const email = m.email?.toLowerCase().trim() || null
-        const key = ghin || email || name.toLowerCase()
+        const key = email || name.toLowerCase()
 
         if (seen.has(key)) continue
         seen.add(key)
 
         // Already in roster?
-        if (ghin && rosterGhins.has(ghin)) continue
         if (email && rosterEmails.has(email)) continue
         if (rosterNames.has(name.toLowerCase())) continue
 
@@ -320,7 +313,7 @@ export const useAuthStore = defineStore('auth', () => {
           first_name: nameParts[0] || null,
           last_name: nameParts.slice(1).join(' ') || null,
           short_name: m.short_name || nameParts[nameParts.length - 1].slice(0, 8),
-          ghin_number: ghin,
+          ghin_number: null,
           ghin_index: m.ghin_index ?? null,
           email,
           nickname: m.nickname || null,
