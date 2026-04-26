@@ -79,9 +79,10 @@ export const useRosterStore = defineStore('roster', () => {
             const authStore = useAuthStore()
             const p = authStore.profile
             const email = auth.user.email?.toLowerCase().trim()
-            const fullName = p?.display_name || p?.first_name && p?.last_name
-              ? [p.first_name, p.last_name].filter(Boolean).join(' ')
-              : null
+            const fullName = p?.display_name
+              || (p?.first_name && p?.last_name
+                ? [p.first_name, p.last_name].filter(Boolean).join(' ')
+                : null)
 
             if (fullName) {
               const nameParts = fullName.trim().split(/\s+/)
@@ -102,8 +103,8 @@ export const useRosterStore = defineStore('roster', () => {
               const { error: insertErr } = await supabase.from('roster_players').insert([selfRow])
               if (!insertErr) localStorage.setItem(seedKey, '1')
             } else {
-              // Profile not ready yet — mark seeded so we don't loop; user adds themselves later
-              localStorage.setItem(seedKey, '1')
+              // Profile not ready yet — don't mark seeded so we retry next load
+              console.log('[roster] profile not ready for self-seed, will retry')
             }
 
             const { data: freshData } = await supabase
