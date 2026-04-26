@@ -208,6 +208,9 @@ export const useAuthStore = defineStore('auth', () => {
   // Fire-and-forget — non-blocking.
   async function syncRoundMembersToRoster() {
     if (!user.value) return
+    // Delay so preset seed (applyPreset + backfill_roster_ghin_for_user) always runs first
+    // and owns is_favorite. This function only fills gaps.
+    await new Promise(r => setTimeout(r, 2000))
     try {
       // Get all round_members from rounds this user is part of
       const { data: myMembers, error: mErr } = await supabase

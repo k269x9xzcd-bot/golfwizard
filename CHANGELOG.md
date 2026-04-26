@@ -304,3 +304,7 @@ Convention: add a block here before every `git push`.
 - Match logic: skips by ghin_number first, then email, then name (case-insensitive)
 - New players added with `is_favorite = false` — user can promote in Players tab
 - Deduplicates across multiple rounds before inserting
+
+## v3.10.109 — 2026-04-25
+### Fixed
+- `syncRoundMembersToRoster` now waits 2s before running so preset seed always wins the race on first sign-in — preset owns `is_favorite: true`, round sync only fills gaps for players not in preset
