@@ -18,11 +18,13 @@
     <template v-else>
       <!-- DEBUG: on-screen diagnostics (remove after fix confirmed) -->
       <div v-if="debugInfo" style="background:#1a1a2e;border:1px solid #e94560;border-radius:8px;margin:8px 16px;padding:10px 12px;font-size:12px;color:#eee;font-family:monospace;line-height:1.5;word-break:break-all;">
-        <div style="color:#e94560;font-weight:bold;margin-bottom:4px;">v3.10.118 debug</div>
+        <div style="color:#e94560;font-weight:bold;margin-bottom:4px;">v3.10.119 debug</div>
         <div>match: {{ match?.id?.slice(0,8) }} status={{ match?.status }}</div>
         <div>roundA: {{ roundA ? `${roundA.id?.slice(0,8)} members=${roundA.round_members?.length} scores=${roundA.scores?.length}` : 'null' }}</div>
         <div>roundB: {{ roundB ? `${roundB.id?.slice(0,8)} members=${roundB.round_members?.length} scores=${roundB.scores?.length}` : 'null' }}</div>
         <div>result: holesBoth={{ result?.holesBoth ?? '?' }} leader={{ result?.currentLeader ?? 'none' }} teamA={{ result?.teamA?.name || '?' }} teamB={{ result?.teamB?.name || '?' }}</div>
+        <div v-if="computeError" style="color:#ff4444;margin-top:4px;">ERROR: {{ computeError }}</div>
+        <div>config: balls={{ match?.match_config?.ballsToCount }} stake={{ match?.match_config?.stake }} hcpPct={{ match?.match_config?.hcpPct }}</div>
       </div>
 
       <!-- Status card -->
@@ -198,6 +200,7 @@ const match = ref(null)
 const roundA = ref(null)
 const roundB = ref(null)
 const result = ref(null)
+const computeError = ref(null)
 
 const ballsLabel = computed(() =>
   match.value?.match_config?.ballsToCount === 2 ? '2 BB Net' : '1 BB Net'
@@ -289,11 +292,13 @@ async function load() {
 }
 
 function recompute() {
-  if (!match.value || !roundA.value) { result.value = null; return }
+  if (!match.value || !roundA.value) { result.value = null; computeError.value = 'no match or roundA'; return }
   try {
+    computeError.value = null
     result.value = computeLinkedMatch(roundA.value, roundB.value, match.value.match_config || {})
   } catch (e) {
     console.warn('[lmd] compute failed:', e)
+    computeError.value = e?.message || String(e)
     result.value = null
   }
 }
