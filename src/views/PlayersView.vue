@@ -100,6 +100,7 @@
       :scores="ghinScores"
       :scores-posted="ghinScoresPosted"
       :score-stats="ghinScoreStats"
+      :agg-stats="ghinAggStats"
       :live-h-i="ghinLiveHI"
       :live-low-h-i="ghinLiveLowHI"
       :computed-trend="ghinComputedTrend"
@@ -375,6 +376,7 @@ const ghinScoresFetched = ref(false)
 const ghinScoresError = ref('')
 const ghinScoresPosted = ref(null)
 const ghinScoreStats = ref(null)
+const ghinAggStats = ref(null)
 const playerSheetTarget = ref(null)
 function openPlayerSheet(p) { playerSheetTarget.value = p }
 const ghinLiveHI = ref(null)
@@ -436,7 +438,8 @@ async function fetchGhinScores() {
     if (data?.error) throw new Error(data.error)
     ghinScores.value = data.scores || []
     ghinScoresPosted.value = data.scores_posted ?? null
-    ghinScoreStats.value = data.aggregate_stats ?? data.score_stats ?? null
+    ghinScoreStats.value = data.score_stats ?? null
+    ghinAggStats.value  = data.aggregate_stats ?? null
     ghinLiveHI.value = data.handicap_index ?? null
     ghinLiveLowHI.value = data.low_hi_display ?? null
     ghinScoresFetched.value = true

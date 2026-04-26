@@ -65,33 +65,33 @@
           </div>
         </div>
 
-        <div v-if="scoreStats?.avg_birdie_pct != null" class="ghin-agg-grid">
+        <div v-if="aggStats?.avg_birdies_pct != null" class="ghin-agg-grid">
           <div class="ghin-agg-stat">
-            <div class="ghin-agg-val" style="color:var(--gw-birdie)">{{ Math.round((scoreStats.avg_birdie_pct ?? 0) * 100) }}%</div>
+            <div class="ghin-agg-val" style="color:var(--gw-birdie)">{{ Math.round((aggStats.avg_birdies_pct ?? 0) * 100) }}%</div>
             <div class="ghin-agg-label">Birdies</div>
           </div>
           <div class="ghin-agg-stat">
-            <div class="ghin-agg-val">{{ Math.round((scoreStats.avg_par_pct ?? 0) * 100) }}%</div>
+            <div class="ghin-agg-val">{{ Math.round((aggStats.avg_pars_pct ?? 0) * 100) }}%</div>
             <div class="ghin-agg-label">Pars</div>
           </div>
           <div class="ghin-agg-stat">
-            <div class="ghin-agg-val" style="color:var(--gw-bogey)">{{ Math.round((scoreStats.avg_bogey_pct ?? 0) * 100) }}%</div>
+            <div class="ghin-agg-val" style="color:var(--gw-bogey)">{{ Math.round((aggStats.avg_bogeys_pct ?? 0) * 100) }}%</div>
             <div class="ghin-agg-label">Bogeys</div>
           </div>
           <div class="ghin-agg-stat">
-            <div class="ghin-agg-val">{{ Math.round((scoreStats.avg_gir_pct ?? 0) * 100) }}%</div>
+            <div class="ghin-agg-val">{{ Math.round((aggStats.avg_gir_pct ?? 0) * 100) }}%</div>
             <div class="ghin-agg-label">GIR</div>
           </div>
           <div class="ghin-agg-stat">
-            <div class="ghin-agg-val">{{ scoreStats.avg_par3 != null ? Number(scoreStats.avg_par3).toFixed(1) : '—' }}</div>
+            <div class="ghin-agg-val">{{ aggStats.avg_par3 != null ? Number(aggStats.avg_par3).toFixed(1) : '—' }}</div>
             <div class="ghin-agg-label">Avg Par 3</div>
           </div>
           <div class="ghin-agg-stat">
-            <div class="ghin-agg-val">{{ scoreStats.avg_par4 != null ? Number(scoreStats.avg_par4).toFixed(1) : '—' }}</div>
+            <div class="ghin-agg-val">{{ aggStats.avg_par4 != null ? Number(aggStats.avg_par4).toFixed(1) : '—' }}</div>
             <div class="ghin-agg-label">Avg Par 4</div>
           </div>
           <div class="ghin-agg-stat">
-            <div class="ghin-agg-val">{{ scoreStats.avg_par5 != null ? Number(scoreStats.avg_par5).toFixed(1) : '—' }}</div>
+            <div class="ghin-agg-val">{{ aggStats.avg_par5 != null ? Number(aggStats.avg_par5).toFixed(1) : '—' }}</div>
             <div class="ghin-agg-label">Avg Par 5</div>
           </div>
         </div>
@@ -172,6 +172,7 @@ const props = defineProps({
   scores: { type: Array, default: () => [] },
   scoresPosted: { type: Number, default: null },
   scoreStats: { type: Object, default: null },
+  aggStats:   { type: Object, default: null },
   liveHI: { type: String, default: null },
   liveLowHI: { type: String, default: null },
   computedTrend: { type: String, default: 'neutral' },
