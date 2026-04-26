@@ -99,7 +99,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, provide } from 'vue'
+import { ref, computed, onMounted, provide, watch } from 'vue'
 import { RouterView, RouterLink, useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 import { useRosterStore } from './stores/roster'
@@ -137,6 +137,19 @@ const memberRound = ref(null)      // { id, course_name, player_names }
 const memberBannerDismissed = ref(false)
 
 provide('openWizard', () => { showWizard.value = true })
+
+// Re-fetch roster when auth resolves after the initial data load.
+// On slow/iOS connections, authStore.init() can time out, causing fetchPlayers()
+// to run as a guest (loads DEFAULT_PLAYERS from localStorage). When the real
+// session arrives via onAuthStateChange, we need to refresh with Supabase data.
+let initialAuthSeen = false
+watch(() => authStore.isAuthenticated, (isAuthed) => {
+  if (!initialAuthSeen) { initialAuthSeen = true; return }
+  if (isAuthed) {
+    rosterStore.fetchPlayers().catch(() => {})
+    coursesStore.fetchCustomCourses().catch(() => {})
+  }
+})
 
 function shouldShowNamePrompt() {
   if (!authStore.isAuthenticated || !authStore.profile) return false
@@ -203,6 +216,7 @@ function goWatch() {
 
 onMounted(async () => {
   try { await authStore.init() } catch (e) { console.warn('Auth init failed:', e) }
+  initialAuthSeen = true
 
   if (shouldShowNamePrompt()) {
     namePromptFirst.value = authStore.profile.first_name || ''

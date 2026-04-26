@@ -177,7 +177,7 @@
           <span v-else-if="myRosterPlayer.soft_cap === 'true' || myRosterPlayer.soft_cap === true" class="cap-badge cap-soft" title="Soft Cap applied">SC</span>
         </div>
       </div>
-      <button v-if="myRosterPlayer.ghin_number" class="ghin-sheet-btn" @click.stop="openGhinSheet">GHIN</button>
+      <button v-if="myRosterPlayer.ghin_number || authStore.profile?.ghin_number" class="ghin-sheet-btn" @click.stop="openGhinSheet">GHIN</button>
     </div>
 
     <!-- GHIN score history sheet (logged-in user only) -->
