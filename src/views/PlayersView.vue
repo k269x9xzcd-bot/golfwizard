@@ -1006,5 +1006,33 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
   padding: 4px 5px; border-radius: 8px; -webkit-tap-highlight-color: transparent;
   flex-shrink: 0; opacity: .7; transition: opacity .15s;
 }
-/* ── Player info button ── */
+
+.player-card--you {
+  border-color: rgba(34,160,107,.4);
+  background: rgba(34,160,107,.06);
+}
+.you-badge {
+  font-size: 10px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
+  background: rgba(34,160,107,.2); color: #4ade80;
+  padding: 1px 6px; border-radius: 4px; margin-left: 6px; vertical-align: middle;
+}
+.you-meta {
+  font-size: 12px; color: var(--gw-text-muted, rgba(240,237,224,.5)); margin-top: 2px;
+}
+.you-sync-time { opacity: .7; }
+.you-no-ghin { opacity: .5; font-style: italic; }
+.ghin-sheet-btn {
+  flex-shrink: 0; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;
+  border: 1px solid rgba(34,160,107,.5); background: rgba(34,160,107,.15);
+  color: #4ade80; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.ghin-sheet-btn:active { background: rgba(34,160,107,.3); }
+.player-info-btn {
+  flex-shrink: 0; width: 36px; height: 36px; border-radius: 10px;
+  background: rgba(34,160,107,.15); border: 1px solid rgba(34,160,107,.3);
+  font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.player-info-btn:active { background: rgba(34,160,107,.3); }
+
 </style>
