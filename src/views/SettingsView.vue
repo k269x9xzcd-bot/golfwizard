@@ -79,16 +79,6 @@
         <div v-if="ghinSyncErr" class="error-msg">{{ ghinSyncErr }}</div>
 
         <button
-          v-if="ghinNumber.trim() && ghinPassword.trim()"
-          class="btn-primary sync-btn"
-          :disabled="ghinSyncing || ghinCredentialsSaving"
-          @click="syncGhin"
-        >
-          <span v-if="ghinSyncing" class="saving-spinner">⟳</span>
-          {{ ghinSyncing ? 'Syncing…' : '↻ Sync Handicap from GHIN' }}
-        </button>
-
-        <button
           v-if="ghinNumber.trim() || ghinPassword.trim()"
           class="btn-secondary save-creds-btn"
           :disabled="ghinCredentialsSaving"
@@ -201,17 +191,46 @@ async function saveGhinCredentials() {
   if (ghinCredentialsSaving.value) return
   ghinCredentialsSaving.value = true
   ghinSyncErr.value = ''
+  const num = ghinNumber.value.trim()
+  const pwd = ghinPassword.value.trim()
   try {
     const { error } = await supabase
       .from('profiles')
       .update({
-        ghin_number: ghinNumber.value.trim() || null,
-        ghin_password: ghinPassword.value.trim() || null,
+        ghin_number: num || null,
+        ghin_password: pwd || null,
       })
       .eq('id', authStore.user.id)
     if (error) throw error
-    ghinSyncMsg.value = '✓ GHIN credentials saved'
-    setTimeout(() => { ghinSyncMsg.value = '' }, 2500)
+
+    // Auto-sync handicap if both credentials present
+    if (num && pwd) {
+      ghinSyncMsg.value = 'Syncing handicap…'
+      const { data: syncData, error: syncErr } = await supabase.functions.invoke('ghin-sync', {
+        body: { ghin_number: num, password: pwd }
+      })
+      if (syncErr) throw syncErr
+      if (syncData?.error) throw new Error(syncData.error)
+
+      // Update profile ghin_index
+      await authStore.updateProfile({ ghin_index: syncData.handicap_index })
+      ghinIndex.value = String(syncData.handicap_index)
+
+      // Update matching roster_players row (match by profile_id)
+      await supabase
+        .from('roster_players')
+        .update({
+          ghin_index: syncData.handicap_index,
+          ghin_number: num,
+          ghin_synced_at: new Date().toISOString(),
+        })
+        .eq('profile_id', authStore.user.id)
+
+      ghinSyncMsg.value = `✓ Saved & synced: ${syncData.hi_display} (${syncData.full_name})`
+    } else {
+      ghinSyncMsg.value = '✓ GHIN credentials saved'
+    }
+    setTimeout(() => { ghinSyncMsg.value = '' }, 4000)
   } catch (err) {
     ghinSyncErr.value = err?.message || 'Save failed'
   } finally {
@@ -233,6 +252,17 @@ async function syncGhin() {
     // Update ghin_index in profile
     await authStore.updateProfile({ ghin_index: data.handicap_index })
     ghinIndex.value = String(data.handicap_index)
+
+    // Update matching roster_players row
+    await supabase
+      .from('roster_players')
+      .update({
+        ghin_index: data.handicap_index,
+        ghin_number: ghinNumber.value.trim(),
+        ghin_synced_at: new Date().toISOString(),
+      })
+      .eq('profile_id', authStore.user.id)
+
     ghinSyncMsg.value = `✓ Handicap synced: ${data.hi_display} (${data.full_name})`
     setTimeout(() => { ghinSyncMsg.value = '' }, 4000)
   } catch (err) {
