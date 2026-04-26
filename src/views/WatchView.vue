@@ -91,6 +91,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { supabase } from '../supabase'
 import { getCourse } from '../modules/courses'
+import { supaRawSelect } from '../modules/supaRaw'
 
 const route = useRoute()
 
@@ -226,13 +227,25 @@ async function init() {
   const roundId = route.params.id
 
   try {
-    const { data, error: err } = await supabase
-      .from('rounds')
-      .select('*, round_members(*), scores(*)')
-      .eq('id', roundId)
-      .single()
+    let data = null
+    try {
+      const res = await Promise.race([
+        supabase.from('rounds').select('*, round_members(*), scores(*)').eq('id', roundId).single(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('init timed out')), 5000)),
+      ])
+      if (res.error) throw res.error
+      data = res.data
+    } catch (e) {
+      if (!e.message?.includes('timed out')) throw e
+      const rows = await supaRawSelect(
+        'rounds',
+        `select=*,round_members(*),scores(*)&id=eq.${roundId}`,
+        12000,
+      )
+      data = Array.isArray(rows) ? rows[0] : rows
+    }
 
-    if (err) throw err
+    if (!data) throw new Error('Round not found')
 
     round.value = data
     members.value = data.round_members ?? []

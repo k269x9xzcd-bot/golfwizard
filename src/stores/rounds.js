@@ -610,13 +610,27 @@ export const useRoundsStore = defineStore('rounds', () => {
     }
 
     // ── AUTHENTICATED PATH ──────────────────────────────────
-    const { data, error } = await supabase
-      .from('rounds')
-      .select(`*, round_members(*), game_configs(*), scores(*)`)
-      .eq('id', roundId)
-      .single()
+    // Timeout + raw fallback: same iOS stuck-socket guard as fetchRounds
+    let data = null
+    try {
+      const res = await Promise.race([
+        supabase.from('rounds').select(`*, round_members(*), game_configs(*), scores(*)`).eq('id', roundId).single(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('loadRound timed out')), 5000)),
+      ])
+      if (res.error) throw res.error
+      data = res.data
+    } catch (e) {
+      if (!e.message?.includes('timed out')) throw e
+      console.warn('[rounds] loadRound SJS timed out, trying raw fetch fallback')
+      const rows = await supaRawSelect(
+        'rounds',
+        `select=*,round_members(*),game_configs(*),scores(*)&id=eq.${roundId}`,
+        12000,
+      )
+      data = Array.isArray(rows) ? rows[0] : rows
+    }
 
-    if (error) throw error
+    if (!data) throw new Error(`Round ${roundId} not found`)
 
     activeRound.value = data
     activeGames.value = data.game_configs ?? []
