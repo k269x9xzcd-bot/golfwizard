@@ -163,6 +163,8 @@ export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
 
   async function _loadRoundBundle(roundId) {
     if (!roundId) return null
+
+    // Tier 1: SJS embedded join (fast — single request)
     try {
       const { data, error } = await supaCallWithRetry(
         `linkedMatch.loadRound(${roundId.slice(0, 8)})`,
@@ -170,10 +172,21 @@ export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
         5000,
       )
       if (error) throw error
-      if (data) return data
+      // PostgREST returns the round row even when RLS blocks embedded tables,
+      // giving empty arrays for round_members/scores. If the round exists but
+      // members are missing, fall through to raw queries which hit RLS per-table.
+      if (data && data.round_members?.length > 0) {
+        console.log(`[linkedMatches] SJS bundle OK for ${roundId.slice(0, 8)}: ${data.round_members.length} members, ${data.scores?.length ?? 0} scores`)
+        return data
+      }
+      if (data) {
+        console.warn(`[linkedMatches] SJS returned round ${roundId.slice(0, 8)} but 0 members — falling through to raw`)
+      }
     } catch (e) {
       console.warn('[linkedMatches] SJS loadRoundBundle failed, trying raw:', e?.message || e)
     }
+
+    // Tier 2: three separate raw-fetch queries (bypasses PostgREST embedded-join RLS quirks)
     try {
       const [rnd, members, scores] = await Promise.all([
         supaRawRequest('GET', `rounds?id=eq.${roundId}&select=*&limit=1`, null, 8000),
@@ -184,6 +197,7 @@ export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
       if (!round) return null
       round.round_members = Array.isArray(members) ? members : []
       round.scores = Array.isArray(scores) ? scores : []
+      console.log(`[linkedMatches] raw bundle OK for ${roundId.slice(0, 8)}: ${round.round_members.length} members, ${round.scores.length} scores`)
       return round
     } catch (rawErr) {
       console.warn('[linkedMatches] raw loadRoundBundle failed:', rawErr)
