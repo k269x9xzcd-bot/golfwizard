@@ -129,6 +129,8 @@ export const useRosterStore = defineStore('roster', () => {
       // Update the existing player's GHIN instead of creating a dupe
       await updatePlayer(existing.id, {
         ghin_index: player.ghin_index ?? existing.ghin_index,
+        ghin_number: player.ghin_number ?? existing.ghin_number,
+        club_name: player.club_name ?? existing.club_name,
         is_favorite: player.is_favorite ?? existing.is_favorite,
         email: player.email ?? existing.email,
         nickname: player.nickname ?? existing.nickname,
