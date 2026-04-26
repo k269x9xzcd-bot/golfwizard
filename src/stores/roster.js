@@ -53,27 +53,58 @@ export const useRosterStore = defineStore('roster', () => {
     }
     loading.value = true
     try {
-      const { data, error } = await supabase
-        .from('roster_players')
-        .select('*')
-        .eq('owner_id', auth.user.id)
-        .order('is_favorite', { ascending: false })
-        .order('name')
-      if (!error) {
-        if (data && data.length > 0) {
+      // ── Step 1: try Supabase JS client with a 7s timeout ──────
+      // On iOS PWA, the HTTP/2 connection pool can have a stuck ("zombie")
+      // socket. The SJS client reuses pooled connections, so a zombie socket
+      // causes every call to hang until the OS eventually closes it. We race
+      // against a timeout so we fail fast instead of hanging indefinitely.
+      let data = null
+      let fetchError = null
+      try {
+        const { supaCall } = await import('../modules/supabaseOps')
+        const res = await supaCall(
+          'roster.fetch',
+          supabase.from('roster_players').select('*')
+            .eq('owner_id', auth.user.id)
+            .order('is_favorite', { ascending: false })
+            .order('name'),
+          7000,
+        )
+        data = res.data ?? null
+        fetchError = res.error ?? null
+      } catch (sjsErr) {
+        fetchError = sjsErr
+      }
+
+      // ── Step 2: supaRaw fallback if SJS timed out or errored ──
+      // supaRaw bypasses the stuck connection pool by using raw fetch()
+      // with keepalive:false, forcing a fresh TCP/TLS connection.
+      if (fetchError || !data) {
+        try {
+          const { supaRawSelect } = await import('../modules/supaRaw')
+          const uid = encodeURIComponent(auth.user.id)
+          const rows = await supaRawSelect(
+            'roster_players',
+            `select=*&owner_id=eq.${uid}&order=is_favorite.desc,name.asc`,
+            10000,
+          )
+          if (Array.isArray(rows)) {
+            data = rows
+            fetchError = null
+          }
+        } catch (rawErr) {
+          // Both paths failed — keep fetchError set, don't clobber existing data
+        }
+      }
+
+      if (!fetchError && data) {
+        if (data.length > 0) {
           players.value = data
         } else {
-          // Supabase roster is empty — seed with defaults ONCE
-          // Guard against re-seeding: check localStorage flag keyed by user id
+          // Supabase roster is empty — seed with self (bootstrapped from profile).
           const seedKey = `gw_roster_seeded_${auth.user.id}`
           const alreadySeeded = localStorage.getItem(seedKey)
-          if (alreadySeeded) {
-            // Seed key set but roster is empty — prior seed failed silently.
-            // Clear the key so we retry; user isn't stuck with empty roster forever.
-            localStorage.removeItem(seedKey)
-          }
-          // New user — seed with just themselves (bootstrapped from profile if available).
-          // Strangers get a clean slate; organic growth via syncRoundMembersToRoster after rounds.
+          if (alreadySeeded) localStorage.removeItem(seedKey)
           try {
             const { useAuthStore } = await import('./auth')
             const authStore = useAuthStore()
@@ -102,9 +133,6 @@ export const useRosterStore = defineStore('roster', () => {
               }
               const { error: insertErr } = await supabase.from('roster_players').insert([selfRow])
               if (!insertErr) localStorage.setItem(seedKey, '1')
-            } else {
-              // Profile not ready yet — don't mark seeded so we retry next load
-              console.log('[roster] profile not ready for self-seed, will retry')
             }
 
             const { data: freshData } = await supabase
@@ -118,11 +146,12 @@ export const useRosterStore = defineStore('roster', () => {
             players.value = []
           }
         }
-      } else {
-        players.value = [...DEFAULT_PLAYERS]
       }
+      // If both fetch paths failed: keep whatever players.value already has.
+      // This prevents stale DEFAULT_PLAYERS from replacing correct data that
+      // was loaded on a previous successful fetch.
     } catch {
-      players.value = [...DEFAULT_PLAYERS]
+      // Outer guard — also don't clobber on unexpected errors
     }
     loading.value = false
   }

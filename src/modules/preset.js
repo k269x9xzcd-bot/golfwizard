@@ -153,9 +153,15 @@ export async function applyPreset(force = false) {
  */
 export function clearPresetForAuthUser() {
   try {
-    // Clear any preset-injected player roster data (uses fake preset_* IDs)
+    // Remove preset_* (guest preset entries) and default_* (DEFAULT_PLAYERS) IDs.
+    // Both are fake IDs that don't exist in Supabase and produce stale data for
+    // authenticated users who load from localStorage when auth is slow to resolve.
     const roster = JSON.parse(localStorage.getItem('gw_roster') || '[]')
-    const cleaned = roster.filter(p => p.id && !p.id.startsWith('preset_'))
+    const cleaned = roster.filter(p =>
+      p.id &&
+      !p.id.startsWith('preset_') &&
+      !p.id.startsWith('default_')
+    )
     if (cleaned.length !== roster.length) {
       localStorage.setItem('gw_roster', JSON.stringify(cleaned))
     }
