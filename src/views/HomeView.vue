@@ -49,6 +49,16 @@
 
     <button v-if="roundsStore.activeRound || roundsStore.rounds.length" class="new-round-pill" @click="openWizard()">+ New Round</button>
 
+    <!-- 4v4 Cross Match entry card -->
+    <RouterLink to="/cross-match/new" class="cm-home-card" v-if="authStore.isAuthenticated">
+      <div class="cm-home-icon">⚔️</div>
+      <div class="cm-home-body">
+        <div class="cm-home-title">4v4 Cross Match</div>
+        <div class="cm-home-sub">Challenge another foursome · best ball · side bets</div>
+      </div>
+      <div class="cm-home-arrow">›</div>
+    </RouterLink>
+
     <!-- Tournament / Cup entry card (only for authorized users) -->
     <template v-if="showTournament">
       <!-- Cup with in-progress tournament round nested -->
