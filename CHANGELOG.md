@@ -247,3 +247,9 @@ Convention: add a block here before every `git push`.
 - DB: dropped global unique constraint on roster_players.ghin_number — replaced with per-owner unique index so same player can exist in multiple users' rosters
 - DB: backfilled GHIN numbers + current HCPs into Jeremy's roster from Jason's roster by email match (7 players updated)
 - DB: Jeremy's own roster row now has ghin_number=3370926, ghin_index=4.6
+
+## [3.10.103] - 2026-04-25
+### Added
+- DB function `backfill_roster_ghin_for_user`: copies GHIN numbers + HCPs to new user's seeded roster by email then name match — runs automatically on first seed so new users never see stale default HCPs
+### Fixed
+- Roster seed now calls backfill function after insert so future signups get current GHIN data immediately

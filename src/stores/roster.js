@@ -89,6 +89,13 @@ export const useRosterStore = defineStore('roster', () => {
             if (!insertErr) {
               // Mark seeded ONLY after confirmed success
               localStorage.setItem(seedKey, '1')
+
+              // Backfill ghin_number + ghin_index from any existing roster rows by name/email match
+              // This ensures new users get current GHIN data without waiting for nightly sync
+              try {
+                await supabase.rpc('backfill_roster_ghin_for_user', { p_owner_id: auth.user.id })
+              } catch (e) { /* non-critical — silent */ }
+
               const { data: freshData } = await supabase
                 .from('roster_players')
                 .select('*')
