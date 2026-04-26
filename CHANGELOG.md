@@ -275,3 +275,14 @@ Convention: add a block here before every `git push`.
 - `InviteWelcome`: reads `?name=` and `?rid=` params; on auth binds `profile_id` directly via `rid` (no fuzzy match); pre-fills display_name from `?name=` if profile has no full name
 - Email mismatch warning banner (yellow, non-blocking) if signed-in email ≠ invite email
 - `docs/INVITE_FLOW.md` added — living doc covering both invite paths, URL params, field handling, edge cases
+
+## v3.10.106 — 2026-04-25
+### Changed
+- `profiles` table: added `first_name` + `last_name` columns; backfilled from `display_name`
+- `SettingsView`: "Full Name" single field → side-by-side First Name `*` / Last Name `*` with required validation
+- `App.vue` name prompt modal: single input → First + Last split fields
+- `auth.js`: `getDisplayName(profile, email)` exported helper — priority: first+last > display_name > nickname > email prefix
+- `auth.js`: `upsertRosterEntry` now accepts `firstName`/`lastName` and derives `fullName` internally
+- `preset.js`: `buildInviteUrl` now passes `&first=` / `&last=` instead of `&name=`
+- `preset.js`: `buildInviteEmail` derives first/last from `player.first_name`/`player.last_name` or splits `player.name`
+- `InviteWelcome`: reads `?first=` / `?last=` params; writes `first_name`/`last_name` to profile on auth if not already set

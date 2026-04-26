@@ -153,8 +153,13 @@ const inviteEmail = computed(() => {
   return typeof e === 'string' ? decodeURIComponent(e) : ''
 })
 
-const inviteName = computed(() => {
-  const n = route.query.name
+const inviteFirst = computed(() => {
+  const n = route.query.first
+  return typeof n === 'string' ? decodeURIComponent(n) : ''
+})
+
+const inviteLast = computed(() => {
+  const n = route.query.last
   return typeof n === 'string' ? decodeURIComponent(n) : ''
 })
 
@@ -184,9 +189,13 @@ async function onAuthClose() {
       .is('profile_id', null)
   }
 
-  // Pre-fill display_name from invite if profile has no full name yet
-  if (inviteName.value && authStore.profile?.display_name && !authStore.profile.display_name.includes(' ')) {
-    await authStore.updateProfile({ display_name: inviteName.value })
+  // Pre-fill first_name/last_name from invite if profile has no full name yet
+  if ((inviteFirst.value || inviteLast.value) && !authStore.profile?.first_name) {
+    await authStore.updateProfile({
+      first_name: inviteFirst.value || null,
+      last_name:  inviteLast.value  || null,
+      display_name: [inviteFirst.value, inviteLast.value].filter(Boolean).join(' ') || null,
+    })
   }
 
   // Prompt GHIN setup if they don't have it yet

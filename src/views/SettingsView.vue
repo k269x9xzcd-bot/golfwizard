@@ -23,9 +23,15 @@
           <input class="wiz-input field-readonly" :value="authStore.user?.email" readonly type="email" />
         </div>
 
-        <div class="field-group">
-          <label class="field-label">Full Name <span style="color:#e53e3e;">*</span></label>
-          <input v-model="displayName" class="wiz-input" placeholder="e.g. Jason Spieler" type="text" autocomplete="name" />
+        <div class="field-row-split">
+          <div class="field-group">
+            <label class="field-label">First Name <span class="req-star">*</span></label>
+            <input v-model="firstName" class="wiz-input" placeholder="e.g. Jason" type="text" autocomplete="given-name" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">Last Name <span class="req-star">*</span></label>
+            <input v-model="lastName" class="wiz-input" placeholder="e.g. Spieler" type="text" autocomplete="family-name" />
+          </div>
         </div>
 
         <div class="field-group">
@@ -51,7 +57,7 @@
         <div v-if="saveError" class="error-msg">{{ saveError }}</div>
         <div v-if="saveSuccess" class="success-msg">✓ Profile saved!</div>
 
-        <button class="btn-primary save-btn" :disabled="saving || !displayName.trim()" @click="save">
+        <button class="btn-primary save-btn" :disabled="saving || !firstName.trim() || !lastName.trim()" @click="save">
           <span v-if="saving" class="saving-spinner">⟳</span>
           {{ saving ? 'Saving…' : 'Save Profile' }}
         </button>
@@ -117,7 +123,8 @@ import AuthModal from '../components/AuthModal.vue'
 const authStore = useAuthStore()
 const showAuth = ref(false)
 
-const displayName = ref('')
+const firstName = ref('')
+const lastName = ref('')
 const nickname = ref('')
 const useNickname = ref(false)
 const ghinIndex = ref('')
@@ -138,16 +145,25 @@ const appVersion = __APP_VERSION__
 const buildStamp = __BUILD_STAMP__
 
 const avatarInitials = computed(() => {
-  const n = displayName.value.trim() || authStore.user?.email || '?'
-  if (n.includes('@') && !displayName.value.trim()) return n[0].toUpperCase()
-  const parts = n.split(/\s+/)
-  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-  return n.slice(0, 2).toUpperCase()
+  const f = firstName.value.trim()
+  const l = lastName.value.trim()
+  if (f && l) return (f[0] + l[0]).toUpperCase()
+  if (f) return f.slice(0, 2).toUpperCase()
+  const email = authStore.user?.email || '?'
+  return email[0].toUpperCase()
 })
 
 function populateFromProfile(p) {
   if (!p) return
-  displayName.value = p.display_name || ''
+  // Prefer dedicated columns; fall back to splitting display_name for existing profiles
+  if (p.first_name || p.last_name) {
+    firstName.value = p.first_name || ''
+    lastName.value  = p.last_name  || ''
+  } else if (p.display_name) {
+    const parts = p.display_name.trim().split(/\s+/)
+    firstName.value = parts[0] || ''
+    lastName.value  = parts.slice(1).join(' ') || ''
+  }
   nickname.value = p.nickname || ''
   useNickname.value = p.use_nickname || false
   ghinIndex.value = p.ghin_index != null ? String(p.ghin_index) : ''
@@ -159,22 +175,28 @@ onMounted(() => populateFromProfile(authStore.profile))
 watch(() => authStore.profile, populateFromProfile)
 
 async function save() {
-  if (saving.value || !displayName.value.trim()) return
+  const f = firstName.value.trim()
+  const l = lastName.value.trim()
+  if (saving.value || !f || !l) return
   saving.value = true
   saveError.value = ''
   saveSuccess.value = false
   try {
-    const trimmedName = displayName.value.trim()
+    const fullName = [f, l].join(' ')
     const trimmedNick = nickname.value.trim() || null
     await authStore.updateProfile({
-      display_name: trimmedName,
-      short_name: trimmedNick || trimmedName.split(/\s+/).pop()?.slice(0, 8),
+      first_name: f,
+      last_name: l,
+      display_name: fullName,
+      short_name: trimmedNick || l.slice(0, 8),
       nickname: trimmedNick,
       use_nickname: useNickname.value,
       ghin_index: ghinIndex.value !== '' ? parseFloat(ghinIndex.value) : null,
     })
     await authStore.upsertRosterEntry({
-      name: trimmedName,
+      firstName: f,
+      lastName: l,
+      name: fullName,
       nickname: trimmedNick,
       useNickname: useNickname.value,
     })
@@ -429,4 +451,10 @@ async function syncGhin() {
   display: block; font-size: 9px; color: rgba(240,237,224,.12);
   letter-spacing: .03em; margin-top: 2px; font-family: monospace;
 }
+.field-row-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.req-star { color: #e53e3e; }
 </style>

@@ -40,7 +40,7 @@
             @keyup.enter="saveNamePrompt"
             autofocus
           />
-          <button class="name-prompt-btn" :disabled="!namePromptValue.trim() || namePromptSaving" @click="saveNamePrompt">
+          <button class="name-prompt-btn" :disabled="!namePromptFirst.trim() || !namePromptLast.trim() || namePromptSaving" @click="saveNamePrompt">
             {{ namePromptSaving ? 'Saving…' : 'Save' }}
           </button>
           <button class="name-prompt-skip" @click="namePrompt = false">Skip for now</button>
@@ -106,7 +106,8 @@ const showWizard = ref(false)
 const showJoin = ref(false)
 const inviteModal = ref(null)
 const namePrompt = ref(false)
-const namePromptValue = ref('')
+const namePromptFirst = ref('')
+const namePromptLast = ref('')
 const namePromptSaving = ref(false)
 
 provide('openWizard', () => { showWizard.value = true })
@@ -116,9 +117,10 @@ onMounted(async () => {
 
   // Prompt for real name if display_name looks like an email prefix (no space = not a full name)
   if (authStore.isAuthenticated && authStore.profile) {
-    const dn = authStore.profile.display_name || ''
+    const dn = authStore.profile.first_name || authStore.profile.display_name || ''
     if (dn && !dn.includes(' ')) {
-      namePromptValue.value = ''
+      namePromptFirst.value = ''
+      namePromptLast.value = ''
       namePrompt.value = true
     }
   }
@@ -187,11 +189,16 @@ onMounted(async () => {
 })
 
 async function saveNamePrompt() {
-  const name = namePromptValue.value.trim()
-  if (!name || namePromptSaving.value) return
+  const f = namePromptFirst.value.trim()
+  const l = namePromptLast.value.trim()
+  if (!f || !l || namePromptSaving.value) return
   namePromptSaving.value = true
   try {
-    await authStore.updateProfile({ display_name: name })
+    await authStore.updateProfile({
+      first_name: f,
+      last_name: l,
+      display_name: [f, l].join(' '),
+    })
     namePrompt.value = false
   } catch (e) {
     console.warn('saveNamePrompt failed:', e)
@@ -292,6 +299,11 @@ function onSetupCourse(courseName, apiId) {
   font-size: 14px; cursor: pointer; padding: 4px;
 }
 
+.name-prompt-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
 .name-prompt-backdrop {
   position: fixed; inset: 0; z-index: 9999;
   background: rgba(0,0,0,0.8);

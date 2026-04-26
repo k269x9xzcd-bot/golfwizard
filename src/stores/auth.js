@@ -1,3 +1,15 @@
+// Derive a display name from a profile object.
+// Priority: first+last > display_name > nickname > email prefix
+export function getDisplayName(profile, userEmail = '') {
+  if (!profile) return userEmail?.split('@')[0] || '?'
+  const first = profile.first_name?.trim() || ''
+  const last  = profile.last_name?.trim()  || ''
+  if (first || last) return [first, last].filter(Boolean).join(' ')
+  if (profile.display_name?.trim()) return profile.display_name.trim()
+  if (profile.nickname?.trim()) return profile.nickname.trim()
+  return userEmail?.split('@')[0] || '?'
+}
+
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { supabase } from '../supabase'
@@ -103,16 +115,19 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   // Upsert the user into roster_players (called after profile setup)
-  async function upsertRosterEntry({ name, nickname, useNickname }) {
+  async function upsertRosterEntry({ name, firstName, lastName, nickname, useNickname }) {
     if (!user.value?.email) return
     const email = user.value.email.toLowerCase().trim()
-    // Build short_name from last word of name
-    const parts = name.trim().split(/\s+/)
-    const short_name = parts.length >= 2 ? parts[parts.length - 1].slice(0, 8) : name.slice(0, 8)
+    // Derive full name from parts if provided separately
+    const fullName = (firstName || lastName)
+      ? [firstName, lastName].filter(Boolean).join(' ').trim()
+      : (name || '').trim()
+    const parts = fullName.split(/\s+/)
+    const short_name = parts.length >= 2 ? parts[parts.length - 1].slice(0, 8) : fullName.slice(0, 8)
     const { error } = await supabase
       .from('roster_players')
       .upsert({
-        name: name.trim(),
+        name: fullName,
         short_name,
         email,
         nickname: nickname || null,
