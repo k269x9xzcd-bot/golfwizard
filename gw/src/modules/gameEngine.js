@@ -841,12 +841,19 @@ export function computeFidget(ctx, config) {
 // For tracking group-wide best ball net total across 18 holes.
 // ─────────────────────────────────────────────────────────────────
 export function computeBestBallNet(ctx, config = {}) {
-  const { ballsToCount = 1, scoring = 'net', players: pids } = config
+  const { ballsToCount = 1, scoring = 'net', players: pids, hcpMode = 'course' } = config
   const useGross = scoring === 'gross'
   const members = pids
     ? ctx.members.filter(m => pids.includes(m.id))
     : ctx.members
   const { from, to } = holeRange(ctx.holesMode)
+
+  // hcpMode: 'course' = full course handicap, 'lowman' = low-man adjusted (lowest plays scratch)
+  const netFn = useGross
+    ? null
+    : hcpMode === 'lowman'
+      ? (m, h) => memberNetOnHoleLowMan(ctx, m, h, members)
+      : (m, h) => memberNetOnHole(ctx, m, h)
 
   const holeResults = []
   let totalScore = 0
@@ -858,7 +865,7 @@ export function computeBestBallNet(ctx, config = {}) {
       .map(m => {
         const gross = getScore(ctx, m.id, h)
         if (gross == null) return null
-        const val = useGross ? gross : memberNetOnHole(ctx, m, h)
+        const val = useGross ? gross : netFn(m, h)
         return { id: m.id, name: m.short_name, score: val }
       })
       .filter(n => n != null)
@@ -2264,7 +2271,7 @@ function _computeSideBets(sideBets, ctx) {
 }
 
 function formatVsParEngine(v) {
-  if (v == null) return '—'
+  if (v == null) return '\u2014'
   if (v === 0) return 'E'
   return v > 0 ? `+${v}` : `${v}`
 }
@@ -2375,7 +2382,7 @@ export function computeCrossBestBall(roundA, roundB, config = {}) {
       // Foursome-to-foursome: each losing player pays each winning player
       description: winner
         ? `Foursome ${loser}: each player pays $${stakePerPlayer} to their Foursome ${winner} counterpart ($${totalPot} total)`
-        : 'All square — no main match payment',
+        : 'All square \u2014 no main match payment',
     }
   }
 
