@@ -240,3 +240,10 @@ Convention: add a block here before every `git push`.
 ### Fixed
 - YOU card now matches on email, not just name/GHIN# — works for all users regardless of display_name format
 - GHIN credential save now uses upsert (not raw update) so it works even if profile row is incomplete; roster_players sync matches by email not profile_id
+
+## [3.10.102] - 2026-04-25
+### Fixed
+- GHIN button on YOU card now shows if profile has ghin_number even when roster row doesn't yet
+- DB: dropped global unique constraint on roster_players.ghin_number — replaced with per-owner unique index so same player can exist in multiple users' rosters
+- DB: backfilled GHIN numbers + current HCPs into Jeremy's roster from Jason's roster by email match (7 players updated)
+- DB: Jeremy's own roster row now has ghin_number=3370926, ghin_index=4.6
