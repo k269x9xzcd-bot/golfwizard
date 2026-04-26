@@ -27,19 +27,27 @@
         <RouterView />
       </div>
 
-      <!-- First-time name prompt for OTP users -->
+      <!-- First-time name prompt for OTP users who have no last name set -->
       <div v-if="namePrompt" class="name-prompt-backdrop">
         <div class="name-prompt-modal">
           <div class="name-prompt-icon">⛳</div>
           <div class="name-prompt-title">What's your name?</div>
           <div class="name-prompt-sub">So your group knows who you are in the app.</div>
-          <input
-            v-model="namePromptValue"
-            class="name-prompt-input"
-            placeholder="e.g. Jeremy Court"
-            @keyup.enter="saveNamePrompt"
-            autofocus
-          />
+          <div class="name-prompt-split">
+            <input
+              v-model="namePromptFirst"
+              class="name-prompt-input"
+              placeholder="First"
+              @keyup.enter="saveNamePrompt"
+              autofocus
+            />
+            <input
+              v-model="namePromptLast"
+              class="name-prompt-input"
+              placeholder="Last"
+              @keyup.enter="saveNamePrompt"
+            />
+          </div>
           <button class="name-prompt-btn" :disabled="!namePromptFirst.trim() || !namePromptLast.trim() || namePromptSaving" @click="saveNamePrompt">
             {{ namePromptSaving ? 'Saving…' : 'Save' }}
           </button>
@@ -115,11 +123,14 @@ provide('openWizard', () => { showWizard.value = true })
 onMounted(async () => {
   try { await authStore.init() } catch (e) { console.warn('Auth init failed:', e) }
 
-  // Prompt for real name if display_name looks like an email prefix (no space = not a full name)
+  // Only prompt if authenticated AND last_name is missing
+  // (first_name alone is fine — don't re-prompt users who have their name set)
   if (authStore.isAuthenticated && authStore.profile) {
-    const dn = authStore.profile.first_name || authStore.profile.display_name || ''
-    if (dn && !dn.includes(' ')) {
-      namePromptFirst.value = ''
+    const hasFirst = !!(authStore.profile.first_name || '').trim()
+    const hasLast  = !!(authStore.profile.last_name  || '').trim()
+    if (!hasLast) {
+      // Pre-fill first name if we already have it
+      namePromptFirst.value = authStore.profile.first_name || ''
       namePromptLast.value = ''
       namePrompt.value = true
     }
