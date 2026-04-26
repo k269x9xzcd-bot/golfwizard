@@ -228,3 +228,8 @@ Convention: add a block here before every `git push`.
 ### Fixed
 - Roster seed: seed key now only set after confirmed Supabase insert success; users with stuck empty roster (prior failed seed) auto-repair on next load
 - Round history: on login, backfill `profile_id` on `round_members` rows matching user's email or GHIN# — all users now see rounds they played in before creating an account
+
+## [3.10.100] - 2026-04-25
+### Fixed
+- Metrics Lab hang: settlements prefetch now has 8s hard timeout; fetchRounds errors no longer block loading spinner from clearing
+- Metrics Lab: defaults to logged-in user's stats instead of first player in list

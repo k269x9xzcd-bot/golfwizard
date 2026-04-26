@@ -344,11 +344,13 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoundsStore } from '../stores/rounds'
+import { useAuthStore } from '../stores/auth'
 import { getCourse } from '../modules/courses'
 
 const LS_COURSE_KEY = 'gw_metrics_course_tab'
 
 const roundsStore = useRoundsStore()
+const authStore = useAuthStore()
 const loading = ref(true)
 const allRounds = ref([])
 const settlementsMap = ref({}) // roundId → settlement_json
@@ -359,26 +361,49 @@ const selectedCourseTab = ref(null) // used by Course tab — persisted
 const activeTab = ref('scoring')
 
 onMounted(async () => {
-  await roundsStore.fetchRounds()
+  try {
+    await roundsStore.fetchRounds()
+  } catch (e) {
+    console.warn('[MetricsView] fetchRounds failed:', e?.message)
+  }
   allRounds.value = roundsStore.rounds
-  // Auto-select first player
+
+  // Default to current user if they appear in any round, else first player
   const players = extractPlayers()
   if (players.length && !selectedPlayer.value) {
-    selectedPlayer.value = players[0].id
+    const uid = authStore.user?.id
+    const profile = authStore.profile
+    const ghinNum = profile?.ghin_number
+    const myEntry = players.find(p =>
+      (uid && p.id === uid) ||
+      (ghinNum && p.ghin_number && String(p.ghin_number) === String(ghinNum))
+    )
+    selectedPlayer.value = myEntry ? myEntry.id : players[0].id
   }
+
   // Restore last selected course for Course tab
   const saved = localStorage.getItem(LS_COURSE_KEY)
   if (saved) selectedCourseTab.value = saved
 
-  // Pre-fetch settlements for completed rounds
-  for (const r of allRounds.value) {
-    if (r.is_complete && r.game_configs?.length) {
-      try {
-        const s = await roundsStore.fetchSettlements(r.id)
-        if (s) settlementsMap.value[r.id] = s
-      } catch (e) { /* silent */ }
-    }
+  // Pre-fetch settlements — hard 8s timeout to prevent infinite hang
+  try {
+    await Promise.race([
+      (async () => {
+        for (const r of allRounds.value) {
+          if (r.is_complete && r.game_configs?.length) {
+            try {
+              const s = await roundsStore.fetchSettlements(r.id)
+              if (s) settlementsMap.value[r.id] = s
+            } catch (e) { /* silent */ }
+          }
+        }
+      })(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('settlements timeout')), 8000))
+    ])
+  } catch (e) {
+    console.warn('[MetricsView] settlements prefetch timed out or failed:', e?.message)
   }
+
   loading.value = false
 })
 
@@ -394,7 +419,11 @@ function extractPlayers() {
     for (const m of (r.round_members || [])) {
       const key = m.profile_id || m.id
       if (!map.has(key)) {
-        map.set(key, { id: key, name: m.short_name || m.guest_name || '?' })
+        map.set(key, {
+          id: key,
+          name: m.short_name || m.guest_name || '?',
+          ghin_number: m.ghin_number ?? null,
+        })
       }
     }
   }
