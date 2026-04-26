@@ -20,6 +20,7 @@ const routes = [
   { path: '/accept/:code',    name: 'cross-match-accept', component: () => import('../views/LinkedMatchAccept.vue') },
   { path: '/cross-match/:id', name: 'cross-match-detail', component: () => import('../views/LinkedMatchDetail.vue') },
   { path: '/invite',          name: 'invite',             component: () => import('../views/InviteWelcome.vue') },
+  { path: '/watch/:id',       name: 'watch',              component: () => import('../views/WatchView.vue') },
 ]
 
 export const router = createRouter({

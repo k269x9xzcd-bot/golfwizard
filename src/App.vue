@@ -24,6 +24,20 @@
       </div>
 
       <div class="app-container">
+        <!-- Active round banner — shown to round members who didn't create the round -->
+        <div v-if="memberRound && !memberBannerDismissed" class="member-round-banner">
+          <div class="mrb-left">
+            <span class="mrb-icon">⛳</span>
+            <div class="mrb-text">
+              <span class="mrb-title">You're in an active round</span>
+              <span class="mrb-sub">{{ memberRound.course_name }} · {{ memberRound.player_names }}</span>
+            </div>
+          </div>
+          <div class="mrb-actions">
+            <button class="mrb-watch" @click="goWatch">Watch Live →</button>
+            <button class="mrb-dismiss" @click="memberBannerDismissed = true">✕</button>
+          </div>
+        </div>
         <RouterView />
       </div>
 
@@ -118,6 +132,10 @@ const namePromptFirst = ref('')
 const namePromptLast = ref('')
 const namePromptSaving = ref(false)
 
+// Member round auto-discovery
+const memberRound = ref(null)      // { id, course_name, player_names }
+const memberBannerDismissed = ref(false)
+
 provide('openWizard', () => { showWizard.value = true })
 
 function shouldShowNamePrompt() {
@@ -132,6 +150,55 @@ function shouldShowNamePrompt() {
   // Only prompt if last_name is missing
   const hasLast = !!(authStore.profile.last_name || '').trim()
   return !hasLast
+}
+
+/**
+ * Auto-discover active rounds where this user is a member but NOT the owner.
+ * Sets memberRound if found — triggers the "You're in an active round" banner.
+ */
+async function discoverMemberRound() {
+  if (!authStore.isAuthenticated || !authStore.user?.id) return
+  // Skip if user already has an active round loaded (they're the scorer)
+  if (roundsStore.activeRound) return
+
+  try {
+    const { supabase } = await import('./supabase')
+    // Join round_members → rounds to find active rounds this user is a member of
+    // but did not create.
+    const { data, error } = await supabase
+      .from('round_members')
+      .select('round_id, rounds!inner(id, course_name, owner_id, is_complete, date, round_members(short_name, guest_name, use_nickname, nickname))')
+      .eq('profile_id', authStore.user.id)
+      .eq('rounds.is_complete', false)
+      .neq('rounds.owner_id', authStore.user.id)
+      .limit(1)
+      .maybeSingle()
+
+    if (error || !data) return
+
+    const r = data.rounds
+    if (!r?.id) return
+
+    // Build a short player name list
+    const names = (r.round_members ?? [])
+      .map(m => (m.use_nickname && m.nickname) ? m.nickname : (m.short_name || m.guest_name || '?'))
+      .slice(0, 4)
+      .join(', ')
+
+    memberRound.value = {
+      id: r.id,
+      course_name: r.course_name,
+      player_names: names,
+    }
+  } catch (e) {
+    console.warn('[app] discoverMemberRound failed:', e.message)
+  }
+}
+
+function goWatch() {
+  if (!memberRound.value?.id) return
+  memberBannerDismissed.value = true
+  router.push(`/watch/${memberRound.value.id}`)
 }
 
 onMounted(async () => {
@@ -195,6 +262,9 @@ onMounted(async () => {
       } catch (e) { console.warn('Guest round restore failed:', e) }
     }
   }
+
+  // After owner-round rehydration: check if user is a member of someone else's active round
+  discoverMemberRound()
 
   const hash = window.location.hash
   const joinMatch = hash.match(/\/join\/([A-Z0-9]{6})/i)
@@ -357,5 +427,71 @@ function onSetupCourse(courseName, apiId) {
 .name-prompt-skip {
   background: transparent; color: #7d9283; border: none;
   font-size: 13px; cursor: pointer; padding: 2px;
+}
+
+/* Member round auto-discovery banner */
+.member-round-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: linear-gradient(135deg, #0f3d28 0%, #0d1f18 100%);
+  border-bottom: 1px solid #1e4030;
+  padding: 10px 14px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.mrb-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+.mrb-icon { font-size: 20px; flex-shrink: 0; }
+.mrb-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.mrb-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e8f5ee;
+  white-space: nowrap;
+}
+.mrb-sub {
+  font-size: 11px;
+  color: #7d9283;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mrb-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.mrb-watch {
+  background: #1a7a55;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.mrb-dismiss {
+  background: transparent;
+  border: none;
+  color: #5a7060;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 6px;
+  line-height: 1;
 }
 </style>
