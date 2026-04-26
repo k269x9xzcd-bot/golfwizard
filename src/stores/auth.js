@@ -46,7 +46,10 @@ export const useAuthStore = defineStore('auth', () => {
       }
 
       user.value = session?.user ?? null
-      if (user.value) await fetchProfile()
+      if (user.value) {
+        await fetchProfile()
+        if (!profile.value) await bootstrapProfileFromRoster(session)
+      }
 
       // Listen for auth state changes
       supabase.auth.onAuthStateChange(async (_event, session) => {
@@ -57,6 +60,7 @@ export const useAuthStore = defineStore('auth', () => {
           // doesn't interfere with the authenticated user's real Supabase data.
           if (wasGuest) clearPresetForAuthUser()
           await fetchProfile()
+          if (!profile.value) await bootstrapProfileFromRoster(session)
           linkUserToRosterPlayer()     // fire-and-forget; non-blocking
           backfillRoundMembership()    // fire-and-forget; backfill profile_id on old round_members rows
           syncRoundMembersToRoster()   // fire-and-forget; auto-add round co-players to this user's roster
@@ -100,6 +104,52 @@ export const useAuthStore = defineStore('auth', () => {
     } catch (e) {
       console.warn('fetchProfile error:', e)
       profile.value = null
+    }
+  }
+
+
+  // On first login, look for this user's email in any roster_players row across all owners.
+  // If found, auto-create their profiles row so the "You" card appears immediately —
+  // no manual Settings visit required.
+  // Also captures Apple/Google OAuth full_name as a fallback.
+  async function bootstrapProfileFromRoster(session) {
+    if (!user.value || profile.value) return  // already has profile
+    const email = user.value.email?.toLowerCase().trim()
+    if (!email) return
+
+    try {
+      // Cross-owner lookup enabled by roster_select_by_email RLS policy
+      const { data: rosterMatch } = await supabase
+        .from('roster_players')
+        .select('name, short_name, ghin_index, ghin_number, nickname, use_nickname')
+        .eq('email', email)
+        .not('name', 'is', null)
+        .order('ghin_index', { ascending: false, nullsFirst: false })
+        .limit(1)
+        .maybeSingle()
+
+      // Fallback: OAuth metadata (Apple/Google send full_name on FIRST login only)
+      const oauthName = session?.user?.user_metadata?.full_name
+        || session?.user?.user_metadata?.name
+        || null
+
+      const displayName = rosterMatch?.name || oauthName
+      if (!displayName) return  // truly unknown user — they fill Settings manually
+
+      const { error } = await supabase
+        .from('profiles')
+        .upsert({
+          id: user.value.id,
+          display_name: displayName,
+          ghin_number: rosterMatch?.ghin_number ?? null,
+        }, { onConflict: 'id', ignoreDuplicates: true })  // never overwrite existing profile
+
+      if (!error) {
+        await fetchProfile()
+        console.log('[auth] bootstrapProfileFromRoster: profile created from roster match')
+      }
+    } catch (e) {
+      console.warn('[auth] bootstrapProfileFromRoster failed:', e?.message)
     }
   }
 
@@ -173,7 +223,10 @@ export const useAuthStore = defineStore('auth', () => {
     }
     if (result.error) throw result.error
     user.value = result.data.session?.user ?? null
-    if (user.value) await fetchProfile()
+    if (user.value) {
+      await fetchProfile()
+      if (!profile.value) await bootstrapProfileFromRoster(result.data.session)
+    }
     return result.data
   }
 
@@ -295,6 +348,7 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     user, profile, loading, isGuest, isAuthenticated,
     init, fetchProfile, updateProfile, upsertRosterEntry, linkUserToRosterPlayer,
+    bootstrapProfileFromRoster,
     backfillRoundMembership, syncRoundMembersToRoster,
     signInWithGoogle, signInWithApple, signInWithEmail, verifyOtp, signOut,
   }

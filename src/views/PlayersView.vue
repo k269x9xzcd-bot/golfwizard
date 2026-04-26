@@ -8,7 +8,7 @@
           <span v-if="ghinSyncing" class="spin">⟳</span>
           <span v-else>⟳</span> HCP
         </button>
-        <button class="btn-ghost btn-sm invite-all-btn" @click="shareGroupInvite" title="Invite a player to GolfWizard">📨</button>
+        <button class="btn-ghost btn-sm gear-btn" @click="showGearMenu = true" title="Invite & share roster">⚙️</button>
         <button class="btn-ghost btn-sm" @click="showAdd = !showAdd">{{ showAdd ? 'Cancel' : '+ Add' }}</button>
       </div>
     </header>
@@ -43,6 +43,89 @@
 
     <!-- Invite hint -->
     <div v-if="inviteHint" class="invite-hint-banner">{{ inviteHint }}</div>
+
+    <!-- Gear menu bottom sheet -->
+    <Teleport to="body">
+      <div v-if="showGearMenu" class="gear-backdrop" @click.self="showGearMenu = false; gearSubMenu = null">
+        <div class="gear-sheet">
+          <div class="gear-sheet-handle"></div>
+
+          <!-- Main menu -->
+          <template v-if="gearSubMenu === null">
+            <div class="gear-sheet-title">Players</div>
+            <button class="gear-action" @click="gearSubMenu = 'invite'">
+              <span class="gear-action-icon">📨</span>
+              <div class="gear-action-body">
+                <div class="gear-action-label">Invite to GolfWizard</div>
+                <div class="gear-action-sub">Send a setup link to a roster player or someone new</div>
+              </div>
+              <span class="gear-action-arrow">›</span>
+            </button>
+            <button class="gear-action" @click="gearSubMenu = 'share'">
+              <span class="gear-action-icon">📋</span>
+              <div class="gear-action-body">
+                <div class="gear-action-label">Share my roster</div>
+                <div class="gear-action-sub">Send your favorites list to a player so they get everyone loaded</div>
+              </div>
+              <span class="gear-action-arrow">›</span>
+            </button>
+            <button class="gear-cancel" @click="showGearMenu = false; gearSubMenu = null">Cancel</button>
+          </template>
+
+          <!-- Invite sub-menu: pick from roster or enter new -->
+          <template v-else-if="gearSubMenu === 'invite'">
+            <div class="gear-sheet-title">
+              <button class="gear-back" @click="gearSubMenu = null">←</button>
+              Invite to GolfWizard
+            </div>
+            <div class="gear-sub-hint">Players with an email can receive a setup link</div>
+            <div class="gear-player-list">
+              <button
+                v-for="p in playersWithEmail"
+                :key="p.id"
+                class="gear-player-row"
+                @click="invitePlayer(p); showGearMenu = false"
+              >
+                <span class="gear-player-avatar">{{ displayInitials(p) }}</span>
+                <div class="gear-player-info">
+                  <div class="gear-player-name">{{ p.name }}</div>
+                  <div class="gear-player-email">{{ p.email }}</div>
+                </div>
+                <span class="gear-player-send">📨</span>
+              </button>
+              <div v-if="!playersWithEmail.length" class="gear-empty">No players with email yet. Add emails via the edit button.</div>
+            </div>
+            <button class="gear-cancel" @click="showGearMenu = false; gearSubMenu = null">Cancel</button>
+          </template>
+
+          <!-- Share roster sub-menu: pick recipient -->
+          <template v-else-if="gearSubMenu === 'share'">
+            <div class="gear-sheet-title">
+              <button class="gear-back" @click="gearSubMenu = null">←</button>
+              Share my roster
+            </div>
+            <div class="gear-sub-hint">Recipient gets your {{ favoritePlayers.length }} favorites pre-loaded when they open the app</div>
+            <div class="gear-player-list">
+              <button
+                v-for="p in playersWithEmail"
+                :key="p.id"
+                class="gear-player-row"
+                @click="shareRosterWith(p); showGearMenu = false"
+              >
+                <span class="gear-player-avatar">{{ displayInitials(p) }}</span>
+                <div class="gear-player-info">
+                  <div class="gear-player-name">{{ p.name }}</div>
+                  <div class="gear-player-email">{{ p.email }}</div>
+                </div>
+                <span class="gear-player-send">📋</span>
+              </button>
+              <div v-if="!playersWithEmail.length" class="gear-empty">No players with email yet.</div>
+            </div>
+            <button class="gear-cancel" @click="showGearMenu = false; gearSubMenu = null">Cancel</button>
+          </template>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- Add form -->
     <div v-if="showAdd" class="add-form card">
@@ -391,7 +474,7 @@
           </div>
         </div>
         <button v-if="p.ghin_number" class="player-info-btn" @click.stop="openPlayerSheet(p)" title="GHIN info">⛳</button>
-        <button v-if="p.email" class="player-invite-btn" @click.stop="invitePlayer(p)" title="Invite to GolfWizard">📨</button>
+
         <span class="player-fav-star">★</span>
       </div>
     </div>
@@ -424,7 +507,7 @@
           </div>
         </div>
         <button v-if="p.ghin_number" class="player-info-btn" @click.stop="openPlayerSheet(p)" title="GHIN info">⛳</button>
-        <button v-if="p.email" class="player-invite-btn" @click.stop="invitePlayer(p)" title="Invite to GolfWizard">📨</button>
+
       </div>
     </div>
 
@@ -636,6 +719,12 @@ async function selectMatch(playerId, golfer) {
 
 // ── Invite ───────────────────────────────────────────────────────
 const inviteHint = ref('')
+const showGearMenu = ref(false)
+const gearSubMenu = ref(null)  // null | 'invite' | 'share'
+
+const playersWithEmail = computed(() =>
+  rosterStore.players.filter(p => p.email).sort((a, b) => a.name.localeCompare(b.name))
+)
 
 function invitePlayer(player) {
   if (!player.email) return
@@ -659,6 +748,37 @@ async function shareGroupInvite() {
       showInviteHint(`Share this link: ${url}`)
     }
   }
+}
+
+function shareRosterWith(recipient) {
+  if (!recipient.email) return
+  const senderName = authStore.profile?.display_name?.split(' ')[0] || 'Me'
+  const favorites = rosterStore.players.filter(p => p.is_favorite)
+  const rosterLines = favorites
+    .map(p => `• ${p.name}${p.ghin_index != null ? ' (' + Number(p.ghin_index).toFixed(1) + ')' : ''}`)
+    .join('\n')
+
+  // Build invite URL — preset encodes Jason's roster for new users
+  const url = buildInviteUrl(recipient.email || '', '', '', '', '')
+
+  const first = recipient.name.split(' ')[0]
+  const subject = `${senderName} shared their GolfWizard roster with you`
+  const body = [
+    `Hey ${first},`,
+    '',
+    `I shared my GolfWizard player list with you (${favorites.length} players). When you open the link below and sign in, they'll all be in your roster:`,
+    '',
+    url,
+    '',
+    `Here's who's included:`,
+    rosterLines,
+    '',
+    `See you on the course,`,
+    senderName,
+  ].join('\n')
+
+  window.location.href = `mailto:${encodeURIComponent(recipient.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+  showInviteHint(`Roster shared with ${first}!`)
 }
 
 function showInviteHint(msg) {
@@ -1568,7 +1688,7 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 .view-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .view-header h2 { font-size: 22px; font-weight: 700; margin: 0; color: var(--gw-text); }
 .header-actions { display: flex; gap: 6px; align-items: center; }
-.sort-btn, .invite-all-btn { font-size: 11px; padding: 5px 9px; opacity: .75; }
+.sort-btn, .gear-btn { font-size: 11px; padding: 5px 9px; opacity: .75; }
 .sync-all-btn {
   font-size: 11px; padding: 5px 10px;
   color: #fff; background: #60a5fa;
@@ -1865,5 +1985,4 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 .ghin-public-note { font-size: 11px; color: var(--gw-text-muted); line-height: 1.5; font-style: italic; }
 .cap-none { background: var(--gw-neutral-700); color: var(--gw-text-muted); font-size:12px; font-weight:700; padding:2px 8px; border-radius:8px; }
 
-.player-invite-btn:active { opacity: 1; transform: scale(.9); }
 </style>

@@ -134,6 +134,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useRoundsStore } from '../stores/rounds'
 import { useLinkedMatchesStore } from '../stores/linkedMatches'
+import { useRosterStore } from '../stores/roster'
 import AuthModal from '../components/AuthModal.vue'
 import WizardOverlay from '../components/WizardOverlay.vue'
 import { applyPreset } from '../modules/preset'
@@ -143,6 +144,7 @@ const router = useRouter()
 const authStore = useAuthStore()
 const roundsStore = useRoundsStore()
 const linkedStore = useLinkedMatchesStore()
+const rosterStore = useRosterStore()
 
 const loading = ref(true)
 const match = ref(null)
@@ -153,6 +155,11 @@ const error = ref('')
 const showAuth = ref(false)
 const hostCourseName = ref(null)
 const roundBOwnerId = ref(null)
+const showRosterOffer = ref(false)
+const rosterOfferPlayers = ref([])
+const rosterOfferCount = computed(() => rosterOfferPlayers.value.length)
+const hostName = computed(() => cfg.value?.hostName || 'the host')
+let pendingRoundId = null
 
 const codeUpper = computed(() => (route.params.code || '').toUpperCase())
 const cfg = computed(() => match.value?.match_config ?? {})
@@ -249,14 +256,75 @@ async function onRoundCreated(round) {
   error.value = ''
   try {
     await linkedStore.acceptLinkedMatch(codeUpper.value, round.id)
-    // Load round as active then go straight to scoring
-    await roundsStore.loadRound(round.id)
-    router.push('/scoring')
+    pendingRoundId = round.id
+
+    // Check if host has favorites worth offering for roster import
+    const { supabase } = await import('../supabase')
+    if (match.value?.round_a_id) {
+      const { data: hostRound } = await supabase
+        .from('rounds').select('owner_id').eq('id', match.value.round_a_id).maybeSingle()
+      if (hostRound?.owner_id) {
+        const { data: hostFavs } = await supabase
+          .from('roster_players')
+          .select('id, name, short_name, ghin_index, ghin_number, email, nickname, use_nickname')
+          .eq('owner_id', hostRound.owner_id)
+          .eq('is_favorite', true)
+        if (hostFavs?.length) {
+          const myEmails = new Set(rosterStore.players.map(p => p.email?.toLowerCase()).filter(Boolean))
+          const myNames = new Set(rosterStore.players.map(p => p.name?.toLowerCase()).filter(Boolean))
+          const newPlayers = hostFavs.filter(p => {
+            if (p.email && myEmails.has(p.email.toLowerCase())) return false
+            if (p.name && myNames.has(p.name.toLowerCase())) return false
+            return true
+          })
+          if (newPlayers.length > 0) {
+            rosterOfferPlayers.value = newPlayers
+            showRosterOffer.value = true
+            creating.value = false
+            return  // wait for user decision
+          }
+        }
+      }
+    }
+
+    await goToScoring()
   } catch (e) {
     console.error('[lma] accept failed:', e)
     error.value = e?.message || 'Could not link your round. Your round is saved — ask the host to check.'
     creating.value = false
   }
+}
+
+async function acceptRosterImport() {
+  showRosterOffer.value = false
+  try {
+    const { supabase } = await import('../supabase')
+    const rows = rosterOfferPlayers.value.map(p => ({
+      owner_id: authStore.user.id,
+      name: p.name,
+      short_name: p.short_name,
+      ghin_index: p.ghin_index ?? null,
+      ghin_number: p.ghin_number ?? null,
+      email: p.email ?? null,
+      nickname: p.nickname ?? null,
+      use_nickname: p.use_nickname ?? false,
+      is_favorite: true,
+    }))
+    await supabase.from('roster_players').insert(rows)
+  } catch (e) {
+    console.warn('[lma] roster import failed:', e?.message)
+  }
+  await goToScoring()
+}
+
+async function declineRosterImport() {
+  showRosterOffer.value = false
+  await goToScoring()
+}
+
+async function goToScoring() {
+  if (pendingRoundId) await roundsStore.loadRound(pendingRoundId)
+  router.push('/scoring')
 }
 </script>
 
@@ -514,4 +582,28 @@ async function onRoundCreated(round) {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ── Roster import offer sheet ── */
+.lma-roster-backdrop {
+  position: fixed; inset: 0; z-index: 1100;
+  background: rgba(0,0,0,.6); backdrop-filter: blur(3px);
+  display: flex; align-items: flex-end;
+}
+.lma-roster-sheet {
+  width: 100%; background: var(--gw-neutral-900);
+  border-radius: 20px 20px 0 0;
+  border-top: 1px solid var(--gw-card-border);
+  padding: 16px 20px calc(32px + env(safe-area-inset-bottom));
+  text-align: center; display: flex; flex-direction: column; gap: 12px;
+}
+.lma-roster-handle {
+  width: 36px; height: 4px; border-radius: 2px;
+  background: rgba(255,255,255,.2); margin: 0 auto 4px;
+}
+.lma-roster-icon { font-size: 40px; }
+.lma-roster-title {
+  font-family: var(--gw-font-display); font-size: 20px; font-weight: 700;
+  color: var(--gw-text);
+}
+.lma-roster-sub { font-size: 14px; color: var(--gw-text-muted); line-height: 1.5; }
 </style>

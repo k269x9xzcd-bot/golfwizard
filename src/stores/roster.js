@@ -72,44 +72,49 @@ export const useRosterStore = defineStore('roster', () => {
             // Clear the key so we retry; user isn't stuck with empty roster forever.
             localStorage.removeItem(seedKey)
           }
-          // Seed roster (new user, or retry after failed prior seed)
+          // New user — seed with just themselves (bootstrapped from profile if available).
+          // Strangers get a clean slate; organic growth via syncRoundMembersToRoster after rounds.
           try {
-            const userEmail = auth.user.email?.toLowerCase().trim()
-            const seedPlayers = DEFAULT_PLAYERS.filter(p => p.is_favorite && p.email?.toLowerCase().trim() !== userEmail)
-            const rows = seedPlayers.map(p => ({
-              owner_id: auth.user.id,
-              name: p.name,
-              short_name: p.short_name,
-              ghin_index: p.ghin_index,
-              is_favorite: p.is_favorite ?? false,
-              email: p.email ?? null,
-              nickname: p.nickname ?? null,
-              use_nickname: p.use_nickname ?? false,
-            }))
-            const { error: insertErr } = await supabase.from('roster_players').insert(rows)
-            if (!insertErr) {
-              // Mark seeded ONLY after confirmed success
-              localStorage.setItem(seedKey, '1')
+            const { useAuthStore } = await import('./auth')
+            const authStore = useAuthStore()
+            const p = authStore.profile
+            const email = auth.user.email?.toLowerCase().trim()
+            const fullName = p?.display_name || p?.first_name && p?.last_name
+              ? [p.first_name, p.last_name].filter(Boolean).join(' ')
+              : null
 
-              // Backfill ghin_number + ghin_index from any existing roster rows by name/email match
-              // This ensures new users get current GHIN data without waiting for nightly sync
-              try {
-                await supabase.rpc('backfill_roster_ghin_for_user', { p_owner_id: auth.user.id })
-              } catch (e) { /* non-critical — silent */ }
-
-              const { data: freshData } = await supabase
-                .from('roster_players')
-                .select('*')
-                .eq('owner_id', auth.user.id)
-                .order('is_favorite', { ascending: false })
-                .order('name')
-              players.value = freshData ?? [...DEFAULT_PLAYERS]
+            if (fullName) {
+              const nameParts = fullName.trim().split(/\s+/)
+              const short_name = nameParts.length >= 2
+                ? nameParts[nameParts.length - 1].slice(0, 8)
+                : fullName.slice(0, 8)
+              const selfRow = {
+                owner_id: auth.user.id,
+                name: fullName,
+                short_name,
+                email,
+                ghin_number: p?.ghin_number ?? null,
+                ghin_index: null,
+                is_favorite: true,
+                nickname: null,
+                use_nickname: false,
+              }
+              const { error: insertErr } = await supabase.from('roster_players').insert([selfRow])
+              if (!insertErr) localStorage.setItem(seedKey, '1')
             } else {
-              // Don't set seed key — will retry on next load
-              players.value = [...DEFAULT_PLAYERS]
+              // Profile not ready yet — mark seeded so we don't loop; user adds themselves later
+              localStorage.setItem(seedKey, '1')
             }
+
+            const { data: freshData } = await supabase
+              .from('roster_players')
+              .select('*')
+              .eq('owner_id', auth.user.id)
+              .order('is_favorite', { ascending: false })
+              .order('name')
+            players.value = freshData ?? []
           } catch {
-            players.value = [...DEFAULT_PLAYERS]
+            players.value = []
           }
         }
       } else {
