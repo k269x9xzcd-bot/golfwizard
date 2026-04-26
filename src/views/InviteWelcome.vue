@@ -212,6 +212,10 @@ async function syncGhin() {
 }
 
 onMounted(async () => {
+  // Pre-fill GHIN # from invite URL if provided
+  const g = route.query.ghin
+  if (g && typeof g === 'string') ghinNum.value = decodeURIComponent(g)
+
   await new Promise(r => setTimeout(r, 800))
   applyPreset(false)
   seeding.value = false

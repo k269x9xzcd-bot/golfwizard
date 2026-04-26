@@ -12,17 +12,18 @@
 export const PRESET_ID = 'bonnie-boyz-2026'
 
 export const PRESET_PLAYERS = [
-  { name: 'Alex Carroll',  short_name: 'AC', ghin_index: 4.0,  nickname: 'Al',     use_nickname: true,  is_favorite: true,  email: 'alexcarroll333@gmail.com' },
-  { name: 'Andy Shpiz',    short_name: 'AS', ghin_index: 6.0,  nickname: null,      use_nickname: false, is_favorite: true,  email: null },
-  { name: 'Brian Cimons',  short_name: 'BC', ghin_index: 6.0,  nickname: 'Brian',  use_nickname: false, is_favorite: true,  email: 'bcimons19@yahoo.com' },
-  { name: 'Chris Raggo',   short_name: 'CR', ghin_index: 4.0,  nickname: 'Chris',  use_nickname: false, is_favorite: true,  email: 'craggo@recordandreturn.com' },
-  { name: 'Harry Spadaro', short_name: 'HS', ghin_index: 15.0, nickname: null,      use_nickname: false, is_favorite: true,  email: 'Harrypspadaro@gmail.com' },
-  { name: 'Jason Spieler', short_name: 'JS', ghin_index: 10.0, nickname: 'Spiels', use_nickname: true,  is_favorite: true,  email: 'jayspieler@aol.com' },
-  { name: 'Jeremy Court',  short_name: 'JC', ghin_index: 5.0,  nickname: 'Jeremy', use_nickname: false, is_favorite: true,  email: 'jcourt93@gmail.com' },
-  { name: 'Joe Tomei',     short_name: 'JT', ghin_index: 14.0, nickname: null,      use_nickname: false, is_favorite: true,  email: 'joertomei@gmail.com' },
-  { name: 'Marty Durkin',  short_name: 'MD', ghin_index: 7.0,  nickname: 'Marty',  use_nickname: false, is_favorite: true,  email: 'martydurkin17@verizon.net' },
-  { name: 'Sam Waters',    short_name: 'SW', ghin_index: 5.0,  nickname: null,      use_nickname: false, is_favorite: true,  email: 'sam.waters.80@gmail.com' },
-  { name: 'Shang Chen',    short_name: 'SC', ghin_index: 7.0,  nickname: 'Wang',   use_nickname: true,  is_favorite: true,  email: 'bonga13@gmail.com' },
+  { name: 'Alex Carroll',  short_name: 'AC', ghin_index: 3.7,  ghin_number: '1312506',  nickname: 'Al',     use_nickname: true,  is_favorite: true,  email: 'alexcarroll333@gmail.com' },
+  { name: 'Andy Shpiz',    short_name: 'AS', ghin_index: 4.5,  ghin_number: '6858154',  nickname: null,      use_nickname: false, is_favorite: true,  email: null },
+  { name: 'Brian Cimons',  short_name: 'BC', ghin_index: 6.3,  ghin_number: '4143469',  nickname: 'Brian',  use_nickname: false, is_favorite: true,  email: 'bcimons19@yahoo.com' },
+  { name: 'Chris Raggo',   short_name: 'CR', ghin_index: 4.5,  ghin_number: '712114',   nickname: 'Chris',  use_nickname: false, is_favorite: true,  email: 'craggo@recordandreturn.com' },
+  { name: 'Harry Spadaro', short_name: 'HS', ghin_index: 10.9, ghin_number: '3080777',  nickname: null,      use_nickname: false, is_favorite: true,  email: 'Harrypspadaro@gmail.com' },
+  { name: 'Jason Spieler', short_name: 'JS', ghin_index: 9.8,  ghin_number: '1321498',  nickname: 'Spiels', use_nickname: true,  is_favorite: true,  email: 'jayspieler@aol.com' },
+  { name: 'Jeremy Court',  short_name: 'JC', ghin_index: 4.6,  ghin_number: '3370926',  nickname: 'Jeremy', use_nickname: false, is_favorite: true,  email: 'jcourt93@gmail.com' },
+  { name: 'Joe Tomei',     short_name: 'JT', ghin_index: 10.0, ghin_number: '6858150',  nickname: null,      use_nickname: false, is_favorite: true,  email: 'joertomei@gmail.com' },
+  { name: 'Marty Durkin',  short_name: 'MD', ghin_index: 8.3,  ghin_number: '348255',   nickname: 'Marty',  use_nickname: false, is_favorite: true,  email: 'martydurkin17@verizon.net' },
+  { name: 'Matt Derosa',   short_name: 'MR', ghin_index: 6.6,  ghin_number: '3011863',  nickname: null,      use_nickname: false, is_favorite: true,  email: null },
+  { name: 'Sam Waters',    short_name: 'SW', ghin_index: 7.3,  ghin_number: '1154293',  nickname: null,      use_nickname: false, is_favorite: true,  email: 'sam.waters.80@gmail.com' },
+  { name: 'Shang Chen',    short_name: 'SC', ghin_index: 5.8,  ghin_number: '1243328',  nickname: 'Wang',   use_nickname: true,  is_favorite: true,  email: 'bonga13@gmail.com' },
 ]
 
 // NOTE: Only the 3 tees actually set up in jayspieler@aol.com's custom course.
@@ -145,11 +146,12 @@ export function clearPresetForAuthUser() {
 /**
  * Build a shareable invite URL that opens GolfWizard with the preset.
  */
-export function buildInviteUrl(email = '') {
+export function buildInviteUrl(email = '', ghinNumber = '') {
   if (typeof window === 'undefined') return `#/invite?preset=${PRESET_ID}`
   const origin = window.location.origin + window.location.pathname.replace(/\/+$/, '')
   const emailParam = email ? `&email=${encodeURIComponent(email)}` : ''
-  return `${origin}#/invite?preset=${PRESET_ID}${emailParam}`
+  const ghinParam = ghinNumber ? `&ghin=${encodeURIComponent(ghinNumber)}` : ''
+  return `${origin}#/invite?preset=${PRESET_ID}${emailParam}${ghinParam}`
 }
 
 /**
@@ -158,7 +160,7 @@ export function buildInviteUrl(email = '') {
  * @param {string} senderName — display name of the host
  */
 export function buildInviteEmail(player, senderName = 'Jason') {
-  const url = buildInviteUrl(player.email || '')
+  const url = buildInviteUrl(player.email || '', player.ghin_number || '')
   const first = player.name.split(' ')[0]
   const subject = `${senderName} invited you to GolfWizard`
   const body = [
