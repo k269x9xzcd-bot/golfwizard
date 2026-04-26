@@ -644,6 +644,10 @@ async function syncAllGhin() {
   syncMsgType.value = 'info'
 
   try {
+    // Refresh roster before syncing so ghin_number fields are populated.
+    // On iOS, the roster may have loaded from a stale cache before auth resolved.
+    await rosterStore.fetchPlayers().catch(() => {})
+
     const { data: bbMembers, error: bbErr } = await supabase
       .from('bb_member_index')
       .select('ghin_number, handicap_index, updated_at')
@@ -661,6 +665,8 @@ async function syncAllGhin() {
     const updatePromises = []
     for (const player of rosterStore.players) {
       if (!player.ghin_number) continue
+      // Skip default_* fallback entries for authenticated users — they don't exist in Supabase.
+      if (authStore.isAuthenticated && String(player.id).startsWith('default_')) continue
       const bb = bbMap[player.ghin_number]
       if (bb?.handicap_index != null) {
         updatePromises.push(
@@ -675,8 +681,6 @@ async function syncAllGhin() {
       }
     }
     await Promise.all(updatePromises)
-
-    await rosterStore.fetchPlayers()
 
     const parts = [`✓ ${updated} synced`]
     if (notFound) parts.push(`${notFound} not in BB roster`)
