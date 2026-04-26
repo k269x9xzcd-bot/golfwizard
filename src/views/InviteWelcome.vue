@@ -263,7 +263,7 @@ onMounted(async () => {
   if (g && typeof g === 'string') ghinNum.value = decodeURIComponent(g)
 
   await new Promise(r => setTimeout(r, 800))
-  applyPreset(false)
+  await applyPreset(false)
   seeding.value = false
 
   if (inviteEmail.value && !authStore.isAuthenticated) {

@@ -286,3 +286,13 @@ Convention: add a block here before every `git push`.
 - `preset.js`: `buildInviteUrl` now passes `&first=` / `&last=` instead of `&name=`
 - `preset.js`: `buildInviteEmail` derives first/last from `player.first_name`/`player.last_name` or splits `player.name`
 - `InviteWelcome`: reads `?first=` / `?last=` params; writes `first_name`/`last_name` to profile on auth if not already set
+
+## v3.10.107 — 2026-04-25
+### Changed
+- `applyPreset()` is now async — fetches live roster from `public_preset_roster` Supabase view (no auth required) before seeding localStorage
+- Falls back to hardcoded `PRESET_PLAYERS` if fetch fails or exceeds 3s timeout
+- Session-level cache (`_livePlayersCache`) so fetch only runs once per page load
+- New DB migration: `public_preset_roster` view — read-only, anon-accessible, scoped to Jason's favorites only
+- `InviteWelcome`: awaits `applyPreset()` so seeded players are live data, not stale hardcoded HCPs
+### Result
+- Shang and future invitees always get current handicaps and the full up-to-date roster without a rebuild

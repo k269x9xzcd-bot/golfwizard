@@ -9,7 +9,13 @@
  * Update this module whenever the roster or course data changes materially.
  */
 
+// Supabase client — used for dynamic preset fetch
+import { supabase } from '../supabase'
+
 export const PRESET_ID = 'bonnie-boyz-2026'
+
+// Cache so we only fetch once per session
+let _livePlayersCache = null
 
 export const PRESET_PLAYERS = [
   { name: 'Alex Carroll',  short_name: 'AC', ghin_index: 3.7,  ghin_number: '1312506',  nickname: 'Al',     use_nickname: true,  is_favorite: true,  email: 'alexcarroll333@gmail.com' },
@@ -68,7 +74,7 @@ const PRESET_LOCAL_KEYS = ['gw_roster_players', 'gw_favorite_roster_players', 'g
  *
  * @param {boolean} force — re-seed even if already seeded (for re-invites)
  */
-export function applyPreset(force = false) {
+export async function applyPreset(force = false) {
   // HARD GUARD: never run if user is authenticated
   // Check the supabase-js session key directly to avoid circular imports
   try {
@@ -86,12 +92,29 @@ export function applyPreset(force = false) {
 
   if (!force && localStorage.getItem(SEEDED_KEY) === PRESET_ID) return false
 
+  // Fetch live roster from DB (public_preset_roster view, no auth needed)
+  // Falls back to hardcoded PRESET_PLAYERS if fetch fails or is slow
+  let players = PRESET_PLAYERS
+  try {
+    if (!_livePlayersCache) {
+      const fetchPromise = supabase
+        .from('public_preset_roster')
+        .select('name, short_name, first_name, last_name, ghin_index, ghin_number, nickname, use_nickname, is_favorite, email, id')
+      const timeout = new Promise(resolve => setTimeout(() => resolve({ data: null }), 3000))
+      const { data } = await Promise.race([fetchPromise, timeout])
+      if (data && data.length > 0) _livePlayersCache = data
+    }
+    if (_livePlayersCache) players = _livePlayersCache
+  } catch (e) {
+    console.warn('[preset] Live fetch failed, using static fallback:', e?.message)
+  }
+
   // Seed players into local roster (guest-only storage key)
   const existing = JSON.parse(localStorage.getItem('gw_roster') || '[]')
   const existingNames = new Set(existing.map(p => p.name))
-  const toAdd = PRESET_PLAYERS.filter(p => !existingNames.has(p.name)).map(p => ({
+  const toAdd = players.filter(p => !existingNames.has(p.name)).map(p => ({
     ...p,
-    id: `preset_${p.short_name}_${Date.now()}`,
+    id: p.id || `preset_${p.short_name}_${Date.now()}`,
     owner_id: null,
     created_at: new Date().toISOString(),
   }))
