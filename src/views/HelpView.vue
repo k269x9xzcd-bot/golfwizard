@@ -107,6 +107,24 @@
                   rows="4"
                 ></textarea>
 
+                <!-- Screenshot attach — bug reports only -->
+                <div v-if="feedbackType === 'bug'" class="help-screenshot-row">
+                  <label class="help-screenshot-label" :class="{ 'has-file': screenshotFile }">
+                    <input
+                      ref="screenshotInput"
+                      type="file"
+                      accept="image/*"
+                      class="help-screenshot-input"
+                      @change="onScreenshotChange"
+                    />
+                    <span v-if="!screenshotFile">📎 Attach screenshot (optional)</span>
+                    <span v-else class="help-screenshot-name">📎 {{ screenshotFile.name }} <button class="help-screenshot-clear" @click.prevent="clearScreenshot">✕</button></span>
+                  </label>
+                  <div v-if="screenshotPreview" class="help-screenshot-preview">
+                    <img :src="screenshotPreview" alt="Screenshot preview" />
+                  </div>
+                </div>
+
                 <div v-if="feedbackError" class="help-feedback-error">{{ feedbackError }}</div>
 
                 <button
@@ -164,6 +182,29 @@ const feedbackMessage = ref('')
 const feedbackError = ref('')
 const feedbackSent = ref(false)
 const submitting = ref(false)
+
+const screenshotFile = ref(null)
+const screenshotPreview = ref(null)
+const screenshotInput = ref(null)
+
+function onScreenshotChange(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  if (file.size > 5 * 1024 * 1024) {
+    feedbackError.value = 'Screenshot must be under 5MB.'
+    return
+  }
+  screenshotFile.value = file
+  const reader = new FileReader()
+  reader.onload = (ev) => { screenshotPreview.value = ev.target.result }
+  reader.readAsDataURL(file)
+}
+
+function clearScreenshot() {
+  screenshotFile.value = null
+  screenshotPreview.value = null
+  if (screenshotInput.value) screenshotInput.value.value = ''
+}
 
 const feedbackPlaceholder = computed(() => {
   if (feedbackType.value === 'bug') return 'What happened? What did you expect? (e.g. "Tapped finish round and nothing happened")'
@@ -235,12 +276,29 @@ async function submitFeedback() {
   if (!feedbackMessage.value.trim()) return
   submitting.value = true
   try {
+    // Upload screenshot if attached
+    let screenshotUrl = null
+    if (screenshotFile.value) {
+      const ext = screenshotFile.value.name.split('.').pop() || 'png'
+      const path = `${authStore.user?.id || 'anon'}/${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage
+        .from('feedback-screenshots')
+        .upload(path, screenshotFile.value, { upsert: false })
+      if (!upErr) {
+        const { data: urlData } = supabase.storage
+          .from('feedback-screenshots')
+          .getPublicUrl(path)
+        screenshotUrl = urlData?.publicUrl || null
+      }
+    }
+
     const payload = {
       type: feedbackType.value,
       message: feedbackMessage.value.trim(),
       user_id: authStore.user?.id || null,
       app_version: props.appVersion || null,
       route: route?.fullPath || null,
+      screenshot_url: screenshotUrl,
       device_info: {
         ua: navigator.userAgent,
         screen: `${screen.width}x${screen.height}`,
@@ -251,6 +309,7 @@ async function submitFeedback() {
     if (error) throw error
     feedbackSent.value = true
     feedbackMessage.value = ''
+    clearScreenshot()
   } catch (e) {
     feedbackError.value = e?.message?.includes('auth') 
       ? 'Please sign in to submit feedback.' 
@@ -449,5 +508,42 @@ async function submitFeedback() {
 
 .help-feedback-note {
   font-size: 10px; color: rgba(240,237,224,.3); text-align: center; line-height: 1.4;
+}
+
+/* ── Screenshot attach ──────────────────────────────────────── */
+.help-screenshot-row { margin-top: 10px; }
+.help-screenshot-label {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 14px; border-radius: 10px;
+  border: 1.5px dashed rgba(212,175,55,.35);
+  color: rgba(240,237,224,.55); font-size: 13px;
+  cursor: pointer; transition: border-color .15s, color .15s;
+  position: relative;
+}
+.help-screenshot-label:hover,
+.help-screenshot-label.has-file {
+  border-color: rgba(212,175,55,.7); color: #d4af37;
+}
+.help-screenshot-input {
+  position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+}
+.help-screenshot-name {
+  display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.help-screenshot-clear {
+  background: none; border: none; color: rgba(240,237,224,.5);
+  font-size: 13px; cursor: pointer; padding: 0 2px; flex-shrink: 0;
+  z-index: 1; position: relative;
+}
+.help-screenshot-clear:hover { color: #f87171; }
+.help-screenshot-preview {
+  margin-top: 8px; border-radius: 10px; overflow: hidden;
+  border: 1px solid rgba(212,175,55,.2);
+  max-height: 160px; display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.3);
+}
+.help-screenshot-preview img {
+  max-width: 100%; max-height: 160px; object-fit: contain; display: block;
 }
 </style>
