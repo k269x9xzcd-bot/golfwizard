@@ -114,6 +114,20 @@
       <div v-if="error" class="lma-error">{{ error }}</div>
     </template>
 
+    <!-- Roster import offer -->
+    <Teleport to="body">
+      <div v-if="showRosterOffer" class="lma-roster-backdrop" @click.self="declineRosterImport">
+        <div class="lma-roster-sheet">
+          <div class="lma-roster-handle"></div>
+          <div class="lma-roster-icon">👥</div>
+          <div class="lma-roster-title">Import {{ hostName }}'s roster?</div>
+          <div class="lma-roster-sub">{{ rosterOfferCount }} player{{ rosterOfferCount === 1 ? '' : 's' }} not yet in your roster</div>
+          <button class="lma-btn-primary" @click="acceptRosterImport">Add {{ rosterOfferCount }} Player{{ rosterOfferCount === 1 ? '' : 's' }}</button>
+          <button class="lma-btn-ghost" @click="declineRosterImport">No thanks</button>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- Auth modal -->
     <AuthModal v-if="showAuth" @close="showAuth = false" />
 
@@ -154,11 +168,12 @@ const fullWizardOpen = ref(false)
 const error = ref('')
 const showAuth = ref(false)
 const hostCourseName = ref(null)
+const hostDisplayName = ref(null)
 const roundBOwnerId = ref(null)
 const showRosterOffer = ref(false)
 const rosterOfferPlayers = ref([])
 const rosterOfferCount = computed(() => rosterOfferPlayers.value.length)
-const hostName = computed(() => cfg.value?.hostName || 'the host')
+const hostName = computed(() => hostDisplayName.value || cfg.value?.hostName || 'the host')
 let pendingRoundId = null
 
 const codeUpper = computed(() => (route.params.code || '').toUpperCase())
@@ -215,6 +230,14 @@ onMounted(async () => {
     const m = await linkedStore.fetchByCode(codeUpper.value)
     match.value = m
     if (!m) { loading.value = false; return }
+
+    // Fetch host display name from profiles
+    if (m.owner_id) {
+      const { supabase: sb } = await import('../supabase')
+      const { data: hostProfile } = await sb
+        .from('profiles').select('display_name').eq('id', m.owner_id).maybeSingle()
+      hostDisplayName.value = hostProfile?.display_name?.split(' ')[0] ?? null
+    }
 
     // Auth guard — show auth modal if not signed in
     if (!authStore.isAuthenticated) {

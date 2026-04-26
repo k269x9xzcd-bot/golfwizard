@@ -82,6 +82,28 @@
 
     <AuthModal v-if="showAuth" :prefill-email="inviteEmail" @close="onAuthClose" />
 
+    <!-- Roster import offer -->
+    <Teleport to="body">
+      <div v-if="showRosterOffer" class="roster-offer-backdrop" @click.self="declineRosterImport">
+        <div class="roster-offer-sheet">
+          <div class="roster-offer-title">Import roster?</div>
+          <div class="roster-offer-sub">{{ rosterOfferPlayers.length }} player{{ rosterOfferPlayers.length === 1 ? '' : 's' }} shared with you — add them to your roster?</div>
+          <div class="roster-offer-list">
+            <div v-for="p in rosterOfferPlayers" :key="p.name" class="roster-offer-player">
+              <span class="rop-name">{{ p.name }}</span>
+              <span v-if="p.ghin_index != null" class="rop-hi">{{ Number(p.ghin_index).toFixed(1) }}</span>
+            </div>
+          </div>
+          <div class="roster-offer-actions">
+            <button class="invite-btn-primary" :disabled="rosterOfferAccepting" @click="acceptRosterImport">
+              {{ rosterOfferAccepting ? 'Importing…' : `Add ${rosterOfferPlayers.length} Player${rosterOfferPlayers.length === 1 ? '' : 's'}` }}
+            </button>
+            <button class="invite-btn-ghost" @click="declineRosterImport">No thanks</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- GHIN setup step -->
     <Teleport to="body">
       <div v-if="showGhinStep" class="ghin-step-backdrop">
@@ -167,6 +189,11 @@ const inviteRid = computed(() => {
   const r = route.query.rid
   return typeof r === 'string' ? decodeURIComponent(r) : ''
 })
+
+// Roster import offer (from shareRosterWith URL)
+const showRosterOffer = ref(false)
+const rosterOfferPlayers = ref([])
+const rosterOfferAccepting = ref(false)
 
 const emailMismatch = computed(() => {
   if (!authStore.isAuthenticated || !inviteEmail.value) return false
@@ -257,6 +284,35 @@ async function syncGhin() {
   }
 }
 
+async function acceptRosterImport() {
+  rosterOfferAccepting.value = true
+  try {
+    const { useRosterStore } = await import('../stores/roster')
+    const rStore = useRosterStore()
+    for (const p of rosterOfferPlayers.value) {
+      await rStore.addPlayer({
+        name: p.name,
+        email: p.email || null,
+        ghin_index: p.ghin_index ?? null,
+        ghin_number: p.ghin_number || null,
+        short_name: p.short_name || null,
+        nickname: p.nickname || null,
+        use_nickname: p.use_nickname || false,
+        is_favorite: true,
+      })
+    }
+  } catch (e) {
+    console.warn('[invite] roster import failed:', e)
+  } finally {
+    showRosterOffer.value = false
+    rosterOfferAccepting.value = false
+  }
+}
+
+function declineRosterImport() {
+  showRosterOffer.value = false
+}
+
 onMounted(async () => {
   // Pre-fill GHIN # and name from invite URL if provided
   const g = route.query.ghin
@@ -265,6 +321,32 @@ onMounted(async () => {
   await new Promise(r => setTimeout(r, 800))
   await applyPreset(false)
   seeding.value = false
+
+  // Check for roster snapshot in URL
+  const rosterParam = route.query.roster
+  if (rosterParam) {
+    try {
+      const decoded = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(rosterParam)))))
+      if (Array.isArray(decoded) && decoded.length > 0) {
+        const { useRosterStore } = await import('../stores/roster')
+        const rStore = useRosterStore()
+        await rStore.fetchPlayers()
+        const myEmails = new Set(rStore.players.map(p => p.email?.toLowerCase()).filter(Boolean))
+        const myNames  = new Set(rStore.players.map(p => p.name?.toLowerCase()).filter(Boolean))
+        const newOnes  = decoded.filter(p => {
+          if (p.email && myEmails.has(p.email.toLowerCase())) return false
+          if (p.name  && myNames.has(p.name.toLowerCase()))  return false
+          return true
+        })
+        if (newOnes.length > 0) {
+          rosterOfferPlayers.value = newOnes
+          showRosterOffer.value = true
+        }
+      }
+    } catch (e) {
+      console.warn('[invite] roster decode failed:', e)
+    }
+  }
 
   if (inviteEmail.value && !authStore.isAuthenticated) {
     showAuth.value = true
@@ -506,4 +588,41 @@ onMounted(async () => {
   line-height: 1.5;
 }
 .invite-mismatch-banner strong { color: #fbbf24; }
+
+/* Roster import offer */
+.roster-offer-backdrop {
+  position: fixed; inset: 0; z-index: 500;
+  background: rgba(0,0,0,.7);
+  display: flex; align-items: flex-end;
+}
+.roster-offer-sheet {
+  width: 100%;
+  background: var(--gw-neutral-900, #141a16);
+  border-radius: 24px 24px 0 0;
+  padding: 28px 20px calc(env(safe-area-inset-bottom) + 24px);
+  display: flex; flex-direction: column; gap: 16px;
+}
+.roster-offer-title {
+  font-family: var(--gw-font-display);
+  font-size: 20px; font-weight: 700; color: var(--gw-text);
+}
+.roster-offer-sub {
+  font-size: 14px; color: rgba(240,237,224,.6); line-height: 1.45; margin-top: -8px;
+}
+.roster-offer-list {
+  display: flex; flex-direction: column; gap: 8px;
+  max-height: 200px; overflow-y: auto;
+}
+.roster-offer-player {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px;
+  background: rgba(255,255,255,.04);
+  border-radius: 10px;
+}
+.rop-name { font-size: 14px; color: var(--gw-text); font-weight: 600; }
+.rop-hi {
+  font-size: 12px; color: rgba(240,237,224,.5);
+  background: rgba(255,255,255,.06); border-radius: 6px; padding: 2px 8px;
+}
+.roster-offer-actions { display: flex; flex-direction: column; gap: 10px; }
 </style>
