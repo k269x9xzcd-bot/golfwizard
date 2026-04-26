@@ -347,7 +347,15 @@ export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
     const auth = useAuthStore()
     if (!auth.isAuthenticated) { pendingInvites.value = []; return }
     try {
-      const { data: rp } = await supabase.from('roster_players').select('id').eq('user_id', auth.user.id).maybeSingle()
+      let rp = null
+      try {
+        const res = await supaCallWithRetry(
+          'roster_players.byUserId',
+          () => supabase.from('roster_players').select('id').eq('user_id', auth.user.id).maybeSingle(),
+          4000,
+        )
+        rp = res.data
+      } catch { /* no roster entry — that's ok */ }
       if (!rp?.id) { pendingInvites.value = []; return }
       const { data, error } = await supaCallWithRetry(
         'linked_matches.pendingInvites',

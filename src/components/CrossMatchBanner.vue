@@ -171,8 +171,13 @@ const display = computed(() => {
   // Linked — try to compute live state from cached rounds
   const ra = roundsCache.value[m.round_a_id]
   const rb = roundsCache.value[m.round_b_id]
-  if (!ra || !rb) {
+  // undefined = not yet fetched (still loading); false/null = tried but failed
+  if (ra === undefined || rb === undefined) {
     return { match: m, icon: '⛳', label: '4v4 linked · loading…', tone: 'pending' }
+  }
+  if (!ra || !rb) {
+    // Hydration attempted but failed — show match name without live score data
+    return { match: m, icon: '⛳', label: m.name || '4v4 linked', tone: 'pending' }
   }
 
   try {
@@ -201,15 +206,28 @@ async function hydrate(match) {
   if (!match) return
   try {
     const { supabase } = await import('../supabase')
+    const { supaRawSelect } = await import('../modules/supaRaw')
     const ids = [match.round_a_id, match.round_b_id].filter(Boolean)
     for (const rid of ids) {
-      if (roundsCache.value[rid]) continue
-      const { data } = await supabase
-        .from('rounds')
-        .select('*, round_members(*), scores(*)')
-        .eq('id', rid)
-        .maybeSingle()
-      if (data) roundsCache.value = { ...roundsCache.value, [rid]: data }
+      if (roundsCache.value[rid] !== undefined) continue  // already fetched (or failed)
+      let data = null
+      try {
+        const res = await Promise.race([
+          supabase.from('rounds').select('*, round_members(*), scores(*)').eq('id', rid).maybeSingle(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('hydrate timed out')), 5000)),
+        ])
+        if (!res.error) data = res.data
+      } catch (e) {
+        if (e.message?.includes('timed out')) {
+          try {
+            const rows = await supaRawSelect('rounds', `select=*,round_members(*),scores(*)&id=eq.${rid}`, 8000)
+            data = Array.isArray(rows) ? (rows[0] ?? false) : (rows || false)
+          } catch { data = false }
+        }
+      }
+      // Store result: object on success, false on failure.
+      // undefined means "never tried" — used by display to distinguish loading from failed.
+      roundsCache.value = { ...roundsCache.value, [rid]: data ?? false }
     }
     tick.value++
   } catch (e) {
@@ -224,10 +242,24 @@ async function refreshScoresFor(roundId) {
   if (!roundId || !roundsCache.value[roundId]) return
   try {
     const { supabase } = await import('../supabase')
-    const { data } = await supabase.from('scores').select('*').eq('round_id', roundId)
-    if (Array.isArray(data)) {
-      const cached = { ...roundsCache.value[roundId], scores: data }
-      roundsCache.value = { ...roundsCache.value, [roundId]: cached }
+    const { supaRawSelect } = await import('../modules/supaRaw')
+    let scores = null
+    try {
+      const res = await Promise.race([
+        supabase.from('scores').select('*').eq('round_id', roundId),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('refreshScores timed out')), 5000)),
+      ])
+      if (Array.isArray(res.data)) scores = res.data
+    } catch (e) {
+      if (e.message?.includes('timed out')) {
+        try {
+          const rows = await supaRawSelect('scores', `select=*&round_id=eq.${roundId}`, 8000)
+          if (Array.isArray(rows)) scores = rows
+        } catch {}
+      }
+    }
+    if (Array.isArray(scores)) {
+      roundsCache.value = { ...roundsCache.value, [roundId]: { ...roundsCache.value[roundId], scores } }
       tick.value++
     }
   } catch { /* non-fatal */ }
