@@ -296,3 +296,11 @@ Convention: add a block here before every `git push`.
 - `InviteWelcome`: awaits `applyPreset()` so seeded players are live data, not stale hardcoded HCPs
 ### Result
 - Shang and future invitees always get current handicaps and the full up-to-date roster without a rebuild
+
+## v3.10.108 — 2026-04-25
+### Added
+- `syncRoundMembersToRoster()` in auth.js — fires on every sign-in, fire-and-forget
+- Scans all rounds the user has played in, finds co-players not yet in their roster, inserts them
+- Match logic: skips by ghin_number first, then email, then name (case-insensitive)
+- New players added with `is_favorite = false` — user can promote in Players tab
+- Deduplicates across multiple rounds before inserting

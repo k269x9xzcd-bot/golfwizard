@@ -59,6 +59,7 @@ export const useAuthStore = defineStore('auth', () => {
           await fetchProfile()
           linkUserToRosterPlayer()     // fire-and-forget; non-blocking
           backfillRoundMembership()    // fire-and-forget; backfill profile_id on old round_members rows
+          syncRoundMembersToRoster()   // fire-and-forget; auto-add round co-players to this user's roster
         } else {
           profile.value = null
         }
@@ -202,6 +203,86 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  // On sign-in, add any players from the user's rounds that aren't already in their roster.
+  // Only adds players with a real name. Sets is_favorite = false so user can promote manually.
+  // Fire-and-forget — non-blocking.
+  async function syncRoundMembersToRoster() {
+    if (!user.value) return
+    try {
+      // Get all round_members from rounds this user is part of
+      const { data: myMembers, error: mErr } = await supabase
+        .from('round_members')
+        .select('round_id')
+        .eq('profile_id', user.value.id)
+      if (mErr || !myMembers?.length) return
+
+      const roundIds = [...new Set(myMembers.map(m => m.round_id))]
+
+      // Get all members from those rounds
+      const { data: allMembers, error: aErr } = await supabase
+        .from('round_members')
+        .select('guest_name, short_name, ghin_number, ghin_index, email, profile_id, nickname, use_nickname')
+        .in('round_id', roundIds)
+      if (aErr || !allMembers?.length) return
+
+      // Get existing roster to avoid duplicates
+      const { data: roster } = await supabase
+        .from('roster_players')
+        .select('name, ghin_number, email')
+        .eq('owner_id', user.value.id)
+
+      const rosterGhins = new Set((roster || []).map(r => String(r.ghin_number)).filter(Boolean))
+      const rosterEmails = new Set((roster || []).map(r => r.email?.toLowerCase()).filter(Boolean))
+      const rosterNames = new Set((roster || []).map(r => r.name?.toLowerCase()).filter(Boolean))
+
+      // Deduplicate round members and filter to only those not in roster
+      const seen = new Set()
+      const toInsert = []
+      for (const m of allMembers) {
+        // Skip self
+        if (m.profile_id === user.value.id) continue
+
+        const name = (m.guest_name || '').trim()
+        if (!name) continue
+
+        const ghin = m.ghin_number ? String(m.ghin_number) : null
+        const email = m.email?.toLowerCase().trim() || null
+        const key = ghin || email || name.toLowerCase()
+
+        if (seen.has(key)) continue
+        seen.add(key)
+
+        // Already in roster?
+        if (ghin && rosterGhins.has(ghin)) continue
+        if (email && rosterEmails.has(email)) continue
+        if (rosterNames.has(name.toLowerCase())) continue
+
+        const nameParts = name.split(/\s+/)
+        toInsert.push({
+          owner_id: user.value.id,
+          name,
+          first_name: nameParts[0] || null,
+          last_name: nameParts.slice(1).join(' ') || null,
+          short_name: m.short_name || nameParts[nameParts.length - 1].slice(0, 8),
+          ghin_number: ghin,
+          ghin_index: m.ghin_index ?? null,
+          email,
+          nickname: m.nickname || null,
+          use_nickname: m.use_nickname || false,
+          is_favorite: false,
+        })
+      }
+
+      if (!toInsert.length) return
+
+      const { error: iErr } = await supabase.from('roster_players').insert(toInsert)
+      if (iErr) console.warn('[auth] syncRoundMembersToRoster insert error:', iErr.message)
+      else console.log(`[auth] syncRoundMembersToRoster: added ${toInsert.length} player(s)`)
+    } catch (e) {
+      console.warn('[auth] syncRoundMembersToRoster exception:', e?.message)
+    }
+  }
+
   async function signOut() {
     await supabase.auth.signOut()
     user.value = null
@@ -211,7 +292,7 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     user, profile, loading, isGuest, isAuthenticated,
     init, fetchProfile, updateProfile, upsertRosterEntry, linkUserToRosterPlayer,
-    backfillRoundMembership,
+    backfillRoundMembership, syncRoundMembersToRoster,
     signInWithGoogle, signInWithApple, signInWithEmail, verifyOtp, signOut,
   }
 })
