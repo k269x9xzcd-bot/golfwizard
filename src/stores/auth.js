@@ -45,7 +45,8 @@ export const useAuthStore = defineStore('auth', () => {
           // doesn't interfere with the authenticated user's real Supabase data.
           if (wasGuest) clearPresetForAuthUser()
           await fetchProfile()
-          linkUserToRosterPlayer() // fire-and-forget; non-blocking
+          linkUserToRosterPlayer()     // fire-and-forget; non-blocking
+          backfillRoundMembership()    // fire-and-forget; backfill profile_id on old round_members rows
         } else {
           profile.value = null
         }
@@ -160,6 +161,32 @@ export const useAuthStore = defineStore('auth', () => {
     return result.data
   }
 
+  // Backfill profile_id on round_members rows that belong to this user
+  // but were created before they had an account.
+  // Matches on: (1) ghin_number if user has one, (2) email.
+  // Fire-and-forget — called after login, non-blocking.
+  async function backfillRoundMembership() {
+    if (!user.value) return
+    const email = user.value.email?.toLowerCase().trim()
+    const ghinNumber = profile.value?.ghin_number
+    try {
+      // Build OR filter: email match, or ghin_number match if available
+      let query = supabase
+        .from('round_members')
+        .update({ profile_id: user.value.id })
+        .is('profile_id', null)
+      if (ghinNumber) {
+        query = query.or(`email.eq.${email},ghin_number.eq.${ghinNumber}`)
+      } else {
+        query = query.eq('email', email)
+      }
+      const { error } = await query
+      if (error) console.warn('[auth] backfillRoundMembership error:', error.message)
+    } catch (e) {
+      console.warn('[auth] backfillRoundMembership exception:', e?.message)
+    }
+  }
+
   async function signOut() {
     await supabase.auth.signOut()
     user.value = null
@@ -169,6 +196,7 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     user, profile, loading, isGuest, isAuthenticated,
     init, fetchProfile, updateProfile, upsertRosterEntry, linkUserToRosterPlayer,
+    backfillRoundMembership,
     signInWithGoogle, signInWithApple, signInWithEmail, verifyOtp, signOut,
   }
 })

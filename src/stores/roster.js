@@ -66,40 +66,42 @@ export const useRosterStore = defineStore('roster', () => {
           // Supabase roster is empty — seed with defaults ONCE
           // Guard against re-seeding: check localStorage flag keyed by user id
           const seedKey = `gw_roster_seeded_${auth.user.id}`
-          if (localStorage.getItem(seedKey)) {
-            // Already seeded before — user deleted all players intentionally, don't re-seed
-            players.value = []
-          } else {
-            try {
-              // New users get only the favorite players as their starting roster.
-              // Full 26-player list is only for the app owner (Jason).
-              const seedPlayers = DEFAULT_PLAYERS.filter(p => p.is_favorite)
-              const rows = seedPlayers.map(p => ({
-                owner_id: auth.user.id,
-                name: p.name,
-                short_name: p.short_name,
-                ghin_index: p.ghin_index,
-                is_favorite: p.is_favorite ?? false,
-                email: p.email ?? null,
-                nickname: p.nickname ?? null,
-                use_nickname: p.use_nickname ?? false,
-              }))
-              const { error: insertErr } = await supabase.from('roster_players').insert(rows)
+          const alreadySeeded = localStorage.getItem(seedKey)
+          if (alreadySeeded) {
+            // Seed key set but roster is empty — prior seed failed silently.
+            // Clear the key so we retry; user isn't stuck with empty roster forever.
+            localStorage.removeItem(seedKey)
+          }
+          // Seed roster (new user, or retry after failed prior seed)
+          try {
+            const seedPlayers = DEFAULT_PLAYERS.filter(p => p.is_favorite)
+            const rows = seedPlayers.map(p => ({
+              owner_id: auth.user.id,
+              name: p.name,
+              short_name: p.short_name,
+              ghin_index: p.ghin_index,
+              is_favorite: p.is_favorite ?? false,
+              email: p.email ?? null,
+              nickname: p.nickname ?? null,
+              use_nickname: p.use_nickname ?? false,
+            }))
+            const { error: insertErr } = await supabase.from('roster_players').insert(rows)
+            if (!insertErr) {
+              // Mark seeded ONLY after confirmed success
               localStorage.setItem(seedKey, '1')
-              if (!insertErr) {
-                const { data: freshData } = await supabase
-                  .from('roster_players')
-                  .select('*')
-                  .eq('owner_id', auth.user.id)
-                  .order('is_favorite', { ascending: false })
-                  .order('name')
-                players.value = freshData ?? [...DEFAULT_PLAYERS]
-              } else {
-                players.value = [...DEFAULT_PLAYERS]
-              }
-            } catch {
+              const { data: freshData } = await supabase
+                .from('roster_players')
+                .select('*')
+                .eq('owner_id', auth.user.id)
+                .order('is_favorite', { ascending: false })
+                .order('name')
+              players.value = freshData ?? [...DEFAULT_PLAYERS]
+            } else {
+              // Don't set seed key — will retry on next load
               players.value = [...DEFAULT_PLAYERS]
             }
+          } catch {
+            players.value = [...DEFAULT_PLAYERS]
           }
         }
       } else {

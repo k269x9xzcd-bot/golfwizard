@@ -223,3 +223,8 @@ Convention: add a block here before every `git push`.
 - Settlement "Computing..." stuck bug
 - ghin-roster-sync v24 Cloudflare proxy (resolved 503s)
 - Nightly GHIN sync cron simplified to single job
+
+## [3.10.99] - 2026-04-25
+### Fixed
+- Roster seed: seed key now only set after confirmed Supabase insert success; users with stuck empty roster (prior failed seed) auto-repair on next load
+- Round history: on login, backfill `profile_id` on `round_members` rows matching user's email or GHIN# — all users now see rounds they played in before creating an account
