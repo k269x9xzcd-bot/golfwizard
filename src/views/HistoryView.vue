@@ -235,7 +235,7 @@
             v-for="match in group.matches"
             :key="match.id"
             class="match-outcome-card"
-            @click="$router.push('/linked-match/' + match.id)"
+            @click="$router.push('/cross-match/' + match.id)"
           >
             <div class="moc-top">
               <div class="moc-course">{{ match.match_config?.courseName || 'Cross-Match' }}</div>

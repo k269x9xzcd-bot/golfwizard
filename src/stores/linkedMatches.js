@@ -208,6 +208,7 @@ export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
       const settlementPayload = {
         status: 'complete',
         completed_at: new Date().toISOString(),
+        settlement_json: result,
       }
 
       await supaCallWithRetry(
@@ -369,7 +370,7 @@ export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
     fetchUserLinkedMatches, fetchByCode, createLinkedMatch, acceptLinkedMatch,
     cancelLinkedMatch, loadLinkedMatchDetail,
     subscribeLinkedMatch, unsubscribeLinkedMatch, reloadActiveMatchScores,
-    matchesForRound, fetchPendingInvites,
+    matchesForRound, fetchPendingInvites, _checkAndPersistSettlement,
   }
 })
 

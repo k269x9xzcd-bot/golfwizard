@@ -293,6 +293,10 @@ function recompute() {
   try {
     computeError.value = null
     result.value = computeLinkedMatch(roundA.value, roundB.value, match.value.match_config || {})
+    // Back-fill settlement_json on the DB row if match is complete but was never persisted
+    if (match.value.status === 'complete' && !match.value.settlement_json && result.value?.allHolesComplete) {
+      linkedStore._checkAndPersistSettlement(match.value).catch(() => {})
+    }
   } catch (e) {
     console.warn('[lmd] compute failed:', e)
     computeError.value = e?.message || String(e)
