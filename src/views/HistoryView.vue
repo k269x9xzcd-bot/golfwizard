@@ -289,6 +289,7 @@ import { useCoursesStore } from '../stores/courses'
 import { useRouter, useRoute } from 'vue-router'
 import { useLinkedMatchesStore } from '../stores/linkedMatches'
 import { useAuthStore } from '../stores/auth'
+import { supaRawRequest } from '../modules/supaRaw'
 import { computeAllSettlements } from '../modules/settlements'
 import { shareHistoryRecap } from '../modules/scorecardShare'
 // ScorecardGrid removed -- share now uses ScorecardCapture component via scorecardShare.js
@@ -318,9 +319,26 @@ onMounted(async () => {
   matchesLoading.value = true
   try {
     await linkedMatchesStore.fetchUserLinkedMatches()
-    linkedMatchHistory.value = linkedMatchesStore.linkedMatches.filter(
+    const matches = linkedMatchesStore.linkedMatches.filter(
       m => m.status === 'complete' || m.status === 'linked'
     )
+    // Enrich each match with team member names from round_members
+    const roundIds = [...new Set(matches.flatMap(m => [m.round_a_id, m.round_b_id].filter(Boolean)))]
+    let membersByRound = {}
+    if (roundIds.length) {
+      try {
+        const members = await supaRawRequest('GET', `round_members?round_id=in.(${roundIds.join(',')})&select=round_id,guest_name,short_name`, null, 5000)
+        for (const m of (members || [])) {
+          if (!membersByRound[m.round_id]) membersByRound[m.round_id] = []
+          membersByRound[m.round_id].push(m.short_name || m.guest_name?.split(' ')[0] || '?')
+        }
+      } catch (e) { console.warn('[HistoryView] member enrich failed', e) }
+    }
+    linkedMatchHistory.value = matches.map(m => ({
+      ...m,
+      _teamA: membersByRound[m.round_a_id] || [],
+      _teamB: membersByRound[m.round_b_id] || [],
+    }))
   } catch (e) {
     console.warn('[HistoryView] matches fetch failed', e)
   } finally {
@@ -461,13 +479,14 @@ function formatMoney(val) {
 // -- Date helpers ---------------------------------------------
 function formatDate(d) {
   if (!d) return ''
-  const dt = new Date(d + 'T12:00:00')
+  // Handle both date-only strings (YYYY-MM-DD) and full ISO timestamps
+  const dt = d.includes('T') ? new Date(d) : new Date(d + 'T12:00:00')
   return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 function monthGroup(d) {
   if (!d) return 'Unknown'
-  const dt = new Date(d + 'T12:00:00')
+  const dt = d.includes('T') ? new Date(d) : new Date(d + 'T12:00:00')
   return dt.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 }
 
@@ -966,17 +985,13 @@ const groupedMatches = computed(() => {
 })
 
 function matchTeamNames(match, side) {
+  const names = side === 'a' ? (match._teamA || []) : (match._teamB || [])
+  if (names.length) return names.join(', ')
+  // fallback
   const cfg = match.match_config || {}
-  if (side === 'a') {
-    // Host team — try hostName + foursomeAPlayers, fallback to generic
-    const host = cfg.hostName || 'Host'
-    return host
-  } else {
-    // Guest team — foursomeBPlayers names
-    const players = cfg.foursomeBPlayers || []
-    if (players.length) return players.map(p => p.short_name || p.guest_name || '?').join(', ')
-    return 'Guests'
-  }
+  if (side === 'a') return cfg.hostName || 'Team A'
+  const players = cfg.foursomeBPlayers || []
+  return players.length ? players.map(p => p.short_name || '?').join(', ') : 'Team B'
 }
 
 function matchTeamScore(match, side) {
