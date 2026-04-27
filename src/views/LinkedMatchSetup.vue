@@ -300,7 +300,7 @@ const pendingRound = ref(null)
 const creating = ref(false)
 
 // Deep-clone DEFAULT_SIDE_BETS so each session is independent
-const sideBets = ref(DEFAULT_SIDE_BETS.map(b => ({ ...b })))
+const sideBets = ref(DEFAULT_SIDE_BETS.map(b => ({ ...b, enabled: false })))
 
 const activeSideBets = computed(() => sideBets.value.filter(b => b.enabled).length)
 

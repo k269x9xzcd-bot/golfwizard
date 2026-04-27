@@ -2099,7 +2099,11 @@ function _crossHoleRange(holesMode) {
 
 function _crossTeamName(members) {
   return (members || [])
-    .map(m => ((m.guest_name || m.short_name || '').trim()[0] || '?').toUpperCase())
+    .map(m => {
+      const full = (m.guest_name || m.short_name || '').trim()
+      const parts = full.split(/\s+/)
+      return parts.length >= 2 ? parts[parts.length - 1] : full || '?'
+    })
     .join('+')
 }
 
@@ -2298,9 +2302,8 @@ export function computeCrossBestBall(roundA, roundB, config = {}) {
     hcpPct = 0.90,
     sideBets: rawSideBets,
   } = config
-  // sideBets may be explicitly null (not undefined), so default-value
-  // destructuring won't catch it — coalesce separately.
-  const sideBets = rawSideBets ?? DEFAULT_SIDE_BETS
+  // null means side bets were explicitly disabled; undefined means not set (use defaults)
+  const sideBets = rawSideBets === undefined ? DEFAULT_SIDE_BETS : (rawSideBets || [])
 
   const holesMode = roundA?.holes_mode || '18'
   const { from, to } = _crossHoleRange(holesMode)

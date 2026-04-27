@@ -76,12 +76,12 @@
           <div class="lmd-hole-cell">Δ</div>
         </div>
         <div
-          v-for="row in result?.perHole || []"
+          v-for="row in perHoleCumulative"
           :key="row.hole"
           class="lmd-hole-row"
           :class="{
-            'lmd-hole-row--a-wins': row.diff != null && row.diff < 0,
-            'lmd-hole-row--b-wins': row.diff != null && row.diff > 0,
+            'lmd-hole-row--a-wins': row.cumDiff != null && row.cumDiff < 0,
+            'lmd-hole-row--b-wins': row.cumDiff != null && row.cumDiff > 0,
           }"
         >
           <div class="lmd-hole-cell lmd-hole-cell--label">{{ row.hole }}</div>
@@ -89,9 +89,9 @@
           <div class="lmd-hole-cell">{{ row.a ? formatVsPar(row.a.vsPar) : '—' }}</div>
           <div class="lmd-hole-cell">{{ row.b ? formatVsPar(row.b.vsPar) : '—' }}</div>
           <div class="lmd-hole-cell lmd-hole-cell--diff">
-            <template v-if="row.diff == null">—</template>
-            <template v-else-if="row.diff < 0">A +{{ Math.abs(row.diff) }}</template>
-            <template v-else-if="row.diff > 0">B +{{ row.diff }}</template>
+            <template v-if="row.cumDiff == null">—</template>
+            <template v-else-if="row.cumDiff < 0">A +{{ Math.abs(row.cumDiff) }}</template>
+            <template v-else-if="row.cumDiff > 0">B +{{ row.cumDiff }}</template>
             <template v-else>AS</template>
           </div>
         </div>
@@ -212,6 +212,15 @@ const myRoundId = computed(() => {
 })
 
 const summary = computed(() => summarizeLinkedMatch(match.value, roundA.value, roundB.value, result.value, myRoundId.value))
+
+// Hole-by-hole with cumulative delta
+const perHoleCumulative = computed(() => {
+  let cum = 0
+  return (result.value?.perHole || []).map(row => {
+    if (row.diff != null) cum += row.diff
+    return { ...row, cumDiff: row.diff != null ? cum : null }
+  })
+})
 const isHost = computed(() => authStore.user?.id && match.value?.created_by === authStore.user.id)
 
 // Foursome B scorer CTA: show when this user owns round B and match is live
