@@ -132,21 +132,10 @@ export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
   async function loadLinkedMatchDetail(matchId) {
     let match = null
     try {
-      const res = await supaCallWithRetry(
-        'linked_matches.byId',
-        () => supabase.from('linked_matches').select('*').eq('id', matchId).maybeSingle(),
-        5000,
-      )
-      match = res.data
-      if (res.error) throw res.error
+      const rows = await supaRawRequest('GET', `linked_matches?id=eq.${matchId}&select=*&limit=1`, null, 5000)
+      match = Array.isArray(rows) ? rows[0] : rows
     } catch (e) {
-      console.warn('[linkedMatches] SJS byId failed, trying raw:', e?.message)
-      try {
-        const rows = await supaRawRequest('GET', `linked_matches?id=eq.${matchId}&select=*&limit=1`, null, 8000)
-        match = Array.isArray(rows) ? rows[0] : rows
-      } catch (rawErr) {
-        throw new Error('Could not load match details. Check your connection.')
-      }
+      throw new Error('Could not load match details. Check your connection.')
     }
     if (!match) return null
 
@@ -161,46 +150,36 @@ export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
     return { match, roundA, roundB }
   }
 
-  async function _loadRoundBundle(roundId) {
+  // Cache: roundId → { data, loadedAt }
+  const _bundleCache = new Map()
+  const BUNDLE_CACHE_TTL = 30_000
+
+  async function _loadRoundBundle(roundId, { forceRefresh = false } = {}) {
     if (!roundId) return null
 
-    // Tier 1: SJS embedded join (fast — single request)
-    try {
-      const { data, error } = await supaCallWithRetry(
-        `linkedMatch.loadRound(${roundId.slice(0, 8)})`,
-        () => supabase.from('rounds').select('*, round_members(*), scores(*)').eq('id', roundId).maybeSingle(),
-        5000,
-      )
-      if (error) throw error
-      // PostgREST returns the round row even when RLS blocks embedded tables,
-      // giving empty arrays for round_members/scores. If the round exists but
-      // members are missing, fall through to raw queries which hit RLS per-table.
-      if (data && data.round_members?.length > 0) {
-        console.log(`[linkedMatches] SJS bundle OK for ${roundId.slice(0, 8)}: ${data.round_members.length} members, ${data.scores?.length ?? 0} scores`)
-        return data
-      }
-      if (data) {
-        console.warn(`[linkedMatches] SJS returned round ${roundId.slice(0, 8)} but 0 members — falling through to raw`)
-      }
-    } catch (e) {
-      console.warn('[linkedMatches] SJS loadRoundBundle failed, trying raw:', e?.message || e)
+    // Return cached bundle if fresh enough
+    const cached = _bundleCache.get(roundId)
+    if (!forceRefresh && cached && (Date.now() - cached.loadedAt < BUNDLE_CACHE_TTL)) {
+      return cached.data
     }
 
-    // Tier 2: three separate raw-fetch queries (bypasses PostgREST embedded-join RLS quirks)
+    // Skip SJS embedded join — RLS blocks embedded tables and always returns empty
+    // members/scores arrays, so it only wastes 10s before falling through anyway.
+    // Go straight to 3 parallel raw fetches.
     try {
       const [rnd, members, scores] = await Promise.all([
-        supaRawRequest('GET', `rounds?id=eq.${roundId}&select=*&limit=1`, null, 8000),
-        supaRawRequest('GET', `round_members?round_id=eq.${roundId}&select=*`, null, 8000),
-        supaRawRequest('GET', `scores?round_id=eq.${roundId}&select=*`, null, 8000),
+        supaRawRequest('GET', `rounds?id=eq.${roundId}&select=*&limit=1`, null, 5000),
+        supaRawRequest('GET', `round_members?round_id=eq.${roundId}&select=*`, null, 5000),
+        supaRawRequest('GET', `scores?round_id=eq.${roundId}&select=*`, null, 5000),
       ])
       const round = Array.isArray(rnd) ? rnd[0] : rnd
       if (!round) return null
       round.round_members = Array.isArray(members) ? members : []
       round.scores = Array.isArray(scores) ? scores : []
-      console.log(`[linkedMatches] raw bundle OK for ${roundId.slice(0, 8)}: ${round.round_members.length} members, ${round.scores.length} scores`)
+      _bundleCache.set(roundId, { data: round, loadedAt: Date.now() })
       return round
     } catch (rawErr) {
-      console.warn('[linkedMatches] raw loadRoundBundle failed:', rawErr)
+      console.warn('[linkedMatches] _loadRoundBundle failed:', rawErr?.message || rawErr)
       return null
     }
   }
@@ -228,10 +207,7 @@ export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
       // Persist settlement as a JSON snapshot on the linked_match row
       const settlementPayload = {
         status: 'complete',
-        settlement_json: {
-          result,
-          computedAt: new Date().toISOString(),
-        },
+        completed_at: new Date().toISOString(),
       }
 
       await supaCallWithRetry(
@@ -346,12 +322,11 @@ export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
 
   async function _reloadScoresOnly(round) {
     try {
-      const { data, error } = await supaCallWithRetry(
-        `linkedMatch.reloadScores(${round.id.slice(0, 8)})`,
-        () => supabase.from('scores').select('*').eq('round_id', round.id),
-        6000,
-      )
-      if (!error && Array.isArray(data)) round.scores = data
+      const fresh = await _loadRoundBundle(round.id, { forceRefresh: true })
+      if (fresh) {
+        round.scores = fresh.scores
+        round.round_members = fresh.round_members
+      }
     } catch { /* non-fatal */ }
   }
 
