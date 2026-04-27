@@ -228,6 +228,7 @@
                   :class="{ 'ghin-spark-bar--latest': bar.isLatest }"
                   :style="{ height: bar.pct + '%' }"
                 ></div>
+                <div v-if="sparkAvgPct != null" class="ghin-spark-avg-line" :style="{ bottom: sparkAvgPct + '%' }"></div>
               </div>
             </div>
           </div>
@@ -888,6 +889,18 @@ const ghinSparkBars = computed(() => {
   }))
 })
 
+const sparkAvgPct = computed(() => {
+  const s = ghinScores.value.slice(0, 10).reverse()
+  if (s.length < 2) return null
+  const diffs = s.map(r => r.differential ?? 0)
+  const mn = Math.min(...diffs)
+  const mx = Math.max(...diffs)
+  const range = mx - mn || 1
+  const avg = diffs.reduce((a, b) => a + b, 0) / diffs.length
+  // Same scale as bars: 20–95% height range. Convert to bottom% for absolute positioning.
+  return 20 + ((avg - mn) / range) * 75
+})
+
 const ghinIsBonnieBriar = computed(() =>
   myRosterPlayer.value?.club_name?.toLowerCase().includes('bonnie briar') ?? false
 )
@@ -972,7 +985,15 @@ async function fetchGhinScores() {
 
   ghinScores.value = data.scores || []
   ghinScoresPosted.value = data.scores_posted ?? null
-  ghinScoreStats.value = data.aggregate_stats ?? data.score_stats ?? null
+  // aggregate_stats has birdie/par/GIR; score range computed from scores array (not GHIN field names)
+  const aggStats = data.aggregate_stats ?? null
+  const rawScores = (data.scores || []).map(s => s.adjusted_gross_score).filter(v => v != null)
+  const scoreRange = rawScores.length ? {
+    lowest_score: Math.min(...rawScores),
+    highest_score: Math.max(...rawScores),
+    average: rawScores.reduce((a, b) => a + b, 0) / rawScores.length,
+  } : {}
+  ghinScoreStats.value = aggStats ? { ...aggStats, ...scoreRange } : (rawScores.length ? scoreRange : null)
   ghinLiveHI.value = data.handicap_index ?? null
   ghinLiveLowHI.value = data.low_hi_display ?? null
   ghinScoresFetched.value = true
@@ -1539,6 +1560,14 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 }
 .ghin-spark-bars {
   display: flex; align-items: flex-end; gap: 3px; height: 32px;
+  position: relative;
+}
+.ghin-spark-avg-line {
+  position: absolute;
+  left: 0; right: 0;
+  height: 1px;
+  background: rgba(239, 68, 68, 0.7);
+  pointer-events: none;
 }
 .ghin-spark-bar {
   flex: 1; border-radius: 3px 3px 0 0;
