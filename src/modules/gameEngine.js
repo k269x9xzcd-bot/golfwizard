@@ -2030,8 +2030,11 @@ function _crossSiFor(round) {
 
 function _crossCourseInfo(round) {
   const snap = round?.course_snapshot
-  const slope = snap?.slope ?? 113
-  const rating = snap?.rating ?? 72
+  // slope/rating may be top-level (old format) or nested under teesData[tee] (new format)
+  const tee = round?.tee || snap?.defaultTee
+  const teeData = (tee && snap?.teesData?.[tee]) || {}
+  const slope = teeData.slope ?? snap?.slope ?? 113
+  const rating = teeData.rating ?? snap?.rating ?? 72
   const par = (_crossParFor(round)).reduce((s, p) => s + p, 0) || 72
   return { slope, rating, par }
 }
