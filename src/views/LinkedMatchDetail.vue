@@ -16,17 +16,6 @@
     </div>
 
     <template v-else>
-      <!-- DEBUG: on-screen diagnostics (remove after fix confirmed) -->
-      <div v-if="debugInfo" style="background:#1a1a2e;border:1px solid #e94560;border-radius:8px;margin:8px 16px;padding:10px 12px;font-size:12px;color:#eee;font-family:monospace;line-height:1.5;word-break:break-all;">
-        <div style="color:#e94560;font-weight:bold;margin-bottom:4px;">v3.10.119 debug</div>
-        <div>match: {{ match?.id?.slice(0,8) }} status={{ match?.status }}</div>
-        <div>roundA: {{ roundA ? `${roundA.id?.slice(0,8)} members=${roundA.round_members?.length} scores=${roundA.scores?.length}` : 'null' }}</div>
-        <div>roundB: {{ roundB ? `${roundB.id?.slice(0,8)} members=${roundB.round_members?.length} scores=${roundB.scores?.length}` : 'null' }}</div>
-        <div>result: holesBoth={{ result?.holesBoth ?? '?' }} leader={{ result?.currentLeader ?? 'none' }} teamA={{ result?.teamA?.name || '?' }} teamB={{ result?.teamB?.name || '?' }}</div>
-        <div v-if="computeError" style="color:#ff4444;margin-top:4px;">ERROR: {{ computeError }}</div>
-        <div>config: balls={{ match?.match_config?.ballsToCount }} stake={{ match?.match_config?.stake }} hcpPct={{ match?.match_config?.hcpPct }}</div>
-      </div>
-
       <!-- Status card -->
       <div class="lmd-status-card" :class="`lmd-status--${summary.state}`">
         <div class="lmd-status-emoji">
@@ -223,7 +212,6 @@ const myRoundId = computed(() => {
 })
 
 const summary = computed(() => summarizeLinkedMatch(match.value, roundA.value, roundB.value, result.value, myRoundId.value))
-const debugInfo = computed(() => !!match.value) // show debug banner whenever match is loaded
 const isHost = computed(() => authStore.user?.id && match.value?.created_by === authStore.user.id)
 
 // Foursome B scorer CTA: show when this user owns round B and match is live
@@ -303,17 +291,8 @@ function recompute() {
   }
 }
 
-/**
- * Manual override: host creates Foursome B's round by running the normal
- * wizard. Once the round is created it's automatically linked to this match
- * as round_b_id (via acceptLinkedMatch). The invite code gets used just like
- * the invitee flow — but the host does it all on their own phone.
- */
 async function onManualB() {
   if (!match.value) return
-  // Navigate to the accept flow for this match's code so the same wizard
-  // + acceptLinkedMatch path runs. The user is already the host so the
-  // "already linked" guard won't fire (they own round A, not round B).
   router.push(`/accept/${match.value.invite_code}`)
 }
 
@@ -498,7 +477,6 @@ watch(() => route.params.id, (id) => { if (id) load() })
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Manual override for when Foursome B has nobody with the app */
 .lmd-manual-override {
   margin: 8px 16px 14px;
   padding: 14px 16px;
@@ -521,7 +499,6 @@ watch(() => route.params.id, (id) => { if (id) load() })
 }
 .lmd-btn-override:active { transform: scale(.98); }
 
-/* Net settlement card */
 .lmd-net-card {
   margin: 0 16px 6px; padding: 14px 16px; border-radius: 14px;
   display: flex; align-items: flex-start; gap: 12px;
@@ -539,7 +516,6 @@ watch(() => route.params.id, (id) => { if (id) load() })
 .lmd-net-summary { font-size: 14px; font-weight: 700; color: var(--gw-text); line-height: 1.3; }
 .lmd-net-perplayer { font-size: 11px; color: var(--gw-text-muted); }
 
-/* Settle breakdown lines */
 .lmd-settle-line {
   display: flex; justify-content: space-between; align-items: center;
   margin: 0 16px; padding: 6px 0;
@@ -564,5 +540,4 @@ watch(() => route.params.id, (id) => { if (id) load() })
   font-size: 10px; font-weight: 800; letter-spacing: .08em;
   text-transform: uppercase; color: var(--gw-text-muted);
 }
-
 </style>
