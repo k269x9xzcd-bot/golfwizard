@@ -2812,6 +2812,17 @@ body.gw-landscape .scorecard-grid tbody .col-player-name {
   --gw-neutral-200: #1e3d24;
   --gw-neutral-100: #0d2614;
   --gw-neutral-50:  #051409;
+
+  /* Green scale — flip dark greens to light surfaces */
+  --gw-green-900: #ffffff;
+  --gw-green-800: #f0f7f3;
+  --gw-green-700: #e0ede5;
+  --gw-green-600: #c8dece;
+  --gw-green-500: #8aab90;
+  --gw-green-400: #5d7a63;
+  --gw-green-300: #3d5c43;
+  --gw-green-200: #1e5c38;
+  --gw-green-100: #0d3325;
 }
 
 /* Body & shell */
@@ -2924,17 +2935,6 @@ body.gw-landscape .scorecard-grid tbody .col-player-name {
    ══════════════════════════════════════════════════════════════ */
 
 /* ── Base text ── */
-[data-theme="light"] * {
-  /* Override the most common hardcoded dark-theme text color */
-  --_lt-text: #0d1f12;
-}
-
-/* Catch-all: any element whose color is the dark-theme cream */
-[data-theme="light"] body,
-[data-theme="light"] body * {
-  color: inherit;
-}
-
 [data-theme="light"] body {
   color: #0d1f12;
 }
@@ -2944,6 +2944,48 @@ body.gw-landscape .scorecard-grid tbody .col-player-name {
 [data-theme="light"] [style*="rgba(255,255,255,0.04)"] {
   background: rgba(0,0,0,0.03) !important;
 }
+
+/* ── Hardcoded dark-theme text colors ── */
+[data-theme="light"] .player-name  { color: #0d1f12 !important; }
+[data-theme="light"] .player-hcp   { color: rgba(13,31,18,0.55) !important; }
+[data-theme="light"] .player-card  { background: #ffffff; border: 1px solid rgba(13,95,60,0.12); }
+
+/* kpi-card uses --gw-green-800 (now overridden to light) but also needs text fix */
+[data-theme="light"] .kpi-card     { border-color: rgba(13,95,60,0.18); }
+[data-theme="light"] .kpi-value    { color: #0d1f12 !important; }
+[data-theme="light"] .kpi-label    { color: rgba(13,31,18,0.55) !important; }
+[data-theme="light"] .kpi-highlight .kpi-value { color: #9a7a1e !important; }
+[data-theme="light"] .kpi-birdie .kpi-value    { color: #2563eb !important; }
+
+/* Pill / player selector */
+[data-theme="light"] .pill {
+  color: #0d3325;
+  border-color: rgba(13,95,60,0.3);
+  background: #ffffff;
+}
+[data-theme="light"] .pill.active {
+  background: #0d3325;
+  color: #ffffff;
+  border-color: #0d3325;
+}
+
+/* Selector labels */
+[data-theme="light"] .selector-label { color: #5d7a63; }
+
+/* Course select dropdown */
+[data-theme="light"] .course-select {
+  background: #ffffff;
+  color: #0d1f12;
+  border-color: #c8dace;
+}
+
+/* Players view header sub-bar */
+[data-theme="light"] .players-subheader,
+[data-theme="light"] .players-toolbar { background: #0d3325; }
+
+/* Any remaining cream-colored text */
+[data-theme="light"] [style*="color: #f0ede0"],
+[data-theme="light"] [style*="color:#f0ede0"] { color: #0d1f12 !important; }
 
 /* ── Section / form labels ── */
 [data-theme="light"] .form-section-label,
