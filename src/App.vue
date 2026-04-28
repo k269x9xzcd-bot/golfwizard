@@ -38,7 +38,11 @@
             <button class="mrb-dismiss" @click="memberBannerDismissed = true">✕</button>
           </div>
         </div>
-        <RouterView />
+        <RouterView v-slot="{ Component, route }">
+          <KeepAlive :include="['MetricsView']" :max="1">
+            <component :is="Component" :key="route.name === 'metrics' ? `metrics-${roundsStore.rounds.length}` : route.fullPath" />
+          </KeepAlive>
+        </RouterView>
       </div>
 
       <!-- First-time name prompt — only for users missing a last name, never on invite URLs -->

@@ -550,7 +550,7 @@
             <input v-model="editFirst" class="wiz-input" placeholder="First name" />
             <input v-model="editLast" class="wiz-input" placeholder="Last name" />
           </div>
-          <input v-model="editGhin" class="wiz-input" placeholder="GHIN Index" type="number" step="0.1" />
+          <input v-model="editGhin" class="wiz-input" placeholder="GHIN Index (e.g. 12.4)" type="text" inputmode="decimal" />
           <div v-if="editTarget?.club_name" class="edit-club-row">
             <img
               v-if="editTarget.club_name.toLowerCase().includes('bonnie briar')"
@@ -603,7 +603,7 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive } from 'vue'
+import { ref, computed, reactive, nextTick } from 'vue'
 import { useRosterStore, displayInitials } from '../stores/roster'
 import { buildInviteUrl, buildInviteEmail } from '../modules/preset'
 import { useAuthStore } from '../stores/auth'
@@ -759,7 +759,8 @@ function invitePlayer(player) {
   if (!player.email) return
   const senderName = authStore.profile?.display_name?.split(' ')[0] || 'Jason'
   const mailtoLink = buildInviteEmail(player, senderName)
-  window.location.href = mailtoLink
+  // Use window.open so iOS PWA opens Mail instead of navigating away
+  window.open(mailtoLink, '_blank')
   showInviteHint(`Invite sent to ${player.name.split(' ')[0]}!`)
 }
 
@@ -806,7 +807,7 @@ function shareRosterWith(recipient) {
     senderName,
   ].join('\n')
 
-  window.location.href = `mailto:${encodeURIComponent(recipient.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+  window.open(`mailto:${encodeURIComponent(recipient.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank')
   showInviteHint(`Roster shared with ${first}!`)
 }
 
@@ -1361,12 +1362,13 @@ async function searchGhinForEdit() {
   }
 }
 
-function applyGhinResult(r) {
+async function applyGhinResult(r) {
+  ghinSearchResults.value = []
+  ghinSearchMsg.value = `✓ Selected ${r.full_name}`
+  await nextTick()
   editGhinNumber.value = r.ghin_number
   editGhin.value = r.handicap_index != null ? String(r.handicap_index) : editGhin.value
   editClubName.value = r.club_name || editClubName.value
-  ghinSearchResults.value = []
-  ghinSearchMsg.value = `✓ Selected ${r.full_name}`
 }
 
 async function saveEdit() {

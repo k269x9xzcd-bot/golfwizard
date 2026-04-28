@@ -417,7 +417,7 @@ function extractPlayers() {
   const map = new Map()
   for (const r of allRounds.value) {
     for (const m of (r.round_members || [])) {
-      const key = m.profile_id || m.id
+      const key = m.profile_id || m.email || m.guest_name || m.id
       if (!map.has(key)) {
         map.set(key, {
           id: key,
@@ -444,7 +444,7 @@ const allCourses = computed(() => {
 function findMember(round) {
   if (!selectedPlayer.value) return null
   return (round.round_members || []).find(m =>
-    (m.profile_id || m.id) === selectedPlayer.value
+    (m.profile_id || m.email || m.guest_name || m.id) === selectedPlayer.value
   )
 }
 
@@ -698,8 +698,8 @@ const h2hRecords = computed(() => {
     const myMoney = settlementsMap.value[r.id]?.playerTotals?.[me.id]?.total ?? null
 
     for (const opp of (r.round_members || [])) {
-      if ((opp.profile_id || opp.id) === selectedPlayer.value) continue
-      const oppKey = opp.profile_id || opp.id
+      if ((opp.profile_id || opp.email || opp.guest_name || opp.id) === selectedPlayer.value) continue
+      const oppKey = opp.profile_id || opp.email || opp.guest_name || opp.id
 
       const oppGross = scores.filter(s => s.member_id === opp.id).reduce((sum, s) => sum + (s.score ?? 0), 0)
       if (!oppGross) continue
