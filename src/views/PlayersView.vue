@@ -2063,3 +2063,23 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 .cap-none { background: var(--gw-neutral-700); color: var(--gw-text-muted); font-size:12px; font-weight:700; padding:2px 8px; border-radius:8px; }
 
 </style>
+
+<style>
+/* Light theme — non-scoped to beat scoped specificity */
+[data-theme="light"] .player-name        { color: #0d1f12 !important; }
+[data-theme="light"] .player-hcp         { color: rgba(13,31,18,0.55) !important; }
+[data-theme="light"] .player-card        { background: #ffffff !important; border-color: rgba(13,95,60,0.12) !important; }
+[data-theme="light"] .empty-state        { color: rgba(13,31,18,0.45) !important; }
+[data-theme="light"] .swipe-hint         { color: rgba(13,31,18,0.3) !important; }
+[data-theme="light"] .delete-header,
+[data-theme="light"] .edit-title,
+[data-theme="light"] .match-name         { color: #0d1f12 !important; }
+[data-theme="light"] .delete-message,
+[data-theme="light"] .match-meta,
+[data-theme="light"] .edit-club-name,
+[data-theme="light"] .ghin-search-meta,
+[data-theme="light"] .ghin-search-msg    { color: rgba(13,31,18,0.55) !important; }
+[data-theme="light"] .close-btn          { color: rgba(13,31,18,0.4) !important; }
+[data-theme="light"] .ghin-prefix-input  { color: rgba(13,31,18,0.6) !important; }
+[data-theme="light"] .player-sheet       { background: #f4f7f5 !important; }
+</style>
