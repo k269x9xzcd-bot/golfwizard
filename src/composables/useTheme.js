@@ -3,13 +3,6 @@ import { ref, watch } from 'vue'
 const STORAGE_KEY = 'gw-theme'
 const DEFAULT = 'dark'
 
-// Clear any previously stored 'light' preference so existing users
-// also get reset to dark on next load.
-if (typeof localStorage !== 'undefined') {
-  const stored = localStorage.getItem(STORAGE_KEY)
-  if (stored === 'light') localStorage.removeItem(STORAGE_KEY)
-}
-
 const theme = ref(
   typeof localStorage !== 'undefined'
     ? (localStorage.getItem(STORAGE_KEY) || DEFAULT)

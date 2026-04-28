@@ -109,6 +109,24 @@
       </div>
     </template>
 
+    <!-- Theme toggle — available to all users -->
+    <div class="settings-form">
+      <div class="form-section-label">Appearance</div>
+      <div class="nickname-toggle-row">
+        <span class="toggle-label">{{ theme === 'light' ? '☀️ Light mode' : '🌙 Dark mode' }}</span>
+        <button
+          class="theme-toggle-btn"
+          :class="{ 'is-light': theme === 'light' }"
+          @click="toggleTheme"
+          type="button"
+          :aria-label="theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'"
+        >
+          <span class="tt-icon tt-moon">🌙</span>
+          <span class="tt-icon tt-sun">☀️</span>
+        </button>
+      </div>
+    </div>
+
     <div class="settings-version">GolfWizard v{{ appVersion }} · {{ buildDate }} {{ buildTime }} · <span class="settings-commit">{{ commitSha }}</span></div>
     <AuthModal v-if="showAuth" @close="showAuth = false" />
   </div>
@@ -117,12 +135,14 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
+import { useTheme } from '../composables/useTheme'
 import { supabase } from '../supabase'
 import AuthModal from '../components/AuthModal.vue'
 import { supaCall } from '../modules/supabaseOps'
 import { supaRawRequest, supaRawUpdate } from '../modules/supaRaw'
 
 const authStore = useAuthStore()
+const { theme, toggle: toggleTheme } = useTheme()
 const showAuth = ref(false)
 
 const firstName = ref('')

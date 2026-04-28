@@ -113,6 +113,10 @@ import { hasTournamentAccess, useTournamentStore } from './stores/tournament.js'
 import { useLinkedMatchesStore } from './stores/linkedMatches'
 import WizardOverlay from './components/WizardOverlay.vue'
 import JoinOverlay from './components/JoinOverlay.vue'
+import { useTheme } from './composables/useTheme'
+
+const { init: initTheme } = useTheme()
+initTheme()
 
 const authStore = useAuthStore()
 const rosterStore = useRosterStore()
