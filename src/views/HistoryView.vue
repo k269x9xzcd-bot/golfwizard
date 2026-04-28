@@ -2,17 +2,18 @@
   <div class="history-view">
     <!-- Header -->
     <header class="history-header">
-      <h1 class="history-title">History</h1>
-      <div v-if="activeSegment === 'rounds' && roundsStore.rounds.length" class="round-count">
+      <button v-if="soloRoundId" class="back-btn" @click="$router.push('/')">‹ Home</button>
+      <h1 class="history-title">{{ soloRoundId ? 'Round Recap' : 'History' }}</h1>
+      <div v-if="!soloRoundId && activeSegment === 'rounds' && roundsStore.rounds.length" class="round-count">
         {{ roundsStore.rounds.length }} round{{ roundsStore.rounds.length !== 1 ? 's' : '' }}
       </div>
-      <div v-else-if="activeSegment === 'matches' && linkedMatchHistory.length" class="round-count">
+      <div v-else-if="!soloRoundId && activeSegment === 'matches' && linkedMatchHistory.length" class="round-count">
         {{ linkedMatchHistory.length }} match{{ linkedMatchHistory.length !== 1 ? 'es' : '' }}
       </div>
     </header>
 
-    <!-- Segmented control -->
-    <div class="segment-control">
+    <!-- Segmented control — hidden in solo mode -->
+    <div v-if="!soloRoundId" class="segment-control">
       <button
         class="segment-btn"
         :class="{ active: activeSegment === 'rounds' }"
@@ -49,9 +50,9 @@
 
     <!-- Round list -->
     <div v-else class="rounds-list">
-      <!-- Group by month -->
-      <template v-for="group in groupedRounds" :key="group.month">
-        <div class="month-label">{{ group.month }}</div>
+      <!-- Group by month; in solo mode show only the matching round without month label -->
+      <template v-for="group in (soloRoundId ? [{ month: '', rounds: roundsStore.rounds.filter(r => r.id === soloRoundId) }] : groupedRounds)" :key="group.month">
+        <div v-if="group.month" class="month-label">{{ group.month }}</div>
 
         <div
           v-for="round in group.rounds"
@@ -198,6 +199,7 @@
           </transition>
         </div>
       </template>
+
     </div>
 
     <!-- Delete confirmation -->
@@ -345,18 +347,23 @@ onMounted(async () => {
     matchesLoading.value = false
   }
   // Support ?expand=<roundId> coming from Home "Recent Rounds" tap
-  const id = route.query?.expand
-  if (id && !expandedIds.value.has(id)) {
-    await toggleRound(String(id))
-    // Clean the URL so a refresh doesn't re-expand
+  // Handle ?solo=<id> (from Home recent rounds tap) and ?expand=<id>
+  const soloId = route.query?.solo
+  const expandId = route.query?.expand
+  const targetId = soloId || expandId
+  if (targetId && !expandedIds.value.has(targetId)) {
+    await toggleRound(String(targetId))
+    // Clean the URL
     router.replace({ path: '/history', query: {} })
-    // Scroll the expanded card into view on next tick
+    // Scroll into view
     setTimeout(() => {
-      const el = document.querySelector(`[data-round-id="${id}"]`)
+      const el = document.querySelector(`[data-round-id="${targetId}"]`)
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }, 120)
   }
 })
+
+const soloRoundId = ref(route.query?.solo || null)
 
 const expandedIds = ref(new Set())
 const settlementsCache = reactive({})
@@ -1037,6 +1044,17 @@ function matchResultClass(match) {
   min-height: 100%;
   background: var(--gw-neutral-950);
   padding-bottom: calc(var(--gw-nav-height) + env(safe-area-inset-bottom) + 16px);
+}
+
+.back-btn {
+  background: none;
+  border: none;
+  color: var(--gw-gold);
+  font-size: 17px;
+  padding: 0;
+  cursor: pointer;
+  font-weight: 500;
+  flex-shrink: 0;
 }
 
 .history-header {

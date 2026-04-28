@@ -205,7 +205,7 @@ function roundPlayerNames(round) {
 async function openRound(id) {
   const r = roundsStore.rounds.find(x => x.id === id)
   if (r?.is_complete) {
-    router.push({ path: '/history', query: { expand: id } })
+    router.push({ path: '/history', query: { solo: id } })
     return
   }
   try {
