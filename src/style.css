@@ -2939,6 +2939,35 @@ body.gw-landscape .scorecard-grid tbody .col-player-name {
   color: #0d1f12;
 }
 
+/* ── Round cards (HomeView) ── */
+[data-theme="light"] .round-players { color: rgba(13,31,18,0.65) !important; }
+[data-theme="light"] .round-date    { color: rgba(13,31,18,0.4) !important; }
+[data-theme="light"] .round-course  { color: #0d1f12; }
+
+/* ── Game type buttons (Wizard) ── */
+[data-theme="light"] .game-type-btn {
+  background: #ffffff !important;
+  border-color: rgba(13,95,60,0.25) !important;
+}
+[data-theme="light"] .game-type-btn.selected {
+  background: linear-gradient(135deg, rgba(154,122,30,.12) 0%, rgba(13,95,60,.10) 100%) !important;
+  border-color: #9a7a1e !important;
+}
+[data-theme="light"] .gtb-label { color: #0d3325 !important; }
+[data-theme="light"] .game-type-btn.selected .gtb-label { color: #9a7a1e !important; }
+
+/* ── Wizard misc ── */
+[data-theme="light"] .wiz-locked-hint { color: rgba(13,31,18,0.5) !important; }
+[data-theme="light"] .sm-vs           { color: rgba(13,31,18,0.4) !important; }
+[data-theme="light"] .wiz-step-label,
+[data-theme="light"] .wiz-section-label { color: #5d7a63; }
+[data-theme="light"] .wiz-card,
+[data-theme="light"] .side-game-header  { background: #ffffff; border-color: rgba(13,95,60,0.15); }
+[data-theme="light"] .game-config-card  { background: #ffffff; border-color: rgba(13,95,60,0.15); }
+[data-theme="light"] .game-info-popover { background: #f4f7f5; border-color: rgba(13,95,60,0.2); }
+[data-theme="light"] .game-info-desc    { color: #0d1f12; }
+[data-theme="light"] .game-info-section { color: rgba(13,31,18,0.65); }
+
 /* ── Glass card surfaces (dark theme uses rgba(white, low-alpha) on dark bg) ── */
 [data-theme="light"] [style*="rgba(255,255,255,.04)"],
 [data-theme="light"] [style*="rgba(255,255,255,0.04)"] {
