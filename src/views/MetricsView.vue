@@ -417,7 +417,7 @@ function extractPlayers() {
   const map = new Map()
   for (const r of allRounds.value) {
     for (const m of (r.round_members || [])) {
-      const key = m.profile_id || m.email || m.guest_name || m.id
+      const key = m.profile_id || m.guest_name || m.email || m.id
       if (!map.has(key)) {
         map.set(key, {
           id: key,
@@ -444,7 +444,7 @@ const allCourses = computed(() => {
 function findMember(round) {
   if (!selectedPlayer.value) return null
   return (round.round_members || []).find(m =>
-    (m.profile_id || m.email || m.guest_name || m.id) === selectedPlayer.value
+    (m.profile_id || m.guest_name || m.email || m.id) === selectedPlayer.value
   )
 }
 
