@@ -7,6 +7,15 @@
       </div>
       <div class="header-actions">
         <button class="help-btn" @click="showHelp = true" title="Help & Support">?</button>
+        <button
+          class="theme-toggle-btn"
+          :class="{ 'is-light': theme === 'light' }"
+          @click="toggleTheme"
+          :title="theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'"
+        >
+          <span class="tt-icon tt-moon">🌙</span>
+          <span class="tt-icon tt-sun">☀️</span>
+        </button>
         <button v-if="!authStore.isAuthenticated" class="btn-signin" @click="showAuth = true">
           Sign In
         </button>
@@ -142,11 +151,13 @@ import { useLinkedMatchesStore } from '../stores/linkedMatches'
 import AuthModal from '../components/AuthModal.vue'
 import HelpView from './HelpView.vue'
 import CrossMatchBanner from '../components/CrossMatchBanner.vue'
+import { useTheme } from '../composables/useTheme'
 
 const appVersion = __APP_VERSION__
 
 const authStore = useAuthStore()
 const roundsStore = useRoundsStore()
+const { theme, toggle: toggleTheme } = useTheme()
 const tournamentStore = useTournamentStore()
 const linkedStore = useLinkedMatchesStore()
 const router = useRouter()

@@ -2916,3 +2916,155 @@ body.gw-landscape .scorecard-grid tbody .col-player-name {
 .theme-toggle-btn .tt-sun  { right: 2px; opacity: 0; }
 .theme-toggle-btn.is-light .tt-moon { opacity: 0; }
 .theme-toggle-btn.is-light .tt-sun  { opacity: 1; }
+
+/* ══════════════════════════════════════════════════════════════
+   LIGHT THEME — global text & surface overrides
+   Covers hardcoded #f0ede0 / rgba(240,237,224,*) text colors
+   and rgba(255,255,255,.04-.15) dark glass card backgrounds
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Base text ── */
+[data-theme="light"] * {
+  /* Override the most common hardcoded dark-theme text color */
+  --_lt-text: #0d1f12;
+}
+
+/* Catch-all: any element whose color is the dark-theme cream */
+[data-theme="light"] body,
+[data-theme="light"] body * {
+  color: inherit;
+}
+
+[data-theme="light"] body {
+  color: #0d1f12;
+}
+
+/* ── Glass card surfaces (dark theme uses rgba(white, low-alpha) on dark bg) ── */
+[data-theme="light"] [style*="rgba(255,255,255,.04)"],
+[data-theme="light"] [style*="rgba(255,255,255,0.04)"] {
+  background: rgba(0,0,0,0.03) !important;
+}
+
+/* ── Section / form labels ── */
+[data-theme="light"] .form-section-label,
+[data-theme="light"] .field-label,
+[data-theme="light"] .toggle-label,
+[data-theme="light"] .settings-title,
+[data-theme="light"] .settings-version,
+[data-theme="light"] .req-star { color: #3d5c43; }
+
+[data-theme="light"] .field-hint { color: rgba(13,31,18,0.5); }
+
+/* ── Player rows ── */
+[data-theme="light"] .player-row {
+  background: #ffffff;
+  border: 1px solid rgba(13,95,60,0.12);
+}
+[data-theme="light"] .player-name { color: #0d1f12; }
+[data-theme="light"] .player-hcp  { color: rgba(13,31,18,0.5); }
+[data-theme="light"] .swipe-hint  { color: rgba(13,31,18,0.3); }
+[data-theme="light"] .section-header,
+[data-theme="light"] .roster-section-label { color: #5d7a63; }
+
+/* Player search / add bar */
+[data-theme="light"] .search-bar,
+[data-theme="light"] .player-search-input {
+  background: #ffffff;
+  color: #0d1f12;
+  border-color: #c8dace;
+}
+
+/* ── Metric / stat cards ── */
+[data-theme="light"] .stat-card,
+[data-theme="light"] .metric-card,
+[data-theme="light"] .kpi-card {
+  background: #ffffff;
+  border: 1px solid rgba(13,95,60,0.12);
+}
+[data-theme="light"] .stat-value,
+[data-theme="light"] .metric-value,
+[data-theme="light"] .kpi-value { color: #0d1f12; }
+[data-theme="light"] .stat-label,
+[data-theme="light"] .metric-label,
+[data-theme="light"] .kpi-label { color: rgba(13,31,18,0.55); }
+
+/* Metrics view specifics */
+[data-theme="light"] .metrics-header h1,
+[data-theme="light"] .metrics-title { color: #9a7a1e; }
+[data-theme="light"] .metrics-subtitle { color: rgba(13,31,18,0.55); }
+[data-theme="light"] .player-pill {
+  background: #ffffff;
+  border-color: rgba(13,95,60,0.25);
+  color: #0d3325;
+}
+[data-theme="light"] .player-pill.active {
+  background: #0d3325;
+  color: #ffffff;
+  border-color: #0d3325;
+}
+[data-theme="light"] .segment-control {
+  background: rgba(13,95,60,0.08);
+}
+[data-theme="light"] .segment-btn { color: rgba(13,31,18,0.6); }
+[data-theme="light"] .segment-btn.active {
+  background: #0d3325;
+  color: #ffffff;
+}
+[data-theme="light"] .scoring-dist-label { color: #0d1f12; }
+[data-theme="light"] .scoring-dist-count,
+[data-theme="light"] .scoring-dist-pct   { color: rgba(13,31,18,0.7); }
+[data-theme="light"] .recent-rounds-title { color: #9a7a1e; }
+[data-theme="light"] .metrics-round-card {
+  background: #ffffff;
+  border: 1px solid rgba(13,95,60,0.12);
+}
+[data-theme="light"] .metrics-round-course { color: #0d1f12; }
+[data-theme="light"] .metrics-round-meta   { color: rgba(13,31,18,0.5); }
+
+/* ── History view ── */
+[data-theme="light"] .history-round-card,
+[data-theme="light"] .round-detail-card {
+  background: #ffffff;
+  border: 1px solid rgba(13,95,60,0.12);
+}
+[data-theme="light"] .history-course-name,
+[data-theme="light"] .round-course-name { color: #0d1f12; }
+[data-theme="light"] .history-meta,
+[data-theme="light"] .round-meta        { color: rgba(13,31,18,0.5); }
+[data-theme="light"] .scores-table th   { color: #5d7a63; }
+[data-theme="light"] .scores-table td   { color: #0d1f12; }
+[data-theme="light"] .scores-table tr   { border-color: rgba(13,95,60,0.08); }
+[data-theme="light"] .game-recap-label  { color: #5d7a63; }
+[data-theme="light"] .settlement-label  { color: #5d7a63; }
+[data-theme="light"] .settlement-row    { color: #0d1f12; }
+
+/* ── Bottom sheets / modals ── */
+[data-theme="light"] .bottom-sheet,
+[data-theme="light"] .sheet-content,
+[data-theme="light"] .modal-card {
+  background: #f4f7f5;
+  border-top: 1px solid rgba(13,95,60,0.15);
+}
+[data-theme="light"] .sheet-title,
+[data-theme="light"] .modal-title { color: #0d1f12; }
+[data-theme="light"] .sheet-subtitle,
+[data-theme="light"] .modal-subtitle { color: rgba(13,31,18,0.55); }
+[data-theme="light"] .sheet-row,
+[data-theme="light"] .action-row {
+  border-color: rgba(13,95,60,0.08);
+  color: #0d1f12;
+}
+
+/* ── Buttons (ghost / secondary) ── */
+[data-theme="light"] .btn-ghost   { color: #3d5c43; }
+[data-theme="light"] .btn-secondary {
+  background: rgba(13,95,60,0.08);
+  color: #0d3325;
+  border-color: rgba(13,95,60,0.2);
+}
+
+/* ── Misc ── */
+[data-theme="light"] .view-subheader { color: rgba(13,31,18,0.55); }
+[data-theme="light"] .empty-state    { color: rgba(13,31,18,0.45); }
+[data-theme="light"] .error-msg      { color: #dc2626; }
+[data-theme="light"] .success-msg    { color: #166534; }
