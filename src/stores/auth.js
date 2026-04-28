@@ -232,20 +232,31 @@ export const useAuthStore = defineStore('auth', () => {
 
   // Backfill profile_id on round_members rows that belong to this user
   // but were created before they had an account.
-  // Matches on email.
   // Fire-and-forget — called after login, non-blocking.
   async function backfillRoundMembership() {
     if (!user.value) return
     const email = user.value.email?.toLowerCase().trim()
+    const fullName = profile.value?.display_name?.trim() || null
     try {
-      // Match on email only — round_members doesn't have a ghin_number column
-      let query = supabase
-        .from('round_members')
-        .update({ profile_id: user.value.id })
-        .is('profile_id', null)
-        .eq('email', email)
-      const { error } = await query
-      if (error) console.warn('[auth] backfillRoundMembership error:', error.message)
+      // Match on email first
+      if (email) {
+        const { error } = await supabase
+          .from('round_members')
+          .update({ profile_id: user.value.id })
+          .is('profile_id', null)
+          .ilike('email', email)
+        if (error) console.warn('[auth] backfillRoundMembership (email) error:', error.message)
+      }
+      // Also match by guest_name where email is null — catches entries added without email
+      if (fullName) {
+        const { error } = await supabase
+          .from('round_members')
+          .update({ profile_id: user.value.id })
+          .is('profile_id', null)
+          .is('email', null)
+          .ilike('guest_name', fullName)
+        if (error) console.warn('[auth] backfillRoundMembership (name) error:', error.message)
+      }
     } catch (e) {
       console.warn('[auth] backfillRoundMembership exception:', e?.message)
     }
