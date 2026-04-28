@@ -6,7 +6,7 @@
  */
 
 import { execSync } from 'child_process'
-import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
@@ -26,6 +26,20 @@ if (!existsSync(resolve(GIT_ROOT, '.git'))) {
 function run(cmd, opts = {}) {
   console.log(`\n$ ${cmd}`)
   execSync(cmd, { stdio: 'inherit', cwd: GIT_ROOT, ...opts })
+}
+
+// 0. Remove stale lock files and pull latest from remote
+const headLock = resolve(GIT_ROOT, '.git/HEAD.lock')
+const indexLock = resolve(GIT_ROOT, '.git/index.lock')
+if (existsSync(headLock)) { unlinkSync(headLock); console.log('🔓 Removed stale HEAD.lock') }
+if (existsSync(indexLock)) { unlinkSync(indexLock); console.log('🔓 Removed stale index.lock') }
+
+console.log('\n━━━ Syncing with remote… ━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+try {
+  run('git pull --rebase --autostash origin main')
+} catch (e) {
+  console.error('❌ Pull/rebase failed — resolve conflicts manually, then re-run deploy.')
+  process.exit(1)
 }
 
 // 1. Bump patch version
