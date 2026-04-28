@@ -32,7 +32,7 @@
           {{ step > 1 ? '←' : '← Home' }}
         </button>
         <div class="lma-step-dots">
-          <span v-for="n in 2" :key="n" class="lma-dot" :class="{ active: step >= n }"></span>
+          <span v-for="n in 3" :key="n" class="lma-dot" :class="{ active: step >= n }"></span>
         </div>
       </header>
 
@@ -53,7 +53,7 @@
       <!-- ── STEP 1: Confirm Your Foursome ── -->
       <div v-if="step === 1" class="lma-step" key="step1">
         <div class="lma-step-heading">
-          <div class="lma-step-num">1 of 2</div>
+          <div class="lma-step-num">1 of 3</div>
           <div class="lma-step-title">Your Foursome</div>
           <div class="lma-step-sub">Confirm the players for your group</div>
         </div>
@@ -83,10 +83,46 @@
         </div>
       </div>
 
-      <!-- ── STEP 2: Side Games via WizardOverlay ── -->
+      <!-- ── STEP 2: Confirm Match Terms ── -->
       <div v-else-if="step === 2" class="lma-step" key="step2">
         <div class="lma-step-heading">
-          <div class="lma-step-num">2 of 2</div>
+          <div class="lma-step-num">2 of 3</div>
+          <div class="lma-step-title">Match Terms</div>
+          <div class="lma-step-sub">The host set these stakes — confirm before you set up your round</div>
+        </div>
+
+        <div class="lma-terms-card">
+          <div class="lma-terms-row">
+            <span class="lma-terms-label">Format</span>
+            <span class="lma-terms-value">{{ cfg.ballsToCount === 1 ? '1 Ball Net' : '2 Ball Net' }}</span>
+          </div>
+          <div class="lma-terms-row">
+            <span class="lma-terms-label">Main stake</span>
+            <span class="lma-terms-value lma-terms-value--gold">${{ cfg.stake ?? 20 }} / player</span>
+          </div>
+          <template v-if="activeSideBets.length">
+            <div class="lma-terms-divider"></div>
+            <div class="lma-terms-row lma-terms-row--header">
+              <span class="lma-terms-label">Side bets</span>
+            </div>
+            <div v-for="bet in activeSideBets" :key="bet.type" class="lma-terms-row lma-terms-row--sidebet">
+              <span class="lma-terms-label">{{ bet.label }}</span>
+              <span class="lma-terms-value">${{ bet.stake }} / player</span>
+            </div>
+          </template>
+        </div>
+
+        <div class="lma-step-actions">
+          <button class="lma-btn-primary" @click="step = 3">
+            Agree & continue →
+          </button>
+        </div>
+      </div>
+
+      <!-- ── STEP 3: Side Games via WizardOverlay ── -->
+      <div v-else-if="step === 3" class="lma-step" key="step3">
+        <div class="lma-step-heading">
+          <div class="lma-step-num">3 of 3</div>
           <div class="lma-step-title">Your Side Games</div>
           <div class="lma-step-sub">Pick the games your foursome plays internally</div>
         </div>
@@ -101,7 +137,7 @@
           :startStep="3"
           inline
           @created="onRoundCreated"
-          @close="step = 1"
+          @close="step = 2"
         />
 
         <div v-if="creating" class="lma-creating">
@@ -195,6 +231,10 @@ const matchFormatLabel = computed(() =>
   cfg.value.ballsToCount === 2 ? '2 BB Net' : '1 BB Net'
 )
 
+const activeSideBets = computed(() =>
+  (cfg.value.sideBets ?? []).filter(b => b.enabled)
+)
+
 const isBonnieBriar = computed(() =>
   (cfg.value.courseName ?? '').toLowerCase().includes('bonnie briar') ||
   (hostCourseName.value ?? '').toLowerCase().includes('bonnie briar')
@@ -218,6 +258,7 @@ function initials(name = '') {
 function handleBack() {
   if (step.value > 1) { step.value-- } else { router.push('/') }
 }
+
 
 function openFullWizard() {
   fullWizardOpen.value = true
@@ -604,6 +645,40 @@ async function goToScoring() {
 @keyframes card-in {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Terms card (step 2) ── */
+.lma-terms-card {
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 16px;
+  padding: 4px 0;
+  overflow: hidden;
+}
+.lma-terms-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  gap: 12px;
+}
+.lma-terms-row--header { padding-bottom: 4px; }
+.lma-terms-row--sidebet { padding-top: 6px; padding-bottom: 6px; }
+.lma-terms-label {
+  font-size: 14px;
+  color: rgba(240,237,224,.55);
+  font-weight: 500;
+}
+.lma-terms-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--gw-text, #f0ede0);
+}
+.lma-terms-value--gold { color: #d4af37; }
+.lma-terms-divider {
+  height: 1px;
+  background: rgba(255,255,255,.07);
+  margin: 0 16px;
 }
 
 /* ── Roster import offer sheet ── */
