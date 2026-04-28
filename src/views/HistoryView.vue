@@ -306,6 +306,7 @@ const roundsStore = useRoundsStore()
 const coursesStore = useCoursesStore()
 const router = useRouter()
 const route = useRoute()
+const soloRoundId = ref(route.query?.solo || null)
 const linkedMatchesStore = useLinkedMatchesStore()
 const authStore = useAuthStore()
 
@@ -360,8 +361,6 @@ onMounted(async () => {
     }, 120)
   }
 })
-
-const soloRoundId = ref(route.query?.solo || null)
 
 const expandedIds = ref(new Set())
 const settlementsCache = reactive({})
