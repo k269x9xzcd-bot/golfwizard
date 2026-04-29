@@ -18,9 +18,6 @@
     <template v-else>
       <!-- Status card -->
       <div class="lmd-status-card" :class="`lmd-status--${summary.state}`">
-        <div class="lmd-status-emoji">
-          {{ summary.state === 'final' ? '🏆' : summary.state === 'live' ? '🎮' : summary.state === 'waiting' ? '⏳' : '⛳' }}
-        </div>
         <div class="lmd-status-label">{{ summary.label }}</div>
       </div>
 
@@ -66,14 +63,14 @@
       </div>
 
       <!-- Per-hole detail -->
-      <div class="lmd-section-label">Hole-by-Hole</div>
+      <div class="lmd-section-label">Hole-by-Hole <span class="lmd-legend">2BB net vs par · Lead = cumulative advantage</span></div>
       <div class="lmd-holes-grid">
         <div class="lmd-hole-row lmd-hole-row--head">
           <div class="lmd-hole-cell lmd-hole-cell--label">Hole</div>
           <div class="lmd-hole-cell">Par</div>
           <div class="lmd-hole-cell">A</div>
           <div class="lmd-hole-cell">B</div>
-          <div class="lmd-hole-cell">Δ</div>
+          <div class="lmd-hole-cell">Lead</div>
         </div>
         <div
           v-for="row in perHoleCumulative"
@@ -157,38 +154,38 @@
 
       <!-- Scorecard table -->
       <div v-if="activeScorecardRound" class="lmd-sc-wrap">
-        <div class="lmd-sc-grid" :style="`grid-template-columns: 56px repeat(${activeScorecardHoles.length}, 1fr)`">
+        <div class="lmd-sc-grid" :style="scorecardGridStyle">
           <!-- Header: hole numbers -->
           <div class="lmd-sc-cell lmd-sc-head lmd-sc-label">Hole</div>
-          <div v-for="h in activeScorecardHoles" :key="h" class="lmd-sc-cell lmd-sc-head">{{ h }}</div>
+          <template v-for="col in scorecardColumns" :key="'h-'+col.key">
+            <div class="lmd-sc-cell lmd-sc-head" :class="col.isTotal ? 'lmd-sc-sub-head' : ''">{{ col.label }}</div>
+          </template>
 
           <!-- Par row -->
           <div class="lmd-sc-cell lmd-sc-par-label">Par</div>
-          <div v-for="h in activeScorecardHoles" :key="'par'+h" class="lmd-sc-cell lmd-sc-par">
-            {{ parForHole(activeScorecardRound, h) || '—' }}
-          </div>
-
-          <!-- Player rows -->
-          <template v-for="m in activeScorecardMembers" :key="m.id">
-            <div class="lmd-sc-cell lmd-sc-player">{{ m.short_name || m.full_name?.split(' ')[0] || '?' }}</div>
-            <div
-              v-for="h in activeScorecardHoles"
-              :key="m.id+'-'+h"
-              class="lmd-sc-cell"
-              :class="scoreClass(activeScorecardRound, m.id, h)"
-            >
-              {{ scoreForMember(activeScorecardRound, m.id, h) }}
+          <template v-for="col in scorecardColumns" :key="'par-'+col.key">
+            <div class="lmd-sc-cell lmd-sc-par" :class="col.isTotal ? 'lmd-sc-sub-val' : ''">
+              {{ col.isTotal ? col.parTotal : (parForHole(activeScorecardRound, col.hole) || '—') }}
             </div>
           </template>
 
-        </div>
-
-        <!-- Per-player totals row (below grid) -->
-        <div class="lmd-sc-totals">
-          <div v-for="m in activeScorecardMembers" :key="'total-'+m.id" class="lmd-sc-total-chip">
-            <span class="lmd-sc-total-name">{{ m.short_name || m.full_name?.split(' ')[0] }}</span>
-            <span class="lmd-sc-total-score">{{ memberTotal(activeScorecardRound, m.id) }}</span>
-          </div>
+          <!-- Player rows -->
+          <template v-for="m in activeScorecardMembers" :key="m.id">
+            <div class="lmd-sc-cell lmd-sc-player">{{ m.short_name || '?' }}</div>
+            <template v-for="col in scorecardColumns" :key="m.id+'-'+col.key">
+              <div
+                v-if="!col.isTotal"
+                class="lmd-sc-cell lmd-sc-score-cell"
+                :class="scoreClass(activeScorecardRound, m.id, col.hole)"
+              >
+                <span class="lmd-sc-score-num">{{ scoreForMember(activeScorecardRound, m.id, col.hole) }}</span>
+                <span v-if="memberStrokesOnHole(activeScorecardRound, m.id, col.hole) > 0" class="lmd-sc-stroke-dot">{{ '•'.repeat(memberStrokesOnHole(activeScorecardRound, m.id, col.hole)) }}</span>
+              </div>
+              <div v-else class="lmd-sc-cell lmd-sc-sub-val">
+                {{ memberRangeTotal(activeScorecardRound, m.id, col.from, col.to) }}
+              </div>
+            </template>
+          </template>
         </div>
       </div>
       <div v-else class="lmd-sc-empty">Scores not yet available</div>
@@ -399,6 +396,74 @@ const activeScorecardHoles = computed(() => {
   return Array.from({ length: 18 }, (_, i) => i + 1)
 })
 
+// Build column definitions for the scorecard grid (holes + Out/In/Total subtotals)
+const scorecardColumns = computed(() => {
+  const r = activeScorecardRound.value
+  const mode = r?.holes_mode || '18'
+  const cols = []
+  if (mode === 'front9') {
+    for (let h = 1; h <= 9; h++) cols.push({ key: h, label: String(h), hole: h, isTotal: false })
+    cols.push({ key: 'out', label: 'Out', isTotal: true, from: 1, to: 9, parTotal: parRangeTotal(r, 1, 9) })
+  } else if (mode === 'back9') {
+    for (let h = 10; h <= 18; h++) cols.push({ key: h, label: String(h), hole: h, isTotal: false })
+    cols.push({ key: 'in', label: 'In', isTotal: true, from: 10, to: 18, parTotal: parRangeTotal(r, 10, 18) })
+  } else {
+    for (let h = 1; h <= 9; h++) cols.push({ key: h, label: String(h), hole: h, isTotal: false })
+    cols.push({ key: 'out', label: 'Out', isTotal: true, from: 1, to: 9, parTotal: parRangeTotal(r, 1, 9) })
+    for (let h = 10; h <= 18; h++) cols.push({ key: h, label: String(h), hole: h, isTotal: false })
+    cols.push({ key: 'in', label: 'In', isTotal: true, from: 10, to: 18, parTotal: parRangeTotal(r, 10, 18) })
+    cols.push({ key: 'tot', label: 'Tot', isTotal: true, from: 1, to: 18, parTotal: parRangeTotal(r, 1, 18) })
+  }
+  return cols
+})
+
+// Grid style: 48px name col, 26px per hole, 34px per subtotal col
+const scorecardGridStyle = computed(() => {
+  const cols = scorecardColumns.value
+  const colDefs = cols.map(c => c.isTotal ? '34px' : '26px').join(' ')
+  return `grid-template-columns: 48px ${colDefs}`
+})
+
+function parRangeTotal(round, from, to) {
+  const par = round?.course_snapshot?.par
+  if (!Array.isArray(par)) return '—'
+  let sum = 0
+  for (let h = from; h <= to; h++) sum += par[h - 1] ?? 4
+  return sum
+}
+
+function memberRangeTotal(round, memberId, from, to) {
+  if (!round?.scores) return '—'
+  let sum = 0; let found = 0
+  for (let h = from; h <= to; h++) {
+    const s = round.scores.find(sc => sc.member_id === memberId && sc.hole === h)
+    if (s?.score != null) { sum += s.score; found++ }
+  }
+  return found > 0 ? sum : '—'
+}
+
+// Stroke dots: how many strokes does this player get on this hole in the cross match
+function memberStrokesOnHole(round, memberId, hole) {
+  if (!round) return 0
+  const m = round.round_members?.find(rm => rm.id === memberId)
+  if (!m) return 0
+  const si = round?.course_snapshot?.si
+  if (!Array.isArray(si) || si.length < 18) return 0
+  const holeSI = si[hole - 1]
+  // Playing hcp: round(ghin * slope/113 + (rating - par)) * 0.90
+  const raw = m.ghin_index ?? m.round_hcp ?? 0
+  const snap = round.course_snapshot || {}
+  const slope = snap.slope_rating ?? snap.slope ?? 113
+  const rating = snap.course_rating ?? snap.rating ?? 72
+  const par = Array.isArray(snap.par) ? snap.par.reduce((a, b) => a + b, 0) : 72
+  const ch = Math.round(raw * (slope / 113) + (rating - par))
+  const playingHcp = Math.round(ch * 0.90)
+  if (playingHcp <= 0) return 0
+  const base = Math.floor(playingHcp / 18)
+  const extra = playingHcp % 18
+  return base + (holeSI <= extra ? 1 : 0)
+}
+
 function parForHole(round, hole) {
   // course_snapshot.par is a 0-indexed array stored at round creation time
   const par = round?.course_snapshot?.par
@@ -507,9 +572,10 @@ watch(() => route.params.id, (id) => { if (id) load() })
   text-transform: uppercase; color: var(--gw-text-muted);
 }
 .lmd-team-name {
-  font-family: var(--gw-font-mono, monospace);
-  font-size: 15px; font-weight: 700; color: var(--gw-text);
+  font-family: var(--gw-font-body, system-ui);
+  font-size: 13px; font-weight: 700; color: var(--gw-text);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  line-height: 1.2;
 }
 .lmd-team-score {
   display: flex; align-items: baseline; gap: 8px; margin-top: 4px;
@@ -546,6 +612,12 @@ watch(() => route.params.id, (id) => { if (id) load() })
   font-size: 11px; font-weight: 800;
   letter-spacing: .08em; text-transform: uppercase;
   color: var(--gw-text-muted);
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.lmd-legend {
+  font-size: 9px; font-weight: 500; letter-spacing: .02em;
+  text-transform: none; color: var(--gw-text-muted);
+  opacity: 0.7;
 }
 
 .lmd-holes-grid {
@@ -688,56 +760,59 @@ watch(() => route.params.id, (id) => { if (id) load() })
   border-radius: 12px;
   border: 1px solid rgba(255,255,255,.06);
   overflow-x: auto;
+  overflow-y: visible;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
+.lmd-sc-wrap::-webkit-scrollbar { display: none; }
 .lmd-sc-grid {
   display: grid;
-  min-width: 100%;
+  min-width: max-content;
 }
 .lmd-sc-cell {
-  padding: 5px 2px;
+  padding: 4px 1px;
   text-align: center;
   font-family: var(--gw-font-mono, monospace);
-  font-size: 12px;
+  font-size: 11px;
   color: var(--gw-text);
   border-top: 1px solid rgba(255,255,255,.05);
+  position: relative;
 }
 .lmd-sc-head {
   background: rgba(0,0,0,.25);
   font-family: var(--gw-font-body);
-  font-size: 10px; font-weight: 800; letter-spacing: .06em;
+  font-size: 9px; font-weight: 800; letter-spacing: .04em;
   text-transform: uppercase; color: var(--gw-text-muted);
-  border-top: none;
+  border-top: none; padding: 5px 1px;
+}
+.lmd-sc-sub-head {
+  background: rgba(0,0,0,.35);
+  color: var(--gw-gold);
+}
+.lmd-sc-sub-val {
+  background: rgba(0,0,0,.2);
+  font-weight: 800;
+  color: var(--gw-text);
+  border-left: 1px solid rgba(255,255,255,.07);
 }
 .lmd-sc-label, .lmd-sc-par-label, .lmd-sc-total-label, .lmd-sc-player {
-  text-align: left; padding-left: 8px;
+  text-align: left; padding-left: 6px;
 }
 .lmd-sc-label { color: var(--gw-gold); }
-.lmd-sc-par-label { font-size: 9px; font-weight: 700; color: var(--gw-text-muted); text-transform: uppercase; background: rgba(0,0,0,.1); }
-.lmd-sc-par { background: rgba(0,0,0,.1); color: var(--gw-text-muted); font-size: 11px; }
-.lmd-sc-player { font-family: var(--gw-font-body); font-size: 11px; font-weight: 700; color: var(--gw-text); }
+.lmd-sc-par-label { font-size: 8px; font-weight: 700; color: var(--gw-text-muted); text-transform: uppercase; background: rgba(0,0,0,.1); }
+.lmd-sc-par { background: rgba(0,0,0,.1); color: var(--gw-text-muted); font-size: 10px; }
+.lmd-sc-player { font-family: var(--gw-font-body); font-size: 10px; font-weight: 700; color: var(--gw-text); white-space: nowrap; }
 .lmd-sc-empty-cell { color: var(--gw-text-muted); }
+.lmd-sc-score-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 30px; }
+.lmd-sc-score-num { line-height: 1; }
+.lmd-sc-stroke-dot { font-size: 6px; color: rgba(255,255,255,.45); line-height: 1; margin-top: 1px; letter-spacing: -1px; }
 
-/* Score coloring */
-.sc-eagle  { background: rgba(245,158,11,.25); color: #fbbf24; font-weight: 900; border-radius: 4px; }
-.sc-birdie { background: rgba(34,197,94,.2);  color: #4ade80; font-weight: 800; border-radius: 4px; }
+/* Score coloring — circle style like ScoringView */
+.sc-eagle  { background: rgba(245,158,11,.30); color: #fbbf24; font-weight: 900; border-radius: 50%; }
+.sc-birdie { background: rgba(34,197,94,.25);  color: #4ade80; font-weight: 800; border-radius: 50%; }
 .sc-par    { color: var(--gw-text); }
-.sc-bogey  { color: #f87171; }
-.sc-double { color: #dc2626; font-weight: 700; }
-
-.lmd-sc-totals {
-  display: flex; flex-wrap: wrap; gap: 8px;
-  padding: 10px 12px;
-  border-top: 1px solid rgba(255,255,255,.06);
-  background: rgba(0,0,0,.15);
-}
-.lmd-sc-total-chip {
-  display: flex; align-items: center; gap: 6px;
-  padding: 4px 10px; border-radius: 8px;
-  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08);
-}
-.lmd-sc-total-name { font-size: 11px; font-weight: 700; color: var(--gw-text-muted); }
-.lmd-sc-total-score { font-family: var(--gw-font-mono); font-size: 14px; font-weight: 900; color: var(--gw-text); }
+.sc-bogey  { background: rgba(239,68,68,.20); color: #f87171; border-radius: 50%; }
+.sc-double { background: rgba(153,27,27,.30); color: #fca5a5; border-radius: 50%; font-weight: 700; }
 
 .lmd-sc-empty {
   margin: 0 16px; padding: 16px; text-align: center;
