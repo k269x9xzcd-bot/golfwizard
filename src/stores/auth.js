@@ -283,7 +283,7 @@ export const useAuthStore = defineStore('auth', () => {
       // Get all members from those rounds
       const { data: allMembers, error: aErr } = await supabase
         .from('round_members')
-        .select('guest_name, short_name, ghin_index, email, profile_id, nickname, use_nickname')
+        .select('guest_name, short_name, ghin_index, ghin_number, email, profile_id, nickname, use_nickname')
         .in('round_id', roundIds)
       if (aErr || !allMembers?.length) return
 
@@ -324,7 +324,7 @@ export const useAuthStore = defineStore('auth', () => {
           first_name: nameParts[0] || null,
           last_name: nameParts.slice(1).join(' ') || null,
           short_name: m.short_name || nameParts[nameParts.length - 1].slice(0, 8),
-          ghin_number: null,
+          ghin_number: m.ghin_number ?? null,
           ghin_index: m.ghin_index ?? null,
           email,
           nickname: m.nickname || null,
