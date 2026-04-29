@@ -365,7 +365,7 @@ onMounted(async () => {
   } catch (e) {
     console.warn('[MetricsView] fetchRounds failed:', e?.message)
   }
-  allRounds.value = roundsStore.rounds
+  allRounds.value = roundsStore.myRounds
 
   // Default to current user if they appear in any round, else first player
   const players = extractPlayers()
@@ -592,44 +592,44 @@ const gameStats = computed(() => {
     const settlement = settlementsMap.value[r.id]
     if (!settlement) continue
 
-    const gameConfigs = r.game_configs || []
-    for (const gc of gameConfigs) {
-      const type = gc.type
-      if (!type) continue
-
-      let net = 0
-      let found = false
-
-      if (settlement.games && Array.isArray(settlement.games)) {
-        const gameEntry = settlement.games.find(g => g.type === type || g.gameType === type)
-        if (gameEntry) {
-          const playerEntry = gameEntry.playerTotals?.[me.id] ?? gameEntry.players?.[me.id]
-          if (playerEntry != null) {
-            net = typeof playerEntry === 'object' ? (playerEntry.total ?? playerEntry.net ?? 0) : playerEntry
-            found = true
-          }
+    // settlement.summary is keyed by game_config id, each entry has { type, nets: [{id, net}] }
+    const summary = settlement.summary
+    if (summary && typeof summary === 'object') {
+      for (const entry of Object.values(summary)) {
+        const type = entry.type
+        if (!type || entry.error) continue
+        const playerNet = entry.nets?.find(n => n.id === me.id)
+        if (!playerNet) continue
+        const net = playerNet.net ?? 0
+        if (!byType.has(type)) {
+          byType.set(type, { type, rounds: 0, wins: 0, losses: 0, pushes: 0, net: 0 })
         }
+        const rec = byType.get(type)
+        rec.rounds++
+        rec.net += net
+        if (net > 0) rec.wins++
+        else if (net < 0) rec.losses++
+        else rec.pushes++
       }
-
-      if (!found && settlement.playerTotals && gameConfigs.length === 1) {
+    } else {
+      // Legacy fallback: single-game rounds where playerTotals is flat
+      const gameConfigs = r.game_configs || []
+      if (gameConfigs.length === 1 && settlement.playerTotals) {
+        const type = gameConfigs[0].type
+        if (!type) continue
         const pt = settlement.playerTotals[me.id]
-        if (pt != null) {
-          net = typeof pt === 'object' ? (pt.total ?? pt.net ?? 0) : pt
-          found = true
+        if (pt == null) continue
+        const net = typeof pt === 'object' ? (pt.total ?? 0) : pt
+        if (!byType.has(type)) {
+          byType.set(type, { type, rounds: 0, wins: 0, losses: 0, pushes: 0, net: 0 })
         }
+        const rec = byType.get(type)
+        rec.rounds++
+        rec.net += net
+        if (net > 0) rec.wins++
+        else if (net < 0) rec.losses++
+        else rec.pushes++
       }
-
-      if (!found) continue
-
-      if (!byType.has(type)) {
-        byType.set(type, { type, rounds: 0, wins: 0, losses: 0, pushes: 0, net: 0 })
-      }
-      const rec = byType.get(type)
-      rec.rounds++
-      rec.net += net
-      if (net > 0) rec.wins++
-      else if (net < 0) rec.losses++
-      else rec.pushes++
     }
   }
 
@@ -654,10 +654,13 @@ const wolfStats = computed(() => {
     const hasWolf = (r.game_configs || []).some(g => g.type === 'wolf')
     if (!hasWolf) continue
 
-    const wolfGame = settlement.games?.find(g => g.type === 'wolf' || g.gameType === 'wolf')
-    if (!wolfGame) continue
+    // Find wolf entry in settlement.summary (keyed by game_config id)
+    const wolfEntry = settlement.summary
+      ? Object.values(settlement.summary).find(e => e.type === 'wolf')
+      : null
+    if (!wolfEntry) continue
 
-    const loneWolfRounds = wolfGame.loneWolf || wolfGame.lone_wolf || []
+    const loneWolfRounds = wolfEntry.rawResult?.loneWolf || wolfEntry.rawResult?.lone_wolf || wolfEntry.loneWolf || []
     for (const lw of loneWolfRounds) {
       const playerId = lw.playerId || lw.player_id || lw.memberId
       if (playerId !== me.id) continue
