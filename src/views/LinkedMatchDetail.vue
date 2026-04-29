@@ -141,6 +141,58 @@
       </div>
 
 
+      <!-- ── Scorecards ── -->
+      <div class="lmd-section-label" style="margin-top:20px">Scorecards</div>
+
+      <!-- Scorecard toggle -->
+      <div class="lmd-sc-tabs">
+        <button
+          v-for="tab in scorecardTabs"
+          :key="tab.key"
+          class="lmd-sc-tab"
+          :class="{ active: scorecardTab === tab.key }"
+          @click="scorecardTab = tab.key"
+        >{{ tab.label }}</button>
+      </div>
+
+      <!-- Scorecard table -->
+      <div v-if="activeScorecardRound" class="lmd-sc-wrap">
+        <div class="lmd-sc-grid" :style="`grid-template-columns: 56px repeat(${activeScorecardHoles.length}, 1fr)`">
+          <!-- Header: hole numbers -->
+          <div class="lmd-sc-cell lmd-sc-head lmd-sc-label">Hole</div>
+          <div v-for="h in activeScorecardHoles" :key="h" class="lmd-sc-cell lmd-sc-head">{{ h }}</div>
+
+          <!-- Par row -->
+          <div class="lmd-sc-cell lmd-sc-par-label">Par</div>
+          <div v-for="h in activeScorecardHoles" :key="'par'+h" class="lmd-sc-cell lmd-sc-par">
+            {{ parForHole(activeScorecardRound, h) || '—' }}
+          </div>
+
+          <!-- Player rows -->
+          <template v-for="m in activeScorecardMembers" :key="m.id">
+            <div class="lmd-sc-cell lmd-sc-player">{{ m.short_name || m.full_name?.split(' ')[0] || '?' }}</div>
+            <div
+              v-for="h in activeScorecardHoles"
+              :key="m.id+'-'+h"
+              class="lmd-sc-cell"
+              :class="scoreClass(activeScorecardRound, m.id, h)"
+            >
+              {{ scoreForMember(activeScorecardRound, m.id, h) }}
+            </div>
+          </template>
+
+        </div>
+
+        <!-- Per-player totals row (below grid) -->
+        <div class="lmd-sc-totals">
+          <div v-for="m in activeScorecardMembers" :key="'total-'+m.id" class="lmd-sc-total-chip">
+            <span class="lmd-sc-total-name">{{ m.short_name || m.full_name?.split(' ')[0] }}</span>
+            <span class="lmd-sc-total-score">{{ memberTotal(activeScorecardRound, m.id) }}</span>
+          </div>
+        </div>
+      </div>
+      <div v-else class="lmd-sc-empty">Scores not yet available</div>
+
       <!-- Foursome B scoring CTA -->
       <div v-if="isRoundBOwner && match.status === 'linked'" class="lmd-score-cta">
         <button class="lmd-btn-score" @click="goScore">
@@ -319,6 +371,66 @@ async function onCancel() {
 function goBack() {
   if (window.history.length > 1) router.back()
   else router.push('/')
+}
+
+// ── Scorecards ────────────────────────────────────────────────────
+const scorecardTab = ref('a')
+
+const scorecardTabs = computed(() => {
+  const tabs = [{ key: 'a', label: result.value?.teamA?.name || 'Foursome A' }]
+  if (roundB.value) tabs.push({ key: 'b', label: result.value?.teamB?.name || 'Foursome B' })
+  return tabs
+})
+
+const activeScorecardRound = computed(() =>
+  scorecardTab.value === 'a' ? roundA.value : roundB.value
+)
+
+const activeScorecardMembers = computed(() => {
+  const r = activeScorecardRound.value
+  return r?.round_members || []
+})
+
+const activeScorecardHoles = computed(() => {
+  const r = activeScorecardRound.value
+  const mode = r?.holes_mode || '18'
+  if (mode === 'front9') return Array.from({ length: 9 }, (_, i) => i + 1)
+  if (mode === 'back9')  return Array.from({ length: 9 }, (_, i) => i + 10)
+  return Array.from({ length: 18 }, (_, i) => i + 1)
+})
+
+function parForHole(round, hole) {
+  // course_snapshot.par is a 0-indexed array stored at round creation time
+  const par = round?.course_snapshot?.par
+  if (Array.isArray(par)) return par[hole - 1] ?? null
+  return null
+}
+
+function scoreForMember(round, memberId, hole) {
+  if (!round?.scores) return '—'
+  const s = round.scores.find(sc => sc.member_id === memberId && sc.hole === hole)
+  return s?.score ?? '—'
+}
+
+function memberTotal(round, memberId) {
+  if (!round?.scores) return '—'
+  const scores = round.scores.filter(sc => sc.member_id === memberId && sc.score != null)
+  if (!scores.length) return '—'
+  return scores.reduce((sum, sc) => sum + sc.score, 0)
+}
+
+function scoreClass(round, memberId, hole) {
+  const score = scoreForMember(round, memberId, hole)
+  if (score === '—') return 'lmd-sc-empty-cell'
+  const par = parForHole(round, hole)
+  if (!par) return ''
+  const diff = score - par
+  if (diff <= -2) return 'sc-eagle'
+  if (diff === -1) return 'sc-birdie'
+  if (diff === 0)  return 'sc-par'
+  if (diff === 1)  return 'sc-bogey'
+  if (diff >= 2)   return 'sc-double'
+  return ''
 }
 
 onMounted(load)
@@ -552,5 +664,85 @@ watch(() => route.params.id, (id) => { if (id) load() })
   margin: 6px 16px 2px;
   font-size: 10px; font-weight: 800; letter-spacing: .08em;
   text-transform: uppercase; color: var(--gw-text-muted);
+}
+
+/* ── Scorecard ── */
+.lmd-sc-tabs {
+  display: flex; gap: 8px; margin: 0 16px 10px;
+}
+.lmd-sc-tab {
+  flex: 1; padding: 8px 12px; border-radius: 10px;
+  font-size: 12px; font-weight: 700; cursor: pointer;
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.04); color: var(--gw-text-muted);
+  font-family: inherit; -webkit-tap-highlight-color: transparent;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.lmd-sc-tab.active {
+  background: rgba(212,175,55,.15); border-color: rgba(212,175,55,.5);
+  color: var(--gw-gold);
+}
+
+.lmd-sc-wrap {
+  margin: 0 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.06);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.lmd-sc-grid {
+  display: grid;
+  min-width: 100%;
+}
+.lmd-sc-cell {
+  padding: 5px 2px;
+  text-align: center;
+  font-family: var(--gw-font-mono, monospace);
+  font-size: 12px;
+  color: var(--gw-text);
+  border-top: 1px solid rgba(255,255,255,.05);
+}
+.lmd-sc-head {
+  background: rgba(0,0,0,.25);
+  font-family: var(--gw-font-body);
+  font-size: 10px; font-weight: 800; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--gw-text-muted);
+  border-top: none;
+}
+.lmd-sc-label, .lmd-sc-par-label, .lmd-sc-total-label, .lmd-sc-player {
+  text-align: left; padding-left: 8px;
+}
+.lmd-sc-label { color: var(--gw-gold); }
+.lmd-sc-par-label { font-size: 9px; font-weight: 700; color: var(--gw-text-muted); text-transform: uppercase; background: rgba(0,0,0,.1); }
+.lmd-sc-par { background: rgba(0,0,0,.1); color: var(--gw-text-muted); font-size: 11px; }
+.lmd-sc-player { font-family: var(--gw-font-body); font-size: 11px; font-weight: 700; color: var(--gw-text); }
+.lmd-sc-empty-cell { color: var(--gw-text-muted); }
+
+/* Score coloring */
+.sc-eagle  { background: rgba(245,158,11,.25); color: #fbbf24; font-weight: 900; border-radius: 4px; }
+.sc-birdie { background: rgba(34,197,94,.2);  color: #4ade80; font-weight: 800; border-radius: 4px; }
+.sc-par    { color: var(--gw-text); }
+.sc-bogey  { color: #f87171; }
+.sc-double { color: #dc2626; font-weight: 700; }
+
+.lmd-sc-totals {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(255,255,255,.06);
+  background: rgba(0,0,0,.15);
+}
+.lmd-sc-total-chip {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 8px;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08);
+}
+.lmd-sc-total-name { font-size: 11px; font-weight: 700; color: var(--gw-text-muted); }
+.lmd-sc-total-score { font-family: var(--gw-font-mono); font-size: 14px; font-weight: 900; color: var(--gw-text); }
+
+.lmd-sc-empty {
+  margin: 0 16px; padding: 16px; text-align: center;
+  font-size: 13px; color: var(--gw-text-muted);
+  background: rgba(255,255,255,.03); border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.06);
 }
 </style>
