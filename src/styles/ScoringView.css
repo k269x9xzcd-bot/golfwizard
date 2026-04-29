@@ -271,6 +271,7 @@
 }
 .round-menu-item:active { background: rgba(255,255,255,.06); }
 .round-menu-danger { color: #f87171; }
+.round-menu-divider { border-top: 1px solid rgba(255,255,255,.08); margin-top: 4px; padding-top: 8px; color: rgba(240,237,224,.6); }
 
 /* HCP Editor Modal */
 .hcp-editor-overlay {

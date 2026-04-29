@@ -299,6 +299,11 @@
             Searching…
           </div>
 
+          <!-- GHIN unavailable hint -->
+          <div v-if="psGhinUnavailable && psQuery.trim().length >= 2 && !psResults.bb.length" class="ps-ghin-unavailable">
+            ⚠️ GHIN search unavailable — no GHIN credentials in your profile. Add them in Settings to enable name search.
+          </div>
+
           <!-- Manual add fallback -->
           <div class="ps-manual-section">
             <div v-if="!psShowManual" class="ps-manual-trigger" @click="psShowManual = true">
@@ -1717,7 +1722,7 @@ const psManualStrokes = ref('')
 const psManualGhin = ref('')
 
 const _rosterRef = computed(() => rosterStore.players)
-const { query: psQuery, results: psResults, searching: psSearching, onQueryChange: psOnInput, clearSearch: psClearSearch } = usePlayerSearch(_rosterRef)
+const { query: psQuery, results: psResults, searching: psSearching, ghinUnavailable: psGhinUnavailable, onQueryChange: psOnInput, clearSearch: psClearSearch } = usePlayerSearch(_rosterRef)
 
 function psClear() {
   psClearSearch()
@@ -3129,6 +3134,7 @@ function reloadApp() {
 }
 .ps-row--added .ps-row-action { color: #4ade80; font-weight: 600; font-size: 16px; }
 .ps-searching { text-align: center; color: var(--gw-text-muted); font-size: 13px; padding: 16px; }
+.ps-ghin-unavailable { margin: 8px 0; padding: 10px 12px; border-radius: 10px; background: rgba(212,175,55,.1); border: 1px solid rgba(212,175,55,.3); color: rgba(212,175,55,.9); font-size: 12px; line-height: 1.4; }
 .ps-manual-section { margin-top: 8px; padding-top: 4px; border-top: 1px solid rgba(255,255,255,.06); }
 .ps-manual-trigger {
   text-align: center; font-size: 13px; color: var(--gw-text-muted);

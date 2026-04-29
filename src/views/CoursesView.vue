@@ -1,8 +1,8 @@
 <template>
   <div class="courses-view">
     <!-- Header -->
-    <header class="courses-header">
-      <h1 class="courses-title">Courses</h1>
+    <header class="view-header">
+      <h2>Courses</h2>
       <div class="header-actions">
         <button class="btn-ghost btn-sm sort-btn" @click="toggleCourseSort" :title="courseSortLabel">⇅ {{ courseSortLabel }}</button>
         <button class="add-course-btn" @click="openAddCourse" aria-label="Add course">
@@ -1035,21 +1035,8 @@ function showToast(msg, type = 'neutral') {
   padding-bottom: calc(var(--gw-nav-height) + env(safe-area-inset-bottom) + 16px);
 }
 
-.courses-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 20px 0;
-}
 .header-actions { display: flex; gap: 8px; align-items: center; }
 .sort-btn { font-size: 11px; padding: 5px 9px; opacity: .75; }
-
-.courses-title {
-  font-family: var(--gw-font-display);
-  font-size: 28px;
-  color: var(--gw-text);
-  margin: 0;
-}
 
 .add-course-btn {
   width: 44px;

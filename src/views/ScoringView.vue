@@ -100,7 +100,10 @@
           <div v-if="!isCaptain && canScore" class="round-menu-item round-menu-note">
             ✏️ You're a member of this round and can enter scores.
           </div>
-          <div v-else-if="!isCaptain && !canScore" class="round-menu-item round-menu-note">
+          <button class="round-menu-item round-menu-divider" @click="showRoundMenu = false; $router.push('/settings')">
+            👤 My Profile &amp; Settings
+          </button>
+          <div v-if="!isCaptain && !canScore" class="round-menu-item round-menu-note">
             👀 You're viewing this round in read-only mode. Ask the scorer to share the room code so you can join.
           </div>
         </div>

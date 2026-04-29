@@ -273,12 +273,12 @@ body {
   border: 1px solid var(--gw-card-border);
   border-radius: var(--gw-radius-lg);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-  padding: var(--gw-space-4);
+  padding: 10px var(--gw-space-4);
   overflow: hidden;
 }
 
 .card + .card {
-  margin-top: var(--gw-space-3);
+  margin-top: var(--gw-space-2);
 }
 
 /* ── Buttons ───────────────────────────────────────────────── */
@@ -1797,7 +1797,7 @@ body {
 .rounds-list {
   display: flex;
   flex-direction: column;
-  gap: var(--gw-space-3);
+  gap: 6px;
 }
 
 .round-card {

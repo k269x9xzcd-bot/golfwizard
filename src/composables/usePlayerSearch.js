@@ -148,7 +148,7 @@ export function usePlayerSearch(rosterPlayers) {
       })
       if (error) return
       if (!data?.results?.length) {
-        // Edge fn returned error = no GHIN creds on this profile
+        // Edge fn returned 400 = no GHIN creds on this profile
         if (data?.error?.includes('No GHIN credentials')) ghinUnavailable.value = true
         return
       }

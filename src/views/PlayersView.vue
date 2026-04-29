@@ -84,7 +84,7 @@
                 v-for="p in playersWithEmail"
                 :key="p.id"
                 class="gear-player-row"
-                @click="invitePlayer(p); showGearMenu = false"
+                @click="confirmInvite(p); showGearMenu = false"
               >
                 <span class="gear-player-avatar">{{ displayInitials(p) }}</span>
                 <div class="gear-player-info">
@@ -477,7 +477,7 @@
             <span v-else-if="p.email" class="invite-status invite-status--pending" title="Not yet invited">Not invited</span>
           </div>
         </div>
-        <button v-if="p.email && !p.user_id" class="invite-btn" @click.stop="invitePlayer(p)" :disabled="inviteStatus[p.id] === 'sending'" title="Send app invite">
+        <button v-if="p.email && !p.user_id" class="invite-btn" @click.stop="confirmInvite(p)" :disabled="inviteStatus[p.id] === 'sending'" title="Send app invite">
           {{ inviteStatus[p.id] === 'sending' ? '…' : p.invited_at ? 'Resend' : 'Invite' }}
         </button>
         <button v-else-if="p.ghin_number" class="player-info-btn" @click.stop="openPlayerSheet(p)" title="GHIN info">⛳</button>
@@ -516,7 +516,7 @@
             <span v-else-if="p.email" class="invite-status invite-status--pending" title="Not yet invited">Not invited</span>
           </div>
         </div>
-        <button v-if="p.email && !p.user_id" class="invite-btn" @click.stop="invitePlayer(p)" :disabled="inviteStatus[p.id] === 'sending'" title="Send app invite">
+        <button v-if="p.email && !p.user_id" class="invite-btn" @click.stop="confirmInvite(p)" :disabled="inviteStatus[p.id] === 'sending'" title="Send app invite">
           {{ inviteStatus[p.id] === 'sending' ? '…' : p.invited_at ? 'Resend' : 'Invite' }}
         </button>
         <button v-else-if="p.ghin_number" class="player-info-btn" @click.stop="openPlayerSheet(p)" title="GHIN info">⛳</button>
@@ -534,6 +534,20 @@
       <transition name="toast">
         <div v-if="toastMsg" class="swipe-toast" :class="toastType">{{ toastMsg }}</div>
       </transition>
+    </Teleport>
+
+    <!-- Invite confirmation modal -->
+    <Teleport to="body">
+      <div v-if="pendingInvitePlayer" class="delete-backdrop" @click.self="pendingInvitePlayer = null">
+        <div class="delete-modal">
+          <div class="delete-header">Send Invite?</div>
+          <div class="delete-message">Send a GolfWizard setup link to <strong>{{ pendingInvitePlayer.name }}</strong> at <strong>{{ pendingInvitePlayer.email }}</strong>?</div>
+          <div class="delete-footer">
+            <button class="btn-ghost" @click="pendingInvitePlayer = null">Cancel</button>
+            <button class="btn-primary" @click="invitePlayer(pendingInvitePlayer); pendingInvitePlayer = null">Send Invite</button>
+          </div>
+        </div>
+      </div>
     </Teleport>
 
     <!-- Delete confirmation modal -->
@@ -760,6 +774,7 @@ async function selectMatch(playerId, golfer) {
 
 // ── Invite ───────────────────────────────────────────────────────
 const inviteHint = ref('')
+const pendingInvitePlayer = ref(null)  // player awaiting invite confirmation
 const showGearMenu = ref(false)
 const gearSubMenu = ref(null)  // null | 'invite' | 'share'
 
@@ -769,6 +784,10 @@ const playersWithEmail = computed(() =>
 
 // Track per-player invite state: 'sending' | 'sent' | 'joined' | 'error'
 const inviteStatus = ref({})  // { [roster_player_id]: status }
+
+function confirmInvite(player) {
+  pendingInvitePlayer.value = player
+}
 
 async function invitePlayer(player) {
   if (!player.email) return
@@ -1843,7 +1862,7 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 
 .swipe-container {
   position: relative; overflow: hidden; border-radius: 12px;
-  margin-bottom: 4px; background: rgba(255,255,255,.04);
+  margin-bottom: 2px; background: rgba(255,255,255,.04);
 }
 .swipe-reveal {
   position: absolute; top: 0; bottom: 0; display: flex; align-items: center;
@@ -1855,7 +1874,7 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 
 .player-card {
   display: flex; align-items: center; gap: 8px;
-  padding: 10px 14px;
+  padding: 8px 14px;
   background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.07);
   border-radius: 12px; position: relative; z-index: 1;
   -webkit-tap-highlight-color: transparent; will-change: transform;
@@ -2134,4 +2153,72 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 [data-theme="light"] .close-btn          { color: rgba(13,31,18,0.4) !important; }
 [data-theme="light"] .ghin-prefix-input  { color: rgba(13,31,18,0.6) !important; }
 [data-theme="light"] .player-sheet       { background: #f4f7f5 !important; }
+
+/* ── Gear bottom sheet (teleported to body, needs non-scoped) ── */
+.gear-backdrop {
+  position: fixed; inset: 0; z-index: 300;
+  background: rgba(0,0,0,.5);
+  display: flex; align-items: flex-end;
+}
+.gear-sheet {
+  width: 100%; max-height: 80vh; overflow-y: auto;
+  background: #1e2720; border-radius: 20px 20px 0 0;
+  padding: 0 0 env(safe-area-inset-bottom);
+}
+.gear-sheet-handle {
+  width: 36px; height: 4px; border-radius: 2px;
+  background: rgba(255,255,255,.2);
+  margin: 12px auto 8px;
+}
+.gear-sheet-title {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px; font-weight: 600; color: rgba(240,237,224,.5);
+  letter-spacing: .6px; text-transform: uppercase;
+  padding: 8px 20px 12px;
+}
+.gear-back {
+  background: none; border: none; color: var(--gw-gold,#d4af37);
+  font-size: 18px; cursor: pointer; padding: 0 4px 0 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.gear-action {
+  display: flex; align-items: center; gap: 14px;
+  width: 100%; padding: 14px 20px;
+  background: none; border: none; border-top: 1px solid rgba(255,255,255,.06);
+  color: var(--gw-text, #f0ede0); cursor: pointer; text-align: left;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .12s;
+}
+.gear-action:active { background: rgba(255,255,255,.05); }
+.gear-action-icon { font-size: 22px; flex-shrink: 0; }
+.gear-action-body { flex: 1; min-width: 0; }
+.gear-action-label { font-size: 15px; font-weight: 600; }
+.gear-action-sub { font-size: 12px; color: rgba(240,237,224,.5); margin-top: 2px; }
+.gear-action-arrow { font-size: 20px; color: rgba(240,237,224,.3); flex-shrink: 0; }
+.gear-cancel {
+  display: block; width: calc(100% - 32px); margin: 12px 16px;
+  padding: 13px; border-radius: 14px;
+  background: rgba(255,255,255,.07); border: none;
+  color: rgba(240,237,224,.7); font-size: 15px; font-weight: 600;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.gear-cancel:active { background: rgba(255,255,255,.12); }
+.gear-player-list { padding: 0 0 8px; }
+.gear-player-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 20px;
+  border-top: 1px solid rgba(255,255,255,.06);
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+  transition: background .12s;
+}
+.gear-player-row:active { background: rgba(255,255,255,.05); }
+.gear-player-name { font-size: 15px; font-weight: 500; flex: 1; }
+.gear-player-sub { font-size: 12px; color: rgba(240,237,224,.45); margin-top: 1px; }
+[data-theme="light"] .gear-sheet { background: #f4f7f5; }
+[data-theme="light"] .gear-action { color: #0d1f12; border-top-color: rgba(0,0,0,.07); }
+[data-theme="light"] .gear-action-sub { color: rgba(13,31,18,.5); }
+[data-theme="light"] .gear-cancel { background: rgba(0,0,0,.06); color: rgba(13,31,18,.7); }
+[data-theme="light"] .gear-sheet-title { color: rgba(13,31,18,.45); }
+[data-theme="light"] .gear-player-row { border-top-color: rgba(0,0,0,.07); color: #0d1f12; }
+[data-theme="light"] .gear-player-sub { color: rgba(13,31,18,.45); }
 </style>
