@@ -114,13 +114,15 @@
           @click="openRound(round.id)"
           @keydown.enter="openRound(round.id)"
         >
-          <div class="round-course">
-            {{ round.course_name }}
-            <span v-if="round.is_complete" class="round-badge round-badge--done">Final</span>
-            <span v-else class="round-badge round-badge--live">In Progress</span>
+          <div class="round-top-row">
+            <div class="round-course">{{ round.course_name }}</div>
+            <div class="round-top-right">
+              <span class="round-date">{{ round.date }}</span>
+              <span v-if="round.is_complete" class="round-badge round-badge--done">F</span>
+              <span v-else class="round-badge round-badge--live">●</span>
+            </div>
           </div>
           <div class="round-players">{{ roundPlayerNames(round) }}</div>
-          <div class="round-date">{{ round.date }}</div>
         </div>
       </div>
     </section>
@@ -368,11 +370,33 @@ async function openRound(id) {
   transition: transform .12s, border-color .12s, background .12s;
 }
 .round-card:active { transform: scale(.985); background: rgba(255,255,255,.03); }
+.round-top-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.round-course {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--gw-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+.round-top-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
 .round-players {
-  font-size: 13px;
-  color: rgba(240,237,224,.75);
+  font-size: 12px;
+  color: rgba(240,237,224,.65);
   font-weight: 500;
-  margin-top: 3px;
+  margin-top: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -380,21 +404,21 @@ async function openRound(id) {
 .round-date {
   font-size: 11px;
   color: rgba(240,237,224,.4);
-  margin-top: 2px;
 }
 .round-badge {
-  display: inline-block;
-  margin-left: 8px;
-  padding: 2px 8px;
-  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 5px;
   font-size: 10px;
   font-weight: 800;
-  letter-spacing: .5px;
-  vertical-align: middle;
+  letter-spacing: .3px;
   font-family: var(--gw-font-body);
-  text-transform: uppercase;
 }
-.round-badge--done { background: rgba(74,222,128,.14); color: #4ade80; border: 1px solid rgba(74,222,128,.3); }
+.round-badge--done { background: rgba(220,38,38,.18); color: #f87171; border: 1px solid rgba(220,38,38,.35); }
 .round-badge--live { background: rgba(212,175,55,.14); color: #d4af37; border: 1px solid rgba(212,175,55,.35); }
 
 .cm-home-card {
