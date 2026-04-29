@@ -124,9 +124,11 @@ body {
 }
 
 #app, #golfwizard-app {
-  min-height: 100dvh;
+  height: 100dvh;
+  max-height: 100dvh;
   display: flex;
   flex-direction: column;
+  overflow: hidden; /* body never scrolls — only .app-container does */
 }
 
 /* ── App shell ─────────────────────────────────────────────── */
@@ -241,7 +243,6 @@ body {
 
 /* ── View scaffold ─────────────────────────────────────────── */
 .view {
-  min-height: calc(100dvh - var(--gw-nav-height) - env(safe-area-inset-bottom));
   padding-top: env(safe-area-inset-top);
 }
 
