@@ -999,19 +999,30 @@ function matchTeamNames(match, side) {
 }
 
 function matchTeamScore(match, side) {
-  const result = match.settlement_json?.result
+  // settlement_json IS the result object (not nested under .result)
+  const result = match.settlement_json
   if (!result) return '—'
-  if (side === 'a') return result.teamATotal != null ? result.teamATotal : '—'
-  return result.teamBTotal != null ? result.teamBTotal : '—'
+  const vsPar = side === 'a' ? result.teamA?.vsPar : result.teamB?.vsPar
+  if (vsPar == null) return '—'
+  if (vsPar === 0) return 'E'
+  return vsPar > 0 ? `+${vsPar}` : `${vsPar}`
 }
 
 function matchWinner(match) {
-  const result = match.settlement_json?.result
+  // settlement_json IS the result object (not nested under .result)
+  const result = match.settlement_json
   if (!result) return null
-  const a = result.teamATotal ?? 0
-  const b = result.teamBTotal ?? 0
-  if (a > b) return 'a'
-  if (b > a) return 'b'
+  // Prefer explicit settlement.winner over vsPar comparison
+  const w = result.settlement?.winner
+  if (w === 'A') return 'a'
+  if (w === 'B') return 'b'
+  if (w === null || w === undefined) {
+    // Fall back to vsPar delta
+    const a = result.teamA?.vsPar ?? 0
+    const b = result.teamB?.vsPar ?? 0
+    if (a < b) return 'a'   // lower vsPar = better in golf
+    if (b < a) return 'b'
+  }
   return 'tie'
 }
 

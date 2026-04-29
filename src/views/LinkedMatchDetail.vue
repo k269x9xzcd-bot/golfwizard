@@ -581,16 +581,15 @@ watch(() => route.params.id, (id) => { if (id) load() })
 }
 .lmd-team-name {
   font-family: var(--gw-font-body, system-ui);
-  font-size: 13px; font-weight: 700; color: var(--gw-text);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  line-height: 1.2;
+  font-size: 12px; font-weight: 700; color: var(--gw-text);
+  line-height: 1.3; word-break: break-word;
 }
 .lmd-team-score {
   display: flex; align-items: baseline; gap: 8px; margin-top: 4px;
 }
 .lmd-team-vs {
   font-family: var(--gw-font-mono, monospace);
-  font-size: 24px; font-weight: 900; color: var(--gw-text);
+  font-size: 20px; font-weight: 900; color: var(--gw-text);
 }
 .lmd-team-holes {
   font-size: 11px; color: var(--gw-text-muted);
