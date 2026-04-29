@@ -1241,13 +1241,15 @@ function confirmDelete(id, name) {
 
 async function performDelete() {
   if (!deleteConfirmId.value) return
+  const id = deleteConfirmId.value
+  deleteConfirmId.value = null
   try {
-    await rosterStore.deletePlayer(deleteConfirmId.value)
+    await rosterStore.deletePlayer(id)
     showToast('Player deleted', 'neutral')
   } catch (err) {
     console.error('Failed to delete player:', err)
+    showToast(`Delete failed: ${err?.message || 'unknown error'}`, 'error')
   }
-  deleteConfirmId.value = null
 }
 
 // ── Edit ─────────────────────────────────────────────────────────
@@ -1899,6 +1901,7 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
   border: 1px solid rgba(255,255,255,.1); backdrop-filter: blur(8px);
 }
 .swipe-toast.gold { color: #d4af37; border-color: rgba(212,175,55,.3); }
+.swipe-toast.error { color: #f87171; border-color: rgba(220,38,38,.35); background: rgba(30,10,10,.92); }
 .toast-enter-active, .toast-leave-active { transition: all .3s ease; }
 .toast-enter-from, .toast-leave-to { opacity: 0; transform: translateX(-50%) translateY(10px); }
 
