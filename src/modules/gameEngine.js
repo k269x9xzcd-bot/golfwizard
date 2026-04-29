@@ -2023,7 +2023,7 @@ function _crossParFor(round) {
 }
 
 function _crossSiFor(round) {
-  const si = round?.course_snapshot?.handicap_stroke_index || round?.stroke_index || []
+  const si = round?.course_snapshot?.si || round?.course_snapshot?.handicap_stroke_index || round?.stroke_index || []
   if (Array.isArray(si) && si.length >= 18) return si
   return Array.from({ length: 18 }, (_, i) => i + 1)
 }
