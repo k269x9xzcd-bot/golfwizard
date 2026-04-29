@@ -573,8 +573,8 @@
             <button class="close-btn" @click="editTarget = null">✕</button>
           </div>
           <div class="name-row">
-            <input v-model="editFirst" class="wiz-input" placeholder="First name" />
-            <input v-model="editLast" class="wiz-input" placeholder="Last name" />
+            <input v-model="editFirst" class="wiz-input" placeholder="First name" @input="ghinSearchResults = []; ghinSearchMsg = ''" />
+            <input v-model="editLast" class="wiz-input" placeholder="Last name" @input="ghinSearchResults = []; ghinSearchMsg = ''" />
           </div>
           <input v-model="editGhin" class="wiz-input" placeholder="GHIN Index (e.g. 12.4)" type="text" inputmode="decimal" />
           <div v-if="editTarget?.club_name" class="edit-club-row">
@@ -1058,6 +1058,7 @@ async function fetchGhinScores() {
 }
 
 async function addSearchGhin() {
+  if (addGhinSearching.value) return  // prevent double-tap
   const first = newFirst.value.trim()
   const last = newLast.value.trim()
   if (!last) { addGhinMsg.value = 'Enter at least a last name to search'; return }
@@ -1065,13 +1066,14 @@ async function addSearchGhin() {
   addGhinResults.value = []
   addGhinMsg.value = ''
   try {
-    const query = supabase
+    const { data: bbRows } = await supabase
       .from('bb_member_index')
       .select('ghin_number, first_name, last_name, handicap_index')
       .ilike('last_name', `%${last}%`)
       .order('last_name').limit(15)
-    const { data: bbRows } = await query
     let filtered = bbRows || []
+    // Only use BB results if last name is an exact match (avoid false positives blocking GHIN)
+    filtered = filtered.filter(p => p.last_name?.toLowerCase() === last.toLowerCase())
     if (first && filtered.length > 0) {
       const firstLower = first.toLowerCase()
       const exact = filtered.filter(p => p.first_name?.toLowerCase().startsWith(firstLower))
@@ -1329,6 +1331,8 @@ async function searchGhinForEdit() {
         .order('last_name')
         .limit(15)
       let filtered = bbRows || []
+      // Only use BB results if last name is an exact match
+      filtered = filtered.filter(p => p.last_name?.toLowerCase() === last.toLowerCase())
       if (first && filtered.length > 0) {
         const fl = first.toLowerCase()
         const exact = filtered.filter(p => p.first_name?.toLowerCase().startsWith(fl))
@@ -1348,9 +1352,33 @@ async function searchGhinForEdit() {
     }
 
     // Fall back to ghin-player-search edge fn (reads creds server-side — no authStore.profile needed)
-    const searchQuery = typedGhinNumber || (first && last ? `${first} ${last}` : last || first)
+    // GHIN # lookup: use ghin-lookup edge fn directly (not name search)
+    if (typedGhinNumber) {
+      const { data: fnData } = await supabase.functions.invoke('ghin-lookup', {
+        body: { ghin_number: typedGhinNumber },
+      })
+      if (fnData?.name) {
+        ghinSearchResults.value = [{
+          ghin_number: typedGhinNumber,
+          full_name: fnData.name,
+          handicap_index: fnData.handicap_index ?? null,
+          club_name: fnData.club_name || '',
+        }]
+      } else {
+        ghinSearchMsg.value = `No golfer found for GHIN # ${typedGhinNumber}`
+      }
+      return
+    }
+    // Build name query: prefer "FirstPrefix Last", fallback to just last or just first
+    const prefix = editGhinPrefix.value.trim() || first
+    let searchQuery = ''
+    if (prefix && last) {
+      searchQuery = `${prefix} ${last}`
+    } else {
+      searchQuery = last || first
+    }
     if (!searchQuery) {
-      ghinSearchMsg.value = 'Enter a GHIN # or first + last name'
+      ghinSearchMsg.value = 'Enter a first and last name to search'
       return
     }
 
@@ -2015,6 +2043,7 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 .ghin-search-results {
   background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
   border-radius: var(--gw-radius-md); overflow: hidden;
+  max-height: 280px; overflow-y: auto; -webkit-overflow-scrolling: touch;
 }
 .ghin-search-label {
   font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
