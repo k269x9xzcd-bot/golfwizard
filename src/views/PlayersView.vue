@@ -1345,65 +1345,32 @@ async function searchGhinForEdit() {
       }
     }
 
-    const profile = authStore.profile
-    if (!profile?.ghin_number || !profile?.ghin_password) {
-      ghinSearchMsg.value = first && last
-        ? 'Not found in BB directory. Add GHIN credentials in Profile to search the full GHIN database.'
-        : 'Enter a GHIN # or first + last name'
-      return
-    }
-
-    if (typedGhinNumber) {
-      const { data, error } = await supabase.functions.invoke('ghin-roster-sync', {
-        body: {
-          ghin_number: profile.ghin_number,
-          password: profile.ghin_password,
-          players: [{ id: 'lookup', name: `${first} ${last}`.trim() || 'Unknown', ghin_number: typedGhinNumber }],
-        }
-      })
-      if (error) throw error
-      const r = data?.results?.[0]
-      if (r?.status === 'updated') {
-        ghinSearchResults.value = [{
-          ghin_number: r.ghin_number,
-          full_name: r.full_name,
-          handicap_index: r.handicap_index,
-          club_name: r.club_name,
-        }]
-      } else {
-        ghinSearchMsg.value = `No golfer found for GHIN # ${typedGhinNumber}`
-      }
-      return
-    }
-
-    if (!first || !last) {
+    // Fall back to ghin-player-search edge fn (reads creds server-side — no authStore.profile needed)
+    const searchQuery = typedGhinNumber || (first && last ? `${first} ${last}` : last || first)
+    if (!searchQuery) {
       ghinSearchMsg.value = 'Enter a GHIN # or first + last name'
       return
     }
-    const prefix = editGhinPrefix.value.trim() || first
-    const { data, error } = await supabase.functions.invoke('ghin-roster-sync', {
-      body: {
-        ghin_number: profile.ghin_number,
-        password: profile.ghin_password,
-        players: [{ id: 'lookup', name: `${first} ${last}`, first_name_prefix: prefix }],
-      }
+
+    const { data, error } = await supabase.functions.invoke('ghin-player-search', {
+      body: { query: searchQuery },
     })
     if (error) throw error
-    const r = data?.results?.[0]
-    if (!r) throw new Error('No response')
-    if (r.status === 'updated') {
-      ghinSearchResults.value = [{
+    if (data?.error?.includes('No GHIN credentials')) {
+      ghinSearchMsg.value = 'Not found in BB directory. Add GHIN credentials in Profile to enable full GHIN search.'
+      return
+    }
+    const results = data?.results || []
+    if (results.length) {
+      ghinSearchResults.value = results.map(r => ({
         ghin_number: r.ghin_number,
         full_name: r.full_name,
         handicap_index: r.handicap_index,
-        club_name: r.club_name,
-      }]
-    } else if (r.status === 'multiple_matches') {
-      ghinSearchResults.value = r.matches ?? []
-      if (ghinSearchResults.value.length) ghinSearchMsg.value = `Found ${ghinSearchResults.value.length} golfer${ghinSearchResults.value.length > 1 ? 's' : ''} named "${last}" — select one:`
-      if (!ghinSearchResults.value.length) ghinSearchMsg.value = `No GHIN record found for "${first} ${last}". Check spelling or enter their GHIN # directly.`
+        club_name: r.club_name || '',
+      }))
+      if (results.length > 1) ghinSearchMsg.value = `Found ${results.length} golfers — select one:`
     } else {
-      ghinSearchMsg.value = `No GHIN record found for "${first} ${last}". Try clearing the prefix field, or enter their GHIN # directly.`
+      ghinSearchMsg.value = `No GHIN record found for "${searchQuery}". Check spelling or enter their GHIN # directly.`
     }
   } catch (e) {
     ghinSearchMsg.value = e?.message || 'Search failed'
