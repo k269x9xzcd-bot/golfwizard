@@ -259,7 +259,17 @@ export const useRoundsStore = defineStore('rounds', () => {
         }
       }
 
-      if (data !== null) rounds.value = data
+      if (data !== null) {
+        rounds.value = data
+        // Reconcile knownRounds against server — purge stale entries whose IDs
+        // no longer exist in the fetched list (ghost rounds from failed creations).
+        const serverIds = new Set(data.map(r => r.id))
+        const cleaned = _loadKnownList().filter(r => serverIds.has(r.id))
+        if (cleaned.length !== _loadKnownList().length) {
+          _saveKnownList(cleaned)
+          knownRounds.value = cleaned.filter(r => !r.isComplete)
+        }
+      }
     } finally {
       // ALWAYS clear loading — even on timeout or error — so UI doesn't hang.
       loading.value = false
