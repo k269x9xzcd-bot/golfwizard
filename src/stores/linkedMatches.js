@@ -190,7 +190,7 @@ export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
    */
   async function _checkAndPersistSettlement(match) {
     if (!match?.round_a_id || !match?.round_b_id) return
-    if (match.status === 'complete') return
+    // Note: intentionally allow re-persist for complete matches to overwrite stale settlement_json
 
     try {
       // Load fresh bundles to get latest is_complete + scores

@@ -298,7 +298,7 @@ import {
   computeNassau, computeSkins, computeMatch, computeBestBall, computeBestBallNet,
   computeVegas, computeDots, computeFidget, computeSnake, computeWolf,
   computeHiLow, computeStableford, computeSixes, computeFiveThreeOne, computeNines, computeHammer,
-  computeBbb, computeScotch6s, computeTeamDay,
+  computeBbb, computeScotch6s, computeTeamDay, computeCrossBestBall,
 } from '../modules/gameEngine'
 import { COURSES as BUILTIN_COURSES } from '../modules/courses'
 
@@ -324,23 +324,45 @@ onMounted(async () => {
     const matches = linkedMatchesStore.linkedMatches.filter(
       m => m.status === 'complete' || m.status === 'linked'
     )
-    // Enrich each match with team member names from round_members
+    // Enrich each match with team member names + live recomputed result
     const roundIds = [...new Set(matches.flatMap(m => [m.round_a_id, m.round_b_id].filter(Boolean)))]
     let membersByRound = {}
+    let roundsById = {}
     if (roundIds.length) {
       try {
-        const members = await supaRawRequest('GET', `round_members?round_id=in.(${roundIds.join(',')})&select=round_id,guest_name,short_name`, null, 5000)
+        const [members, roundRows, scoreRows] = await Promise.all([
+          supaRawRequest('GET', `round_members?round_id=in.(${roundIds.join(',')})&select=*`, null, 5000),
+          supaRawRequest('GET', `rounds?id=in.(${roundIds.join(',')})&select=id,course_snapshot,holes_mode,is_complete,owner_id,course_name`, null, 5000),
+          supaRawRequest('GET', `scores?round_id=in.(${roundIds.join(',')})&select=*`, null, 5000),
+        ])
+        // Build round bundles for recompute
+        for (const r of (roundRows || [])) {
+          roundsById[r.id] = { ...r, round_members: [], scores: [] }
+        }
         for (const m of (members || [])) {
           if (!membersByRound[m.round_id]) membersByRound[m.round_id] = []
           membersByRound[m.round_id].push(m.short_name || m.guest_name?.split(' ')[0] || '?')
+          if (roundsById[m.round_id]) roundsById[m.round_id].round_members.push(m)
         }
-      } catch (e) { console.warn('[HistoryView] member enrich failed', e) }
+        for (const s of (scoreRows || [])) {
+          if (roundsById[s.round_id]) roundsById[s.round_id].scores.push(s)
+        }
+      } catch (e) { console.warn('[HistoryView] match enrich failed', e) }
     }
-    linkedMatchHistory.value = matches.map(m => ({
-      ...m,
-      _teamA: membersByRound[m.round_a_id] || [],
-      _teamB: membersByRound[m.round_b_id] || [],
-    }))
+    linkedMatchHistory.value = matches.map(m => {
+      const rA = roundsById[m.round_a_id]
+      const rB = roundsById[m.round_b_id]
+      let liveResult = null
+      if (rA && rB) {
+        try { liveResult = computeCrossBestBall(rA, rB, m.match_config || {}) } catch {}
+      }
+      return {
+        ...m,
+        _teamA: membersByRound[m.round_a_id] || [],
+        _teamB: membersByRound[m.round_b_id] || [],
+        _liveResult: liveResult,
+      }
+    })
   } catch (e) {
     console.warn('[HistoryView] matches fetch failed', e)
   } finally {
@@ -999,8 +1021,8 @@ function matchTeamNames(match, side) {
 }
 
 function matchTeamScore(match, side) {
-  // settlement_json IS the result object (not nested under .result)
-  const result = match.settlement_json
+  // Prefer live recomputed result, fall back to persisted settlement_json
+  const result = match._liveResult || match.settlement_json
   if (!result) return '—'
   const vsPar = side === 'a' ? result.teamA?.vsPar : result.teamB?.vsPar
   if (vsPar == null) return '—'
@@ -1009,18 +1031,17 @@ function matchTeamScore(match, side) {
 }
 
 function matchWinner(match) {
-  // settlement_json IS the result object (not nested under .result)
-  const result = match.settlement_json
+  // Prefer live recomputed result, fall back to persisted settlement_json
+  const result = match._liveResult || match.settlement_json
   if (!result) return null
-  // Prefer explicit settlement.winner over vsPar comparison
   const w = result.settlement?.winner
   if (w === 'A') return 'a'
   if (w === 'B') return 'b'
-  if (w === null || w === undefined) {
-    // Fall back to vsPar delta
-    const a = result.teamA?.vsPar ?? 0
-    const b = result.teamB?.vsPar ?? 0
-    if (a < b) return 'a'   // lower vsPar = better in golf
+  // Fall back to vsPar delta (lower = better)
+  const a = result.teamA?.vsPar ?? null
+  const b = result.teamB?.vsPar ?? null
+  if (a !== null && b !== null) {
+    if (a < b) return 'a'
     if (b < a) return 'b'
   }
   return 'tie'
@@ -1653,15 +1674,13 @@ function matchResultClass(match) {
   color: var(--gw-text-muted);
 }
 .moc-team-names {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--gw-text-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 120px;
+  line-height: 1.35;
+  word-break: break-word;
 }
 .moc-team--right .moc-team-names {
-  max-width: 120px;
+  text-align: right;
 }
 .moc-team-score {
   font-size: 22px;
