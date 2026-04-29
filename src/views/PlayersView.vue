@@ -471,10 +471,16 @@
             <span v-else-if="p.soft_cap === 'true' || p.soft_cap === true" class="cap-badge cap-soft" title="Soft Cap applied">SC</span>
           </div>
           <div class="player-meta">
-            <span v-if="p.email" class="player-email-dot" title="Has email">✓</span>
+            <span v-if="p.user_id" class="invite-status invite-status--joined" title="Has account">● In app</span>
+            <span v-else-if="inviteStatus[p.id] === 'sending'" class="invite-status invite-status--sending">Sending…</span>
+            <span v-else-if="inviteStatus[p.id] === 'sent' || p.invited_at" class="invite-status invite-status--sent" title="Invite sent">✉ Invited</span>
+            <span v-else-if="p.email" class="invite-status invite-status--pending" title="Not yet invited">Not invited</span>
           </div>
         </div>
-        <button v-if="p.ghin_number" class="player-info-btn" @click.stop="openPlayerSheet(p)" title="GHIN info">⛳</button>
+        <button v-if="p.email && !p.user_id" class="invite-btn" @click.stop="invitePlayer(p)" :disabled="inviteStatus[p.id] === 'sending'" title="Send app invite">
+          {{ inviteStatus[p.id] === 'sending' ? '…' : p.invited_at ? 'Resend' : 'Invite' }}
+        </button>
+        <button v-else-if="p.ghin_number" class="player-info-btn" @click.stop="openPlayerSheet(p)" title="GHIN info">⛳</button>
 
         <span class="player-fav-star">★</span>
       </div>
@@ -504,10 +510,16 @@
             <span v-else-if="p.soft_cap === 'true' || p.soft_cap === true" class="cap-badge cap-soft" title="Soft Cap applied">SC</span>
           </div>
           <div class="player-meta">
-            <span v-if="p.email" class="player-email-dot" title="Has email">✓</span>
+            <span v-if="p.user_id" class="invite-status invite-status--joined" title="Has account">● In app</span>
+            <span v-else-if="inviteStatus[p.id] === 'sending'" class="invite-status invite-status--sending">Sending…</span>
+            <span v-else-if="inviteStatus[p.id] === 'sent' || p.invited_at" class="invite-status invite-status--sent" title="Invite sent">✉ Invited</span>
+            <span v-else-if="p.email" class="invite-status invite-status--pending" title="Not yet invited">Not invited</span>
           </div>
         </div>
-        <button v-if="p.ghin_number" class="player-info-btn" @click.stop="openPlayerSheet(p)" title="GHIN info">⛳</button>
+        <button v-if="p.email && !p.user_id" class="invite-btn" @click.stop="invitePlayer(p)" :disabled="inviteStatus[p.id] === 'sending'" title="Send app invite">
+          {{ inviteStatus[p.id] === 'sending' ? '…' : p.invited_at ? 'Resend' : 'Invite' }}
+        </button>
+        <button v-else-if="p.ghin_number" class="player-info-btn" @click.stop="openPlayerSheet(p)" title="GHIN info">⛳</button>
 
       </div>
     </div>
@@ -755,13 +767,34 @@ const playersWithEmail = computed(() =>
   rosterStore.players.filter(p => p.email).sort((a, b) => a.name.localeCompare(b.name))
 )
 
-function invitePlayer(player) {
+// Track per-player invite state: 'sending' | 'sent' | 'joined' | 'error'
+const inviteStatus = ref({})  // { [roster_player_id]: status }
+
+async function invitePlayer(player) {
   if (!player.email) return
-  const senderName = authStore.profile?.display_name?.split(' ')[0] || 'Jason'
-  const mailtoLink = buildInviteEmail(player, senderName)
-  // Use window.open so iOS PWA opens Mail instead of navigating away
-  window.open(mailtoLink, '_blank')
-  showInviteHint(`Invite sent to ${player.name.split(' ')[0]}!`)
+  if (player.user_id) {
+    showInviteHint(`${player.name.split(' ')[0]} already has an account`)
+    return
+  }
+  inviteStatus.value[player.id] = 'sending'
+  try {
+    const { data, error } = await supabase.functions.invoke('invite-player', {
+      body: { roster_player_id: player.id },
+    })
+    if (error) throw error
+    if (data?.already_joined || data?.already_registered) {
+      inviteStatus.value[player.id] = 'joined'
+      showInviteHint(`${player.name.split(' ')[0]} already has an account — they can sign in directly`)
+      return
+    }
+    inviteStatus.value[player.id] = 'sent'
+    // Stamp invited_at locally so UI updates without refetch
+    await rosterStore.updatePlayer(player.id, { invited_at: new Date().toISOString() })
+    showInviteHint(`Invite sent to ${player.name.split(' ')[0]}!`)
+  } catch (e) {
+    inviteStatus.value[player.id] = 'error'
+    showInviteHint(`Failed to invite ${player.name.split(' ')[0]}: ${e?.message ?? 'unknown error'}`)
+  }
 }
 
 async function shareGroupInvite() {
@@ -2035,6 +2068,25 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
   -webkit-tap-highlight-color: transparent;
   margin-right: 2px;
 }
+.invite-btn {
+  font-size: 11px; font-weight: 600;
+  padding: 5px 10px; border-radius: 8px;
+  border: 1px solid var(--gw-primary);
+  background: transparent; color: var(--gw-primary);
+  cursor: pointer; flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+  margin-right: 2px;
+  transition: background .15s, color .15s;
+}
+.invite-btn:active { background: var(--gw-primary); color: #fff; }
+.invite-btn:disabled { opacity: 0.5; cursor: default; }
+.invite-status {
+  font-size: 10px; font-weight: 600; letter-spacing: .02em;
+}
+.invite-status--joined  { color: #22c55e; }
+.invite-status--sent    { color: var(--gw-text-muted); }
+.invite-status--pending { color: var(--gw-text-muted); opacity: 0.6; }
+.invite-status--sending { color: var(--gw-primary); }
 /* ── Aggregate stats grid ── */
 .ghin-agg-grid {
   display: grid; grid-template-columns: repeat(4, minmax(0,1fr));

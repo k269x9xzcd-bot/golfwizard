@@ -224,9 +224,14 @@ export const useRosterStore = defineStore('roster', () => {
 
   async function addPlayer(player) {
     const auth = useAuthStore()
-    // Prevent duplicate names (case-insensitive)
+    // Prevent duplicate names (case-insensitive).
+    // Only treat as a real match if the row has a real DB id (not default_* / local_*).
     const nameNorm = player.name.trim().toLowerCase()
-    const existing = players.value.find(p => p.name.trim().toLowerCase() === nameNorm)
+    const existing = players.value.find(p =>
+      p.name.trim().toLowerCase() === nameNorm &&
+      !String(p.id).startsWith('default_') &&
+      !String(p.id).startsWith('local_')
+    )
     if (existing) {
       // Update the existing player's GHIN instead of creating a dupe
       await updatePlayer(existing.id, {
@@ -258,8 +263,14 @@ export const useRosterStore = defineStore('roster', () => {
         .from('roster_players')
         .upsert(row, { onConflict: 'ghin_number', ignoreDuplicates: false })
         .select().single())
+    } else if (row.email) {
+      // No GHIN but has email — upsert on (owner_id, email) to prevent duplicates
+      ;({ data, error } = await supabase
+        .from('roster_players')
+        .upsert(row, { onConflict: 'owner_id,email', ignoreDuplicates: false })
+        .select().single())
     } else {
-      // Plain insert for players without a GHIN number
+      // No GHIN, no email — plain insert (no unique key to deduplicate on)
       ;({ data, error } = await supabase
         .from('roster_players')
         .insert(row)
