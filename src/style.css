@@ -135,7 +135,9 @@ body {
   overflow-y: auto;
   padding-bottom: calc(var(--gw-nav-height) + env(safe-area-inset-bottom));
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;        /* Firefox */
 }
+.app-container::-webkit-scrollbar { display: none; } /* Chrome/Safari/iOS */
 
 /* ── Bottom navigation ─────────────────────────────────────── */
 /*
@@ -1654,7 +1656,9 @@ body {
 
 .header-logo-group {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
 }
 
 .header-logo {
@@ -1669,7 +1673,25 @@ body {
   font-size: 10px;
   color: var(--gw-text-muted);
   letter-spacing: 0.5px;
-  margin-top: -2px;
+}
+
+/* Compact inline variant of the toggle — sits next to the logo */
+.theme-toggle-inline {
+  width: 36px !important;
+  height: 20px !important;
+  flex-shrink: 0;
+}
+.theme-toggle-inline::after {
+  width: 14px !important;
+  height: 14px !important;
+  top: 3px !important;
+  left: 3px !important;
+}
+.theme-toggle-inline.is-light::after {
+  left: calc(100% - 17px) !important;
+}
+.theme-toggle-inline .tt-icon {
+  font-size: 9px !important;
 }
 
 .header-actions {

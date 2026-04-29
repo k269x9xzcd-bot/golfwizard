@@ -4,11 +4,8 @@
       <div class="header-logo-group">
         <div class="header-logo">⛳ GolfWizard</div>
         <div class="header-version">v{{ appVersion }}</div>
-      </div>
-      <div class="header-actions">
-        <button class="help-btn" @click="showHelp = true" title="Help & Support">?</button>
         <button
-          class="theme-toggle-btn"
+          class="theme-toggle-btn theme-toggle-inline"
           :class="{ 'is-light': theme === 'light' }"
           @click="toggleTheme"
           :title="theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'"
@@ -16,6 +13,9 @@
           <span class="tt-icon tt-moon">🌙</span>
           <span class="tt-icon tt-sun">☀️</span>
         </button>
+      </div>
+      <div class="header-actions">
+        <button class="help-btn" @click="showHelp = true" title="Help & Support">?</button>
         <button v-if="!authStore.isAuthenticated" class="btn-signin" @click="showAuth = true">
           Sign In
         </button>
