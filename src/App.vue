@@ -45,6 +45,9 @@
         </RouterView>
       </div>
 
+      <!-- PWA install prompt — iOS Safari only, not already installed -->
+      <PwaInstallPrompt />
+
       <!-- First-time name prompt — only for users missing a last name, never on invite URLs -->
       <div v-if="namePrompt" class="name-prompt-backdrop">
         <div class="name-prompt-modal">
@@ -113,6 +116,7 @@ import { hasTournamentAccess, useTournamentStore } from './stores/tournament.js'
 import { useLinkedMatchesStore } from './stores/linkedMatches'
 import WizardOverlay from './components/WizardOverlay.vue'
 import JoinOverlay from './components/JoinOverlay.vue'
+import PwaInstallPrompt from './components/PwaInstallPrompt.vue'
 import { useTheme } from './composables/useTheme'
 
 const { init: initTheme } = useTheme()
