@@ -112,114 +112,39 @@
         <span v-for="p in opponentPlayers" :key="p.id" class="opp-strip-player">{{ p.shortName || p.name }}</span>
       </div>
 
-      <!-- HCP Editor Modal -->
-      <!-- Date editor modal -->
-      <div v-if="showDateEditor" class="hcp-editor-overlay" @click.self="showDateEditor = false">
-        <div class="hcp-editor-modal" style="max-width:320px">
-          <div class="hcp-editor-title">Edit Round Date</div>
-          <div style="margin:16px 0">
-            <input
-              type="date"
-              v-model="editDateValue"
-              class="wiz-input"
-              style="width:100%;font-size:16px;text-align:center"
-            />
-          </div>
-          <div v-if="dateEditError" style="color:#f87171;font-size:12px;margin-bottom:10px">{{ dateEditError }}</div>
-          <div style="display:flex;gap:8px">
-            <button class="hcp-editor-done" style="flex:1;background:rgba(255,255,255,.08);color:var(--gw-text)" @click="showDateEditor = false">Cancel</button>
-            <button class="hcp-editor-done" style="flex:1" @click="saveDateEdit" :disabled="dateSaving">{{ dateSaving ? 'Saving…' : 'Save' }}</button>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="showHcpEditor" class="hcp-editor-overlay" @click.self="showHcpEditor = false">
-        <div class="hcp-editor-modal">
-          <div class="hcp-editor-title">Edit Strokes / Handicap</div>
-          <div class="hcp-editor-note">Set strokes directly to override, or edit handicap index to recalculate.</div>
-          <div v-for="m in roundsStore.activeMembers" :key="m.id" class="hcp-editor-row hcp-editor-row--expanded">
-            <!-- Name + index + course HCP -->
-            <div class="hcp-editor-top">
-              <span class="hcp-editor-name">{{ m.short_name || m.guest_name }}</span>
-              <div class="hcp-editor-right">
-                <div class="hcp-dual-inputs">
-                  <div class="hcp-input-group">
-                    <span class="hcp-input-label">Strokes</span>
-                    <input type="number" min="0" max="54" step="1" class="hcp-editor-input"
-                      :value="m.stroke_override != null ? m.stroke_override : hcpEditorCourseHcp(m)"
-                      :class="{ 'hcp-editor-input--modified': m.stroke_override != null }"
-                      @input="updateMemberStrokesLocal(m.id, $event.target.value)"
-                      @change="updateMemberStrokes(m.id, $event.target.value)" />
-                  </div>
-                  <div class="hcp-input-group">
-                    <span class="hcp-input-label">Index</span>
-                    <input type="number" step="0.1" class="hcp-editor-input"
-                      :class="{ 'hcp-editor-input--modified': hcpEditorIsModified(m) }"
-                      :value="m.ghin_index"
-                      @change="updateMemberHcp(m.id, $event.target.value)" placeholder="—" />
-                  </div>
-                </div>
-              </div>
-            </div>
-            <!-- Strokes per hole grid -->
-            <div class="hcp-editor-holes">
-              <div
-                v-for="(strokes, hIdx) in hcpEditorStrokes(m)"
-                :key="hIdx"
-                class="hcp-editor-hole"
-                :class="{ 'hcp-editor-hole--has': strokes > 0 }"
-              >
-                <div class="hcp-editor-hole-num">{{ hIdx + 1 }}</div>
-                <div class="hcp-editor-hole-val">{{ strokes > 0 ? '+'.repeat(strokes) : '·' }}</div>
-              </div>
-            </div>
-          </div>
-          <button class="hcp-editor-done" @click="showHcpEditor = false">Done</button>
-        </div>
-      </div>
-
-      <!-- Opponent Group Editor -->
-      <div v-if="showOppEditor" class="hcp-editor-overlay" @click.self="showOppEditor = false">
-        <div class="hcp-editor-modal opp-editor-modal">
-          <div class="hcp-editor-title">⚔️ Opponent Group</div>
-          <div class="hcp-editor-note">Pick the players you're competing against today.</div>
-
-          <!-- Current opponents as removable chips -->
-          <div v-if="editOppPlayers.length" class="opp-edit-chips">
-            <div v-for="(p, i) in editOppPlayers" :key="p.id" class="opp-edit-chip">
-              <span>{{ p.shortName || p.name }}</span>
-              <button @click="editOppPlayers.splice(i, 1)">×</button>
-            </div>
-          </div>
-          <div v-else class="opp-edit-empty">No opponents set — pick from roster below</div>
-
-          <!-- Roster picker -->
-          <input v-model="oppEditorSearch" class="hcp-editor-input opp-editor-search" placeholder="Search roster…" style="width:100%;margin:8px 0" />
-          <div class="opp-editor-roster">
-            <div
-              v-for="p in oppEditorFiltered"
-              :key="p.id"
-              class="opp-editor-row"
-              :class="{ 'opp-editor-row--on': isEditOppAdded(p), 'opp-editor-row--mine': isMyPlayer(p) }"
-              @click="toggleEditOpp(p)"
-            >
-              <span class="opp-editor-name">{{ p.name }}</span>
-              <span class="opp-editor-hcp">idx {{ p.ghin_index ?? '—' }}</span>
-              <span class="opp-editor-check">{{ isEditOppAdded(p) ? '✓' : isMyPlayer(p) ? '—' : '+' }}</span>
-            </div>
-          </div>
-
-          <!-- Guest quick-add -->
-          <div class="quick-add-row" style="margin-top:8px">
-            <input v-model="oppEditorGuestName" class="hcp-editor-input" placeholder="Add guest…" style="flex:1" @keydown.enter="oppEditorAddGuest" />
-            <button class="hcp-editor-done" style="padding:8px 14px;flex-shrink:0" @click="oppEditorAddGuest">Add</button>
-          </div>
-
-          <div class="opp-editor-actions">
-            <button class="hcp-editor-done" @click="saveOppEditor">Save</button>
-          </div>
-        </div>
-      </div>
+      <!-- HCP / Date / Opponent Editor Modals -->
+      <HcpEditorModal
+        :show-date-editor="showDateEditor"
+        :edit-date-value="editDateValue"
+        :date-edit-error="dateEditError"
+        :date-saving="dateSaving"
+        :show-hcp-editor="showHcpEditor"
+        :members="roundsStore.activeMembers"
+        :course-hcp="hcpEditorCourseHcp"
+        :is-modified="hcpEditorIsModified"
+        :strokes-per-hole="hcpEditorStrokes"
+        :show-opp-editor="showOppEditor"
+        :edit-opp-players="editOppPlayers"
+        :opp-editor-search="oppEditorSearch"
+        :opp-editor-guest-name="oppEditorGuestName"
+        :opp-editor-filtered="oppEditorFiltered"
+        :is-opp-added="isEditOppAdded"
+        :is-my-player="isMyPlayer"
+        @close-date-editor="showDateEditor = false"
+        @update:edit-date-value="editDateValue = $event"
+        @save-date-edit="saveDateEdit"
+        @close-hcp-editor="showHcpEditor = false"
+        @update-hcp="updateMemberHcp"
+        @update-strokes="updateMemberStrokes"
+        @update-strokes-local="updateMemberStrokesLocal"
+        @close-opp-editor="showOppEditor = false"
+        @remove-opp="editOppPlayers.splice($event, 1)"
+        @toggle-opp="toggleEditOpp"
+        @add-opp-guest="oppEditorAddGuest"
+        @save-opp-editor="saveOppEditor"
+        @update:opp-editor-search="oppEditorSearch = $event"
+        @update:opp-editor-guest-name="oppEditorGuestName = $event"
+      />
 
       <!-- Delete active round confirmation -->
       <!-- ── Edit Score Dialog (viewOnly mode) ───────────────────── -->
@@ -262,30 +187,13 @@
       </div>
 
       <!-- ── Round picker bottom sheet ────────────────────────── -->
-      <div v-if="showRoundPicker" class="junk-sheet-backdrop" @click.self="showRoundPicker = false">
-        <div class="junk-sheet round-picker-sheet">
-          <div class="junk-sheet-header">
-            <span>Switch Round</span>
-            <button class="junk-sheet-close" @click="showRoundPicker = false">Done</button>
-          </div>
-          <div class="junk-sheet-body">
-            <button
-              v-for="kr in roundsStore.knownRounds"
-              :key="kr.id"
-              class="round-picker-row"
-              :class="{ 'round-picker-row--active': kr.id === roundsStore.activeRound?.id }"
-              @click="switchToRound(kr.id)"
-            >
-              <div class="rpr-left">
-                <span class="rpr-course">{{ kr.courseName }}</span>
-                <span class="rpr-meta">{{ kr.holesMode }}h · {{ kr.date }}</span>
-                <span v-if="kr.players" class="rpr-players">{{ kr.players }}</span>
-              </div>
-              <span v-if="kr.id === roundsStore.activeRound?.id" class="rpr-active-dot">✓</span>
-            </button>
-          </div>
-        </div>
-      </div>
+      <RoundPickerSheet
+        :show="showRoundPicker"
+        :known-rounds="roundsStore.knownRounds"
+        :active-round-id="roundsStore.activeRound?.id"
+        @close="showRoundPicker = false"
+        @switch="switchToRound"
+      />
 
       <!-- ── Game Editor Overlay ────────────────────────────────── -->
       <WizardOverlay v-if="showGameEditor" edit-mode @close="showGameEditor = false" />
@@ -1021,26 +929,17 @@
         </div>
 
         <!-- Finish Round Review overlay -->
-        <div v-if="showFinishReview" class="delete-overlay" @click="showFinishReview = false">
-          <div class="finish-review-panel" @click.stop>
-            <div class="finish-review-title">Review Round</div>
-            <div class="finish-review-sub">Confirm scores before finishing</div>
-            <div class="finish-review-grid">
-              <div v-for="member in roundsStore.activeMembers" :key="'fr-'+member.id" class="finish-review-player">
-                <span class="fr-name">{{ memberDisplay(member) }}</span>
-                <span class="fr-total">{{ playerTotal(member.id) || '—' }}</span>
-                <span class="fr-net">NET {{ playerNetTotal(member.id) || '—' }}</span>
-              </div>
-            </div>
-            <div v-if="finishError" class="finish-error">{{ finishError }}</div>
-            <div class="finish-review-actions">
-              <button class="btn-cancel" :disabled="finishing" @click="showFinishReview = false">Back to Scoring</button>
-              <button class="finish-btn" :disabled="finishing" @click="finishRound()">
-                {{ finishing ? 'Finishing…' : 'Finish Round ✓' }}
-              </button>
-            </div>
-          </div>
-        </div>
+        <FinishRoundOverlay
+          :show="showFinishReview"
+          :members="roundsStore.activeMembers"
+          :finishing="finishing"
+          :error="finishError"
+          :member-display="memberDisplay"
+          :player-total="playerTotal"
+          :player-net-total="playerNetTotal"
+          @close="showFinishReview = false"
+          @finish="finishRound"
+        />
       </div>
 
       <!-- Score entry modal removed — inline +/- on player cards -->
@@ -1060,6 +959,9 @@ import { shareScorecard, shareRecap } from '../modules/scorecardShare'
 import CrossMatchBanner from '../components/CrossMatchBanner.vue'
 import WizardOverlay from '../components/WizardOverlay.vue'
 import RetroScoreOverlay from '../components/RetroScoreOverlay.vue'
+import HcpEditorModal from '../components/scoring/HcpEditorModal.vue'
+import RoundPickerSheet from '../components/scoring/RoundPickerSheet.vue'
+import FinishRoundOverlay from '../components/scoring/FinishRoundOverlay.vue'
 import { useScorecardHelpers } from '../composables/useScorecardHelpers'
 import { useGameNotation } from '../composables/useGameNotation'
 import { useHoleMath } from '../composables/useHoleMath'
@@ -2415,7 +2317,7 @@ function formatDate(dateStr) {
 }
 </script>
 
-<style scoped src="../styles/ScoringView.css" />
+<style src="../styles/ScoringView.css" />
 
 <style>
 /* ── ScoringView light theme overrides (non-scoped to beat scoped specificity) ── */
