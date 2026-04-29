@@ -102,11 +102,11 @@
 
 
     <!-- Recent rounds -->
-    <section v-if="roundsStore.rounds.length" class="section">
+    <section v-if="roundsStore.myRounds.length" class="section">
       <h2 class="section-title">Recent Rounds</h2>
       <div class="rounds-list">
         <div
-          v-for="round in roundsStore.rounds.slice(0, 5)"
+          v-for="round in roundsStore.myRounds.slice(0, 5)"
           :key="round.id"
           class="round-card card"
           role="button"

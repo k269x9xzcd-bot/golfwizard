@@ -4,8 +4,8 @@
     <header class="view-header">
       <button v-if="soloRoundId" class="back-btn" @click="$router.push('/')">‹ Home</button>
       <h2 style="flex:1">{{ soloRoundId ? 'Round Recap' : 'History' }}</h2>
-      <div v-if="!soloRoundId && activeSegment === 'rounds' && roundsStore.rounds.length" class="round-count">
-        {{ roundsStore.rounds.length }} round{{ roundsStore.rounds.length !== 1 ? 's' : '' }}
+      <div v-if="!soloRoundId && activeSegment === 'rounds' && roundsStore.myRounds.length" class="round-count">
+        {{ roundsStore.myRounds.length }} round{{ roundsStore.myRounds.length !== 1 ? 's' : '' }}
       </div>
       <div v-else-if="!soloRoundId && activeSegment === 'matches' && linkedMatchHistory.length" class="round-count">
         {{ linkedMatchHistory.length }} match{{ linkedMatchHistory.length !== 1 ? 'es' : '' }}
@@ -35,13 +35,13 @@
     <template v-if="activeSegment === 'rounds'">
 
     <!-- Loading -- only when we truly have nothing to show -->
-    <div v-if="roundsStore.loading && !roundsStore.rounds.length" class="loading-state">
+    <div v-if="roundsStore.loading && !roundsStore.myRounds.length" class="loading-state">
       <div class="loading-spinner" />
       <div class="loading-text">Loading rounds…</div>
     </div>
 
     <!-- Empty -->
-    <div v-else-if="!roundsStore.rounds.length" class="empty-state">
+    <div v-else-if="!roundsStore.myRounds.length" class="empty-state">
       <div class="empty-icon">⛳</div>
       <div class="empty-title">No rounds yet</div>
       <div class="empty-sub">Complete a round to see your history here.</div>
@@ -51,7 +51,7 @@
     <!-- Round list -->
     <div v-else class="rounds-list">
       <!-- Group by month; in solo mode show only the matching round without month label -->
-      <template v-for="group in (soloRoundId ? [{ month: '', rounds: roundsStore.rounds.filter(r => r.id === soloRoundId) }] : groupedRounds)" :key="group.month || 'solo'">
+      <template v-for="group in (soloRoundId ? [{ month: '', rounds: roundsStore.myRounds.filter(r => r.id === soloRoundId) }] : groupedRounds)" :key="group.month || 'solo'">
         <div v-if="group.month" class="month-label">{{ group.month }}</div>
 
         <div
@@ -501,7 +501,7 @@ function capitalize(s) {
 // -- Grouping -------------------------------------------------
 const groupedRounds = computed(() => {
   const map = new Map()
-  for (const r of roundsStore.rounds) {
+  for (const r of roundsStore.myRounds) {
     const key = monthGroup(r.date)
     if (!map.has(key)) map.set(key, [])
     map.get(key).push(r)

@@ -64,6 +64,13 @@ export const useRoundsStore = defineStore('rounds', () => {
   const rounds = ref([])
   const loading = ref(false)
 
+  // Only rounds this user owns (excludes cross-match opponent rounds fetched via RLS)
+  const myRounds = computed(() => {
+    const uid = authStore.user?.id
+    if (!uid) return rounds.value
+    return rounds.value.filter(r => r.owner_id === uid)
+  })
+
   // ── Known rounds registry ────────────────────────────────────
   // Tracks rounds this user has created or joined so they can switch between them.
   // Stored as lightweight summaries; full data is loaded on demand via loadRound().
@@ -1146,7 +1153,7 @@ export const useRoundsStore = defineStore('rounds', () => {
   return {
     activeRound, activeMembers, activeScores, activeGames,
     knownRounds,
-    rounds, loading, activeRoundId, scoreSyncError,
+    rounds, myRounds, loading, activeRoundId, scoreSyncError,
     pendingQueueCount,
     flushQueue: _flushQueue,
     fetchRounds, createRound, loadRound, setScore,
