@@ -1,7 +1,7 @@
 <template>
   <div class="settings-view">
-    <header class="settings-header">
-      <h1 class="settings-title">Profile</h1>
+    <header class="view-header">
+      <h2>Profile</h2>
     </header>
 
     <!-- Authenticated view -->

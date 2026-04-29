@@ -3139,3 +3139,29 @@ body.gw-landscape .scorecard-grid tbody .col-player-name {
 [data-theme="light"] .empty-state    { color: rgba(13,31,18,0.45); }
 [data-theme="light"] .error-msg      { color: #dc2626; }
 [data-theme="light"] .success-msg    { color: #166534; }
+
+/* ── Wizard modal (light theme) ── */
+[data-theme="light"] .modal-overlay  { background: rgba(0,0,0,0.45); }
+[data-theme="light"] .modal          { background: #f4f7f5; border-color: rgba(13,95,60,0.15); }
+[data-theme="light"] .wizard-header  { border-bottom-color: rgba(13,95,60,0.15); }
+[data-theme="light"] .wizard-header-title { color: #0d1f12; }
+[data-theme="light"] .wizard-title   { color: #0d1f12; }
+[data-theme="light"] .wizard-step-indicator { color: rgba(13,31,18,0.45); }
+[data-theme="light"] .wizard-close-btn {
+  background: rgba(13,95,60,0.1);
+  color: rgba(13,31,18,0.6);
+}
+[data-theme="light"] .wizard-close-btn:hover {
+  background: rgba(13,95,60,0.2);
+  color: #0d1f12;
+}
+[data-theme="light"] .wizard-step h3 { color: #0d1f12; }
+[data-theme="light"] .wizard-nav {
+  border-top-color: rgba(13,95,60,0.1);
+  background: #f4f7f5;
+}
+[data-theme="light"] .wizard-inline-body { background: #f4f7f5; }
+
+/* ── Scrollbar hiding (light) ── */
+[data-theme="light"] ::-webkit-scrollbar { display: none; }
+[data-theme="light"] * { scrollbar-width: none; }

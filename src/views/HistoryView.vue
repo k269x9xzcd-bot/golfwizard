@@ -1,9 +1,9 @@
 <template>
   <div class="history-view">
     <!-- Header -->
-    <header class="history-header">
+    <header class="view-header">
       <button v-if="soloRoundId" class="back-btn" @click="$router.push('/')">‹ Home</button>
-      <h1 class="history-title">{{ soloRoundId ? 'Round Recap' : 'History' }}</h1>
+      <h2 style="flex:1">{{ soloRoundId ? 'Round Recap' : 'History' }}</h2>
       <div v-if="!soloRoundId && activeSegment === 'rounds' && roundsStore.rounds.length" class="round-count">
         {{ roundsStore.rounds.length }} round{{ roundsStore.rounds.length !== 1 ? 's' : '' }}
       </div>

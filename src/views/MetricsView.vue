@@ -1,8 +1,7 @@
 <template>
   <div class="metrics-page">
-    <header class="metrics-header">
-      <h1 class="metrics-title">Metrics Lab</h1>
-      <p class="metrics-subtitle">Season stats, head-to-head, and performance trends</p>
+    <header class="view-header">
+      <h2>Metrics Lab</h2>
     </header>
 
     <!-- Loading -->
