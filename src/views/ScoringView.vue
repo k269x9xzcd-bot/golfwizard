@@ -2416,3 +2416,72 @@ function formatDate(dateStr) {
 </script>
 
 <style scoped src="../styles/ScoringView.css" />
+
+<style>
+/* ── ScoringView light theme overrides (non-scoped to beat scoped specificity) ── */
+[data-theme="light"] .hole-banner {
+  background: linear-gradient(135deg, #0d3325, #166044);
+  border-color: rgba(212,175,55,.35);
+}
+[data-theme="light"] .hole-big-number { color: #f0ede0 !important; }
+[data-theme="light"] .hole-course-meta { color: rgba(240,237,224,.7) !important; }
+
+[data-theme="light"] .player-hole-card {
+  background: #ffffff !important;
+  border-color: rgba(13,95,60,0.15) !important;
+}
+[data-theme="light"] .card-t1 { background: rgba(96,165,250,.12) !important; border-color: rgba(96,165,250,.4) !important; }
+[data-theme="light"] .card-t2 { background: rgba(248,113,113,.12) !important; border-color: rgba(248,113,113,.4) !important; }
+
+[data-theme="light"] .phc-name  { color: #0d1f12 !important; }
+[data-theme="light"] .phc-running { color: rgba(13,31,18,.5) !important; }
+[data-theme="light"] .muted     { color: rgba(13,31,18,.3) !important; }
+[data-theme="light"] .phc-net-label { color: rgba(13,31,18,.4) !important; }
+[data-theme="light"] .phc-net-value { color: #0d1f12 !important; }
+[data-theme="light"] .phc-init-lowman { color: rgba(37,99,235,.9) !important; }
+
+[data-theme="light"] .hole-game-status {
+  background: #f0f7f3 !important;
+  border-color: rgba(13,95,60,.2) !important;
+}
+[data-theme="light"] .hole-gs-header { color: #9a7a1e !important; }
+[data-theme="light"] .hole-gs-row {
+  color: #0d1f12 !important;
+  border-top-color: rgba(13,95,60,.08) !important;
+}
+[data-theme="light"] .hole-gs-detail { color: rgba(13,31,18,.6) !important; }
+[data-theme="light"] .hole-gs-summary { border-top-color: rgba(13,95,60,.08) !important; }
+
+[data-theme="light"] .hole-math-section {
+  background: #e8f4ec !important;
+  border-color: rgba(13,95,60,.15) !important;
+}
+[data-theme="light"] .hole-math-line { color: rgba(13,31,18,.75) !important; }
+[data-theme="light"] .hole-math-line:not(:first-of-type)::before { color: rgba(13,31,18,.3) !important; }
+
+[data-theme="light"] .hole-nav-btn {
+  background: rgba(13,95,60,.08) !important;
+  color: #0d3325 !important;
+  border-color: rgba(13,95,60,.2) !important;
+}
+[data-theme="light"] .hole-nav-swipe-hint { color: rgba(13,31,18,.35) !important; }
+
+/* ── Live games box ── */
+[data-theme="light"] .live-games-box {
+  background: rgba(22,101,52,.06) !important;
+  border-color: rgba(22,101,52,.2) !important;
+}
+[data-theme="light"] .live-games-label { color: rgba(13,31,18,.55) !important; }
+
+[data-theme="light"] .gs-game-title   { color: #0d1f12 !important; }
+[data-theme="light"] .gs-dash         { color: rgba(13,31,18,.3) !important; }
+[data-theme="light"] .gs-value-muted  { color: rgba(13,31,18,.5) !important; }
+[data-theme="light"] .gs-detail-row   { color: rgba(13,31,18,.7) !important; }
+[data-theme="light"] .gs-strokes-line { color: rgba(154,122,30,.85) !important; }
+[data-theme="light"] .gs-line         { border-top-color: rgba(13,95,60,.08) !important; }
+
+[data-theme="light"] .live-game-name   { color: #0d1f12 !important; }
+[data-theme="light"] .live-game-status { color: rgba(13,31,18,.65) !important; }
+[data-theme="light"] .live-game-summary { border-top-color: rgba(13,95,60,.08) !important; }
+[data-theme="light"] .live-game-row   { border-top-color: rgba(13,95,60,.06) !important; }
+</style>

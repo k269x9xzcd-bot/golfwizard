@@ -553,3 +553,56 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 </style>
+
+<style>
+/* ── CrossMatchBanner light theme (non-scoped) ── */
+[data-theme="light"] .cmb {
+  background: #ffffff !important;
+  border-color: rgba(13,95,60,.2) !important;
+  color: #0d1f12 !important;
+}
+[data-theme="light"] .cmb--pending,
+[data-theme="light"] .cmb--waiting { background: #f4f7f5 !important; }
+[data-theme="light"] .cmb--live-row {
+  background: linear-gradient(135deg, rgba(154,122,30,.12) 0%, rgba(154,122,30,.04) 100%) !important;
+  border-color: rgba(154,122,30,.5) !important;
+}
+[data-theme="light"] .cmb--live {
+  background: linear-gradient(135deg, rgba(154,122,30,.12) 0%, rgba(154,122,30,.04) 100%) !important;
+  border-color: rgba(154,122,30,.5) !important;
+}
+[data-theme="light"] .cmb--final,
+[data-theme="light"] .cmb--win {
+  background: linear-gradient(135deg, rgba(22,101,52,.12) 0%, rgba(22,101,52,.04) 100%) !important;
+  border-color: rgba(22,101,52,.35) !important;
+}
+[data-theme="light"] .cmb--tie  { background: #f4f7f5 !important; border-color: rgba(59,130,246,.3) !important; }
+[data-theme="light"] .cmb--cancelled { background: rgba(239,68,68,.06) !important; }
+[data-theme="light"] .cmb-label { color: #0d1f12 !important; }
+[data-theme="light"] .cmb-arrow { color: rgba(13,31,18,.35) !important; }
+[data-theme="light"] .cmb-icon  { color: #0d1f12; }
+[data-theme="light"] .cmb-standings-btn {
+  background: rgba(13,95,60,.08) !important;
+  border-color: rgba(13,95,60,.2) !important;
+  color: #0d3325 !important;
+}
+[data-theme="light"] .cmb-options-btn,
+[data-theme="light"] .cmb-dismiss {
+  background: rgba(13,95,60,.07) !important;
+  border-color: rgba(13,95,60,.15) !important;
+  color: rgba(13,31,18,.6) !important;
+}
+[data-theme="light"] .cmb-options-menu {
+  background: #ffffff !important;
+  border-color: rgba(13,95,60,.15) !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,.15) !important;
+}
+[data-theme="light"] .cmb-opt { color: #0d1f12 !important; border-bottom-color: rgba(13,95,60,.08) !important; }
+[data-theme="light"] .cmb-opt--danger { color: #dc2626 !important; }
+[data-theme="light"] .cmb-cancel-body { color: rgba(13,31,18,.8) !important; }
+[data-theme="light"] .cmb-cancel-btn {
+  background: rgba(13,95,60,.06) !important;
+  border-color: rgba(13,95,60,.15) !important;
+  color: #0d1f12 !important;
+}
+</style>

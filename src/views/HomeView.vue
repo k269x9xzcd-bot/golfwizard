@@ -423,3 +423,21 @@ async function openRound(id) {
 }
 .help-btn:active { background: rgba(212,175,55,.28); border-color: #d4af37; transform: scale(.92); }
 </style>
+
+<style>
+/* ── HomeView light theme overrides (non-scoped) ── */
+[data-theme="light"] .cup-home-card {
+  background: linear-gradient(135deg, rgba(154,122,30,.10) 0%, rgba(154,122,30,.04) 100%) !important;
+  border-color: rgba(154,122,30,.35) !important;
+  color: #0d1f12 !important;
+}
+[data-theme="light"] .cup-home-title { color: #9a7a1e !important; }
+[data-theme="light"] .cup-home-sub  { color: rgba(13,31,18,.55) !important; }
+[data-theme="light"] .cup-home-arrow { color: rgba(154,122,30,.6) !important; }
+[data-theme="light"] .cup-home-card--active .cup-home-header {
+  color: #0d1f12 !important;
+  border-bottom-color: rgba(154,122,30,.2) !important;
+}
+[data-theme="light"] .car-title { color: #0d1f12 !important; }
+[data-theme="light"] .car-sub   { color: rgba(13,31,18,.5) !important; }
+</style>

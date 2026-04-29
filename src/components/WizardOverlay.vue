@@ -1413,8 +1413,10 @@ const TeamPicker = {
       fontSize: '10px', fontWeight: '700', marginBottom: '8px', textTransform: 'uppercase',
       color: team === 1 ? '#60a5fa' : '#f87171',
     })
+    const isLight = () => document.documentElement.getAttribute('data-theme') === 'light'
     const btnStyle = (pid, team) => {
       const isOn = getTeam(pid) === team
+      const light = isLight()
       return {
         display: 'block', width: '100%', textAlign: 'left',
         padding: '8px 12px', marginBottom: '5px', borderRadius: '9px',
@@ -1423,10 +1425,10 @@ const TeamPicker = {
         touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent',
         background: isOn
           ? (team === 1 ? 'rgba(96,165,250,.25)' : 'rgba(248,113,113,.25)')
-          : 'rgba(255,255,255,.04)',
+          : (light ? 'rgba(0,0,0,.04)' : 'rgba(255,255,255,.04)'),
         color: isOn
           ? (team === 1 ? '#60a5fa' : '#f87171')
-          : 'rgba(240,237,224,.5)',
+          : (light ? 'rgba(13,31,18,.6)' : 'rgba(240,237,224,.5)'),
       }
     }
     function randomize() {
