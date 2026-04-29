@@ -13,6 +13,7 @@ export function usePlayerSearch(rosterPlayers) {
   const ghinResult = ref(null)
   const ghinResults = ref([])  // multiple GHIN matches
   const searching = ref(false)
+  const ghinUnavailable = ref(false)  // true when user has no GHIN creds in profile
 
   let _debounceTimer = null
   let _lastQuery = ''
@@ -24,7 +25,7 @@ export function usePlayerSearch(rosterPlayers) {
     return lastDiff !== 0 ? lastDiff : firstPart(a).localeCompare(firstPart(b))
   }
 
-  // ── Roster matches (instant, client-side) ────────────────────
+  // ── Roster matches (instant, client-side) ──────────────────
   const rosterMatches = computed(() => {
     const q = query.value.trim().toLowerCase()
     if (!q) {
@@ -68,12 +69,13 @@ export function usePlayerSearch(rosterPlayers) {
     return roster.length > 0 || bb.length > 0 || ghin.length > 0
   })
 
-  // ── Query change handler (call from @input) ──────────────────
+  // ── Query change handler (call from @input) ────────────────
   function onQueryChange(val) {
     query.value = val
     bbResults.value = []
     ghinResult.value = null
     ghinResults.value = []
+    ghinUnavailable.value = false
 
     const q = val.trim()
     if (!q || q.length < 2) return
@@ -144,7 +146,12 @@ export function usePlayerSearch(rosterPlayers) {
       const { data, error } = await supabase.functions.invoke('ghin-player-search', {
         body: { query: q },
       })
-      if (error || !data?.results?.length) return
+      if (error) return
+      if (!data?.results?.length) {
+        // Edge fn returned error = no GHIN creds on this profile
+        if (data?.error?.includes('No GHIN credentials')) ghinUnavailable.value = true
+        return
+      }
       if (_lastQuery !== query.value.trim()) return
 
       // Map to ghinResult array — filter out anyone already in the roster
@@ -225,6 +232,7 @@ export function usePlayerSearch(rosterPlayers) {
     ghinResult.value = null
     ghinResults.value = []
     searching.value = false
+    ghinUnavailable.value = false
     clearTimeout(_debounceTimer)
   }
 
@@ -246,5 +254,5 @@ export function usePlayerSearch(rosterPlayers) {
     }
   }
 
-  return { query, results, hasResults, searching, onQueryChange, clearSearch }
+  return { query, results, hasResults, searching, ghinUnavailable, onQueryChange, clearSearch }
 }
