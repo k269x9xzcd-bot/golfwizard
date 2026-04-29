@@ -1088,20 +1088,17 @@ async function addSearchGhin() {
       addGhinMsg.value = `🏌️ ${filtered.length} match${filtered.length > 1 ? 'es' : ''} in Bonnie Briar directory`
       return
     }
-    const profile = authStore.profile
-    if (!profile?.ghin_number || !profile?.ghin_password) {
-      addGhinMsg.value = 'Not found in BB directory. Add GHIN credentials in Profile to search the full GHIN database.'
-      return
-    }
-    const { data, error } = await supabase.functions.invoke('ghin-roster-sync', {
-      body: {
-        ghin_number: profile.ghin_number,
-        password: profile.ghin_password,
-        players: [{ id: 'lookup', name: `${first || ''} ${last}`.trim(), first_name_prefix: first || '' }],
-      }
+    // Fall back to ghin-player-search edge fn (reads creds server-side)
+    const searchQuery = `${first ? first + ' ' : ''}${last}`.trim()
+    const { data, error } = await supabase.functions.invoke('ghin-player-search', {
+      body: { query: searchQuery },
     })
     if (error) throw error
-    const results = data?.results?.filter(r => r.status === 'updated') || []
+    if (data?.error?.includes('No GHIN credentials')) {
+      addGhinMsg.value = 'Not found in BB directory. Add GHIN credentials in Profile to enable full GHIN search.'
+      return
+    }
+    const results = data?.results || []
     if (results.length) {
       addGhinResults.value = results.map(r => ({
         ghin_number: r.ghin_number,
@@ -1109,8 +1106,9 @@ async function addSearchGhin() {
         handicap_index: r.handicap_index,
         club_name: r.club_name || '',
       }))
+      addGhinMsg.value = `⛳ ${results.length} match${results.length > 1 ? 'es' : ''} in GHIN`
     } else {
-      addGhinMsg.value = `No golfer found for "${first ? first + ' ' : ''}${last}". Enter HCP manually or type their GHIN # directly.`
+      addGhinMsg.value = `No golfer found for "${searchQuery}". Enter HCP manually or type their GHIN # directly.`
     }
   } catch(e) {
     addGhinMsg.value = 'Search failed — check connection and try again'
