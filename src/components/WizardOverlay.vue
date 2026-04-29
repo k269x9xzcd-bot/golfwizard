@@ -2,7 +2,7 @@
   <div :class="props.inline ? 'wizard-inline' : 'modal-overlay wizard-overlay'">
     <div :class="props.inline ? 'wizard-inline-body' : 'modal wizard-modal'">
       <div class="wizard-header">
-        <div v-if="!props.editMode" class="wizard-step-indicator">Step {{ step }} of {{ totalSteps }}</div>
+        <div v-if="!props.editMode" class="wizard-step-indicator">Step {{ displayStep }} of {{ totalSteps }}</div>
         <div v-if="stepTitle" class="wizard-header-title">{{ stepTitle }}</div>
         <button class="wizard-close-btn" @click="$emit('close')">✕</button>
       </div>
@@ -1424,10 +1424,19 @@ const rosterStore = useRosterStore()
 const roundsStore = useRoundsStore()
 
 const step = ref(props.editMode ? 3 : (props.startStep || 1))
-const totalSteps = computed(() => 3)
+// When players are locked (cross-match flow), step 2 is skipped — only 2 steps total
+const totalSteps = computed(() => props.lockedPlayers ? 2 : 3)
 const stepTitle = computed(() => {
   if (props.editMode) return 'Edit Games & Stakes'
+  if (props.lockedPlayers) {
+    return { 1: 'Where are you playing?', 3: 'Set up games' }[step.value] || ''
+  }
   return { 1: 'Where are you playing?', 2: "Who's playing?", 3: 'Set up games' }[step.value] || ''
+})
+// Visual step number (1-based, accounting for skipped step 2 when lockedPlayers)
+const displayStep = computed(() => {
+  if (!props.lockedPlayers) return step.value
+  return step.value === 1 ? 1 : 2
 })
 const creating = ref(false)
 const saving = ref(false)
@@ -1953,14 +1962,21 @@ const canFinish = computed(() => {
 })
 
 function goBack() {
-  step.value--
+  // Skip step 2 (players) when players are locked (cross-match flow)
+  if (props.lockedPlayers && step.value === 3) {
+    step.value = 1
+  } else {
+    step.value--
+  }
   // Returning to step 3 (games) — always show the game grid so user can pick a different game
   if (step.value === 3) showMainGrid.value = true
 }
 
 function nextStep() {
-  if (step.value === 1 && canNext.value) step.value++
-  else if (step.value === 2 && canNext.value) {
+  if (step.value === 1 && canNext.value) {
+    // Skip step 2 when players are locked
+    step.value = props.lockedPlayers ? 3 : 2
+  } else if (step.value === 2 && canNext.value) {
     autoSplitTeams()
     step.value++
   } else if (step.value === 3 && canNext.value) {
