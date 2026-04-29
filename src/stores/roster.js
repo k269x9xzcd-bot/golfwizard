@@ -254,26 +254,23 @@ export const useRosterStore = defineStore('roster', () => {
     }
     const row = { ...player, owner_id: auth.user.id }
     let data, error
-    // Note: ghin_number (7-digit USGA ID) is distinct from ghin_index (handicap float).
-    // PlayersView currently only sets ghin_index, so ghin_number is always undefined here
-    // and we always use insert. The upsert branch is reserved for GHIN-synced players.
     if (row.ghin_number) {
-      // Upsert on ghin_number only when a real GHIN exists (NULL cannot match a unique constraint)
+      // Upsert on (owner_id, ghin_number) — composite unique index
       ;({ data, error } = await supabase
         .from('roster_players')
-        .upsert(row, { onConflict: 'ghin_number', ignoreDuplicates: false })
+        .upsert(row, { onConflict: 'owner_id,ghin_number', ignoreDuplicates: false })
         .select().single())
     } else if (row.email) {
-      // No GHIN but has email — upsert on (owner_id, email) to prevent duplicates
+      // No GHIN but has email — upsert on (owner_id, email) composite unique index
       ;({ data, error } = await supabase
         .from('roster_players')
         .upsert(row, { onConflict: 'owner_id,email', ignoreDuplicates: false })
         .select().single())
     } else {
-      // No GHIN, no email — plain insert (no unique key to deduplicate on)
+      // No GHIN, no email — upsert on (owner_id, name) to avoid name dupes
       ;({ data, error } = await supabase
         .from('roster_players')
-        .insert(row)
+        .upsert(row, { onConflict: 'owner_id,name', ignoreDuplicates: false })
         .select().single())
     }
     if (error) throw error
@@ -405,15 +402,4 @@ export function displayName(player) {
   if (!player) return '?'
   if (player.use_nickname && player.nickname) return player.nickname
   return player.name || player.guest_name || player.short_name || '?'
-}
-
-export function displayInitials(player) {
-  const name = displayName(player)
-  // If nickname is active, use full nickname as the badge label (truncated to 6 chars)
-  if (player?.use_nickname && player?.nickname) return player.nickname.slice(0, 6)
-  // Otherwise first+last initial from full name
-  const parts = name.replace(/\./g, '').trim().split(/\s+/).filter(Boolean)
-  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-  if (parts[0]?.length >= 2) return (parts[0][0] + parts[0][1]).toUpperCase()
-  return (parts[0]?.[0] ?? '?').toUpperCase() + '?'
 }
