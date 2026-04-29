@@ -921,13 +921,29 @@ export const useRoundsStore = defineStore('rounds', () => {
 
   // ── Complete / archive a round ──────────────────────────────
   async function completeRound(roundId) {
-    // Compute settlements before marking complete
+    // Compute settlements before marking complete.
+    // If activeGames is empty (e.g. finish triggered after page reload), fetch from DB.
     let settlementData = null
-    if (activeRound.value?.id === roundId && activeGames.value.length) {
+    let gamesForSettlement = activeGames.value
+    if (activeRound.value?.id === roundId && !gamesForSettlement.length) {
+      try {
+        const { data: fetchedGames } = await supabase.from('game_configs').select('*').eq('round_id', roundId)
+        if (fetchedGames?.length) {
+          gamesForSettlement = fetchedGames.map(g => ({
+            ...g,
+            config: typeof g.config === 'string' ? JSON.parse(g.config) : g.config,
+          }))
+          activeGames.value = gamesForSettlement
+        }
+      } catch (e) {
+        console.warn('[rounds] completeRound: game_configs fetch failed:', e.message)
+      }
+    }
+    if (activeRound.value?.id === roundId && gamesForSettlement.length) {
       const ctx = _buildSettlementCtx()
       if (ctx) {
         try {
-          settlementData = computeAllSettlements(ctx, activeGames.value)
+          settlementData = computeAllSettlements(ctx, gamesForSettlement)
         } catch (e) {
           console.warn('Settlement computation failed:', e)
         }
