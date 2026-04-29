@@ -1299,7 +1299,11 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, h, onMounted } from 'vue'
+import { ref, computed, watch, h, onMounted, onUnmounted } from 'vue'
+
+// Module-level singleton guard — prevents duplicate round creation if the
+// component remounts while a create() is in flight (e.g. wizard step flicker).
+let _globalCreating = false
 import { useCoursesStore } from '../stores/courses'
 import { useRosterStore } from '../stores/roster'
 import { useRoundsStore } from '../stores/rounds'
@@ -2567,8 +2571,9 @@ function _wizLog(msg) {
 }
 
 async function create() {
-  if (creating.value) return
+  if (creating.value || _globalCreating) return
   creating.value = true
+  _globalCreating = true
   // Reset log at the start of each attempt so the trace is self-contained
   try { localStorage.setItem('gw_create_log', '[]') } catch {}
   _wizLog(`create() start — app v${__APP_VERSION__}`)
@@ -2700,8 +2705,14 @@ async function create() {
     }
   } finally {
     creating.value = false
+    _globalCreating = false
   }
 }
+
+onUnmounted(() => {
+  // Always release the global lock when component tears down, so next open is not blocked
+  _globalCreating = false
+})
 
 // How many Supabase calls timed out in the last 60s?
 // When >=2, we show the "Reload GolfWizard" button — iOS is stuck.
