@@ -1,6 +1,5 @@
 import { ref, computed } from 'vue'
 import { supabase } from '../supabase'
-import { useAuthStore } from '../stores/auth'
 
 /**
  * usePlayerSearch — cascading search across roster, BB member index, and GHIN API.
@@ -25,7 +24,7 @@ export function usePlayerSearch(rosterPlayers) {
     return lastDiff !== 0 ? lastDiff : firstPart(a).localeCompare(firstPart(b))
   }
 
-  // ── Roster matches (instant, client-side) ──────────────────────
+  // ── Roster matches (instant, client-side) ────────────────────
   const rosterMatches = computed(() => {
     const q = query.value.trim().toLowerCase()
     if (!q) {
@@ -69,7 +68,7 @@ export function usePlayerSearch(rosterPlayers) {
     return roster.length > 0 || bb.length > 0 || ghin.length > 0
   })
 
-  // ── Query change handler (call from @input) ────────────────────
+  // ── Query change handler (call from @input) ──────────────────
   function onQueryChange(val) {
     query.value = val
     bbResults.value = []
@@ -139,18 +138,11 @@ export function usePlayerSearch(rosterPlayers) {
   }
 
   async function _ghinNameSearch(q) {
-    const authStore = useAuthStore()
-    const profile = authStore.profile
-    if (!profile?.ghin_number || !profile?.ghin_password) return
     if (_lastQuery !== query.value.trim()) return
 
     try {
       const { data, error } = await supabase.functions.invoke('ghin-player-search', {
-        body: {
-          ghin_number: profile.ghin_number,
-          password: profile.ghin_password,
-          query: q,
-        },
+        body: { query: q },
       })
       if (error || !data?.results?.length) return
       if (_lastQuery !== query.value.trim()) return
@@ -176,7 +168,6 @@ export function usePlayerSearch(rosterPlayers) {
       if (mapped.length === 1) {
         ghinResult.value = mapped[0]
       } else if (mapped.length > 1) {
-        // Store multiple results — use first as primary, rest as extras
         ghinResult.value = mapped[0]
         ghinResults.value = mapped
       }
