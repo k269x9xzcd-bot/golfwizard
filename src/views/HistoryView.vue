@@ -64,12 +64,13 @@
           <!-- Card header -->
           <div class="round-card-header">
             <div class="round-card-left">
-              <div class="round-course-name">{{ round.course_name }}</div>
+              <div class="round-top-row">
+                <div class="round-course-name">{{ round.course_name }}</div>
+                <span class="round-date-inline">{{ formatDate(round.date) }}</span>
+              </div>
               <div class="round-meta-row">
-                <span class="round-date">{{ formatDate(round.date) }}</span>
-                <span class="round-dot">*</span>
                 <span class="round-players">{{ playerCount(round) }} players</span>
-                <span v-if="round.format" class="round-dot">*</span>
+                <span v-if="round.format" class="round-dot">·</span>
                 <span v-if="round.format" class="round-format">{{ capitalize(round.format) }}</span>
               </div>
             </div>
@@ -81,6 +82,9 @@
                   <div class="mini-total" :class="{ 'mini-total--leader': p.isLeader }">{{ p.total ?? '--' }}</div>
                 </div>
               </div>
+              <span class="round-status-badge" :class="round.is_complete ? 'rsb--final' : 'rsb--progress'">
+                {{ round.is_complete ? 'F' : '●' }}
+              </span>
               <div class="expand-arrow" :class="{ expanded: expandedIds.has(round.id) }">›</div>
             </div>
           </div>
@@ -1190,38 +1194,63 @@ function matchResultClass(match) {
 .round-card-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 14px 12px 14px 16px;
+  gap: 8px;
+  padding: 10px 10px 10px 14px;
 }
 
 .round-card-left { flex: 1; min-width: 0; }
 
+.round-top-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
 .round-course-name {
   font-family: var(--gw-font-body);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--gw-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1;
+}
+
+.round-date-inline {
+  font-size: 11px;
+  color: var(--gw-text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .round-meta-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 3px;
-  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 2px;
 }
-.round-date { font-size: 12px; color: var(--gw-text-muted); }
-.round-dot  { font-size: 12px; color: rgba(240, 237, 224, 0.2); }
-.round-players { font-size: 12px; color: var(--gw-text-muted); }
-.round-format  { font-size: 12px; color: var(--gw-gold); font-weight: 500; }
+.round-dot  { font-size: 11px; color: rgba(240, 237, 224, 0.2); }
+.round-players { font-size: 11px; color: var(--gw-text-muted); }
+.round-format  { font-size: 11px; color: var(--gw-gold); font-weight: 500; }
+
+.round-status-badge {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 5px;
+  border-radius: 5px;
+  flex-shrink: 0;
+  letter-spacing: .02em;
+}
+.rsb--final    { color: #f87171; background: rgba(239,68,68,.12); }
+.rsb--progress { color: #fbbf24; background: rgba(251,191,36,.12); font-size: 8px; }
 
 .round-card-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
 }
 
