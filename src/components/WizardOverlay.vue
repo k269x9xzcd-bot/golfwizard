@@ -1247,82 +1247,6 @@
 
       </div>
 
-      <!-- ── Step 4: Opponent group ─────────────────────────── -->
-      <div v-if="step === 4" class="wizard-step">
-        <div class="opp-step-question">Playing against another group today?</div>
-        <div class="opp-step-sub">You can always set this later from the ⚙️ menu.</div>
-
-        <!-- Yes / No cards -->
-        <div v-if="form.withOpponents === null" class="opp-yn-row">
-          <button class="opp-yn-btn opp-yn-btn--yes" @click="form.withOpponents = true">
-            <span class="opp-yn-icon">⚔️</span>
-            <span class="opp-yn-label">Yes — pick their players</span>
-          </button>
-          <button class="opp-yn-btn opp-yn-btn--no" @click="skipOpponents">
-            <span class="opp-yn-icon">🚫</span>
-            <span class="opp-yn-label">No — just our group</span>
-          </button>
-        </div>
-
-        <!-- Picker (shown after Yes) -->
-        <div v-if="form.withOpponents === true" class="opp-pick-area">
-          <div class="opp-pick-header">
-            <span class="opp-pick-title">Opponent group</span>
-            <button class="opp-pick-change" @click="form.withOpponents = null; form.opponentPlayers = []">Change answer</button>
-          </div>
-
-          <!-- Selected chips -->
-          <div v-if="form.opponentPlayers.length" class="opp-selected">
-            <div v-for="(p, i) in form.opponentPlayers" :key="p.id" class="opp-chip">
-              <span>{{ p.shortName || p.name }}</span>
-              <button class="opp-chip-remove" @click="form.opponentPlayers.splice(i, 1)">×</button>
-            </div>
-          </div>
-          <div v-else class="opp-pick-hint">Tap players below to add them</div>
-
-          <!-- Search -->
-          <input v-model="oppSearch" class="wiz-input" placeholder="Search roster…" style="margin-bottom:6px" @focus="scrollInputIntoView" />
-
-          <!-- Roster list -->
-          <div class="opp-roster">
-            <template v-if="!oppSearch">
-              <div v-if="oppFavorites.length" class="section-label-sm">Favorites</div>
-              <div v-for="p in oppFavorites" :key="p.id"
-                class="roster-option"
-                :class="{ selected: isOppAdded(p), 'roster-option--dim': isPlayerAdded(p) }"
-                @click="toggleOpp(p)">
-                <div class="roster-info"><span class="roster-name">{{ p.name }}</span><span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span></div>
-                <span class="roster-check">{{ isOppAdded(p) ? '✓' : isPlayerAdded(p) ? '(yours)' : '+' }}</span>
-              </div>
-              <div v-if="oppOthers.length" class="section-label-sm" style="margin-top:6px">All Players</div>
-              <div v-for="p in oppOthers" :key="p.id"
-                class="roster-option"
-                :class="{ selected: isOppAdded(p), 'roster-option--dim': isPlayerAdded(p) }"
-                @click="toggleOpp(p)">
-                <div class="roster-info"><span class="roster-name">{{ p.name }}</span><span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span></div>
-                <span class="roster-check">{{ isOppAdded(p) ? '✓' : isPlayerAdded(p) ? '(yours)' : '+' }}</span>
-              </div>
-            </template>
-            <template v-else>
-              <div v-for="p in oppFiltered" :key="p.id"
-                class="roster-option"
-                :class="{ selected: isOppAdded(p), 'roster-option--dim': isPlayerAdded(p) }"
-                @click="toggleOpp(p)">
-                <div class="roster-info"><span class="roster-name">{{ p.name }}</span><span class="roster-hcp">idx {{ p.ghin_index ?? '—' }}</span></div>
-                <span class="roster-check">{{ isOppAdded(p) ? '✓' : isPlayerAdded(p) ? '(yours)' : '+' }}</span>
-              </div>
-            </template>
-          </div>
-
-          <!-- Guest quick-add -->
-          <div class="quick-add-row" style="margin-top:8px">
-            <input v-model="oppGuestName" class="wiz-input" placeholder="Add guest opponent…" @keydown.enter="quickAddOpp" />
-            <input v-model="oppGuestHcp" class="wiz-input wiz-input-sm" placeholder="HCP" type="number" step="0.1" />
-            <button class="btn-ghost btn-sm" @click="quickAddOpp">Add</button>
-          </div>
-        </div>
-      </div>
-
       <!-- Nav -->
       <div class="wizard-nav">
         <button v-if="step > 1 && !props.editMode" class="btn-ghost" @click="goBack">← Back</button>
@@ -1500,11 +1424,10 @@ const rosterStore = useRosterStore()
 const roundsStore = useRoundsStore()
 
 const step = ref(props.editMode ? 3 : (props.startStep || 1))
-// When lockedPlayers is set (inline accept flow), skip the opponent step — already linked via invite
-const totalSteps = computed(() => props.lockedPlayers ? 3 : 4)
+const totalSteps = computed(() => 3)
 const stepTitle = computed(() => {
   if (props.editMode) return 'Edit Games & Stakes'
-  return { 1: 'Where are you playing?', 2: "Who's playing?", 3: 'Set up games', 4: 'Opponent group?' }[step.value] || ''
+  return { 1: 'Where are you playing?', 2: "Who's playing?", 3: 'Set up games' }[step.value] || ''
 })
 const creating = ref(false)
 const saving = ref(false)
@@ -1763,8 +1686,7 @@ const form = ref({
   date: new Date().toISOString().slice(0, 10),
   holesMode: '18',
   players: props.lockedPlayers ? props.lockedPlayers.map(p => ({ ...p, ghinIndex: p.ghinIndex ?? p.ghin_index ?? null })) : [],
-  withOpponents: props.lockedPlayers ? false : null,   // auto-false in accept flow (already linked via invite)
-  opponentPlayers: [],
+  opponentPlayers: [],  // kept for back-compat with submit payload
 })
 
 const courseSearch = ref('')
@@ -2023,17 +1945,10 @@ const canNext = computed(() => {
   }
   if (step.value === 2) return form.value.players.length >= 1
   if (step.value === 3) return true
-  // Step 4: can proceed if they answered No, or answered Yes and picked at least 1 player
-  if (step.value === 4) return form.value.withOpponents === false || (form.value.withOpponents === true && form.value.opponentPlayers.length >= 1)
   return true
 })
 const canFinish = computed(() => {
   if (!form.value.players.length || !form.value.courseName) return false
-  // Step 4: must have answered the opponent question
-  if (step.value === 4) {
-    if (form.value.withOpponents === null) return false
-    if (form.value.withOpponents === true && form.value.opponentPlayers.length === 0) return false
-  }
   return true
 })
 
@@ -2051,11 +1966,6 @@ function nextStep() {
   } else if (step.value === 3 && canNext.value) {
     step.value++
   }
-}
-
-function skipOpponents() {
-  form.value.withOpponents = false
-  form.value.opponentPlayers = []
 }
 
 function autoSplitTeams() {
@@ -2414,49 +2324,6 @@ function quickAddPlayer() {
   wizSearchResults.value = []; wizSearchMsg.value = ''
 }
 
-// ── Opponent group ───────────────────────────────────────────────
-const oppSearch = ref('')
-const oppGuestName = ref('')
-const oppGuestHcp = ref('')
-
-const oppFavorites = computed(() =>
-  rosterStore.players.filter(p => p.is_favorite).slice().sort(byLastName)
-)
-const oppOthers = computed(() =>
-  rosterStore.players.filter(p => !p.is_favorite).slice().sort(byLastName)
-)
-const oppFiltered = computed(() => {
-  const q = oppSearch.value.toLowerCase()
-  return rosterStore.players.filter(p => p.name.toLowerCase().includes(q)).slice().sort(byLastName)
-})
-
-function isOppAdded(p) { return form.value.opponentPlayers.some(op => op.id === p.id) }
-
-function toggleOpp(p) {
-  if (isPlayerAdded(p)) return // can't be in both groups
-  if (isOppAdded(p)) {
-    form.value.opponentPlayers = form.value.opponentPlayers.filter(op => op.id !== p.id)
-  } else {
-    form.value.opponentPlayers.push({
-      id: p.id, name: p.name,
-      shortName: p.short_name,
-      ghinIndex: p.ghin_index,
-    })
-  }
-}
-
-function quickAddOpp() {
-  if (!oppGuestName.value.trim()) return
-  form.value.opponentPlayers.push({
-    id: `opp_guest_${Date.now()}`,
-    name: oppGuestName.value.trim(),
-    shortName: oppGuestName.value.trim().split(' ')[0].slice(0, 8),
-    ghinIndex: oppGuestHcp.value ? parseFloat(oppGuestHcp.value) : null,
-  })
-  oppGuestName.value = ''
-  oppGuestHcp.value = ''
-}
-
 // ── Build game configs for round creation ────────────────────────
 function buildGameConfigs() {
   const games = []
@@ -2741,7 +2608,7 @@ async function create() {
           date: form.value.date,
           holesMode: form.value.holesMode,
           withRoomCode: false,
-          opponentPlayers: form.value.withOpponents ? form.value.opponentPlayers : [],
+          opponentPlayers: [],
           players,
           games,
         }),
@@ -2784,8 +2651,8 @@ async function create() {
 
     if (round) {
       emit('created', round, {
-        withOpponents: form.value.withOpponents === true,
-        opponentPlayers: form.value.opponentPlayers ?? [],
+        withOpponents: false,
+        opponentPlayers: [],
         courseName: form.value.courseName,
         tee: form.value.tee,
         holesMode: form.value.holesMode,
@@ -2868,97 +2735,7 @@ function reloadApp() {
 }
 /* Hide header close button and step indicator in inline mode */
 .wizard-inline-body .wizard-header { display: none; }
-/* Hide step 4 (opponent group) in inline mode — not relevant for accept flow */
-.wizard-inline-body .wizard-step:last-child { display: none; }
-
-/* ── Step 4: Opponent group ────────────────────────── */
-.opp-step-question {
-  font-family: var(--gw-font-display, Georgia);
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--gw-text, #f0ede0);
-  text-align: center;
-  margin-top: 12px;
-  margin-bottom: 6px;
-  line-height: 1.25;
-}
-.opp-step-sub {
-  font-size: 12px;
-  color: rgba(240,237,224,.45);
-  text-align: center;
-  margin-bottom: 20px;
-}
-.opp-yn-row {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.opp-yn-btn {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 18px 20px;
-  border-radius: 16px;
-  border: 2px solid transparent;
-  cursor: pointer;
-  font-family: inherit;
-  -webkit-tap-highlight-color: transparent;
-  transition: transform .1s, border-color .15s;
-}
-.opp-yn-btn:active { transform: scale(.97); }
-.opp-yn-btn--yes {
-  background: rgba(248,113,113,.1);
-  border-color: rgba(248,113,113,.4);
-}
-.opp-yn-btn--no {
-  background: rgba(255,255,255,.04);
-  border-color: rgba(255,255,255,.12);
-}
-.opp-yn-icon { font-size: 28px; flex-shrink: 0; }
-.opp-yn-label {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--gw-text, #f0ede0);
-  text-align: left;
-}
-.opp-pick-area { display: flex; flex-direction: column; gap: 8px; }
-.opp-pick-header {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 4px;
-}
-.opp-pick-title { font-size: 14px; font-weight: 700; color: #fca5a5; }
-.opp-pick-change {
-  font-size: 12px; color: rgba(240,237,224,.45); background: none;
-  border: none; cursor: pointer; font-family: inherit; text-decoration: underline;
-}
-.opp-pick-hint { font-size: 12px; color: rgba(240,237,224,.4); }
-.opp-selected {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.opp-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 12px;
-  border-radius: 20px;
-  background: rgba(248,113,113,.15);
-  border: 1px solid rgba(248,113,113,.35);
-  font-size: 13px;
-  font-weight: 700;
-  color: #fca5a5;
-}
-.opp-chip-remove {
-  background: none; border: none; color: rgba(252,165,165,.7);
-  cursor: pointer; font-size: 15px; padding: 0; line-height: 1;
-}
-.opp-roster {
-  max-height: 220px;
-  overflow-y: auto;
-  border-radius: 10px;
-  border: 1px solid rgba(255,255,255,.08);
-}
+/* Hide header close button and step indicator in inline mode */
 .roster-option--dim { opacity: 0.35; pointer-events: none; }
 .wiz-input--sm { padding: 8px 12px; font-size: 13px; }
 
