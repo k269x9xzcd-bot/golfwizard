@@ -149,7 +149,10 @@
           class="lmd-sc-tab"
           :class="{ active: scorecardTab === tab.key }"
           @click="scorecardTab = tab.key"
-        >{{ tab.label }}</button>
+        >
+          <span class="lmd-sc-tab-badge">{{ tab.key.toUpperCase() }}</span>
+          <span class="lmd-sc-tab-name">{{ tab.label }}</span>
+        </button>
       </div>
 
       <!-- Scorecard table -->
@@ -171,7 +174,7 @@
 
           <!-- Player rows -->
           <template v-for="m in activeScorecardMembers" :key="m.id">
-            <div class="lmd-sc-cell lmd-sc-player">{{ m.short_name || '?' }}</div>
+            <div class="lmd-sc-cell lmd-sc-player">{{ m.short_name || m.full_name?.split(' ')[0] || '?' }}</div>
             <template v-for="col in scorecardColumns" :key="m.id+'-'+col.key">
               <div
                 v-if="!col.isTotal"
@@ -511,7 +514,12 @@ watch(() => route.params.id, (id) => { if (id) load() })
 }
 .lmd-header {
   display: flex; align-items: center; gap: 10px;
-  padding: 18px 16px 6px;
+  padding: calc(env(safe-area-inset-top, 0px) + 14px) 16px 10px;
+  position: sticky; top: 0; z-index: 20;
+  background: var(--gw-neutral-950);
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 .lmd-back {
   background: transparent; border: none; color: var(--gw-text-muted);
@@ -743,26 +751,44 @@ watch(() => route.params.id, (id) => { if (id) load() })
   display: flex; gap: 8px; margin: 0 16px 10px;
 }
 .lmd-sc-tab {
-  flex: 1; padding: 8px 12px; border-radius: 10px;
+  flex: 1; min-width: 0;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 9px 8px; border-radius: 10px;
   font-size: 12px; font-weight: 700; cursor: pointer;
   border: 1px solid rgba(255,255,255,.1);
   background: rgba(255,255,255,.04); color: var(--gw-text-muted);
   font-family: inherit; -webkit-tap-highlight-color: transparent;
   transition: background .12s, border-color .12s, color .12s;
+  overflow: hidden;
 }
 .lmd-sc-tab.active {
   background: rgba(212,175,55,.15); border-color: rgba(212,175,55,.5);
   color: var(--gw-gold);
 }
+.lmd-sc-tab-badge {
+  flex-shrink: 0;
+  width: 18px; height: 18px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 900;
+  background: rgba(255,255,255,.1);
+}
+.lmd-sc-tab.active .lmd-sc-tab-badge {
+  background: rgba(212,175,55,.3);
+}
+.lmd-sc-tab-name {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 11px;
+}
 
 .lmd-sc-wrap {
   margin: 0 16px;
   border-radius: 12px;
-  border: 1px solid rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.08);
   overflow-x: auto;
   overflow-y: visible;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
+  background: rgba(0,0,0,.15);
 }
 .lmd-sc-wrap::-webkit-scrollbar { display: none; }
 .lmd-sc-grid {
@@ -770,49 +796,93 @@ watch(() => route.params.id, (id) => { if (id) load() })
   min-width: max-content;
 }
 .lmd-sc-cell {
-  padding: 4px 1px;
+  padding: 0;
   text-align: center;
   font-family: var(--gw-font-mono, monospace);
-  font-size: 11px;
+  font-size: 13px;
   color: var(--gw-text);
   border-top: 1px solid rgba(255,255,255,.05);
-  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  height: 32px;
 }
 .lmd-sc-head {
-  background: rgba(0,0,0,.25);
+  background: rgba(0,0,0,.3);
   font-family: var(--gw-font-body);
   font-size: 9px; font-weight: 800; letter-spacing: .04em;
   text-transform: uppercase; color: var(--gw-text-muted);
-  border-top: none; padding: 5px 1px;
+  border-top: none; height: 24px;
 }
 .lmd-sc-sub-head {
-  background: rgba(0,0,0,.35);
-  color: var(--gw-gold);
+  background: rgba(0,0,0,.4);
+  color: rgba(212,175,55,.8);
+  border-left: 1px solid rgba(255,255,255,.08);
 }
 .lmd-sc-sub-val {
   background: rgba(0,0,0,.2);
-  font-weight: 800;
+  font-weight: 800; font-size: 13px;
   color: var(--gw-text);
   border-left: 1px solid rgba(255,255,255,.07);
 }
 .lmd-sc-label, .lmd-sc-par-label, .lmd-sc-total-label, .lmd-sc-player {
-  text-align: left; padding-left: 6px;
+  justify-content: flex-start; padding-left: 8px;
 }
-.lmd-sc-label { color: var(--gw-gold); }
-.lmd-sc-par-label { font-size: 8px; font-weight: 700; color: var(--gw-text-muted); text-transform: uppercase; background: rgba(0,0,0,.1); }
-.lmd-sc-par { background: rgba(0,0,0,.1); color: var(--gw-text-muted); font-size: 10px; }
-.lmd-sc-player { font-family: var(--gw-font-body); font-size: 10px; font-weight: 700; color: var(--gw-text); white-space: nowrap; }
-.lmd-sc-empty-cell { color: var(--gw-text-muted); }
-.lmd-sc-score-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 30px; }
-.lmd-sc-score-num { line-height: 1; }
-.lmd-sc-stroke-dot { font-size: 6px; color: rgba(255,255,255,.45); line-height: 1; margin-top: 1px; letter-spacing: -1px; }
+.lmd-sc-label { color: var(--gw-gold); font-size: 9px; }
+.lmd-sc-par-label { font-size: 9px; font-weight: 700; color: var(--gw-text-muted); text-transform: uppercase; background: rgba(0,0,0,.12); }
+.lmd-sc-par { background: rgba(0,0,0,.12); color: var(--gw-text-muted); font-size: 11px; height: 22px; }
+.lmd-sc-player {
+  font-family: var(--gw-font-body); font-size: 11px; font-weight: 700;
+  color: var(--gw-text); white-space: nowrap; height: 32px;
+}
+.lmd-sc-empty-cell { color: var(--gw-text-muted); opacity: .4; }
 
-/* Score coloring — circle style like ScoringView */
-.sc-eagle  { background: rgba(245,158,11,.30); color: #fbbf24; font-weight: 900; border-radius: 50%; }
-.sc-birdie { background: rgba(34,197,94,.25);  color: #4ade80; font-weight: 800; border-radius: 50%; }
-.sc-par    { color: var(--gw-text); }
-.sc-bogey  { background: rgba(239,68,68,.20); color: #f87171; border-radius: 50%; }
-.sc-double { background: rgba(153,27,27,.30); color: #fca5a5; border-radius: 50%; font-weight: 700; }
+/* Score cell — classic scorecard notation */
+.lmd-sc-score-cell {
+  flex-direction: column; gap: 1px;
+  width: 100%; height: 32px;
+  position: relative;
+}
+.lmd-sc-score-num {
+  font-size: 13px; line-height: 1; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px;
+}
+.lmd-sc-stroke-dot {
+  font-size: 5px; color: rgba(255,255,255,.5);
+  line-height: 1; letter-spacing: -1px;
+  position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);
+}
+
+/* Classic golf scorecard notation */
+/* Eagle: double circle (gold) */
+.sc-eagle .lmd-sc-score-num {
+  color: #fbbf24; font-weight: 900;
+  border: 2px solid #f59e0b;
+  border-radius: 50%;
+  outline: 1.5px solid #f59e0b;
+  outline-offset: 2px;
+}
+/* Birdie: single circle (green) */
+.sc-birdie .lmd-sc-score-num {
+  color: #4ade80; font-weight: 800;
+  border: 2px solid #22c55e;
+  border-radius: 50%;
+}
+/* Par: plain white */
+.sc-par .lmd-sc-score-num { color: var(--gw-text); }
+/* Bogey: square box (red) */
+.sc-bogey .lmd-sc-score-num {
+  color: #f87171;
+  border: 2px solid #ef4444;
+  border-radius: 3px;
+}
+/* Double+: double square (dark red) */
+.sc-double .lmd-sc-score-num {
+  color: #fca5a5; font-weight: 800;
+  border: 2px solid #dc2626;
+  border-radius: 3px;
+  outline: 1.5px solid #dc2626;
+  outline-offset: 2px;
+}
 
 .lmd-sc-empty {
   margin: 0 16px; padding: 16px; text-align: center;
