@@ -43,16 +43,12 @@ const activeTab = ref('players')
 .pc-tab-bar {
   display: flex;
   gap: 0;
-  background: #0a2a1c;
-  border-bottom: 1px solid #114a35;
+  background: var(--gw-bg-app);
+  border-bottom: 1px solid var(--gw-border-subtle);
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 11;
   padding: 0 16px;
-}
-[data-theme="light"] .pc-tab-bar {
-  background: #ffffff;
-  border-bottom: 1px solid rgba(13,95,60,.18);
 }
 
 .pc-tab {

@@ -910,6 +910,8 @@ function bestScoreClass(score, par) {
   padding: 16px 16px 100px;
   max-width: 600px;
   margin: 0 auto;
+  background: var(--gw-bg-app);
+  min-height: 100%;
 }
 
 .metrics-header {

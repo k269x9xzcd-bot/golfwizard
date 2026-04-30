@@ -354,6 +354,8 @@ async function syncGhin() {
   padding-bottom: 100px;
   max-width: 480px;
   margin: 0 auto;
+  background: var(--gw-bg-app);
+  min-height: 100%;
 }
 
 .settings-header { margin-bottom: 20px; }

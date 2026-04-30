@@ -163,8 +163,8 @@ body {
   font-family: var(--gw-font-body);
   font-size: 16px;
   line-height: 1.5;
-  color: var(--gw-text);
-  background: var(--gw-neutral-950);
+  color: var(--gw-text-primary);
+  background: var(--gw-bg-app);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -296,9 +296,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--gw-space-4) var(--gw-space-4);
-  background: var(--gw-neutral-900);
-  border-bottom: 1px solid rgba(212, 175, 55, 0.1);
+  padding: 18px 20px 14px;
+  background: var(--gw-bg-app);
+  border-bottom: 1px solid var(--gw-border-subtle);
   position: sticky;
   top: 0;
   z-index: 10;
@@ -307,20 +307,26 @@ body {
 .view-header h2 {
   margin: 0;
   font-family: var(--gw-font-display);
-  font-size: 24px;
-  font-weight: 400; /* DM Serif Display has a lighter weight look at 400 */
-  color: var(--gw-gold);
-  letter-spacing: -0.2px;
+  font-size: 26px;
+  font-weight: 400;
+  color: var(--gw-accent);
+  letter-spacing: -0.01em;
+  line-height: 1.1;
 }
+[data-theme="light"] .view-header h2 { color: var(--gw-text-primary); }
 
 /* ── Cards ─────────────────────────────────────────────────── */
 .card {
-  background: var(--gw-neutral-800);
-  border: 1px solid var(--gw-card-border);
-  border-radius: var(--gw-radius-lg);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-  padding: 10px var(--gw-space-4);
+  background: var(--gw-bg-surface);
+  border: 1px solid var(--gw-border-subtle);
+  border-radius: var(--gw-card-radius);
+  box-shadow: var(--gw-shadow-elev1);
+  padding: 14px;
   overflow: hidden;
+}
+[data-theme="light"] .card {
+  background: var(--gw-bg-surface);
+  border-color: var(--gw-border-subtle);
 }
 
 .card + .card {
@@ -552,11 +558,12 @@ body {
   font-family: var(--gw-font-body);
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.8px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--gw-text-muted);
+  color: var(--gw-text-tertiary);
   margin: 0 0 var(--gw-space-3);
 }
+[data-theme="light"] .section-title { color: #2d3a30; }
 
 /* ── Empty state ───────────────────────────────────────────── */
 .empty-state {
@@ -2942,14 +2949,17 @@ body.gw-landscape .scorecard-grid tbody .col-player-name {
 [data-theme="light"] .nav-item.active .nav-icon { opacity: 1; }
 [data-theme="light"] .nav-fab { background: linear-gradient(135deg, #9a7a1e, #c8a42a) !important; }
 
-/* View header */
+/* View header — light variant: white surface, deep-green serif title */
 [data-theme="light"] .view-header {
-  background: #0d3325;
-  border-bottom: 2px solid #9a7a1e;
+  background: var(--gw-bg-app);
+  border-bottom: 1px solid var(--gw-border-subtle);
 }
-/* Brighter gold + larger weight for legibility on dark green band */
-[data-theme="light"] .view-header h2 { color: #f5d24a; font-weight: 500; letter-spacing: -0.005em; }
-[data-theme="light"] .view-header .header-actions .btn-ghost { color: #f0ede0; border-color: rgba(255,255,255,.25); }
+[data-theme="light"] .view-header h2 { color: var(--gw-text-primary); font-weight: 400; }
+[data-theme="light"] .view-header .header-actions .btn-ghost {
+  color: var(--gw-accent);
+  border-color: var(--gw-border-strong);
+  background: transparent;
+}
 
 /* Cards */
 [data-theme="light"] .card {

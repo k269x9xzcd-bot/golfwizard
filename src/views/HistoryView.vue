@@ -1075,7 +1075,7 @@ function matchResultClass(match) {
 /* -- Layout ----------------------------------------------- */
 .history-view {
   min-height: 100%;
-  background: var(--gw-neutral-950);
+  background: var(--gw-bg-app);
   padding-bottom: calc(var(--gw-nav-height) + env(safe-area-inset-bottom) + 16px);
 }
 
@@ -1180,15 +1180,18 @@ function matchResultClass(match) {
 }
 
 .round-card {
-  background: var(--gw-card-bg);
-  border-radius: var(--gw-radius-lg);
+  background: var(--gw-bg-surface);
+  border-radius: var(--gw-card-radius);
   margin-bottom: 10px;
-  box-shadow: var(--gw-shadow-card);
+  box-shadow: var(--gw-shadow-elev1);
   overflow: hidden;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   animation: card-in 250ms ease-out both;
-  border-left: 3px solid var(--gw-gold);
+  border-left: 3px solid var(--gw-accent);
+  border-top: 1px solid var(--gw-border-subtle);
+  border-right: 1px solid var(--gw-border-subtle);
+  border-bottom: 1px solid var(--gw-border-subtle);
 }
 
 .round-card-header {

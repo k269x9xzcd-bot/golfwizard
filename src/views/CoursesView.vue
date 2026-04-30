@@ -1031,7 +1031,7 @@ function showToast(msg, type = 'neutral') {
   display: flex;
   flex-direction: column;
   min-height: 100%;
-  background: var(--gw-neutral-950);
+  background: var(--gw-bg-app);
   padding-bottom: calc(var(--gw-nav-height) + env(safe-area-inset-bottom) + 16px);
 }
 
