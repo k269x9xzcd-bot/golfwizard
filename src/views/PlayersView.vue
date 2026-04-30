@@ -1,5 +1,5 @@
 <template>
-  <div class="players-view">
+  <div class="view players-view">
     <header class="view-header">
       <h2>Players</h2>
       <div class="header-actions">
@@ -1216,12 +1216,19 @@ function swipeContainerStyle(id) { return {} }
 
 function swipeCardStyle(id) {
   const dx = swipeX[id] || 0
+  const isLight = (typeof document !== 'undefined') && document.documentElement.getAttribute('data-theme') === 'light'
   if (dx < -10) {
     const t = Math.min(1, Math.abs(dx) / SWIPE_THRESHOLD)
-    return { transform: `translateX(${dx}px)`, background: `rgba(185,28,28,${0.08 + t * 0.55})`, borderColor: `rgba(248,113,113,${t * 0.6})` }
+    if (isLight) {
+      return { transform: `translateX(${dx}px)`, background: `rgba(185,28,28,${0.06 + t * 0.18})`, borderColor: `rgba(185,28,28,${0.3 + t * 0.5})` }
+    }
+    return { transform: `translateX(${dx}px)`, background: `rgba(185,28,28,${0.10 + t * 0.55})`, borderColor: `rgba(248,113,113,${t * 0.6})` }
   } else if (dx > 10) {
     const t = Math.min(1, dx / SWIPE_THRESHOLD)
-    return { transform: `translateX(${dx}px)`, background: `rgba(161,98,7,${0.08 + t * 0.55})`, borderColor: `rgba(212,175,55,${t * 0.6})` }
+    if (isLight) {
+      return { transform: `translateX(${dx}px)`, background: `rgba(154,122,30,${0.06 + t * 0.18})`, borderColor: `rgba(154,122,30,${0.3 + t * 0.5})` }
+    }
+    return { transform: `translateX(${dx}px)`, background: `rgba(161,98,7,${0.10 + t * 0.55})`, borderColor: `rgba(212,175,55,${t * 0.6})` }
   }
   return { transform: `translateX(${dx}px)` }
 }
@@ -1251,14 +1258,20 @@ async function onSwipeEnd(e, player) {
   const id = player.id
   const dx = swipeX[id] || 0
   swiping.value = null
+  console.log('[swipe]', { id, name: player?.name, dx, threshold: SWIPE_THRESHOLD, fav: player?.is_favorite })
   if (dx < -SWIPE_THRESHOLD) {
     swipeX[id] = 0
     confirmDelete(id, player.name)
   } else if (dx > SWIPE_THRESHOLD) {
     const wasFav = player.is_favorite
     swipeX[id] = 0
-    await rosterStore.toggleFavorite(id)
-    showToast(wasFav ? 'Removed from favorites' : '★ Added to favorites!', wasFav ? 'neutral' : 'gold')
+    try {
+      await rosterStore.toggleFavorite(id)
+      showToast(wasFav ? 'Removed from favorites' : '★ Added to favorites!', wasFav ? 'neutral' : 'gold')
+    } catch (err) {
+      console.error('[swipe] toggleFavorite failed', err)
+      showToast('Could not update — try again', 'red')
+    }
   } else {
     swipeX[id] = 0
   }
@@ -1533,7 +1546,12 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 </script>
 
 <style scoped>
-.players-view { padding: 16px; padding-bottom: 80px; }
+.players-view { padding: 0; padding-bottom: 80px; }
+.players-view > .view-header { padding: 14px 16px; }
+.players-view > :not(.view-header):not(.add-form):not(.section-label) { padding-left: 16px; padding-right: 16px; }
+.players-view > .add-form, .players-view > .section-label { margin-left: 16px; margin-right: 16px; }
+.players-view > .swipe-container { margin-left: 16px; margin-right: 16px; }
+.players-view > .player-card { margin-left: 16px; margin-right: 16px; }
 
 /* ── Trend arrows ───────────────────────────────────────────── */
 .trend-arrow {
@@ -1907,11 +1925,13 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 }
 .swipe-reveal {
   position: absolute; top: 0; bottom: 0; display: flex; align-items: center;
-  font-size: 13px; font-weight: 700; letter-spacing: .04em;
-  color: white; pointer-events: none; z-index: 0; transition: opacity 0.1s;
+  font-size: 13px; font-weight: 600; letter-spacing: .04em;
+  pointer-events: none; z-index: 0; transition: opacity 0.1s;
 }
-.swipe-reveal-left { left: 0; padding-left: 20px; }
-.swipe-reveal-right { right: 0; padding-right: 20px; }
+.swipe-reveal-left  { left: 0;  padding-left: 20px;  color: #fca5a5; }
+.swipe-reveal-right { right: 0; padding-right: 20px; color: #fcd34d; }
+[data-theme="light"] .swipe-reveal-left  { color: #b91c1c; }
+[data-theme="light"] .swipe-reveal-right { color: #9a7a1e; }
 
 .player-card {
   display: flex; align-items: center; gap: 8px;
