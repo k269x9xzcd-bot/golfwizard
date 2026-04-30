@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import { supabase } from '../supabase'
+import { useAuthStore } from '../stores/auth'
 
 /**
  * usePlayerSearch — cascading search across roster, BB member index, and GHIN API.
@@ -142,14 +143,32 @@ export function usePlayerSearch(rosterPlayers) {
   async function _ghinNameSearch(q) {
     if (_lastQuery !== query.value.trim()) return
 
+    // New contract requires first+last and caller GHIN creds
+    const parts = q.split(/\s+/).filter(Boolean)
+    if (parts.length < 2) return  // need both first and last
+    const first = parts.slice(0, -1).join(' ')
+    const last = parts[parts.length - 1]
+    if (first.length < 2 || last.length < 2) return
+
+    const authStore = useAuthStore()
+    const profile = authStore.profile
+    if (!profile?.ghin_number || !profile?.ghin_password) {
+      ghinUnavailable.value = true
+      return
+    }
+
     try {
       const { data, error } = await supabase.functions.invoke('ghin-player-search', {
-        body: { query: q },
+        body: {
+          first_name: first,
+          last_name: last,
+          ghin_number: profile.ghin_number,
+          password: profile.ghin_password,
+        },
       })
       if (error) return
       if (!data?.results?.length) {
-        // Edge fn returned 400 = no GHIN creds on this profile
-        if (data?.error?.includes('No GHIN credentials')) ghinUnavailable.value = true
+        if (data?.error?.toLowerCase().includes('credentials')) ghinUnavailable.value = true
         return
       }
       if (_lastQuery !== query.value.trim()) return
