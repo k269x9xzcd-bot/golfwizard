@@ -9,18 +9,18 @@ export const useRosterStore = defineStore('roster', () => {
 
   const DEFAULT_PLAYERS = [
     // ── Favorites (seeded for all new users) ──────────────────
-    { id: 'default_1',  name: 'Jason Spieler',     short_name: 'Spieler', ghin_index: 9.8,  ghin_number: '1321498', is_favorite: true,  email: 'jayspieler@aol.com',          nickname: 'Spiels', use_nickname: true  },
-    { id: 'default_2',  name: 'Alex Carroll',       short_name: 'Carroll', ghin_index: 3.7,  ghin_number: '1312506', is_favorite: true,  email: 'alexcarroll333@gmail.com',     nickname: 'Al',     use_nickname: true  },
+    { id: 'default_1',  name: 'Jason Spieler',     short_name: 'Spieler', ghin_index: 9.8,  ghin_number: '1321498', is_favorite: true,  email: null, nickname: 'Spiels', use_nickname: true  },
+    { id: 'default_2',  name: 'Alex Carroll',       short_name: 'Carroll', ghin_index: 3.7,  ghin_number: '1312506', is_favorite: true,  email: null, nickname: 'Al',     use_nickname: true  },
     { id: 'default_3',  name: 'Andy Shpiz',         short_name: 'Shpiz',   ghin_index: 4.5,  ghin_number: '6858154', is_favorite: true,  email: null, nickname: null, use_nickname: false },
-    { id: 'default_4',  name: 'Brian Cimons',       short_name: 'Cimons',  ghin_index: 6.3,  ghin_number: '4143469', is_favorite: true,  email: 'bcimons19@yahoo.com',          nickname: 'Brian',  use_nickname: false },
-    { id: 'default_5',  name: 'Chris Raggo',        short_name: 'Chris',   ghin_index: 4.5,  ghin_number: '712114',  is_favorite: true,  email: 'craggo@recordandreturn.com',   nickname: 'Chris',  use_nickname: false },
+    { id: 'default_4',  name: 'Brian Cimons',       short_name: 'Cimons',  ghin_index: 6.3,  ghin_number: '4143469', is_favorite: true,  email: null, nickname: 'Brian',  use_nickname: false },
+    { id: 'default_5',  name: 'Chris Raggo',        short_name: 'Chris',   ghin_index: 4.5,  ghin_number: '712114',  is_favorite: true,  email: null, nickname: 'Chris',  use_nickname: false },
     { id: 'default_6',  name: 'Harry Spadaro',      short_name: 'Harry',   ghin_index: 10.9, ghin_number: '3080777', is_favorite: true,  email: null, nickname: null, use_nickname: false },
-    { id: 'default_7',  name: 'Jeremy Court',       short_name: 'Jeremy',  ghin_index: 4.6,  ghin_number: '3370926', is_favorite: true,  email: 'jcourt93@gmail.com',           nickname: 'Jeremy', use_nickname: false },
+    { id: 'default_7',  name: 'Jeremy Court',       short_name: 'Jeremy',  ghin_index: 4.6,  ghin_number: '3370926', is_favorite: true,  email: null, nickname: 'Jeremy', use_nickname: false },
     { id: 'default_8',  name: 'Joe Tomei',          short_name: 'Tomei',   ghin_index: 10.0, ghin_number: '6858150', is_favorite: true,  email: null, nickname: null, use_nickname: false },
-    { id: 'default_9',  name: 'Marty Durkin',       short_name: 'Marty',   ghin_index: 8.3,  ghin_number: '348255',  is_favorite: true,  email: 'martydurkin17@verizon.net',    nickname: 'Marty',  use_nickname: false },
-    { id: 'default_10', name: 'Matt Derosa',        short_name: 'Matt',    ghin_index: 6.6,  ghin_number: '3011863', is_favorite: true,  email: null,                           nickname: 'Matt',   use_nickname: false },
+    { id: 'default_9',  name: 'Marty Durkin',       short_name: 'Marty',   ghin_index: 8.3,  ghin_number: '348255',  is_favorite: true,  email: null, nickname: 'Marty',  use_nickname: false },
+    { id: 'default_10', name: 'Matt Derosa',        short_name: 'Matt',    ghin_index: 6.6,  ghin_number: '3011863', is_favorite: true,  email: null, nickname: 'Matt',   use_nickname: false },
     { id: 'default_11', name: 'Sam Waters',         short_name: 'Waters',  ghin_index: 7.3,  ghin_number: '1154293', is_favorite: true,  email: null, nickname: null, use_nickname: false },
-    { id: 'default_12', name: 'Shang Chen',         short_name: 'Shang',   ghin_index: 5.8,  ghin_number: '1243328', is_favorite: true,  email: 'bonga13@gmail.com',            nickname: 'Wang',   use_nickname: true  },
+    { id: 'default_12', name: 'Shang Chen',         short_name: 'Shang',   ghin_index: 5.8,  ghin_number: '1243328', is_favorite: true,  email: null, nickname: 'Wang',   use_nickname: true  },
     // ── Non-favorites (owner's extended roster only) ──────────
     { id: 'default_13', name: 'Alex Dubin',         short_name: 'Dubin',   ghin_index: 10.0, is_favorite: false, email: null, nickname: null, use_nickname: false },
     { id: 'default_14', name: 'Alex Pugatch',       short_name: 'Pugatch', ghin_index: 10.0, is_favorite: false, email: null, nickname: null, use_nickname: false },

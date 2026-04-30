@@ -8,6 +8,11 @@
 import { computed } from 'vue'
 import { useRoundsStore } from '../stores/rounds'
 import { computeAllSettlements } from '../modules/settlements'
+
+// Escape HTML special chars — prevents XSS when player names are interpolated into v-html strings
+function escHtml(str) {
+  return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;')
+}
 import {
   computeNassau, computeSkins, computeMatch, computeVegas, computeSnake,
   computeHiLow, computeStableford, computeWolf, computeHammer, computeSixes,
@@ -63,7 +68,7 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         return parts.join(' · ')
       })()
       const titleRight = winner
-        ? `<span class="gs-winner"><span class="gs-star">⭐️</span> <span class="gs-winner-name">${winner}</span><span class="gs-value">${valStr ? '&nbsp;' + valStr : ''}</span></span>`
+        ? `<span class="gs-winner"><span class="gs-star">⭐️</span> <span class="gs-winner-name">${escHtml(winner)}</span><span class="gs-value">${valStr ? '&nbsp;' + valStr : ''}</span></span>`
         : (valStr ? `<span class="gs-value gs-value-muted">${valStr}</span>` : '')
       const titleLeft = `<span class="gs-game-title">${icon} ${gameName}</span>`
       const titleRow = `<div class="gs-title-row">${titleLeft}${titleRight ? '<span class="gs-dash">·</span>' + titleRight : ''}</div>`
@@ -90,7 +95,7 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
           let html = `<span style="font-weight:600">${label}:</span> <span style="font-family:monospace;letter-spacing:0.5px">${slashStatus}</span>`
           if (segDollar !== 0) {
             const winner = segDollar > 0 ? t1n : t2n
-            html += ` · <span style="color:#4ade80;font-weight:700">${winner} $${Math.abs(segDollar)}</span>`
+            html += ` · <span style="color:#4ade80;font-weight:700">${escHtml(winner)} $${Math.abs(segDollar)}</span>`
           }
           return html
         }
@@ -103,14 +108,14 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         let oHtml = `<span style="font-weight:600">Overall:</span> <span style="font-family:monospace;letter-spacing:0.5px">${oFmt}</span>`
         if (s.overall !== 0) {
           const oWinner = s.overall > 0 ? t1n : t2n
-          oHtml += ` · <span style="color:#4ade80;font-weight:700">${oWinner} $${Math.abs(s.overall)}</span>`
+          oHtml += ` · <span style="color:#4ade80;font-weight:700">${escHtml(oWinner)} $${Math.abs(s.overall)}</span>`
         }
 
         let alohaHtml = ''
         if (r.aloha) {
           const ar = r.aloha
           const alohaWinner = ar.t1Delta > 0 ? t1n : t2n
-          alohaHtml = `<div>🌺 <span style="font-weight:600">Aloha:</span> <span style="color:#4ade80;font-weight:700">${alohaWinner} +$${ar.amount}</span></div>`
+          alohaHtml = `<div>🌺 <span style="font-weight:600">Aloha:</span> <span style="color:#4ade80;font-weight:700">${escHtml(alohaWinner)} +$${ar.amount}</span></div>`
         } else if (cfg.aloha?.status === 'accepted') {
           alohaHtml = `<div>🌺 <span style="font-weight:600">Aloha:</span> <span style="opacity:.5">accepted — h18 pending</span></div>`
         } else if (cfg.aloha?.status === 'pending') {
@@ -124,7 +129,7 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
           const payee = netOwed < 0 ? t2n : t1n
           const grossTotal = Math.abs(s.front) + Math.abs(s.back) + Math.abs(s.overall) + Math.abs(s.aloha || 0)
           const grossNote = grossTotal > Math.abs(netOwed) ? ` <span style="font-size:10px;opacity:.5">(gross: $${grossTotal})</span>` : ''
-          totLine = `<div style="font-size:12px;font-weight:700;margin-top:5px;padding:5px 8px;background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);border-radius:8px;color:#4ade80">💰 ${payer} owe ${payee} $${Math.abs(netOwed)}${grossNote}</div>`
+          totLine = `<div style="font-size:12px;font-weight:700;margin-top:5px;padding:5px 8px;background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);border-radius:8px;color:#4ade80">💰 ${escHtml(payer)} owe ${escHtml(payee)} $${Math.abs(netOwed)}${grossNote}</div>`
         } else if (Math.abs(s.front) + Math.abs(s.back) + Math.abs(s.overall) > 0) {
           totLine = `<div style="font-size:11px;margin-top:4px;opacity:.5">All square · $${Math.abs(s.front) + Math.abs(s.back) + Math.abs(s.overall)} action</div>`
         }
@@ -134,7 +139,7 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         const oAmt = cfg.overall ?? 20
         const pressInfo = cfg.pressAt ? ` · press@${cfg.pressAt}` : ''
         const nassauLabel = cfg._sideMatch ? '1v1 Nassau' : 'Nassau'
-        return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} ${nassauLabel}</span><span class="muted" style="font-size:10px;margin-left:4px">${t1n} vs ${t2n} · $${fAmt}/$${bAmt}/$${oAmt}${pressInfo}</span><div style="font-size:11px;margin-top:3px;display:flex;flex-direction:column;gap:2px"><div>${fHtml}</div><div>${bHtml}</div><div>${oHtml}</div>${alohaHtml}</div>${totLine}</div>`
+        return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} ${nassauLabel}</span><span class="muted" style="font-size:10px;margin-left:4px">${escHtml(t1n)} vs ${escHtml(t2n)} · $${fAmt}/$${bAmt}/$${oAmt}${pressInfo}</span><div style="font-size:11px;margin-top:3px;display:flex;flex-direction:column;gap:2px"><div>${fHtml}</div><div>${bHtml}</div><div>${oHtml}</div>${alohaHtml}</div>${totLine}</div>`
       }
 
       // ── Skins ──
@@ -378,13 +383,13 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         let lines = '', fStatus = ''
         if (completedHoles >= totalHoles) {
           if (atRisk.length > 0) {
-            lines = atRisk.map(m => `❌ ${memberDisplay(m)}: owes $${ppp * (members.length - 1)}`).join('<br>')
+            lines = atRisk.map(m => `❌ ${escHtml(memberDisplay(m))}: owes $${ppp * (members.length - 1)}`).join('<br>')
             fStatus = `<div style="font-size:11px;margin-top:4px;font-weight:600;color:#f87171">${safe.length} safe · ${atRisk.length} fidgeted</div>`
           } else {
             fStatus = `<div style="font-size:11px;margin-top:4px;font-weight:600;color:#4ade80">Everyone won a hole — no fidgets!</div>`
           }
         } else {
-          if (atRisk.length > 0) lines = atRisk.map(m => `⚠️ ${memberDisplay(m)}: no win yet`).join('<br>')
+          if (atRisk.length > 0) lines = atRisk.map(m => `⚠️ ${escHtml(memberDisplay(m))}: no win yet`).join('<br>')
           fStatus = `<div style="font-size:11px;margin-top:4px;font-weight:600;color:#4ade80">${safe.length}/${members.length} safe</div>`
         }
         return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Fidget</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppp}/player${completedHoles < totalHoles ? ' · thru ' + completedHoles + '/' + totalHoles : ''}</span>${lines ? '<div style="font-size:11px;margin-top:3px">' + lines + '</div>' : ''}${fStatus}</div>`
@@ -394,7 +399,7 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
       if (t === 'stableford') {
         const r = computeStableford(ctx, cfg)
         if (!r) return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Stableford</span></div>`
-        const standings = r.settlements?.map(s => `${s.name}: ${s.pts || 0} pts`).join(' · ') || '—'
+        const standings = r.settlements?.map(s => `${escHtml(s.name)}: ${s.pts || 0} pts`).join(' · ') || '—'
         return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Stableford</span><div style="font-size:11px;margin-top:2px">${standings}</div></div>`
       }
 
@@ -437,17 +442,17 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
             if (!hr.isLone && !hr.isBlind && m.id === hr.partner) return false
             return true
           })
-          const wolfLabel = hr.isBlind ? `🙈${abbN(wolfM)}`
-            : hr.isLone ? `🐺${abbN(wolfM)} Lone`
-            : `🐺${[wolfM, partnerM].filter(Boolean).map(abbN).join('+')}`
-          const fieldLabel = fieldMs.map(abbN).join('+')
+          const wolfLabel = hr.isBlind ? `🙈${escHtml(abbN(wolfM))}`
+            : hr.isLone ? `🐺${escHtml(abbN(wolfM))} Lone`
+            : `🐺${[wolfM, partnerM].filter(Boolean).map(m => escHtml(abbN(m))).join('+')}`
+          const fieldLabel = fieldMs.map(m => escHtml(abbN(m))).join('+')
           return { wolfLabel, fieldLabel }
         }
 
         // Next incomplete hole = upcoming wolf
         const nextIncomplete = r.holeResults.find(hr => hr.incomplete)
         const nextWolfHtml = nextIncomplete
-          ? `<div style="font-size:11px;margin-top:3px;opacity:.85">🐺 H${nextIncomplete.hole}: <span style="font-weight:600">${nextIncomplete.wolfName}</span> is wolf</div>`
+          ? `<div style="font-size:11px;margin-top:3px;opacity:.85">🐺 H${nextIncomplete.hole}: <span style="font-weight:600">${escHtml(nextIncomplete.wolfName)}</span> is wolf</div>`
           : ''
 
         // All completed holes — scrollable per-hole breakdown
@@ -472,7 +477,7 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
           const m = ctx.members.find(x => x.id === s.id)
           const label = m ? initLastN(m) : (s.name || '?')
           const color = (s.net||0) > 0 ? '#4ade80' : (s.net||0) < 0 ? '#f87171' : '#d4af37'
-          return `${label}: <span style="color:${color};font-weight:700">${(s.net||0) > 0 ? '+' : ''}$${Math.abs(s.net||0)}</span>`
+          return `${escHtml(label)}: <span style="color:${color};font-weight:700">${(s.net||0) > 0 ? '+' : ''}$${Math.abs(s.net||0)}</span>`
         }).join(' · ') || ''
 
         return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Wolf</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppt}/pt</span>${nextWolfHtml}${holesHtml}${standings ? `<div style="font-size:11px;margin-top:3px">${standings}</div>` : ''}</div>`
@@ -483,7 +488,7 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         const r = computeSixes(ctx, cfg)
         if (!r) return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Sixes</span><span class="muted" style="font-size:11px">Need 4 players</span></div>`
         const ppt = cfg.ppt || 1
-        const standings = r.settlements?.map(s => `${s.name}: <span style="color:${(s.net||0) > 0 ? '#4ade80' : (s.net||0) < 0 ? '#f87171' : '#d4af37'};font-weight:700">${(s.net||0) > 0 ? '+' : ''}$${Math.abs(s.net||0)}</span>`).join(' · ') || '—'
+        const standings = r.settlements?.map(s => `${escHtml(s.name)}: <span style="color:${(s.net||0) > 0 ? '#4ade80' : (s.net||0) < 0 ? '#f87171' : '#d4af37'};font-weight:700">${(s.net||0) > 0 ? '+' : ''}$${Math.abs(s.net||0)}</span>`).join(' · ') || '—'
         return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Sixes</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppt}/segment</span><div style="font-size:11px;margin-top:3px">${standings}</div></div>`
       }
 
@@ -492,8 +497,8 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         const r = computeDots(ctx, cfg)
         if (!r) return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Dots</span></div>`
         const ppt = r.ppt || cfg.ppt || 1
-        const counts = r.settlements?.map(s => `${s.name}: ${s.myDots || 0}`).join(' · ') || '—'
-        const dollarLine = r.settlements?.filter(s => (s.net||0) !== 0).map(s => `${s.name}${(s.net||0) > 0 ? '<span style="color:#4ade80"> +$' + s.net + '</span>' : '<span style="color:#f87171"> -$' + Math.abs(s.net) + '</span>'}`).join(' · ') || ''
+        const counts = r.settlements?.map(s => `${escHtml(s.name)}: ${s.myDots || 0}`).join(' · ') || '—'
+        const dollarLine = r.settlements?.filter(s => (s.net||0) !== 0).map(s => `${escHtml(s.name)}${(s.net||0) > 0 ? '<span style="color:#4ade80"> +$' + s.net + '</span>' : '<span style="color:#f87171"> -$' + Math.abs(s.net) + '</span>'}`).join(' · ') || ''
         return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Dots</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppt}/dot</span><div style="font-size:11px;margin-top:3px;opacity:.8">${counts}</div>${dollarLine ? '<div style="font-size:11px;margin-top:2px">' + dollarLine + '</div>' : ''}</div>`
       }
 
@@ -503,8 +508,8 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         if (!r) return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} BBB</span></div>`
         const ppt = r.ppt || cfg.ppt || 1
         const variant = cfg.doubleBongo ? ' (Double Bongo)' : ''
-        const standingStr = (r.standings || []).slice().sort((a,b)=>b.pts-a.pts).map(s => `${s.name}: ${s.pts}pt`).join(' · ')
-        const dollarLine = (r.settlements || []).map(s => `${s.fromName} → ${s.toName} $${s.amount}`).join(' · ')
+        const standingStr = (r.standings || []).slice().sort((a,b)=>b.pts-a.pts).map(s => `${escHtml(s.name)}: ${s.pts}pt`).join(' · ')
+        const dollarLine = (r.settlements || []).map(s => `${escHtml(s.fromName)} → ${escHtml(s.toName)} $${s.amount}`).join(' · ')
         return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} BBB</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppt}/pt${variant}</span><div style="font-size:11px;margin-top:3px;opacity:.8">${standingStr}</div>${dollarLine ? '<div style="font-size:11px;margin-top:2px;color:#4ade80">' + dollarLine + '</div>' : ''}</div>`
       }
 
@@ -521,22 +526,23 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         const ppt = r.settlement?.ppt || cfg.ppt || 0
         const isTournament = !!cfg.tournament
         const points = cfg.points || 2
-        let winner = null, value = null, detail = `${t1n} vs ${t2n}`
+        const t1nE = escHtml(t1n), t2nE = escHtml(t2n)
+        let winner = null, value = null, detail = `${t1nE} vs ${t2nE}`
         if (played === 0) {
-          detail = `${t1n} vs ${t2n} — waiting for scores`
+          detail = `${t1nE} vs ${t2nE} — waiting for scores`
         } else if (matchOver) {
           winner = finalUp > 0 ? t1n : t2n
           const loser = finalUp > 0 ? t2n : t1n
           const resultStr = `${Math.abs(finalUp)}&${remaining}`
-          detail = `${winner} (${resultStr}) vs ${loser}`
+          detail = `${escHtml(winner)} (${resultStr}) vs ${escHtml(loser)}`
           value = { pts: isTournament ? points : null, dollars: ppt > 0 ? ppt : null }
         } else if (finalUp === 0) {
-          detail = `${t1n} vs ${t2n} — AS thru ${played}`
+          detail = `${t1nE} vs ${t2nE} — AS thru ${played}`
           if (isTournament) value = { pts: points / 2, dollars: null }
         } else {
           winner = finalUp > 0 ? t1n : t2n
           const loser = finalUp > 0 ? t2n : t1n
-          detail = `${winner} (${Math.abs(finalUp)} UP thru ${played}) vs ${loser}`
+          detail = `${escHtml(winner)} (${Math.abs(finalUp)} UP thru ${played}) vs ${escHtml(loser)}`
           value = { pts: isTournament ? points : null, dollars: ppt > 0 ? ppt : null }
         }
         return _gameLine({ gameName: 'Best Ball', winner, value, detail })
@@ -581,7 +587,7 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
           const t = ftoTallies[s.id]
           const tallyHtml = t ? ((t.sweeps ? `<span style="font-size:10px;margin-left:4px">🧹×${t.sweeps}</span>` : '') + (t.birdies ? `<span style="font-size:10px;margin-left:4px">🐦×${t.birdies}</span>` : '')) : ''
           return `<div style="display:flex;align-items:center;gap:6px;padding:2px 0">`
-            + `<span style="min-width:60px">${medal}<span style="font-weight:700">${s.name}</span></span>`
+            + `<span style="min-width:60px">${medal}<span style="font-weight:700">${escHtml(s.name)}</span></span>`
             + `<span style="color:#d4af37;font-weight:700">${s.pts}pts · $${rawDollars}</span>`
             + `<span style="color:${netColor};font-size:10px">(net ${netStr})</span>`
             + tallyHtml

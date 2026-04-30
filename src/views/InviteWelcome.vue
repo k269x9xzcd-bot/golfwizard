@@ -328,19 +328,31 @@ onMounted(async () => {
     try {
       const decoded = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(rosterParam)))))
       if (Array.isArray(decoded) && decoded.length > 0) {
-        const { useRosterStore } = await import('../stores/roster')
-        const rStore = useRosterStore()
-        await rStore.fetchPlayers()
-        const myEmails = new Set(rStore.players.map(p => p.email?.toLowerCase()).filter(Boolean))
-        const myNames  = new Set(rStore.players.map(p => p.name?.toLowerCase()).filter(Boolean))
-        const newOnes  = decoded.filter(p => {
-          if (p.email && myEmails.has(p.email.toLowerCase())) return false
-          if (p.name  && myNames.has(p.name.toLowerCase()))  return false
-          return true
-        })
-        if (newOnes.length > 0) {
-          rosterOfferPlayers.value = newOnes
-          showRosterOffer.value = true
+        // Sanitize: only accept known fields with expected types and lengths
+        const ALLOWED_FIELDS = ['name', 'short_name', 'ghin_index', 'ghin_number', 'nickname', 'use_nickname']
+        const sanitizePlayer = (p) => {
+          if (!p || typeof p !== 'object') return null
+          if (typeof p.name !== 'string' || !p.name.trim() || p.name.length > 100) return null
+          if (p.email !== undefined && p.email !== null) return null  // strip emails from URL roster
+          if (p.ghin_index != null && typeof p.ghin_index !== 'number') return null
+          if (p.ghin_number != null && typeof p.ghin_number !== 'string') return null
+          if (p.nickname != null && typeof p.nickname !== 'string') return null
+          const clean = {}
+          for (const k of ALLOWED_FIELDS) if (p[k] !== undefined) clean[k] = p[k]
+          clean.name = clean.name.trim()
+          return clean
+        }
+        const sanitized = decoded.map(sanitizePlayer).filter(Boolean)
+        if (sanitized.length > 0) {
+          const { useRosterStore } = await import('../stores/roster')
+          const rStore = useRosterStore()
+          await rStore.fetchPlayers()
+          const myNames = new Set(rStore.players.map(p => p.name?.toLowerCase()).filter(Boolean))
+          const newOnes = sanitized.filter(p => !myNames.has(p.name.toLowerCase()))
+          if (newOnes.length > 0) {
+            rosterOfferPlayers.value = newOnes
+            showRosterOffer.value = true
+          }
         }
       }
     } catch (e) {

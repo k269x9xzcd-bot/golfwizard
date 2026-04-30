@@ -13,6 +13,11 @@ import {
   holePar,
 } from '../modules/gameEngine'
 
+// Escape HTML special chars to prevent XSS when interpolating player names into v-html strings
+function escHtml(str) {
+  return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;')
+}
+
 export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pInit }) {
   const roundsStore = useRoundsStore()
 
@@ -213,14 +218,14 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
             for (const bd of (data.breakdown || [])) {
               if (!holeMarks[bd.hole]) holeMarks[bd.hole] = []
               const sym = bd.pts < 0 ? '−' : bd.type.startsWith('Eagle') ? '★★' : bd.type.startsWith('Birdie') ? '●' : bd.type === 'Greenie' ? 'G' : bd.type === 'Sandy' ? 'S' : bd.type === 'Chip-in' ? 'C' : bd.type === 'Barkie' ? 'B' : bd.type === 'Arnie' ? 'A' : bd.type === 'Ferret' ? 'F' : '◦'
-              holeMarks[bd.hole].push(`<span class="nota-dot-who">${pInit(mid)}</span>${sym}`)
+              holeMarks[bd.hole].push(`<span class="nota-dot-who">${escHtml(pInit(mid))}</span>${sym}`)
             }
           }
           for (const [hole, marks] of Object.entries(holeMarks)) {
             cells[+hole] = { text: marks.join(' '), cls: 'nota-dots' }
           }
           const sorted = Object.entries(r.dots || {}).map(([id, d]) => ({ id, ...d })).sort((a, b) => b.dots - a.dots)
-          const summaryParts = sorted.filter(d => d.dots > 0).map(d => `${pInit(d.id)}:${d.dots}`)
+          const summaryParts = sorted.filter(d => d.dots > 0).map(d => `${escHtml(pInit(d.id))}:${d.dots}`)
           rows.push({
             icon: '🎯', label: 'Dots', cells,
             outSummary: '', inSummary: '',
@@ -365,7 +370,7 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
           const sorted = [...(r.settlements || [])].sort((a, b) => b.net - a.net)
           const leader = sorted[0]
           const summary = (leader && leader.net > 0)
-            ? `${pInit(leader.id) || leader.name} +$${leader.net}`
+            ? `${escHtml(pInit(leader.id) || leader.name)} +$${leader.net}`
             : 'AS'
           rows.push({
             icon: '🐺', label: 'Wolf', cells,
@@ -400,8 +405,8 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
             const bInits = (seg.teamBIds || []).map(id => pInit(id))
 
             // Label: two colored chip groups
-            const aChips = aInits.map(i => `<span class="six-chip six-chip-a">${i}</span>`).join('')
-            const bChips = bInits.map(i => `<span class="six-chip six-chip-b">${i}</span>`).join('')
+            const aChips = aInits.map(i => `<span class="six-chip six-chip-a">${escHtml(i)}</span>`).join('')
+            const bChips = bInits.map(i => `<span class="six-chip six-chip-b">${escHtml(i)}</span>`).join('')
             const labelHtml = `${aChips}<span class="six-vs">v</span>${bChips}`
 
             const cells = {}
@@ -409,10 +414,10 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
               if (hd.incomplete) { cells[hd.hole] = { text: '', cls: '' }; continue }
               if (hd.winner === 'a') {
                 const init = aInits[0] || 'A'
-                cells[hd.hole] = { text: `<span class="six-winner six-winner-a">${init}</span>`, cls: 'nota-six-a-cell' }
+                cells[hd.hole] = { text: `<span class="six-winner six-winner-a">${escHtml(init)}</span>`, cls: 'nota-six-a-cell' }
               } else if (hd.winner === 'b') {
                 const init = bInits[0] || 'B'
-                cells[hd.hole] = { text: `<span class="six-winner six-winner-b">${init}</span>`, cls: 'nota-six-b-cell' }
+                cells[hd.hole] = { text: `<span class="six-winner six-winner-b">${escHtml(init)}</span>`, cls: 'nota-six-b-cell' }
               } else {
                 cells[hd.hole] = { text: '<span class="six-halved">=</span>', cls: 'nota-six-halved' }
               }
@@ -422,8 +427,8 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
             const aLabel = aInits.join('+')
             const bLabel = bInits.join('+')
             const segResult = played.length === 0 ? ''
-              : seg.aWins > seg.bWins ? `<span style="color:#15803d">${aLabel} ${seg.aWins}-${seg.bWins}</span>`
-              : seg.bWins > seg.aWins ? `<span style="color:#b45309">${bLabel} ${seg.bWins}-${seg.aWins}</span>`
+              : seg.aWins > seg.bWins ? `<span style="color:#15803d">${escHtml(aLabel)} ${seg.aWins}-${seg.bWins}</span>`
+              : seg.bWins > seg.aWins ? `<span style="color:#b45309">${escHtml(bLabel)} ${seg.bWins}-${seg.aWins}</span>`
               : `<span style="color:#6b7280">AS ${seg.aWins}-${seg.bWins}</span>`
             const ptsStr = seg.aPts != null && played.length === (seg.to - seg.from + 1)
               ? ` <span style="font-size:9px;opacity:.7">(${seg.aPts}/${seg.bPts})</span>` : ''
@@ -447,7 +452,7 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
           // Settlement row
           const sorted = [...(r.settlements || [])].sort((a, b) => b.net - a.net)
           const topNet = sorted[0]?.net || 0
-          const summary = topNet > 0 ? `${sorted[0].name} +$${topNet}` : 'AS'
+          const summary = topNet > 0 ? `${escHtml(sorted[0].name)} +$${topNet}` : 'AS'
           rows.push({ icon: '', label: '💰 Total', cells: {}, outSummary: '', inSummary: '', totalSummary: summary, game })
         } catch(e) { /* skip */ }
       }
@@ -482,7 +487,7 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
             const netColor = player.net > 0 ? '#4ade80' : player.net < 0 ? '#f87171' : '#d4af37'
             rows.push({
               icon: '⭐', label: initials,
-              labelHtml: `<span style="color:${dotColor};margin-right:3px">●</span>${initials}`,
+              labelHtml: `<span style="color:${dotColor};margin-right:3px">●</span>${escHtml(initials)}`,
               cells,
               outSummary: ctx.holesMode !== 9 ? `${outPts}` : '',
               inSummary: ctx.holesMode !== 9 ? `${inPts}` : '',
@@ -569,7 +574,7 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
             rows.push({
               icon: '5️⃣',
               label: initials,
-              labelHtml: `<span style="color:${dotColor};margin-right:3px">●</span>${initials}`,
+              labelHtml: `<span style="color:${dotColor};margin-right:3px">●</span>${escHtml(initials)}`,
               cells,
               outSummary: ctx.holesMode !== 9 ? `<span style="font-weight:700">${Math.round(outPts*100)/100}</span>` : '',
               inSummary: ctx.holesMode !== 9 ? `<span style="font-weight:700">${Math.round(inPts*100)/100}</span>` : '',
@@ -590,13 +595,13 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
           for (const [holeKey, award] of Object.entries(r.awards || {})) {
             const h = parseInt(holeKey)
             const parts = []
-            if (award.bingo) parts.push(`<span class="nota-dot-who">${pInit(award.bingo)}</span>B1`)
-            if (award.bango) parts.push(`<span class="nota-dot-who">${pInit(award.bango)}</span>B2`)
-            if (award.bongo) parts.push(`<span class="nota-dot-who">${pInit(award.bongo)}</span>B3`)
+            if (award.bingo) parts.push(`<span class="nota-dot-who">${escHtml(pInit(award.bingo))}</span>B1`)
+            if (award.bango) parts.push(`<span class="nota-dot-who">${escHtml(pInit(award.bango))}</span>B2`)
+            if (award.bongo) parts.push(`<span class="nota-dot-who">${escHtml(pInit(award.bongo))}</span>B3`)
             if (parts.length) cells[h] = { text: parts.join(' '), cls: 'nota-bbb' }
           }
           const sorted = (r.standings || []).slice().sort((a, b) => b.pts - a.pts)
-          const summaryParts = sorted.filter(s => s.pts > 0).map(s => `${pInit(s.id)}:${s.pts}`)
+          const summaryParts = sorted.filter(s => s.pts > 0).map(s => `${escHtml(pInit(s.id))}:${s.pts}`)
           rows.push({
             icon: '🏌️', label: 'BBB', cells,
             outSummary: '', inSummary: '',
