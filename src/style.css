@@ -2945,9 +2945,11 @@ body.gw-landscape .scorecard-grid tbody .col-player-name {
 /* View header */
 [data-theme="light"] .view-header {
   background: #0d3325;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+  border-bottom: 2px solid #9a7a1e;
 }
-[data-theme="light"] .view-header h2 { color: #e8c84a; }
+/* Brighter gold + larger weight for legibility on dark green band */
+[data-theme="light"] .view-header h2 { color: #f5d24a; font-weight: 500; letter-spacing: -0.005em; }
+[data-theme="light"] .view-header .header-actions .btn-ghost { color: #f0ede0; border-color: rgba(255,255,255,.25); }
 
 /* Cards */
 [data-theme="light"] .card {

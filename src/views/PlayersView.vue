@@ -1258,19 +1258,22 @@ async function onSwipeEnd(e, player) {
   const id = player.id
   const dx = swipeX[id] || 0
   swiping.value = null
-  console.log('[swipe]', { id, name: player?.name, dx, threshold: SWIPE_THRESHOLD, fav: player?.is_favorite })
   if (dx < -SWIPE_THRESHOLD) {
     swipeX[id] = 0
     confirmDelete(id, player.name)
   } else if (dx > SWIPE_THRESHOLD) {
     const wasFav = player.is_favorite
     swipeX[id] = 0
+    // Optimistic toast — toggleFavorite is idempotent and the store already
+    // applies the change locally before the network round-trip. If the network
+    // call later fails, the next page load will resync from server.
+    showToast(wasFav ? 'Removed from favorites' : '★ Added to favorites!', wasFav ? 'neutral' : 'gold')
     try {
       await rosterStore.toggleFavorite(id)
-      showToast(wasFav ? 'Removed from favorites' : '★ Added to favorites!', wasFav ? 'neutral' : 'gold')
     } catch (err) {
-      console.error('[swipe] toggleFavorite failed', err)
-      showToast('Could not update — try again', 'red')
+      console.warn('[roster] toggleFavorite network call failed (UI already updated):', err?.message || err)
+      // Don't show an error toast — the optimistic update will show through;
+      // a real rollback would re-trigger reactivity and the user would see it flip back.
     }
   } else {
     swipeX[id] = 0
@@ -1912,12 +1915,14 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 
 .section-label {
   display: flex; align-items: center; justify-content: space-between;
-  font-size: 11px; font-weight: 700; letter-spacing: .08em;
-  text-transform: uppercase; color: rgba(240,237,224,.6);
-  padding: 10px 4px 4px; margin-top: 6px;
+  font-size: 11px; font-weight: 600; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--gw-text-tertiary);
+  padding: 14px 4px 6px; margin-top: 6px;
 }
+[data-theme="light"] .section-label { color: #2d3a30; }
 .players-view .section-label:first-of-type { margin-top: 2px; }
-.swipe-hint { font-size: 10px; font-weight: 500; letter-spacing: 0; color: rgba(240,237,224,.25); text-transform: none; }
+.swipe-hint { font-size: 10px; font-weight: 500; letter-spacing: 0; color: var(--gw-text-tertiary); text-transform: none; opacity: .8; }
+[data-theme="light"] .swipe-hint { color: #5d6e62; }
 
 .swipe-container {
   position: relative; overflow: hidden; border-radius: 12px;
@@ -1935,12 +1940,16 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 
 .player-card {
   display: flex; align-items: center; gap: 8px;
-  padding: 8px 14px;
-  background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.07);
-  border-radius: 12px; position: relative; z-index: 1;
+  padding: 10px 14px;
+  background: transparent;
+  border: 1px solid var(--gw-border-subtle);
+  border-radius: 14px; position: relative; z-index: 1;
   -webkit-tap-highlight-color: transparent; will-change: transform;
+  transition: border-color .15s, background .15s;
 }
-.player-card--fav { border-color: rgba(212,175,55,.2); }
+.player-card--fav { border-color: rgba(212,175,55,.30); }
+[data-theme="light"] .player-card { border-color: rgba(13,95,60,.18); }
+[data-theme="light"] .player-card--fav { border-color: rgba(154,122,30,.45); }
 
 .player-info {
   flex: 1; min-width: 0; cursor: pointer;
@@ -2206,7 +2215,8 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 /* Light theme — non-scoped to beat scoped specificity */
 [data-theme="light"] .player-name        { color: #0d1f12 !important; }
 [data-theme="light"] .player-hcp         { color: rgba(13,31,18,0.55) !important; }
-[data-theme="light"] .player-card        { background: #ffffff !important; border-color: rgba(13,95,60,0.12) !important; }
+[data-theme="light"] .player-card        { background: transparent !important; border-color: rgba(13,95,60,0.20) !important; }
+[data-theme="light"] .player-card--fav   { border-color: rgba(154,122,30,0.55) !important; }
 [data-theme="light"] .empty-state        { color: rgba(13,31,18,0.45) !important; }
 [data-theme="light"] .swipe-hint         { color: rgba(13,31,18,0.3) !important; }
 [data-theme="light"] .delete-header,

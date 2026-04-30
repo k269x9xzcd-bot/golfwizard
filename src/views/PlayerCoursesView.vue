@@ -43,12 +43,16 @@ const activeTab = ref('players')
 .pc-tab-bar {
   display: flex;
   gap: 0;
-  background: var(--gw-green-900, #0a2a1c);
-  border-bottom: 1px solid var(--gw-green-700, #114a35);
+  background: #0a2a1c;
+  border-bottom: 1px solid #114a35;
   position: sticky;
   top: 0;
   z-index: 10;
   padding: 0 16px;
+}
+[data-theme="light"] .pc-tab-bar {
+  background: #ffffff;
+  border-bottom: 1px solid rgba(13,95,60,.18);
 }
 
 .pc-tab {
@@ -57,18 +61,21 @@ const activeTab = ref('players')
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
-  color: var(--gw-text-secondary, #a3b8aa);
+  color: rgba(240,237,224,.55);
+  font-family: var(--gw-font-body);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.15s;
   -webkit-tap-highlight-color: transparent;
 }
+[data-theme="light"] .pc-tab { color: #5d6e62; }
 
 .pc-tab.active {
-  color: var(--gw-gold, #d4af37);
-  border-bottom-color: var(--gw-gold, #d4af37);
+  color: var(--gw-accent);
+  border-bottom-color: var(--gw-accent);
 }
+[data-theme="light"] .pc-tab.active { color: #9a7a1e; border-bottom-color: #9a7a1e; }
 
 .pc-hidden {
   display: none;
