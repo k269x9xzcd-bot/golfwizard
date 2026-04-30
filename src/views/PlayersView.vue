@@ -1551,10 +1551,8 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 <style scoped>
 .players-view { padding: 0; padding-bottom: 80px; }
 .players-view > .view-header { padding: 14px 16px; }
-.players-view > :not(.view-header):not(.add-form):not(.section-label) { padding-left: 16px; padding-right: 16px; }
-.players-view > .add-form, .players-view > .section-label { margin-left: 16px; margin-right: 16px; }
-.players-view > .swipe-container { margin-left: 16px; margin-right: 16px; }
-.players-view > .player-card { margin-left: 16px; margin-right: 16px; }
+/* All non-header content gets uniform 16px gutter via padding (not margin) */
+.players-view > :not(.view-header) { padding-left: 16px; padding-right: 16px; }
 
 /* ── Trend arrows ───────────────────────────────────────────── */
 .trend-arrow {
@@ -1925,8 +1923,10 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 [data-theme="light"] .swipe-hint { color: #5d6e62; }
 
 .swipe-container {
-  position: relative; overflow: hidden; border-radius: 12px;
-  margin-bottom: 2px; background: rgba(255,255,255,.04);
+  position: relative; overflow: hidden;
+  border-radius: 14px;
+  margin-bottom: 8px;
+  background: transparent;
 }
 .swipe-reveal {
   position: absolute; top: 0; bottom: 0; display: flex; align-items: center;

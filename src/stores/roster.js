@@ -273,12 +273,25 @@ export const useRosterStore = defineStore('roster', () => {
     const before = idx >= 0 ? { ...players.value[idx] } : null
     if (idx >= 0) players.value[idx] = { ...players.value[idx], ...updates }
 
+    // Trivial single-column updates (e.g. is_favorite toggle) bypass SJS entirely
+    // and use raw fetch with longer timeout — SJS's 5s ceiling is aggressive on
+    // iOS PWA where stuck-socket re-establishment can take >5s.
+    const isTrivialUpdate = Object.keys(updates).length === 1 &&
+      ['is_favorite', 'is_archived'].includes(Object.keys(updates)[0])
+
     try {
+      if (isTrivialUpdate) {
+        const { supaRawRequest } = await import('../modules/supaRaw')
+        const rows = await supaRawRequest('PATCH', `roster_players?id=eq.${id}&select=*`, updates, 12000)
+        const row = Array.isArray(rows) ? rows[0] : rows
+        if (row && idx >= 0) players.value[idx] = row
+        return
+      }
       const { supaCall } = await import('../modules/supabaseOps')
       const res = await supaCall(
         'roster.update',
         supabase.from('roster_players').update(updates).eq('id', id).select().single(),
-        5000,
+        8000,
       )
       if (!res.error && res.data && idx >= 0) players.value[idx] = res.data
       else if (res.error) throw res.error
@@ -294,16 +307,19 @@ export const useRosterStore = defineStore('roster', () => {
       console.warn('[roster] SJS update failed, trying raw fetch:', e?.message)
       try {
         const { supaRawRequest } = await import('../modules/supaRaw')
-        const rows = await supaRawRequest('PATCH', `roster_players?id=eq.${id}&select=*`, updates, 10000)
+        const rows = await supaRawRequest('PATCH', `roster_players?id=eq.${id}&select=*`, updates, 12000)
         const row = Array.isArray(rows) ? rows[0] : rows
         if (row && idx >= 0) players.value[idx] = row
       } catch (rawErr) {
         const isRawConflict = rawErr?.status === 409 || rawErr?.message?.includes('409')
-        if (before && idx >= 0) players.value[idx] = before
         if (isRawConflict) {
+          if (before && idx >= 0) players.value[idx] = before
           throw new Error(`A player named "${updates.name}" already exists in your roster. Use a different name or add a last initial.`)
         }
-        throw new Error('Could not save changes. Check your connection and try again.')
+        // For non-conflict failures: keep optimistic update locally so the user
+        // doesn't see a flicker. The change might still have committed server-side
+        // (timeout != failure on iOS PWA). Log only.
+        console.warn('[roster] update did not confirm — keeping optimistic state:', rawErr?.message)
       }
     }
   }
