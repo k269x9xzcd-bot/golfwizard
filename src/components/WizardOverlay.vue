@@ -310,11 +310,27 @@
               Can't find them? Add manually
             </div>
             <template v-else>
-              <div class="ps-section-label"><span>Add Manually</span></div>
+              <div class="ps-section-label"><span>Add New Player</span></div>
               <div class="ps-manual-form">
                 <div class="ps-manual-name-row">
-                  <input v-model="psManualFirst" class="wiz-input" placeholder="First name" />
-                  <input v-model="psManualLast" class="wiz-input" placeholder="Last name" />
+                  <input v-model="psManualFirst" class="wiz-input" placeholder="First name" @input="onManualNameInput" />
+                  <input v-model="psManualLast" class="wiz-input" placeholder="Last name" @input="onManualNameInput" />
+                </div>
+                <div v-if="psManualSearching" class="ps-manual-hint">Searching GHIN…</div>
+                <div v-if="psManualResults.length" class="ps-manual-ghin-results">
+                  <div class="ps-section-label-mini">Tap to use these details:</div>
+                  <div
+                    v-for="r in psManualResults"
+                    :key="`${r.club_affiliation_id}_${r.ghin_number}`"
+                    class="ps-manual-ghin-row"
+                    @click="applyManualGhinResult(r)"
+                  >
+                    <div class="ps-manual-ghin-name">
+                      {{ r.full_name }}
+                      <span v-if="r.status && r.status !== 'Active'" class="status-badge">{{ r.status }}</span>
+                    </div>
+                    <div class="ps-manual-ghin-meta">{{ r.club_name }} · HCP {{ r.handicap_index ?? 'NH' }}<span v-if="r.ghin_number"> · #{{ r.ghin_number }}</span></div>
+                  </div>
                 </div>
                 <div class="ps-manual-hcp-row">
                   <input v-model="psManualHcp" class="wiz-input" placeholder="Index (e.g. 9.1)" type="number" step="0.1" />
@@ -322,6 +338,11 @@
                   <input v-model="psManualStrokes" class="wiz-input" placeholder="Strokes" type="number" step="1" />
                   <input v-model="psManualGhin" class="wiz-input" placeholder="GHIN # (opt.)" type="text" inputmode="numeric" />
                 </div>
+                <input v-model="psManualEmail" class="wiz-input" placeholder="Email (optional, for invites)" type="email" autocomplete="email" />
+                <label class="ps-manual-roster-check">
+                  <input type="checkbox" v-model="psManualSaveToRoster" />
+                  <span>Save to my roster for next time</span>
+                </label>
                 <button class="btn-primary btn-sm ps-manual-add-btn" @click="psAddManual">Add Player</button>
               </div>
             </template>
@@ -1312,6 +1333,8 @@ let _globalCreating = false
 import { useCoursesStore } from '../stores/courses'
 import { useRosterStore } from '../stores/roster'
 import { useRoundsStore } from '../stores/rounds'
+import { useAuthStore } from '../stores/auth'
+import { supabase } from '../supabase'
 import { GAME_DEFS } from '../modules/courses'
 import { usePlayerSearch } from '../composables/usePlayerSearch'
 
@@ -1430,6 +1453,7 @@ const props = defineProps({
 })
 const coursesStore = useCoursesStore()
 const rosterStore = useRosterStore()
+const authStore = useAuthStore()
 const roundsStore = useRoundsStore()
 
 const step = ref(props.editMode ? 3 : (props.startStep || 1))
@@ -1720,6 +1744,61 @@ const psManualLast = ref('')
 const psManualHcp = ref('')
 const psManualStrokes = ref('')
 const psManualGhin = ref('')
+const psManualEmail = ref('')
+const psManualSaveToRoster = ref(true)
+const psManualClubName = ref(null)
+const psManualResults = ref([])
+const psManualSearching = ref(false)
+let _psManualTimer = null
+let _psManualSeq = 0
+
+function onManualNameInput() {
+  // Clear results & GHIN# when user is editing the name (they may be picking a different person)
+  psManualResults.value = []
+  const f = psManualFirst.value.trim()
+  const l = psManualLast.value.trim()
+  if (f.length < 2 || l.length < 2) {
+    if (_psManualTimer) { clearTimeout(_psManualTimer); _psManualTimer = null }
+    return
+  }
+  if (_psManualTimer) clearTimeout(_psManualTimer)
+  _psManualTimer = setTimeout(() => runManualGhinSearch(), 350)
+}
+
+async function runManualGhinSearch() {
+  const first = psManualFirst.value.trim()
+  const last = psManualLast.value.trim()
+  if (first.length < 2 || last.length < 2) return
+  const profile = authStore.profile
+  if (!profile?.ghin_number || !profile?.ghin_password) return  // silent — no creds, manual entry only
+  const seq = ++_psManualSeq
+  psManualSearching.value = true
+  try {
+    const { data, error } = await supabase.functions.invoke('ghin-player-search', {
+      body: { first_name: first, last_name: last, ghin_number: profile.ghin_number, password: profile.ghin_password },
+    })
+    if (seq !== _psManualSeq) return
+    if (!error && Array.isArray(data?.results)) {
+      // Filter out anyone already in the roster
+      const rosterGhins = new Set(rosterStore.players.map(p => String(p.ghin_number || '')).filter(Boolean))
+      psManualResults.value = data.results.filter(r => !r.ghin_number || !rosterGhins.has(String(r.ghin_number)))
+    }
+  } catch { /* silent */ } finally {
+    if (seq === _psManualSeq) psManualSearching.value = false
+  }
+}
+
+function applyManualGhinResult(r) {
+  if (r.first_name) psManualFirst.value = r.first_name
+  if (r.last_name) psManualLast.value = r.last_name
+  const hi = r.handicap_index
+  if (hi != null && hi !== 'NH' && !isNaN(parseFloat(hi))) {
+    psManualHcp.value = String(parseFloat(hi))
+  }
+  if (r.ghin_number) psManualGhin.value = String(r.ghin_number)
+  psManualClubName.value = r.club_name || null
+  psManualResults.value = []
+}
 
 const _rosterRef = computed(() => rosterStore.players)
 const { query: psQuery, results: psResults, searching: psSearching, ghinUnavailable: psGhinUnavailable, onQueryChange: psOnInput, clearSearch: psClearSearch } = usePlayerSearch(_rosterRef)
@@ -1779,6 +1858,34 @@ async function psAddManual() {
   const ghinIndex = psManualHcp.value ? parseFloat(psManualHcp.value) : null
   const strokeOverride = psManualStrokes.value ? parseInt(psManualStrokes.value) : null
   const ghinNumber = psManualGhin.value.trim() || null
+  const email = psManualEmail.value.trim() || null
+  const clubName = psManualClubName.value || null
+
+  // Dupe guard: if GHIN # or exact name already in roster, reuse that player
+  let existing = null
+  if (ghinNumber) {
+    existing = rosterStore.players.find(p => String(p.ghin_number || '') === String(ghinNumber))
+  }
+  if (!existing) {
+    existing = rosterStore.players.find(p => p.name?.toLowerCase() === fullName.toLowerCase())
+  }
+  if (existing) {
+    if (!isPlayerAddedById(existing.id)) {
+      form.value.players.push({
+        id: existing.id,
+        name: existing.name,
+        shortName: existing.short_name,
+        ghinIndex: existing.ghin_index,
+        ghinSyncedAt: existing.ghin_synced_at ?? null,
+        nickname: existing.nickname ?? null,
+        use_nickname: existing.use_nickname ?? false,
+        profileId: existing.user_id ?? null,
+        email: existing.email ?? null,
+      })
+    }
+    resetManualForm()
+    return
+  }
 
   const tempId = `guest_${Date.now()}`
   form.value.players.push({
@@ -1791,28 +1898,40 @@ async function psAddManual() {
     nickname: null,
     use_nickname: false,
     profileId: null,
-    email: null,
+    email,
   })
 
-  // Save to roster
-  try {
-    const saved = await rosterStore.addPlayer({
-      name: fullName,
-      short_name: last || first.slice(0, 8),
-      ghin_index: ghinIndex,
-      ghin_number: ghinNumber,
-      is_favorite: false,
-    })
-    // Remap the temp ID to the real roster ID
-    const idx = form.value.players.findIndex(p => p.id === tempId)
-    if (idx >= 0 && saved?.id) form.value.players[idx].id = saved.id
-  } catch { /* offline or dupe — keep temp id */ }
+  if (psManualSaveToRoster.value) {
+    try {
+      const saved = await rosterStore.addPlayer({
+        name: fullName,
+        first_name: first || null,
+        last_name: last || null,
+        short_name: last || first.slice(0, 8),
+        ghin_index: ghinIndex,
+        ghin_number: ghinNumber,
+        club_name: clubName,
+        email,
+        is_favorite: false,
+      })
+      const idx = form.value.players.findIndex(p => p.id === tempId)
+      if (idx >= 0 && saved?.id) form.value.players[idx].id = saved.id
+    } catch { /* offline or dupe — keep temp id */ }
+  }
 
+  resetManualForm()
+}
+
+function resetManualForm() {
   psManualFirst.value = ''
   psManualLast.value = ''
   psManualHcp.value = ''
   psManualStrokes.value = ''
   psManualGhin.value = ''
+  psManualEmail.value = ''
+  psManualClubName.value = null
+  psManualResults.value = []
+  psManualSaveToRoster.value = true
   psShowManual.value = false
 }
 const apiResults = ref([])
@@ -3142,6 +3261,16 @@ function reloadApp() {
 }
 .ps-manual-trigger:active { color: var(--gw-text); }
 .ps-manual-form { display: flex; flex-direction: column; gap: 8px; padding: 4px 0 8px; }
+.ps-manual-hint { font-size: 12px; color: rgba(240,237,224,.5); padding: 0 4px; }
+.ps-manual-ghin-results { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 8px; overflow: hidden; }
+.ps-section-label-mini { font-size: 11px; font-weight: 700; color: rgba(240,237,224,.4); text-transform: uppercase; letter-spacing: .04em; padding: 8px 12px 4px; }
+.ps-manual-ghin-row { padding: 10px 12px; cursor: pointer; border-top: 1px solid rgba(255,255,255,.06); }
+.ps-manual-ghin-row:active { background: rgba(96,165,250,.15); }
+.ps-manual-ghin-name { font-size: 14px; font-weight: 600; color: var(--gw-text); }
+.ps-manual-ghin-meta { font-size: 12px; color: rgba(240,237,224,.5); margin-top: 2px; }
+.ps-manual-roster-check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: rgba(240,237,224,.7); padding: 4px 2px; cursor: pointer; }
+.ps-manual-roster-check input { accent-color: #d4af37; }
+.status-badge { display: inline-block; font-size: 10px; font-weight: 700; color: rgba(240,237,224,.7); background: rgba(255,255,255,.08); border-radius: 3px; padding: 1px 4px; margin-left: 6px; vertical-align: middle; text-transform: uppercase; letter-spacing: .04em; }
 .ps-manual-name-row { display: flex; gap: 6px; }
 .ps-manual-name-row .wiz-input { flex: 1; min-width: 0; }
 .ps-manual-hcp-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
