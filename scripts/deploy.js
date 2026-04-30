@@ -31,8 +31,13 @@ function run(cmd, opts = {}) {
 // 0. Remove stale lock files and pull latest from remote
 const headLock = resolve(GIT_ROOT, '.git/HEAD.lock')
 const indexLock = resolve(GIT_ROOT, '.git/index.lock')
-if (existsSync(headLock)) { unlinkSync(headLock); console.log('🔓 Removed stale HEAD.lock') }
-if (existsSync(indexLock)) { unlinkSync(indexLock); console.log('🔓 Removed stale index.lock') }
+const origHeadLock = resolve(GIT_ROOT, '.git/ORIG_HEAD.lock')
+for (const [label, p] of [['HEAD.lock', headLock], ['index.lock', indexLock], ['ORIG_HEAD.lock', origHeadLock]]) {
+  if (existsSync(p)) {
+    try { unlinkSync(p); console.log(`🔓 Removed stale ${label}`) }
+    catch { console.warn(`⚠️  Could not remove ${label} — delete manually if pull fails`) }
+  }
+}
 
 console.log('\n━━━ Syncing with remote… ━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 try {

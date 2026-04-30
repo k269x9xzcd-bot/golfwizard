@@ -246,7 +246,10 @@ export const useRosterStore = defineStore('roster', () => {
       }
     }
     if (error) throw error
-    players.value.push(data)
+    // Replace if already in list (23505 path updates an existing row), otherwise push
+    const existIdx = players.value.findIndex(p => p.id === data.id)
+    if (existIdx >= 0) players.value[existIdx] = data
+    else players.value.push(data)
     return data
   }
 
