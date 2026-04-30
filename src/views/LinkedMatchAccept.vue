@@ -395,7 +395,7 @@ async function goToScoring() {
 <style scoped>
 .lma-view {
   min-height: 100%;
-  background: var(--gw-neutral-950);
+  background: var(--gw-bg-app);
   padding-bottom: calc(var(--gw-nav-height, 64px) + env(safe-area-inset-bottom) + 24px);
 }
 

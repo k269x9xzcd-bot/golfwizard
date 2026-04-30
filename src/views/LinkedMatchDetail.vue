@@ -496,14 +496,14 @@ watch(() => route.params.id, (id) => { if (id) load() })
 <style scoped>
 .lmd-view {
   min-height: 100%;
-  background: var(--gw-neutral-950);
+  background: var(--gw-bg-app);
   padding: 0 0 calc(var(--gw-nav-height) + env(safe-area-inset-bottom) + 16px);
 }
 .lmd-header {
   display: flex; align-items: center; gap: 10px;
   padding: calc(env(safe-area-inset-top, 0px) + 14px) 16px 10px;
   position: sticky; top: 0; z-index: 20;
-  background: var(--gw-neutral-950);
+  background: var(--gw-bg-app);
   border-bottom: 1px solid rgba(255,255,255,.06);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);

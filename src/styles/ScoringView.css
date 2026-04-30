@@ -1586,7 +1586,7 @@
 .aloha-btn.aloha-accept { background: rgba(50,200,100,.25); color: #50c864; }
 .aloha-btn.aloha-decline { background: rgba(200,50,50,.2); color: #e05555; }
 .aloha-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 200; display: flex; align-items: center; justify-content: center; }
-.aloha-modal { background: #1a1a2e; border-radius: 16px; padding: 24px; width: 300px; border: 1px solid rgba(212,175,55,.3); }
+.aloha-modal { background: var(--gw-bg-sheet); border-radius: 16px; padding: 24px; width: 300px; border: 1px solid rgba(212,175,55,.3); }
 .aloha-modal-title { font-size: 18px; font-weight: 700; color: #d4af37; margin-bottom: 12px; }
 .aloha-modal-body p { color: #c0b090; font-size: 14px; margin-bottom: 10px; }
 .aloha-amount-input { width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(212,175,55,.3); background: rgba(255,255,255,.05); color: #e8e0c8; font-size: 18px; text-align: center; margin-bottom: 16px; }
@@ -1639,7 +1639,7 @@
 .junk-sheet-trigger { display: flex; justify-content: center; margin: 6px 0 4px; }
 .junk-sheet-btn { background: rgba(212,175,55,.15); color: #d4af37; border: 1px solid rgba(212,175,55,.3); border-radius: 20px; padding: 6px 18px; font-size: 13px; font-weight: 600; cursor: pointer; }
 .junk-sheet-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 200; display: flex; align-items: flex-end; }
-.junk-sheet { background: #1a1a2e; border-radius: 20px 20px 0 0; width: 100%; max-height: 75vh; overflow-y: auto; padding-bottom: env(safe-area-inset-bottom, 16px); border-top: 1px solid rgba(212,175,55,.3); }
+.junk-sheet { background: var(--gw-bg-sheet); border-radius: 20px 20px 0 0; width: 100%; max-height: 75vh; overflow-y: auto; padding-bottom: env(safe-area-inset-bottom, 16px); border-top: 1px solid rgba(212,175,55,.3); }
 .junk-sheet-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px 12px; border-bottom: 1px solid rgba(255,255,255,.08); font-weight: 700; font-size: 16px; color: #d4af37; }
 .junk-sheet-close { background: rgba(212,175,55,.2); color: #d4af37; border: none; border-radius: 12px; padding: 6px 16px; font-size: 13px; font-weight: 600; cursor: pointer; }
 .junk-sheet-body { padding: 12px 16px; }

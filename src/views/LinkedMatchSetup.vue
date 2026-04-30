@@ -493,7 +493,7 @@ function goToScoring() { router.push('/scoring') }
 <style scoped>
 .lms-view {
   min-height: 100%;
-  background: var(--gw-neutral-950);
+  background: var(--gw-bg-app);
   position: relative; overflow: hidden;
   padding-bottom: calc(var(--gw-nav-height) + env(safe-area-inset-bottom) + 24px);
 }

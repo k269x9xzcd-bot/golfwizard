@@ -1474,7 +1474,7 @@ _loadFinalResult()
 .tournament-view {
   padding: 0 0 100px;
   min-height: 100vh;
-  background: var(--gw-bg, #0c150e);
+  background: var(--gw-bg-app);
 }
 
 /* ── Header ─────────────────────────────────────────────── */

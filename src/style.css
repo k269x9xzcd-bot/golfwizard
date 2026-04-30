@@ -82,7 +82,7 @@
   --gw-gold: #d4af37;
   --gw-gold-lt: #f0d060;
   --gw-text: #f0ede0;
-  --gw-text-muted: rgba(240,237,224,.45);
+  --gw-text-muted: rgba(240,237,224,.65);   /* bumped from .45 — was failing AA */
   --gw-card-bg: rgba(255,255,255,.04);
   --gw-card-border: rgba(212,175,55,.15);
   --gw-t1: #60a5fa;
@@ -2870,7 +2870,7 @@ body.gw-landscape .scorecard-grid tbody .col-player-name {
 [data-theme="light"] {
   /* Semantic surface tokens */
   --gw-text:        #0d1f12;
-  --gw-text-muted:  rgba(13, 31, 18, 0.50);
+  --gw-text-muted:  #5d6e62;   /* solid hex, 5.7:1 on white = AA ✓ */
   --gw-card-bg:     rgba(0, 0, 0, 0.03);
   --gw-card-border: rgba(13, 95, 60, 0.18);
   --gw-gold:        #9a7a1e;

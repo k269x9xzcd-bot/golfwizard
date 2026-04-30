@@ -3273,5 +3273,46 @@ function reloadApp() {
 .ps-manual-hcp-row .wiz-input { flex: 1; min-width: 72px; }
 .ps-manual-add-btn { align-self: flex-end; }
 /* keep quick-add-or for manual form */
-.quick-add-or { font-size: 11px; color: var(--gw-text-muted); white-space: nowrap; flex-shrink: 0; }
+.quick-add-or { font-size: 11px; color: var(--gw-text-tertiary); white-space: nowrap; flex-shrink: 0; }
+
+/* ── Design system v2 — overrides for legacy chrome ──────────
+   Wraps the wizard's many hand-rolled rgba(255,255,255,.X) surfaces in
+   token-driven values so light/dark themes flip uniformly. */
+.wiz-input,
+.wiz-select,
+.wiz-textarea {
+  background: var(--gw-bg-input) !important;
+  border: 1px solid var(--gw-border-default) !important;
+  color: var(--gw-text-primary) !important;
+}
+.wiz-input::placeholder,
+.wiz-textarea::placeholder { color: var(--gw-text-tertiary); }
+.wiz-input:focus,
+.wiz-select:focus,
+.wiz-textarea:focus {
+  border-color: var(--gw-accent) !important;
+  outline: none;
+}
+.wiz-step-card,
+.section-card,
+.tee-option-card,
+.player-search-section,
+.ps-manual-section,
+.game-rules-card {
+  background: var(--gw-bg-surface) !important;
+  border-color: var(--gw-border-subtle) !important;
+  color: var(--gw-text-primary);
+}
+.ps-row { border-bottom-color: var(--gw-border-subtle) !important; }
+.ps-row:active,
+.ps-row:hover { background: var(--gw-bg-surface-2) !important; }
+.ps-section-label,
+.wiz-section-label,
+.tee-section-label {
+  color: var(--gw-text-tertiary) !important;
+}
+[data-theme="light"] .ps-section-label,
+[data-theme="light"] .wiz-section-label,
+[data-theme="light"] .tee-section-label { color: #2d3a30 !important; }
+.ps-manual-trigger:active { color: var(--gw-text-primary); }
 </style>
