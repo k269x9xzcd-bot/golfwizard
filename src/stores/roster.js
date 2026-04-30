@@ -224,24 +224,26 @@ export const useRosterStore = defineStore('roster', () => {
     }
     const row = { ...player, owner_id: auth.user.id }
     let data, error
-    if (row.ghin_number) {
-      // Upsert on (owner_id, ghin_number) — composite unique index
-      ;({ data, error } = await supabase
-        .from('roster_players')
-        .upsert(row, { onConflict: 'owner_id,ghin_number', ignoreDuplicates: false })
-        .select().single())
-    } else if (row.email) {
-      // No GHIN but has email — upsert on (owner_id, email) composite unique index
-      ;({ data, error } = await supabase
-        .from('roster_players')
-        .upsert(row, { onConflict: 'owner_id,email', ignoreDuplicates: false })
-        .select().single())
-    } else {
-      // No GHIN, no email — upsert on (owner_id, name) to avoid name dupes
-      ;({ data, error } = await supabase
-        .from('roster_players')
-        .upsert(row, { onConflict: 'owner_id,name', ignoreDuplicates: false })
-        .select().single())
+    // Try plain insert first. Partial unique indexes (ghin_number, email) can't be
+    // used as ON CONFLICT targets in Supabase — use insert + catch-and-update instead.
+    ;({ data, error } = await supabase
+      .from('roster_players')
+      .insert(row)
+      .select().single())
+    if (error && error.code === '23505') {
+      // Unique violation — find the existing row and update it
+      let matchQuery = supabase.from('roster_players').select('id').eq('owner_id', auth.user.id)
+      if (row.ghin_number) matchQuery = matchQuery.eq('ghin_number', row.ghin_number)
+      else if (row.email)   matchQuery = matchQuery.eq('email', row.email)
+      else                  matchQuery = matchQuery.eq('name', row.name)
+      const { data: existing } = await matchQuery.maybeSingle()
+      if (existing?.id) {
+        ;({ data, error } = await supabase
+          .from('roster_players')
+          .update(row)
+          .eq('id', existing.id)
+          .select().single())
+      }
     }
     if (error) throw error
     players.value.push(data)
