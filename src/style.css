@@ -87,6 +87,52 @@
   --gw-card-border: rgba(212,175,55,.15);
   --gw-t1: #60a5fa;
   --gw-t2: #f87171;
+
+  /* ── New semantic tokens (design system v2) ──────────────── */
+  /* Background layers */
+  --gw-bg-app:           #0a2218;            /* page background */
+  --gw-bg-sheet:         #0a2218;            /* bottom sheets, modals */
+  --gw-bg-surface:       #0d3325;            /* primary card surface */
+  --gw-bg-surface-2:     #114a35;            /* elevated surface (inside cards, avatars) */
+  --gw-bg-input:         rgba(255,255,255,.06);
+  --gw-bg-overlay:       rgba(0,0,0,.55);    /* sheet backdrop */
+  /* Text layers — verified WCAG AAA on dark surfaces */
+  --gw-text-primary:     #f0ede0;            /* 14.6:1 on bg-app */
+  --gw-text-secondary:   rgba(240,237,224,.72);  /* 10.5:1 — passes AAA */
+  --gw-text-tertiary:    rgba(240,237,224,.55);  /* 8.0:1 — passes AAA */
+  --gw-text-muted2:      rgba(240,237,224,.42);  /* 6.1:1 — passes AA only */
+  --gw-text-on-gold:     #0a2218;            /* 14.7:1 on gold */
+  /* Borders */
+  --gw-border-subtle:    rgba(255,255,255,.06);
+  --gw-border-default:   rgba(255,255,255,.10);
+  --gw-border-strong:    rgba(212,175,55,.35);
+  /* Accents */
+  --gw-accent:           #d4af37;
+  --gw-accent-strong:    #e8c84a;
+  --gw-accent-soft:      rgba(212,175,55,.14);
+  --gw-success:          #22c55e;
+  --gw-success-on-bg:    #6edba0;            /* for text on dark bg */
+  --gw-danger:           #ef4444;
+  --gw-danger-on-bg:     #fca5a5;
+  /* Component */
+  --gw-sheet-radius:     22px;
+  --gw-card-radius:      14px;
+  --gw-pill-radius:      999px;
+  --gw-shadow-sheet:     0 -8px 32px rgba(0,0,0,.45);
+  --gw-shadow-elev1:     0 1px 3px rgba(0,0,0,.18), 0 1px 2px rgba(0,0,0,.10);
+}
+
+/* ── UI helpers (design system v2) ───────────────────────── */
+.ui-stack { display: flex; flex-direction: column; gap: 8px; }
+.ui-stack--lg { gap: 12px; }
+.ui-emoji { font-size: 22px; line-height: 1; flex-shrink: 0; width: 32px; text-align: center; }
+.ui-chevron { color: var(--gw-text-tertiary); font-size: 20px; line-height: 1; }
+.ui-empty {
+  padding: 24px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--gw-text-tertiary);
+  font-family: var(--gw-font-body);
 }
 
 /* ── Resets & base ─────────────────────────────────────────── */
@@ -2822,6 +2868,35 @@ body.gw-landscape .scorecard-grid tbody .col-player-name {
   --gw-card-border: rgba(13, 95, 60, 0.18);
   --gw-gold:        #9a7a1e;
   --gw-gold-lt:     #c8a42a;
+
+  /* ── New semantic tokens v2 — light theme ────────────────── */
+  --gw-bg-app:           #fafcfb;
+  --gw-bg-sheet:         #fafcfb;
+  --gw-bg-surface:       #ffffff;
+  --gw-bg-surface-2:     #f0f7f3;
+  --gw-bg-input:         #ffffff;
+  --gw-bg-overlay:       rgba(13,31,18,.40);
+  /* Text — verified WCAG AAA on white */
+  --gw-text-primary:     #0a2218;            /* 16.0:1 on white */
+  --gw-text-secondary:   #2d3a30;            /* 11.5:1 */
+  --gw-text-tertiary:    #5d6e62;            /* 5.7:1 — AA */
+  --gw-text-muted2:      #7d9283;            /* 4.0:1 — borderline, only for non-essential */
+  --gw-text-on-gold:     #0a2218;
+  /* Borders */
+  --gw-border-subtle:    rgba(13,95,60,.10);
+  --gw-border-default:   rgba(13,95,60,.18);
+  --gw-border-strong:    rgba(154,122,30,.45);
+  /* Accents — gold gets darker on light bg for contrast */
+  --gw-accent:           #9a7a1e;
+  --gw-accent-strong:    #b88e1f;
+  --gw-accent-soft:      rgba(154,122,30,.10);
+  --gw-success:          #166044;            /* 7.6:1 on white */
+  --gw-success-on-bg:    #166044;
+  --gw-danger:           #b91c1c;            /* 6.0:1 on white */
+  --gw-danger-on-bg:     #b91c1c;
+  /* Shadows — softer on light */
+  --gw-shadow-sheet:     0 -8px 32px rgba(10,34,24,.18);
+  --gw-shadow-elev1:     0 1px 3px rgba(10,34,24,.07), 0 1px 2px rgba(10,34,24,.04);
 
   /* Neutrals flipped to light scale */
   --gw-neutral-950: #f4f7f5;

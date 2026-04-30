@@ -339,10 +339,7 @@
                   <input v-model="psManualGhin" class="wiz-input" placeholder="GHIN # (opt.)" type="text" inputmode="numeric" />
                 </div>
                 <input v-model="psManualEmail" class="wiz-input" placeholder="Email (optional, for invites)" type="email" autocomplete="email" />
-                <label class="ps-manual-roster-check">
-                  <input type="checkbox" v-model="psManualSaveToRoster" />
-                  <span>Save to my roster for next time</span>
-                </label>
+                <Toggle v-model="psManualSaveToRoster">Save to my roster for next time</Toggle>
                 <button class="btn-primary btn-sm ps-manual-add-btn" @click="psAddManual">Add Player</button>
               </div>
             </template>
@@ -1335,6 +1332,7 @@ import { useRosterStore } from '../stores/roster'
 import { useRoundsStore } from '../stores/rounds'
 import { useAuthStore } from '../stores/auth'
 import { supabase } from '../supabase'
+import { Toggle } from './ui'
 import { GAME_DEFS } from '../modules/courses'
 import { usePlayerSearch } from '../composables/usePlayerSearch'
 
@@ -3260,17 +3258,15 @@ function reloadApp() {
   padding: 14px; cursor: pointer; -webkit-tap-highlight-color: transparent;
 }
 .ps-manual-trigger:active { color: var(--gw-text); }
-.ps-manual-form { display: flex; flex-direction: column; gap: 8px; padding: 4px 0 8px; }
-.ps-manual-hint { font-size: 12px; color: rgba(240,237,224,.5); padding: 0 4px; }
-.ps-manual-ghin-results { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 8px; overflow: hidden; }
-.ps-section-label-mini { font-size: 11px; font-weight: 700; color: rgba(240,237,224,.4); text-transform: uppercase; letter-spacing: .04em; padding: 8px 12px 4px; }
-.ps-manual-ghin-row { padding: 10px 12px; cursor: pointer; border-top: 1px solid rgba(255,255,255,.06); }
-.ps-manual-ghin-row:active { background: rgba(96,165,250,.15); }
-.ps-manual-ghin-name { font-size: 14px; font-weight: 600; color: var(--gw-text); }
-.ps-manual-ghin-meta { font-size: 12px; color: rgba(240,237,224,.5); margin-top: 2px; }
-.ps-manual-roster-check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: rgba(240,237,224,.7); padding: 4px 2px; cursor: pointer; }
-.ps-manual-roster-check input { accent-color: #d4af37; }
-.status-badge { display: inline-block; font-size: 10px; font-weight: 700; color: rgba(240,237,224,.7); background: rgba(255,255,255,.08); border-radius: 3px; padding: 1px 4px; margin-left: 6px; vertical-align: middle; text-transform: uppercase; letter-spacing: .04em; }
+.ps-manual-form { display: flex; flex-direction: column; gap: 10px; padding: 4px 0 8px; }
+.ps-manual-hint { font-size: 12px; color: var(--gw-text-tertiary); padding: 0 4px; }
+.ps-manual-ghin-results { background: var(--gw-bg-surface); border: 1px solid var(--gw-border-subtle); border-radius: var(--gw-card-radius); overflow: hidden; box-shadow: var(--gw-shadow-elev1); }
+.ps-section-label-mini { font-size: 10px; font-weight: 500; color: var(--gw-text-tertiary); text-transform: uppercase; letter-spacing: .06em; padding: 10px 14px 6px; }
+.ps-manual-ghin-row { padding: 12px 14px; cursor: pointer; border-top: 1px solid var(--gw-border-subtle); transition: background .12s; }
+.ps-manual-ghin-row:active { background: var(--gw-bg-surface-2); }
+.ps-manual-ghin-name { font-size: 14px; font-weight: 500; color: var(--gw-text-primary); }
+.ps-manual-ghin-meta { font-size: 12px; color: var(--gw-text-tertiary); margin-top: 3px; }
+.status-badge { display: inline-block; font-size: 10px; font-weight: 500; color: var(--gw-text-tertiary); background: var(--gw-bg-input); border-radius: 4px; padding: 2px 6px; margin-left: 6px; vertical-align: middle; text-transform: uppercase; letter-spacing: .04em; }
 .ps-manual-name-row { display: flex; gap: 6px; }
 .ps-manual-name-row .wiz-input { flex: 1; min-width: 0; }
 .ps-manual-hcp-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }

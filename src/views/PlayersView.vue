@@ -44,88 +44,84 @@
     <!-- Invite hint -->
     <div v-if="inviteHint" class="invite-hint-banner">{{ inviteHint }}</div>
 
-    <!-- Gear menu bottom sheet -->
-    <Teleport to="body">
-      <div v-if="showGearMenu" class="gear-backdrop" @click.self="showGearMenu = false; gearSubMenu = null">
-        <div class="gear-sheet">
-          <div class="gear-sheet-handle"></div>
-
-          <!-- Main menu -->
-          <template v-if="gearSubMenu === null">
-            <div class="gear-sheet-title">Players</div>
-            <button class="gear-action" @click="gearSubMenu = 'invite'">
-              <span class="gear-action-icon">📨</span>
-              <div class="gear-action-body">
-                <div class="gear-action-label">Invite to GolfWizard</div>
-                <div class="gear-action-sub">Send a setup link to a roster player or someone new</div>
-              </div>
-              <span class="gear-action-arrow">›</span>
-            </button>
-            <button class="gear-action" @click="gearSubMenu = 'share'">
-              <span class="gear-action-icon">📋</span>
-              <div class="gear-action-body">
-                <div class="gear-action-label">Share my roster</div>
-                <div class="gear-action-sub">Send your favorites list to a player so they get everyone loaded</div>
-              </div>
-              <span class="gear-action-arrow">›</span>
-            </button>
-            <button class="gear-cancel" @click="showGearMenu = false; gearSubMenu = null">Cancel</button>
-          </template>
-
-          <!-- Invite sub-menu: pick from roster or enter new -->
-          <template v-else-if="gearSubMenu === 'invite'">
-            <div class="gear-sheet-title">
-              <button class="gear-back" @click="gearSubMenu = null">←</button>
-              Invite to GolfWizard
-            </div>
-            <div class="gear-sub-hint">Players with an email can receive a setup link</div>
-            <div class="gear-player-list">
-              <button
-                v-for="p in playersWithEmail"
-                :key="p.id"
-                class="gear-player-row"
-                @click="confirmInvite(p); showGearMenu = false"
-              >
-                <span class="gear-player-avatar">{{ displayInitials(p) }}</span>
-                <div class="gear-player-info">
-                  <div class="gear-player-name">{{ p.name }}</div>
-                  <div class="gear-player-email">{{ p.email }}</div>
-                </div>
-                <span class="gear-player-send">📨</span>
-              </button>
-              <div v-if="!playersWithEmail.length" class="gear-empty">No players with email yet. Add emails via the edit button.</div>
-            </div>
-            <button class="gear-cancel" @click="showGearMenu = false; gearSubMenu = null">Cancel</button>
-          </template>
-
-          <!-- Share roster sub-menu: pick recipient -->
-          <template v-else-if="gearSubMenu === 'share'">
-            <div class="gear-sheet-title">
-              <button class="gear-back" @click="gearSubMenu = null">←</button>
-              Share my roster
-            </div>
-            <div class="gear-sub-hint">Recipient gets your {{ favoritePlayers.length }} favorites pre-loaded when they open the app</div>
-            <div class="gear-player-list">
-              <button
-                v-for="p in playersWithEmail"
-                :key="p.id"
-                class="gear-player-row"
-                @click="shareRosterWith(p); showGearMenu = false"
-              >
-                <span class="gear-player-avatar">{{ displayInitials(p) }}</span>
-                <div class="gear-player-info">
-                  <div class="gear-player-name">{{ p.name }}</div>
-                  <div class="gear-player-email">{{ p.email }}</div>
-                </div>
-                <span class="gear-player-send">📋</span>
-              </button>
-              <div v-if="!playersWithEmail.length" class="gear-empty">No players with email yet.</div>
-            </div>
-            <button class="gear-cancel" @click="showGearMenu = false; gearSubMenu = null">Cancel</button>
-          </template>
-        </div>
+    <!-- Gear menu — main sheet -->
+    <Sheet
+      :model-value="showGearMenu && gearSubMenu === null"
+      @update:model-value="showGearMenu = false; gearSubMenu = null"
+      title="Roster Tools"
+    >
+      <div class="ui-stack">
+        <ListItem clickable variant="card" tag="button" @click="gearSubMenu = 'invite'">
+          <template #lead><span class="ui-emoji">📨</span></template>
+          Invite to GolfWizard
+          <template #subtitle>Send a setup link to a roster player or someone new</template>
+          <template #trail><span class="ui-chevron">›</span></template>
+        </ListItem>
+        <ListItem clickable variant="card" tag="button" @click="gearSubMenu = 'share'">
+          <template #lead><span class="ui-emoji">📋</span></template>
+          Share my roster
+          <template #subtitle>Send your favorites list to a player so they get everyone loaded</template>
+          <template #trail><span class="ui-chevron">›</span></template>
+        </ListItem>
       </div>
-    </Teleport>
+    </Sheet>
+
+    <!-- Invite sub-sheet -->
+    <Sheet
+      :model-value="showGearMenu && gearSubMenu === 'invite'"
+      @update:model-value="showGearMenu = false; gearSubMenu = null"
+      @back="gearSubMenu = null"
+      back
+      title="Invite to GolfWizard"
+      hint="Players with an email can receive a setup link"
+    >
+      <div class="ui-stack">
+        <ListItem
+          v-for="p in playersWithEmail"
+          :key="p.id"
+          clickable variant="card" tag="button"
+          @click="confirmInvite(p); showGearMenu = false"
+        >
+          <template #lead>
+            <Avatar :name="p.name" :initials="displayInitials(p)" size="md" />
+          </template>
+          {{ p.name }}
+          <template #subtitle>{{ p.email }}</template>
+          <template #trail>
+            <Pill v-if="p.invited_at" variant="ghost" size="sm">Resend</Pill>
+            <Pill v-else variant="filled" size="sm">Invite</Pill>
+          </template>
+        </ListItem>
+        <div v-if="!playersWithEmail.length" class="ui-empty">No players with email yet. Add emails via the edit button on a roster card.</div>
+      </div>
+    </Sheet>
+
+    <!-- Share roster sub-sheet -->
+    <Sheet
+      :model-value="showGearMenu && gearSubMenu === 'share'"
+      @update:model-value="showGearMenu = false; gearSubMenu = null"
+      @back="gearSubMenu = null"
+      back
+      title="Share my roster"
+      :hint="`Recipient gets your ${favoritePlayers.length} favorites pre-loaded when they open the app`"
+    >
+      <div class="ui-stack">
+        <ListItem
+          v-for="p in playersWithEmail"
+          :key="p.id"
+          clickable variant="card" tag="button"
+          @click="shareRosterWith(p); showGearMenu = false"
+        >
+          <template #lead>
+            <Avatar :name="p.name" :initials="displayInitials(p)" size="md" />
+          </template>
+          {{ p.name }}
+          <template #subtitle>{{ p.email }}</template>
+          <template #trail><Pill variant="filled" size="sm">Share</Pill></template>
+        </ListItem>
+        <div v-if="!playersWithEmail.length" class="ui-empty">No players with email yet.</div>
+      </div>
+    </Sheet>
 
     <!-- Add form -->
     <div v-if="showAdd" class="add-form card">
@@ -630,6 +626,7 @@
 
 <script setup>
 import { ref, computed, reactive, nextTick } from 'vue'
+import { Sheet, ListItem, Avatar, Pill } from '../components/ui'
 import { useRosterStore, displayInitials } from '../stores/roster'
 import { buildInviteUrl, buildInviteEmail } from '../modules/preset'
 import { useAuthStore } from '../stores/auth'
@@ -2090,23 +2087,25 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 }
 .ghin-lookup-btn:disabled { opacity: 0.5; cursor: default; }
 .ghin-search-results {
-  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
-  border-radius: var(--gw-radius-md); overflow: hidden;
+  background: var(--gw-bg-surface); border: 1px solid var(--gw-border-subtle);
+  border-radius: var(--gw-card-radius); overflow: hidden;
   max-height: 280px; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  box-shadow: var(--gw-shadow-elev1);
 }
 .ghin-search-label {
-  font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
-  color: rgba(240,237,224,.4); padding: 8px 12px 4px;
+  font-size: 10px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--gw-text-tertiary); padding: 10px 14px 6px;
 }
 .ghin-search-option {
-  padding: 10px 12px; cursor: pointer; border-top: 1px solid rgba(255,255,255,.06);
+  padding: 12px 14px; cursor: pointer; border-top: 1px solid var(--gw-border-subtle);
   -webkit-tap-highlight-color: transparent;
+  transition: background .12s;
 }
-.ghin-search-option:active { background: rgba(96,165,250,.15); }
-.ghin-search-name { font-size: 14px; font-weight: 600; color: var(--gw-text); }
-.ghin-search-meta { font-size: 12px; color: rgba(240,237,224,.5); margin-top: 2px; }
-.bb-badge { display: inline-block; font-size: 10px; font-weight: 700; color: #1a1a1a; background: #4ade80; border-radius: 3px; padding: 1px 4px; margin-left: 6px; vertical-align: middle; }
-.status-badge { display: inline-block; font-size: 10px; font-weight: 700; color: rgba(240,237,224,.7); background: rgba(255,255,255,.08); border-radius: 3px; padding: 1px 4px; margin-left: 6px; vertical-align: middle; text-transform: uppercase; letter-spacing: .04em; }
+.ghin-search-option:active { background: var(--gw-bg-surface-2); }
+.ghin-search-name { font-size: 14px; font-weight: 500; color: var(--gw-text-primary); }
+.ghin-search-meta { font-size: 12px; color: var(--gw-text-tertiary); margin-top: 3px; }
+.bb-badge { display: inline-block; font-size: 10px; font-weight: 500; color: var(--gw-text-on-gold); background: var(--gw-accent); border-radius: 4px; padding: 2px 6px; margin-left: 6px; vertical-align: middle; letter-spacing: .04em; }
+.status-badge { display: inline-block; font-size: 10px; font-weight: 500; color: var(--gw-text-tertiary); background: var(--gw-bg-input); border-radius: 4px; padding: 2px 6px; margin-left: 6px; vertical-align: middle; text-transform: uppercase; letter-spacing: .04em; }
 .ghin-live-indicator { font-size: 12px; color: rgba(240,237,224,.5); align-self: center; padding-left: 8px; }
 .ghin-search-msg { font-size: 12px; color: rgba(240,237,224,.5); padding: 4px 2px; }
 .ghin-search-msg--error { color: #fbbf24; }
@@ -2202,71 +2201,5 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 [data-theme="light"] .ghin-prefix-input  { color: rgba(13,31,18,0.6) !important; }
 [data-theme="light"] .player-sheet       { background: #f4f7f5 !important; }
 
-/* ── Gear bottom sheet (teleported to body, needs non-scoped) ── */
-.gear-backdrop {
-  position: fixed; inset: 0; z-index: 300;
-  background: rgba(0,0,0,.5);
-  display: flex; align-items: flex-end;
-}
-.gear-sheet {
-  width: 100%; max-height: 80vh; overflow-y: auto;
-  background: #1e2720; border-radius: 20px 20px 0 0;
-  padding: 0 0 env(safe-area-inset-bottom);
-}
-.gear-sheet-handle {
-  width: 36px; height: 4px; border-radius: 2px;
-  background: rgba(255,255,255,.2);
-  margin: 12px auto 8px;
-}
-.gear-sheet-title {
-  display: flex; align-items: center; gap: 10px;
-  font-size: 13px; font-weight: 600; color: rgba(240,237,224,.5);
-  letter-spacing: .6px; text-transform: uppercase;
-  padding: 8px 20px 12px;
-}
-.gear-back {
-  background: none; border: none; color: var(--gw-gold,#d4af37);
-  font-size: 18px; cursor: pointer; padding: 0 4px 0 0;
-  -webkit-tap-highlight-color: transparent;
-}
-.gear-action {
-  display: flex; align-items: center; gap: 14px;
-  width: 100%; padding: 14px 20px;
-  background: none; border: none; border-top: 1px solid rgba(255,255,255,.06);
-  color: var(--gw-text, #f0ede0); cursor: pointer; text-align: left;
-  -webkit-tap-highlight-color: transparent;
-  transition: background .12s;
-}
-.gear-action:active { background: rgba(255,255,255,.05); }
-.gear-action-icon { font-size: 22px; flex-shrink: 0; }
-.gear-action-body { flex: 1; min-width: 0; }
-.gear-action-label { font-size: 15px; font-weight: 600; }
-.gear-action-sub { font-size: 12px; color: rgba(240,237,224,.5); margin-top: 2px; }
-.gear-action-arrow { font-size: 20px; color: rgba(240,237,224,.3); flex-shrink: 0; }
-.gear-cancel {
-  display: block; width: calc(100% - 32px); margin: 12px 16px;
-  padding: 13px; border-radius: 14px;
-  background: rgba(255,255,255,.07); border: none;
-  color: rgba(240,237,224,.7); font-size: 15px; font-weight: 600;
-  cursor: pointer; -webkit-tap-highlight-color: transparent;
-}
-.gear-cancel:active { background: rgba(255,255,255,.12); }
-.gear-player-list { padding: 0 0 8px; }
-.gear-player-row {
-  display: flex; align-items: center; gap: 12px;
-  padding: 12px 20px;
-  border-top: 1px solid rgba(255,255,255,.06);
-  cursor: pointer; -webkit-tap-highlight-color: transparent;
-  transition: background .12s;
-}
-.gear-player-row:active { background: rgba(255,255,255,.05); }
-.gear-player-name { font-size: 15px; font-weight: 500; flex: 1; }
-.gear-player-sub { font-size: 12px; color: rgba(240,237,224,.45); margin-top: 1px; }
-[data-theme="light"] .gear-sheet { background: #f4f7f5; }
-[data-theme="light"] .gear-action { color: #0d1f12; border-top-color: rgba(0,0,0,.07); }
-[data-theme="light"] .gear-action-sub { color: rgba(13,31,18,.5); }
-[data-theme="light"] .gear-cancel { background: rgba(0,0,0,.06); color: rgba(13,31,18,.7); }
-[data-theme="light"] .gear-sheet-title { color: rgba(13,31,18,.45); }
-[data-theme="light"] .gear-player-row { border-top-color: rgba(0,0,0,.07); color: #0d1f12; }
-[data-theme="light"] .gear-player-sub { color: rgba(13,31,18,.45); }
+/* gear-* styles removed — replaced by Sheet/ListItem/Avatar/Pill UI components (v3.10.197) */
 </style>
