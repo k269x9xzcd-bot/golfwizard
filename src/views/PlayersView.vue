@@ -1077,37 +1077,66 @@ async function addSearchGhin() {
   const seq = ++_addSearchSeq
   addGhinSearching.value = true
   addGhinMsg.value = ''
-  try {
-    // BB index first — exact last name + first-name prefix
-    const { data: bbRows } = await supabase
-      .from('bb_member_index')
-      .select('ghin_number, first_name, last_name, handicap_index')
-      .ilike('last_name', last)
-      .order('last_name').limit(50)
-    if (seq !== _addSearchSeq) return
-    let bbMatches = (bbRows || []).filter(p => p.last_name?.toLowerCase() === last.toLowerCase())
-    const firstLower = first.toLowerCase()
-    bbMatches = bbMatches.filter(p => p.first_name?.toLowerCase().startsWith(firstLower))
 
-    // GHIN API search via edge fn (in parallel with BB)
+  // Hard ceiling: always clear the spinner after 8s no matter what
+  const hardTimeout = setTimeout(() => {
+    if (addGhinSearching.value) {
+      addGhinSearching.value = false
+      if (!addGhinResults.value.length) addGhinMsg.value = 'Search timed out — try again'
+    }
+  }, 8000)
+
+  // Race a promise against a timeout
+  const withTimeout = (p, ms, label) => Promise.race([
+    p,
+    new Promise((_, rej) => setTimeout(() => rej(new Error(`${label} timeout`)), ms)),
+  ])
+
+  try {
+    // BB index first — exact last name + first-name prefix (4s timeout)
+    let bbMatches = []
+    try {
+      const { data: bbRows } = await withTimeout(
+        supabase.from('bb_member_index')
+          .select('ghin_number, first_name, last_name, handicap_index')
+          .ilike('last_name', last)
+          .order('last_name').limit(50),
+        4000, 'bb_index'
+      )
+      if (seq !== _addSearchSeq) return
+      bbMatches = (bbRows || []).filter(p => p.last_name?.toLowerCase() === last.toLowerCase())
+      const firstLower = first.toLowerCase()
+      bbMatches = bbMatches.filter(p => p.first_name?.toLowerCase().startsWith(firstLower))
+    } catch (e) {
+      console.warn('[ghin-search] bb_index failed/timeout, continuing with edge fn:', e?.message)
+    }
+
+    // GHIN API search via edge fn (5s timeout)
     const profile = authStore.profile
     let ghinResults = []
     if (profile?.ghin_number && profile?.ghin_password) {
-      const { data, error } = await supabase.functions.invoke('ghin-player-search', {
-        body: {
-          first_name: first,
-          last_name: last,
-          ghin_number: profile.ghin_number,
-          password: profile.ghin_password,
-        },
-      })
-      if (seq !== _addSearchSeq) return
-      if (!error && Array.isArray(data?.results)) {
-        ghinResults = data.results
-      } else if (data?.error) {
-        // surface the message but don't block BB results
-        if (data.error.includes('credentials')) {
+      try {
+        const { data, error } = await withTimeout(
+          supabase.functions.invoke('ghin-player-search', {
+            body: {
+              first_name: first,
+              last_name: last,
+              ghin_number: profile.ghin_number,
+              password: profile.ghin_password,
+            },
+          }),
+          5000, 'ghin_search'
+        )
+        if (seq !== _addSearchSeq) return
+        if (!error && Array.isArray(data?.results)) {
+          ghinResults = data.results
+        } else if (data?.error?.includes('credentials')) {
           addGhinMsg.value = 'GHIN search unavailable. Add credentials in Profile.'
+        }
+      } catch (e) {
+        console.warn('[ghin-search] edge fn failed/timeout:', e?.message)
+        if (seq === _addSearchSeq && !bbMatches.length) {
+          addGhinMsg.value = 'GHIN search timed out — check connection'
         }
       }
     } else if (bbMatches.length === 0) {
@@ -1148,6 +1177,8 @@ async function addSearchGhin() {
     if (seq !== _addSearchSeq) return
     addGhinMsg.value = 'Search failed — check connection and try again'
   } finally {
+    clearTimeout(hardTimeout)
+    // Always clear spinner if this is the latest call
     if (seq === _addSearchSeq) addGhinSearching.value = false
   }
 }
