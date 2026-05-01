@@ -64,11 +64,14 @@ export const useRoundsStore = defineStore('rounds', () => {
   const rounds = ref([])
   const loading = ref(false)
 
-  // Only rounds this user owns (excludes cross-match opponent rounds fetched via RLS)
+  // Rounds this user owns or is a member of (excludes cross-match opponent rounds fetched via RLS)
   const myRounds = computed(() => {
     const uid = authStore.user?.id
     if (!uid) return rounds.value
-    return rounds.value.filter(r => r.owner_id === uid)
+    return rounds.value.filter(r =>
+      r.owner_id === uid ||
+      r.round_members?.some(m => m.profile_id === uid)
+    )
   })
 
   // ── Known rounds registry ────────────────────────────────────

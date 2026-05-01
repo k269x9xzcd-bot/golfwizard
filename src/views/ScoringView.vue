@@ -1184,10 +1184,23 @@ async function retryPendingScores() {
   pendingScores.value = roundsStore.pendingQueueCount()
 }
 
-onMounted(() => {
+onMounted(async () => {
   _pendingInterval = setInterval(() => {
     pendingScores.value = roundsStore.pendingQueueCount()
   }, 2000)
+
+  // Auto-open the user's in-progress round when none is currently loaded —
+  // covers participants returning to the Score tab after the active state was cleared.
+  if (!roundsStore.activeRound && authStore.isAuthenticated) {
+    const uid = authStore.user?.id
+    const candidate = roundsStore.rounds.find(r =>
+      !r.is_complete &&
+      (r.owner_id === uid || r.round_members?.some(m => m.profile_id === uid))
+    )
+    if (candidate) {
+      try { await roundsStore.loadRound(candidate.id) } catch (e) { console.warn('[scoring] auto-load failed:', e?.message) }
+    }
+  }
 })
 
 onUnmounted(() => {

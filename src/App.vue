@@ -24,20 +24,6 @@
       </div>
 
       <div class="app-container">
-        <!-- Active round banner — shown to round members who didn't create the round -->
-        <div v-if="memberRound && !memberBannerDismissed" class="member-round-banner">
-          <div class="mrb-left">
-            <span class="mrb-icon">⛳</span>
-            <div class="mrb-text">
-              <span class="mrb-title">You're in an active round</span>
-              <span class="mrb-sub">{{ memberRound.course_name }} · {{ memberRound.player_names }}</span>
-            </div>
-          </div>
-          <div class="mrb-actions">
-            <button class="mrb-watch" @click="goWatch">Watch Live →</button>
-            <button class="mrb-dismiss" @click="memberBannerDismissed = true">✕</button>
-          </div>
-        </div>
         <RouterView v-slot="{ Component, route }">
           <KeepAlive :include="['MetricsView']" :max="1">
             <component :is="Component" :key="route.name === 'metrics' ? `metrics-${roundsStore.rounds.length}` : route.fullPath" />
@@ -144,10 +130,6 @@ const namePromptFirst = ref('')
 const namePromptLast = ref('')
 const namePromptSaving = ref(false)
 
-// Member round auto-discovery
-const memberRound = ref(null)      // { id, course_name, player_names }
-const memberBannerDismissed = ref(false)
-
 provide('openWizard', () => { showWizard.value = true })
 
 // Re-fetch roster when auth resolves after the initial data load.
@@ -178,52 +160,33 @@ function shouldShowNamePrompt() {
 }
 
 /**
- * Auto-discover active rounds where this user is a member but NOT the owner.
- * Sets memberRound if found — triggers the "You're in an active round" banner.
+ * Auto-discover and load the most recent in-progress round this user is in,
+ * as owner or member. Setting activeRound here makes the round persistently
+ * accessible from Home and the Score tab — same UX for hosts and participants.
  */
-async function discoverMemberRound() {
+async function discoverActiveRound() {
   if (!authStore.isAuthenticated || !authStore.user?.id) return
-  // Skip if user already has an active round loaded (they're the scorer)
-  if (roundsStore.activeRound) return
+  if (roundsStore.activeRound && !roundsStore.activeRound.is_complete) return
 
   try {
     const { supabase } = await import('./supabase')
-    // Join round_members → rounds to find active rounds this user is a member of
-    // but did not create.
     const { data, error } = await supabase
       .from('round_members')
-      .select('round_id, rounds!inner(id, course_name, owner_id, is_complete, date, round_members(short_name, guest_name, use_nickname, nickname))')
+      .select('rounds!inner(id, is_complete, created_at)')
       .eq('profile_id', authStore.user.id)
       .eq('rounds.is_complete', false)
-      .neq('rounds.owner_id', authStore.user.id)
-      .limit(1)
-      .maybeSingle()
+      .limit(10)
 
-    if (error || !data) return
-
-    const r = data.rounds
-    if (!r?.id) return
-
-    // Build a short player name list
-    const names = (r.round_members ?? [])
-      .map(m => (m.use_nickname && m.nickname) ? m.nickname : (m.short_name || m.guest_name || '?'))
-      .slice(0, 4)
-      .join(', ')
-
-    memberRound.value = {
-      id: r.id,
-      course_name: r.course_name,
-      player_names: names,
-    }
+    if (error || !data?.length) return
+    const candidate = data
+      .map(d => d.rounds)
+      .filter(r => r?.id)
+      .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))[0]
+    if (!candidate?.id) return
+    await roundsStore.loadRound(candidate.id)
   } catch (e) {
-    console.warn('[app] discoverMemberRound failed:', e.message)
+    console.warn('[app] discoverActiveRound failed:', e?.message)
   }
-}
-
-function goWatch() {
-  if (!memberRound.value?.id) return
-  memberBannerDismissed.value = true
-  router.push(`/watch/${memberRound.value.id}`)
 }
 
 onMounted(async () => {
@@ -271,18 +234,7 @@ onMounted(async () => {
         try { await roundsStore.loadRound(known[0].id) } catch (e) { console.warn('knownRound reload failed:', e) }
       }
       if (!roundsStore.activeRound) {
-        try {
-          const { supabase } = await import('./supabase')
-          const { data } = await supabase
-            .from('rounds')
-            .select('id')
-            .eq('owner_id', authStore.user.id)
-            .eq('is_complete', false)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle()
-          if (data?.id) await roundsStore.loadRound(data.id)
-        } catch (e) { console.warn('Auto-rehydrate fallback failed:', e) }
+        await discoverActiveRound()
       }
     } else {
       try {
@@ -300,8 +252,6 @@ onMounted(async () => {
     }
   }
 
-  // After owner-round rehydration: check if user is a member of someone else's active round
-  discoverMemberRound()
 
   const hash = window.location.hash
   const joinMatch = hash.match(/\/join\/([A-Z0-9]{6})/i)
@@ -466,69 +416,4 @@ function onSetupCourse(courseName, apiId) {
   font-size: 13px; cursor: pointer; padding: 2px;
 }
 
-/* Member round auto-discovery banner */
-.member-round-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  background: linear-gradient(135deg, #0f3d28 0%, #0d1f18 100%);
-  border-bottom: 1px solid #1e4030;
-  padding: 10px 14px;
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-.mrb-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
-}
-.mrb-icon { font-size: 20px; flex-shrink: 0; }
-.mrb-text {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-.mrb-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #e8f5ee;
-  white-space: nowrap;
-}
-.mrb-sub {
-  font-size: 11px;
-  color: #7d9283;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.mrb-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-.mrb-watch {
-  background: #1a7a55;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 6px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.mrb-dismiss {
-  background: transparent;
-  border: none;
-  color: #5a7060;
-  font-size: 14px;
-  cursor: pointer;
-  padding: 4px 6px;
-  line-height: 1;
-}
 </style>
