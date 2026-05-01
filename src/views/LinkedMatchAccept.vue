@@ -55,10 +55,11 @@
         <div class="lma-step-heading">
           <div class="lma-step-num">1 of 3</div>
           <div class="lma-step-title">Your Foursome</div>
-          <div class="lma-step-sub">Confirm the players for your group</div>
+          <div v-if="players.length" class="lma-step-sub">The host pre-selected your group — confirm or pick different players</div>
+          <div v-else class="lma-step-sub">The host didn't pre-assign Team B — pick your foursome in the round wizard</div>
         </div>
 
-        <div class="lma-player-list">
+        <div v-if="players.length" class="lma-player-list">
           <div
             v-for="p in players"
             :key="p.id"
@@ -72,12 +73,20 @@
             <div class="lma-player-check">✓</div>
           </div>
         </div>
+        <div v-else class="lma-empty-team">
+          <div class="lma-empty-icon">👥</div>
+          <div class="lma-empty-text">No players pre-assigned</div>
+          <div class="lma-empty-sub">Tap below to pick your foursome from your roster</div>
+        </div>
 
         <div class="lma-step-actions">
-          <button class="lma-btn-primary" @click="step = 2">
+          <button v-if="players.length" class="lma-btn-primary" @click="step = 2">
             Looks good →
           </button>
-          <button class="lma-btn-ghost" @click="openFullWizard">
+          <button v-else class="lma-btn-primary" @click="openFullWizard">
+            Pick my foursome →
+          </button>
+          <button v-if="players.length" class="lma-btn-ghost" @click="openFullWizard">
             Different players?
           </button>
         </div>
@@ -551,6 +560,17 @@ async function goToScoring() {
 
 /* ── Step actions ── */
 .lma-step-actions { display: flex; flex-direction: column; gap: 10px; }
+.lma-empty-team {
+  text-align: center;
+  padding: 32px 20px;
+  background: var(--gw-bg-surface);
+  border: 1px dashed var(--gw-border-default);
+  border-radius: var(--gw-card-radius);
+  margin-bottom: 16px;
+}
+.lma-empty-icon { font-size: 36px; margin-bottom: 8px; }
+.lma-empty-text { font-size: 16px; font-weight: 500; color: var(--gw-text-primary); }
+.lma-empty-sub { font-size: 13px; color: var(--gw-text-tertiary); margin-top: 4px; }
 
 /* ── Buttons ── */
 .lma-btn-primary {

@@ -101,6 +101,21 @@ export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
   }
 
   async function acceptLinkedMatch(inviteCode, roundBId) {
+    // Pre-check current state — surfaces meaningful error vs. silent .single() fail
+    const existing = await fetchByCode(inviteCode)
+    if (!existing) {
+      throw new Error('Invite code not found. Ask the host to re-share the link.')
+    }
+    if (existing.status === 'cancelled') {
+      throw new Error('This match was cancelled by the host.')
+    }
+    if (existing.round_b_id && existing.round_b_id !== roundBId) {
+      throw new Error('Someone else already accepted this match. Ask the host for a new invite.')
+    }
+    if (existing.round_b_id === roundBId) {
+      return existing  // idempotent — already accepted by this caller
+    }
+
     const { data, error } = await supaCallWithRetry(
       'linked_matches.accept',
       () => supabase
@@ -108,11 +123,17 @@ export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
         .update({ round_b_id: roundBId, status: 'linked', linked_at: new Date().toISOString() })
         .eq('invite_code', inviteCode)
         .is('round_b_id', null)
+        .neq('status', 'cancelled')
         .select()
         .single(),
       8000,
     )
-    if (error) throw error
+    if (error) {
+      if (error.code === 'PGRST116' || (error.message || '').includes('no rows')) {
+        throw new Error('Someone else accepted this match in the last second. Ask the host for a new invite.')
+      }
+      throw error
+    }
     const idx = linkedMatches.value.findIndex(m => m.id === data.id)
     if (idx >= 0) linkedMatches.value[idx] = data
     else linkedMatches.value = [data, ...linkedMatches.value]
