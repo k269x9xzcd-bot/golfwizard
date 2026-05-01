@@ -1445,19 +1445,24 @@ async function searchGhinForEdit() {
 }
 
 async function applyGhinResult(r) {
+  console.log('[applyGhinResult] received:', r)
   ghinSearchResults.value = []
   ghinSearchMsg.value = `✓ Selected ${r.full_name}`
+  // Cancel any pending live-search timer so it doesn't fire and clear results
+  if (_editSearchTimer) { clearTimeout(_editSearchTimer); _editSearchTimer = null }
+  _editSearchSeq++ // invalidate any in-flight search
   await nextTick()
   // Apply name (preserve user's display preference if they typed it differently)
   if (r.first_name) editFirst.value = r.first_name
   if (r.last_name) editLast.value = r.last_name
-  editGhinNumber.value = r.ghin_number || editGhinNumber.value
+  if (r.ghin_number) editGhinNumber.value = String(r.ghin_number)
   // Handicap may be number, "13.6", or "NH" — only set numeric values
   const hi = r.handicap_index
   if (hi != null && hi !== 'NH' && !isNaN(parseFloat(hi))) {
     editGhin.value = String(parseFloat(hi))
   }
-  editClubName.value = r.club_name || editClubName.value
+  if (r.club_name) editClubName.value = r.club_name
+  console.log('[applyGhinResult] state after:', { editGhinNumber: editGhinNumber.value, editGhin: editGhin.value, editClubName: editClubName.value })
 }
 
 async function saveEdit() {
@@ -1469,10 +1474,15 @@ async function saveEdit() {
     return
   }
   const fullName = editLast.value.trim() ? `${editFirst.value.trim()} ${editLast.value.trim()}` : editFirst.value.trim()
-  const newGhinNumber = editGhinNumber.value.trim() || null
+  // Coerce safely — refs may be null, empty, or the string "null"
+  const ghinStr = (editGhinNumber.value ?? '').toString().trim()
+  const newGhinNumber = ghinStr && ghinStr !== 'null' ? ghinStr : null
   const prevGhinNumber = editTarget.value?.ghin_number || null
   const ghinNumberChanged = newGhinNumber && newGhinNumber !== prevGhinNumber
   const playerId = editTarget.value.id
+  const clubName = (editClubName.value ?? '').toString().trim() || null
+
+  console.log('[saveEdit]', { playerId, name: fullName, ghin_number: newGhinNumber, prev_ghin: prevGhinNumber, club_name: clubName, ghinNumberChanged })
 
   editSaving.value = true
   try {
@@ -1483,7 +1493,7 @@ async function saveEdit() {
       short_name: editLast.value.trim() || editFirst.value.trim().slice(0, 8),
       ghin_index: editGhin.value !== '' ? parseFloat(editGhin.value) : null,
       ghin_number: newGhinNumber,
-      club_name: editClubName.value.trim() || null,
+      club_name: clubName,
       nickname: editNickname.value.trim() || null,
       use_nickname: editUseNickname.value,
       email: emailTrimmed || null,
