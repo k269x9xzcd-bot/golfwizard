@@ -569,8 +569,8 @@
             <button class="close-btn" @click="editTarget = null">✕</button>
           </div>
           <div class="name-row">
-            <input v-model="editFirst" class="wiz-input" placeholder="First name" @input="ghinSearchResults = []; ghinSearchMsg = ''" />
-            <input v-model="editLast" class="wiz-input" placeholder="Last name" @input="ghinSearchResults = []; ghinSearchMsg = ''" />
+            <input v-model="editFirst" class="wiz-input" placeholder="First name" @input="onEditNameInput" />
+            <input v-model="editLast" class="wiz-input" placeholder="Last name" @input="onEditNameInput" />
           </div>
           <input v-model="editGhin" class="wiz-input" placeholder="GHIN Index (e.g. 12.4)" type="text" inputmode="decimal" />
           <div v-if="editTarget?.club_name" class="edit-club-row">
@@ -585,20 +585,18 @@
           </div>
           <div class="ghin-number-row">
             <input v-model="editGhinNumber" class="wiz-input" placeholder="GHIN # (e.g. 1321498)" type="text" inputmode="numeric" style="flex:1" />
-            <button class="ghin-lookup-btn" @click="searchGhinForEdit" :disabled="ghinSearching" type="button">
-              {{ ghinSearching ? '…' : '🔍 GHIN' }}
-            </button>
+            <span v-if="ghinSearching" class="ghin-live-indicator">searching…</span>
           </div>
-          <!-- First-name prefix hint for ambiguous names -->
-          <div class="ghin-prefix-row">
-            <input v-model="editGhinPrefix" class="wiz-input ghin-prefix-input" placeholder="Narrow by first name (e.g. &quot;Br&quot; for Brian)" />
-          </div>
-          <!-- In-app GHIN search results -->
+          <!-- Live GHIN search results — fires when both first+last have ≥2 chars -->
           <div v-if="ghinSearchResults.length" class="ghin-search-results">
-            <div class="ghin-search-label">Select the correct golfer:</div>
-            <div v-for="r in ghinSearchResults" :key="r.ghin_number" class="ghin-search-option" @click="applyGhinResult(r)">
-              <div class="ghin-search-name">{{ r.full_name }} <span v-if="r._source === 'bb'" class="bb-badge">BB</span></div>
-              <div class="ghin-search-meta">{{ r.club_name }} · HCP {{ r.handicap_index ?? 'NH' }} · #{{ r.ghin_number }}</div>
+            <div class="ghin-search-label">Tap to apply:</div>
+            <div v-for="r in ghinSearchResults" :key="`${r.club_affiliation_id}_${r.ghin_number}`" class="ghin-search-option" @click="applyGhinResult(r)">
+              <div class="ghin-search-name">
+                {{ r.full_name }}
+                <span v-if="r._source === 'bb'" class="bb-badge">BB</span>
+                <span v-if="r.status && r.status !== 'Active'" class="status-badge">{{ r.status }}</span>
+              </div>
+              <div class="ghin-search-meta">{{ r.club_name }} · HCP {{ r.handicap_index ?? 'NH' }}<span v-if="r.ghin_number"> · #{{ r.ghin_number }}</span></div>
             </div>
           </div>
           <div v-if="ghinSearchMsg" class="ghin-search-msg">{{ ghinSearchMsg }}</div>
@@ -1320,7 +1318,6 @@ const editFirst = ref('')
 const editLast = ref('')
 const editGhin = ref('')
 const editGhinNumber = ref('')
-const editGhinPrefix = ref('')
 const editClubName = ref('')
 const editNickname = ref('')
 const editUseNickname = ref(false)
@@ -1334,7 +1331,6 @@ const editSaving = ref(false)
 function startEdit(p) {
   ghinSearchResults.value = []
   ghinSearchMsg.value = ''
-  editGhinPrefix.value = ''
   editTarget.value = p
   if (p.first_name) {
     editFirst.value = p.first_name
@@ -1354,120 +1350,97 @@ function startEdit(p) {
   editSaving.value = false
 }
 
-async function searchGhinForEdit() {
-  if (ghinSearching.value) return
-  ghinSearching.value = true
-  ghinSearchResults.value = []
-  ghinSearchMsg.value = ''
+// Live debounced GHIN search on edit-modal first/last name inputs
+let _editSearchTimer = null
+let _editSearchSeq = 0
 
-  const typedGhinNumber = editGhinNumber.value.trim()
+function onEditNameInput() {
+  ghinSearchMsg.value = ''
   const first = editFirst.value.trim()
   const last = editLast.value.trim()
+  if (first.length < 2 || last.length < 2) {
+    ghinSearchResults.value = []
+    if (_editSearchTimer) { clearTimeout(_editSearchTimer); _editSearchTimer = null }
+    return
+  }
+  if (_editSearchTimer) clearTimeout(_editSearchTimer)
+  _editSearchTimer = setTimeout(() => searchGhinForEdit(), 350)
+}
 
+async function searchGhinForEdit() {
+  const first = editFirst.value.trim()
+  const last = editLast.value.trim()
+  if (first.length < 2 || last.length < 2) { ghinSearchResults.value = []; return }
+  const seq = ++_editSearchSeq
+  ghinSearching.value = true
+  ghinSearchMsg.value = ''
   try {
-    if (typedGhinNumber) {
-      const { data: bbRows } = await supabase
-        .from('bb_member_index')
-        .select('ghin_number, first_name, last_name, handicap_index')
-        .eq('ghin_number', typedGhinNumber)
-        .limit(1)
-      if (bbRows?.length) {
-        const bb = bbRows[0]
-        ghinSearchResults.value = [{
-          ghin_number: bb.ghin_number,
-          full_name: `${bb.first_name} ${bb.last_name}`,
-          handicap_index: bb.handicap_index,
-          club_name: 'Bonnie Briar Country Club',
-          _source: 'bb',
-        }]
-        ghinSearchMsg.value = '🏌️ Found in Bonnie Briar directory'
-        return
+    // BB index first — exact last name + first-name prefix
+    const { data: bbRows } = await supabase
+      .from('bb_member_index')
+      .select('ghin_number, first_name, last_name, handicap_index')
+      .ilike('last_name', last)
+      .order('last_name').limit(50)
+    if (seq !== _editSearchSeq) return
+    let bbMatches = (bbRows || []).filter(p => p.last_name?.toLowerCase() === last.toLowerCase())
+    const firstLower = first.toLowerCase()
+    bbMatches = bbMatches.filter(p => p.first_name?.toLowerCase().startsWith(firstLower))
+
+    // GHIN API search via edge fn
+    const profile = authStore.profile
+    let ghinResults = []
+    if (profile?.ghin_number && profile?.ghin_password) {
+      const { data, error } = await supabase.functions.invoke('ghin-player-search', {
+        body: {
+          first_name: first,
+          last_name: last,
+          ghin_number: profile.ghin_number,
+          password: profile.ghin_password,
+        },
+      })
+      if (seq !== _editSearchSeq) return
+      if (!error && Array.isArray(data?.results)) {
+        ghinResults = data.results
+      } else if (data?.error?.includes('credentials')) {
+        ghinSearchMsg.value = 'GHIN search unavailable. Add credentials in Profile.'
       }
-    } else if (last) {
-      const { data: bbRows } = await supabase
-        .from('bb_member_index')
-        .select('ghin_number, first_name, last_name, handicap_index')
-        .ilike('last_name', `%${last}%`)
-        .order('last_name')
-        .limit(15)
-      let filtered = bbRows || []
-      // Only use BB results if last name is an exact match
-      filtered = filtered.filter(p => p.last_name?.toLowerCase() === last.toLowerCase())
-      if (first && filtered.length > 0) {
-        const fl = first.toLowerCase()
-        const exact = filtered.filter(p => p.first_name?.toLowerCase().startsWith(fl))
-        if (exact.length > 0) filtered = exact
-      }
-      if (filtered.length > 0) {
-        ghinSearchResults.value = filtered.map(bb => ({
-          ghin_number: bb.ghin_number,
-          full_name: `${bb.first_name} ${bb.last_name}`,
-          handicap_index: bb.handicap_index,
-          club_name: 'Bonnie Briar Country Club',
-          _source: 'bb',
-        }))
-        ghinSearchMsg.value = `🏌️ ${filtered.length} match${filtered.length > 1 ? 'es' : ''} in Bonnie Briar directory`
-        return
-      }
+    } else if (bbMatches.length === 0) {
+      ghinSearchMsg.value = 'Add GHIN credentials in Profile to enable full GHIN search.'
     }
 
-    // Fall back to ghin-player-search edge fn (reads creds server-side — no authStore.profile needed)
-    // GHIN # lookup: use ghin-lookup edge fn directly (not name search)
-    if (typedGhinNumber) {
-      const { data: fnData } = await supabase.functions.invoke('ghin-lookup', {
-        body: { ghin_number: typedGhinNumber },
+    // Merge — BB matches first (already known), then GHIN, dedup by ghin_number
+    const seenGhins = new Set()
+    const merged = []
+    for (const bb of bbMatches) {
+      const g = String(bb.ghin_number || '')
+      if (g) seenGhins.add(g)
+      merged.push({
+        ghin_number: bb.ghin_number,
+        full_name: `${bb.first_name} ${bb.last_name}`,
+        first_name: bb.first_name,
+        last_name: bb.last_name,
+        handicap_index: bb.handicap_index,
+        club_name: 'Bonnie Briar Country Club',
+        club_id: null,
+        club_affiliation_id: null,
+        status: 'Active',
+        _source: 'bb',
       })
-      if (fnData?.name) {
-        ghinSearchResults.value = [{
-          ghin_number: typedGhinNumber,
-          full_name: fnData.name,
-          handicap_index: fnData.handicap_index ?? null,
-          club_name: fnData.club_name || '',
-        }]
-      } else {
-        ghinSearchMsg.value = `No golfer found for GHIN # ${typedGhinNumber}`
-      }
-      return
     }
-    // Need first + last name
-    const editFirst = (editGhinPrefix.value.trim() || first || '').trim()
-    if (!editFirst || !last) {
-      ghinSearchMsg.value = 'Enter both first and last name to search'
-      return
+    for (const g of ghinResults) {
+      const num = String(g.ghin_number || '')
+      if (num && seenGhins.has(num)) continue
+      merged.push({ ...g, _source: 'ghin' })
     }
-    if (editFirst.length < 2) {
-      ghinSearchMsg.value = 'Enter at least 2 letters of first name'
-      return
-    }
-    const profile = authStore.profile
-    if (!profile?.ghin_number || !profile?.ghin_password) {
-      ghinSearchMsg.value = 'Add GHIN credentials in Profile to enable GHIN search.'
-      return
-    }
-    const { data, error } = await supabase.functions.invoke('ghin-player-search', {
-      body: {
-        first_name: editFirst,
-        last_name: last,
-        ghin_number: profile.ghin_number,
-        password: profile.ghin_password,
-      },
-    })
-    if (error) throw error
-    if (data?.error) {
-      ghinSearchMsg.value = data.error
-      return
-    }
-    const results = data?.results || []
-    if (results.length) {
-      ghinSearchResults.value = results
-      if (results.length > 1) ghinSearchMsg.value = `Found ${results.length} golfers — select one:`
-    } else {
-      ghinSearchMsg.value = `No GHIN record found for "${editFirst} ${last}".`
-    }
+
+    if (seq !== _editSearchSeq) return
+    ghinSearchResults.value = merged
+    if (!merged.length) ghinSearchMsg.value = `No golfer found for "${first} ${last}".`
   } catch (e) {
-    ghinSearchMsg.value = e?.message || 'Search failed'
+    if (seq !== _editSearchSeq) return
+    ghinSearchMsg.value = 'Search failed — check connection and try again'
   } finally {
-    ghinSearching.value = false
+    if (seq === _editSearchSeq) ghinSearching.value = false
   }
 }
 
@@ -1475,8 +1448,15 @@ async function applyGhinResult(r) {
   ghinSearchResults.value = []
   ghinSearchMsg.value = `✓ Selected ${r.full_name}`
   await nextTick()
-  editGhinNumber.value = r.ghin_number
-  editGhin.value = r.handicap_index != null ? String(r.handicap_index) : editGhin.value
+  // Apply name (preserve user's display preference if they typed it differently)
+  if (r.first_name) editFirst.value = r.first_name
+  if (r.last_name) editLast.value = r.last_name
+  editGhinNumber.value = r.ghin_number || editGhinNumber.value
+  // Handicap may be number, "13.6", or "NH" — only set numeric values
+  const hi = r.handicap_index
+  if (hi != null && hi !== 'NH' && !isNaN(parseFloat(hi))) {
+    editGhin.value = String(parseFloat(hi))
+  }
   editClubName.value = r.club_name || editClubName.value
 }
 
@@ -2099,9 +2079,7 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
   color: #fca5a5; font-size: 12px; line-height: 1.4;
 }
 .ghin-number-row { display: flex; align-items: center; gap: 8px; }
-.ghin-prefix-row { margin-top: -4px; }
-.ghin-prefix-input { font-size: 16px; color: rgba(240,237,224,.6); }
-.ghin-prefix-input::placeholder { font-size: 14px; opacity: 0.5; }
+/* ghin-prefix-* classes removed in v3.10.209 — replaced by live search on first/last name inputs */
 .edit-club-row { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: rgba(255,255,255,.04); border-radius: 8px; margin-bottom: 4px; }
 .edit-club-logo { height: 18px; width: 18px; object-fit: contain; flex-shrink: 0; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3)); }
 .edit-club-icon { font-size: 13px; }
@@ -2228,7 +2206,6 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 [data-theme="light"] .ghin-search-meta,
 [data-theme="light"] .ghin-search-msg    { color: rgba(13,31,18,0.55) !important; }
 [data-theme="light"] .close-btn          { color: rgba(13,31,18,0.4) !important; }
-[data-theme="light"] .ghin-prefix-input  { color: rgba(13,31,18,0.6) !important; }
 [data-theme="light"] .player-sheet       { background: #f4f7f5 !important; }
 
 /* gear-* styles removed — replaced by Sheet/ListItem/Avatar/Pill UI components (v3.10.197) */
