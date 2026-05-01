@@ -134,6 +134,13 @@
       <div class="add-ghin-search-row">
         <input v-model="newGhin" class="wiz-input" placeholder="GHIN Index (e.g. 14.2)" type="number" step="0.1" />
         <span v-if="addGhinSearching" class="ghin-live-indicator">searching…</span>
+        <button
+          v-else-if="addGhinError"
+          class="ghin-retry-btn"
+          type="button"
+          :title="addGhinError"
+          @click="addSearchGhin()"
+        >✕</button>
       </div>
       <!-- Live GHIN search results -->
       <div v-if="addGhinResults.length" class="ghin-search-results">
@@ -586,6 +593,13 @@
           <div class="ghin-number-row">
             <input v-model="editGhinNumber" class="wiz-input" placeholder="GHIN # (e.g. 1321498)" type="text" inputmode="numeric" style="flex:1" />
             <span v-if="ghinSearching" class="ghin-live-indicator">searching…</span>
+            <button
+              v-else-if="ghinSearchError"
+              class="ghin-retry-btn"
+              type="button"
+              :title="ghinSearchError"
+              @click="searchGhinForEdit()"
+            >✕</button>
           </div>
           <!-- Live GHIN search results — fires when both first+last have ≥2 chars -->
           <div v-if="ghinSearchResults.length" class="ghin-search-results">
@@ -876,6 +890,7 @@ const addingPlayer = ref(false)
 const addGhinSearching = ref(false)
 const addGhinResults = ref([])
 const addGhinMsg = ref('')
+const addGhinError = ref('')  // non-empty triggers red X retry button
 const newGhinNumber = ref(null)
 const newClubName = ref(null)
 const sortMode = ref('name')
@@ -1057,6 +1072,7 @@ let _addSearchTimer = null
 let _addSearchSeq = 0
 function onAddNameInput() {
   addGhinMsg.value = ''
+  addGhinError.value = ''
   const first = newFirst.value.trim()
   const last = newLast.value.trim()
   // Clear results if either field too short
@@ -1077,12 +1093,15 @@ async function addSearchGhin() {
   const seq = ++_addSearchSeq
   addGhinSearching.value = true
   addGhinMsg.value = ''
+  addGhinError.value = ''
 
   // Hard ceiling: always clear the spinner after 8s no matter what
   const hardTimeout = setTimeout(() => {
     if (addGhinSearching.value) {
       addGhinSearching.value = false
-      if (!addGhinResults.value.length) addGhinMsg.value = 'Search timed out — try again'
+      if (!addGhinResults.value.length) {
+        addGhinError.value = 'Search timed out'
+      }
     }
   }, 8000)
 
@@ -1136,7 +1155,7 @@ async function addSearchGhin() {
       } catch (e) {
         console.warn('[ghin-search] edge fn failed/timeout:', e?.message)
         if (seq === _addSearchSeq && !bbMatches.length) {
-          addGhinMsg.value = 'GHIN search timed out — check connection'
+          addGhinError.value = 'GHIN search failed — tap to retry'
         }
       }
     } else if (bbMatches.length === 0) {
@@ -1175,10 +1194,9 @@ async function addSearchGhin() {
     }
   } catch(e) {
     if (seq !== _addSearchSeq) return
-    addGhinMsg.value = 'Search failed — check connection and try again'
+    addGhinError.value = 'Search failed — tap to retry'
   } finally {
     clearTimeout(hardTimeout)
-    // Always clear spinner if this is the latest call
     if (seq === _addSearchSeq) addGhinSearching.value = false
   }
 }
@@ -1355,6 +1373,7 @@ const editUseNickname = ref(false)
 const ghinSearching = ref(false)
 const ghinSearchResults = ref([])
 const ghinSearchMsg = ref('')
+const ghinSearchError = ref('')  // non-empty triggers red X retry button
 const editEmail = ref('')
 const editError = ref('')
 const editSaving = ref(false)
@@ -1387,6 +1406,7 @@ let _editSearchSeq = 0
 
 function onEditNameInput() {
   ghinSearchMsg.value = ''
+  ghinSearchError.value = ''
   const first = editFirst.value.trim()
   const last = editLast.value.trim()
   if (first.length < 2 || last.length < 2) {
@@ -1405,41 +1425,73 @@ async function searchGhinForEdit() {
   const seq = ++_editSearchSeq
   ghinSearching.value = true
   ghinSearchMsg.value = ''
-  try {
-    // BB index first — exact last name + first-name prefix
-    const { data: bbRows } = await supabase
-      .from('bb_member_index')
-      .select('ghin_number, first_name, last_name, handicap_index')
-      .ilike('last_name', last)
-      .order('last_name').limit(50)
-    if (seq !== _editSearchSeq) return
-    let bbMatches = (bbRows || []).filter(p => p.last_name?.toLowerCase() === last.toLowerCase())
-    const firstLower = first.toLowerCase()
-    bbMatches = bbMatches.filter(p => p.first_name?.toLowerCase().startsWith(firstLower))
+  ghinSearchError.value = ''
 
-    // GHIN API search via edge fn
+  // Hard ceiling: spinner always clears after 8s
+  const hardTimeout = setTimeout(() => {
+    if (ghinSearching.value) {
+      ghinSearching.value = false
+      if (!ghinSearchResults.value.length) ghinSearchError.value = 'Search timed out'
+    }
+  }, 8000)
+
+  const withTimeout = (p, ms, label) => Promise.race([
+    p,
+    new Promise((_, rej) => setTimeout(() => rej(new Error(`${label} timeout`)), ms)),
+  ])
+
+  try {
+    // BB index first
+    let bbMatches = []
+    try {
+      const { data: bbRows } = await withTimeout(
+        supabase.from('bb_member_index')
+          .select('ghin_number, first_name, last_name, handicap_index')
+          .ilike('last_name', last)
+          .order('last_name').limit(50),
+        4000, 'bb_index'
+      )
+      if (seq !== _editSearchSeq) return
+      bbMatches = (bbRows || []).filter(p => p.last_name?.toLowerCase() === last.toLowerCase())
+      const firstLower = first.toLowerCase()
+      bbMatches = bbMatches.filter(p => p.first_name?.toLowerCase().startsWith(firstLower))
+    } catch (e) {
+      console.warn('[ghin-search-edit] bb_index failed/timeout:', e?.message)
+    }
+
+    // GHIN edge fn
     const profile = authStore.profile
     let ghinResults = []
     if (profile?.ghin_number && profile?.ghin_password) {
-      const { data, error } = await supabase.functions.invoke('ghin-player-search', {
-        body: {
-          first_name: first,
-          last_name: last,
-          ghin_number: profile.ghin_number,
-          password: profile.ghin_password,
-        },
-      })
-      if (seq !== _editSearchSeq) return
-      if (!error && Array.isArray(data?.results)) {
-        ghinResults = data.results
-      } else if (data?.error?.includes('credentials')) {
-        ghinSearchMsg.value = 'GHIN search unavailable. Add credentials in Profile.'
+      try {
+        const { data, error } = await withTimeout(
+          supabase.functions.invoke('ghin-player-search', {
+            body: {
+              first_name: first,
+              last_name: last,
+              ghin_number: profile.ghin_number,
+              password: profile.ghin_password,
+            },
+          }),
+          5000, 'ghin_search'
+        )
+        if (seq !== _editSearchSeq) return
+        if (!error && Array.isArray(data?.results)) {
+          ghinResults = data.results
+        } else if (data?.error?.includes('credentials')) {
+          ghinSearchMsg.value = 'GHIN search unavailable. Add credentials in Profile.'
+        }
+      } catch (e) {
+        console.warn('[ghin-search-edit] edge fn failed/timeout:', e?.message)
+        if (seq === _editSearchSeq && !bbMatches.length) {
+          ghinSearchError.value = 'GHIN search failed — tap to retry'
+        }
       }
     } else if (bbMatches.length === 0) {
       ghinSearchMsg.value = 'Add GHIN credentials in Profile to enable full GHIN search.'
     }
 
-    // Merge — BB matches first (already known), then GHIN, dedup by ghin_number
+    // Merge — BB first, then GHIN, dedup by ghin_number
     const seenGhins = new Set()
     const merged = []
     for (const bb of bbMatches) {
@@ -1466,11 +1518,12 @@ async function searchGhinForEdit() {
 
     if (seq !== _editSearchSeq) return
     ghinSearchResults.value = merged
-    if (!merged.length) ghinSearchMsg.value = `No golfer found for "${first} ${last}".`
+    if (!merged.length && !ghinSearchError.value) ghinSearchMsg.value = `No golfer found for "${first} ${last}".`
   } catch (e) {
     if (seq !== _editSearchSeq) return
-    ghinSearchMsg.value = 'Search failed — check connection and try again'
+    ghinSearchError.value = 'Search failed — tap to retry'
   } finally {
+    clearTimeout(hardTimeout)
     if (seq === _editSearchSeq) ghinSearching.value = false
   }
 }
@@ -2154,7 +2207,27 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
 .ghin-search-meta { font-size: 12px; color: var(--gw-text-tertiary); margin-top: 3px; }
 .bb-badge { display: inline-block; font-size: 10px; font-weight: 500; color: var(--gw-text-on-gold); background: var(--gw-accent); border-radius: 4px; padding: 2px 6px; margin-left: 6px; vertical-align: middle; letter-spacing: .04em; }
 .status-badge { display: inline-block; font-size: 10px; font-weight: 500; color: var(--gw-text-tertiary); background: var(--gw-bg-input); border-radius: 4px; padding: 2px 6px; margin-left: 6px; vertical-align: middle; text-transform: uppercase; letter-spacing: .04em; }
-.ghin-live-indicator { font-size: 12px; color: rgba(240,237,224,.5); align-self: center; padding-left: 8px; }
+.ghin-live-indicator { font-size: 12px; color: var(--gw-text-tertiary); align-self: center; padding-left: 8px; }
+.ghin-retry-btn {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, .15);
+  color: #ef4444;
+  border: 1.5px solid #ef4444;
+  font-size: 14px; font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .12s, background .12s;
+  padding: 0;
+  flex-shrink: 0;
+  margin-left: 6px;
+}
+.ghin-retry-btn:active { transform: scale(0.92); background: rgba(239, 68, 68, .28); }
+[data-theme="light"] .ghin-retry-btn { background: #fee2e2; color: #b91c1c; border-color: #b91c1c; }
 .ghin-search-msg { font-size: 12px; color: rgba(240,237,224,.5); padding: 4px 2px; }
 .ghin-search-msg--error { color: #fbbf24; }
 .edit-nickname-row { display: flex; align-items: center; gap: 10px; }
