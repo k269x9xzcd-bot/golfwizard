@@ -826,9 +826,11 @@ async function invitePlayer(player) {
   }
   inviteStatus.value[player.id] = 'sending'
   try {
-    const { data, error } = await supabase.functions.invoke('invite-player', {
-      body: { roster_player_id: player.id },
-    })
+    const invokeResult = await Promise.race([
+      supabase.functions.invoke('invite-player', { body: { roster_player_id: player.id } }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('[invite-player] timed out')), 8000)),
+    ])
+    const { data, error } = invokeResult
     if (error) throw error
     if (data?.already_joined || data?.already_registered) {
       inviteStatus.value[player.id] = 'joined'

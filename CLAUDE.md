@@ -86,7 +86,7 @@ GitHub MCP `push_files` truncates over ~40-50KB. CI threshold currently blocks `
 ## Deploy
 
 ```bash
-cd ~/Desktop/GolfWizard/GolfWizard/src
+cd ~/Library/Mobile\ Documents/com~apple~CloudDocs/ClaudeAI/GolfWizard/GolfWizard/gw
 npm run deploy
 ```
 
@@ -394,8 +394,8 @@ Plays at Bonnie Briar Country Club primarily. `bb_member_index` table holds the 
 
 ## ADR-003 — workspace migration (DONE 2026-04-21)
 
-- Single canonical repo at `~/Desktop/GolfWizard/GolfWizard/src` — has `.git`
-- iCloud + OneDrive copies purged
+- Single canonical repo at `~/Library/Mobile Documents/com~apple~CloudDocs/ClaudeAI/GolfWizard/GolfWizard/gw` — has `.git`
+- Old Desktop copy purged; project lives in iCloud Drive under ClaudeAI/ folder
 - ScoringView.vue split: 166KB → 64KB (extracted `useScorecardHelpers`, `useGameNotation`, `useLiveSettlements`, `GameEditorOverlay`, `RetroScoreOverlay`, `ScoringView.css`)
 - CI gate: `.vue > 110KB` blocks deploy (110 to accommodate WizardOverlay at 101KB)
 - Rollback anchor: tag `v3.9.569-pre-adr003`
