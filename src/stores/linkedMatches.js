@@ -151,6 +151,10 @@ export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
   }
 
   async function loadLinkedMatchDetail(matchId) {
+    const t0 = Date.now()
+    console.log(`[linkedMatches] loadLinkedMatchDetail start for ${matchId.slice(0, 8)}`)
+
+    // Step 1: fetch match row via raw fetch (skip SJS entirely — faster on iOS)
     let match = null
     try {
       const rows = await supaRawRequest('GET', `linked_matches?id=eq.${matchId}&select=*&limit=1`, null, 5000)
@@ -159,12 +163,15 @@ export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
       throw new Error('Could not load match details. Check your connection.')
     }
     if (!match) return null
+    console.log(`[linkedMatches] match row loaded in ${Date.now() - t0}ms`)
 
+    // Step 2: load both round bundles in parallel using raw-only fast path
     const [roundA, roundB] = await Promise.all([
-      _loadRoundBundle(match.round_a_id),
-      match.round_b_id ? _loadRoundBundle(match.round_b_id) : Promise.resolve(null),
+      _loadRoundBundleFast(match.round_a_id),
+      match.round_b_id ? _loadRoundBundleFast(match.round_b_id) : Promise.resolve(null),
     ])
 
+    console.log(`[linkedMatches] full detail loaded in ${Date.now() - t0}ms`)
     activeLinkedMatch.value = match
     activeRoundA.value = roundA
     activeRoundB.value = roundB
@@ -245,7 +252,11 @@ export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
         { round_id: match.round_b_id, settlement_json: result, computed_at: new Date().toISOString() },
       ]
       try {
-        await supabase.from('round_settlements').upsert(roundSettlements, { onConflict: 'round_id' })
+        await supaCallWithRetry(
+          'round_settlements.upsert',
+          () => supabase.from('round_settlements').upsert(roundSettlements, { onConflict: 'round_id' }),
+          6000,
+        )
       } catch (e) {
         console.warn('[linkedMatches] round_settlements upsert failed (non-fatal):', e?.message)
       }

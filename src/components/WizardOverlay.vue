@@ -1344,12 +1344,14 @@ const TeamPicker = {
   emits: ['update:team1', 'update:team2'],
   setup(props, { emit }) {
     function assign(pid, teamNum) {
-      // Remove from both teams first
+      const currentTeam = getTeam(pid)
       const newT1 = (props.team1 || []).filter(id => id !== pid)
       const newT2 = (props.team2 || []).filter(id => id !== pid)
-      // Add to the target team
-      if (teamNum === 1) newT1.push(pid)
-      else newT2.push(pid)
+      // Toggle off if already on this team; otherwise assign to target team
+      if (currentTeam !== teamNum) {
+        if (teamNum === 1) newT1.push(pid)
+        else newT2.push(pid)
+      }
       emit('update:team1', newT1)
       emit('update:team2', newT2)
     }

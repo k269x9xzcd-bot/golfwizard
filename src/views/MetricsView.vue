@@ -341,10 +341,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onActivated, watch } from 'vue'
 import { useRoundsStore } from '../stores/rounds'
 import { useAuthStore } from '../stores/auth'
 import { getCourse } from '../modules/courses'
+
+defineOptions({ name: 'MetricsView' })
 
 const LS_COURSE_KEY = 'gw_metrics_course_tab'
 
@@ -353,13 +355,15 @@ const authStore = useAuthStore()
 const loading = ref(true)
 const allRounds = ref([])
 const settlementsMap = ref({}) // roundId → settlement_json
+const lastRoundCount = ref(0) // staleness tracker
 
 const selectedPlayer = ref(null)
 const selectedCourse = ref(null)  // used by Scoring/Games tabs
 const selectedCourseTab = ref(null) // used by Course tab — persisted
 const activeTab = ref('scoring')
 
-onMounted(async () => {
+async function loadMetrics() {
+  loading.value = true
   try {
     await roundsStore.fetchRounds()
   } catch (e) {
@@ -374,7 +378,7 @@ onMounted(async () => {
     const profile = authStore.profile
     const ghinNum = profile?.ghin_number
     const myEntry = players.find(p =>
-      (uid && p.id === uid) ||
+      (uid && p.id === `pid:${uid}`) ||
       (ghinNum && p.ghin_number && String(p.ghin_number) === String(ghinNum))
     )
     selectedPlayer.value = myEntry ? myEntry.id : players[0].id
@@ -389,7 +393,7 @@ onMounted(async () => {
     await Promise.race([
       (async () => {
         for (const r of allRounds.value) {
-          if (r.is_complete && r.game_configs?.length) {
+          if (r.is_complete && r.game_configs?.length && !settlementsMap.value[r.id]) {
             try {
               const s = await roundsStore.fetchSettlements(r.id)
               if (s) settlementsMap.value[r.id] = s
@@ -404,6 +408,19 @@ onMounted(async () => {
   }
 
   loading.value = false
+}
+
+onMounted(loadMetrics)
+
+// When KeepAlive reactivates, only refresh if rounds changed
+onActivated(() => {
+  const storeCount = roundsStore.rounds.length
+  if (storeCount !== lastRoundCount.value) {
+    console.log(`[MetricsView] rounds changed (${lastRoundCount.value} → ${storeCount}), refreshing`)
+    loadMetrics()
+  } else {
+    console.log(`[MetricsView] reactivated, ${storeCount} rounds unchanged — using cache`)
+  }
 })
 
 function onCourseTabChange(e) {
@@ -411,7 +428,16 @@ function onCourseTabChange(e) {
   localStorage.setItem(LS_COURSE_KEY, e.target.value)
 }
 
-// ── Player list ──────────────────────────────────────
+// ── Player identity ──────────────────────────────────
+// Players sometimes appear with profile_id and sometimes without (guest entries).
+// Deduplicate by profile_id first, then by email, then by guest_name as fallback.
+function playerKey(m) {
+  if (m.profile_id) return `pid:${m.profile_id}`
+  if (m.email) return `email:${m.email.toLowerCase()}`
+  if (m.guest_name) return `name:${m.guest_name.toLowerCase().trim()}`
+  return `id:${m.id}`
+}
+
 function extractPlayers() {
   const map = new Map()
   for (const r of allRounds.value) {

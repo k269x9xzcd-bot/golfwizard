@@ -294,6 +294,19 @@
                       <span class="bbn-value">{{ bbnResult(game).ballsToCount }}</span>
                     </div>
                   </div>
+                  <div class="bbn-hcp-toggle">
+                    <span class="bbn-toggle-label">HCP mode:</span>
+                    <button
+                      class="bbn-toggle-btn"
+                      :class="{ active: (game.config?.hcpMode ?? 'course') === 'course' }"
+                      @click.stop="setBbnHcpMode(game, 'course')"
+                    >Course</button>
+                    <button
+                      class="bbn-toggle-btn"
+                      :class="{ active: (game.config?.hcpMode ?? 'course') === 'lowman' }"
+                      @click.stop="setBbnHcpMode(game, 'lowman')"
+                    >Low Man</button>
+                  </div>
                 </div>
               </template>
 
@@ -760,6 +773,16 @@ function fidgetResult(game) {
 function bbnResult(game) {
   if (!gameCtx.value || !gameCtx.value.course) return null
   return computeBestBallNet(gameCtx.value, game.config) ?? null
+}
+
+async function setBbnHcpMode(game, mode) {
+  const newConfig = { ...game.config, hcpMode: mode }
+  // Update label to reflect mode
+  const balls = newConfig.ballsToCount ?? 1
+  const scoring = newConfig.scoring === 'gross' ? 'Gross' : 'Net'
+  const suffix = mode === 'lowman' ? ' (LM)' : ''
+  newConfig.label = `${balls}BB ${scoring}${suffix}`
+  await roundsStore.updateGameConfig(game.id, newConfig)
 }
 
 // Vegas
@@ -1494,6 +1517,37 @@ function balanceClass(val) {
   font-weight: 700;
   color: var(--gw-text);
   margin-top: 4px;
+}
+
+.bbn-hcp-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+.bbn-toggle-label {
+  font-size: 11px;
+  color: var(--gw-text-muted);
+  text-transform: uppercase;
+  font-weight: 600;
+  margin-right: 4px;
+}
+.bbn-toggle-btn {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: transparent;
+  color: var(--gw-text-muted);
+  cursor: pointer;
+}
+.bbn-toggle-btn.active {
+  background: var(--gw-accent, #c9a227);
+  color: #000;
+  border-color: var(--gw-accent, #c9a227);
+  font-weight: 600;
 }
 
 /* Generic standings */

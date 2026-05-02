@@ -2071,9 +2071,16 @@ async function updateMemberHcp(memberId, rawValue) {
   // Persist to Supabase
   try {
     const { supabase } = await import('../supabase')
-    await supabase.from('round_members').update({ ghin_index: newIndex }).eq('id', memberId)
+    const { supaCall: _sc } = await import('../modules/supabaseOps')
+    const res = await _sc('round_members.hcp', supabase.from('round_members').update({ ghin_index: newIndex }).eq('id', memberId), 5000)
+    if (res.error) throw res.error
   } catch (e) {
-    console.warn('[ScoringView] updateMemberHcp failed:', e)
+    if (e.message?.includes('timed out')) {
+      const { supaRawUpdate: _ru } = await import('../modules/supaRaw')
+      await _ru('round_members', `id=eq.${memberId}`, { ghin_index: newIndex }, 8000).catch(() => {})
+    } else {
+      console.warn('[ScoringView] updateMemberHcp failed:', e)
+    }
   }
 }
 
@@ -2084,8 +2091,17 @@ async function updateMemberStrokes(memberId, rawValue) {
   m.stroke_override = strokes
   try {
     const { supabase } = await import('../supabase')
-    await supabase.from('round_members').update({ stroke_override: strokes }).eq('id', memberId)
-  } catch (e) { console.warn('[ScoringView] updateMemberStrokes failed:', e) }
+    const { supaCall: _sc } = await import('../modules/supabaseOps')
+    const res = await _sc('round_members.strokes', supabase.from('round_members').update({ stroke_override: strokes }).eq('id', memberId), 5000)
+    if (res.error) throw res.error
+  } catch (e) {
+    if (e.message?.includes('timed out')) {
+      const { supaRawUpdate: _ru } = await import('../modules/supaRaw')
+      await _ru('round_members', `id=eq.${memberId}`, { stroke_override: strokes }, 8000).catch(() => {})
+    } else {
+      console.warn('[ScoringView] updateMemberStrokes failed:', e)
+    }
+  }
 }
 
 // ── HCP editor helpers ──────────────────────────────────────────

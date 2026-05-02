@@ -7,6 +7,7 @@ import { useRosterStore } from './roster'
 import { computeAllSettlements } from '../modules/settlements'
 import { getCourse, COURSES as BUILTIN_COURSES } from '../modules/courses'
 import { supaRawInsert, supaRawSelect, supaRawUpdate, supaRawRequest, supaRawDelete } from '../modules/supaRaw'
+import { supaCall } from '../modules/supabaseOps'
 
 /**
  * Build a deterministic, self-contained snapshot of a course at the moment
@@ -762,16 +763,27 @@ export const useRoundsStore = defineStore('rounds', () => {
       return newGame
     }
 
-    const { data, error } = await supabase
-      .from('game_configs')
-      .upsert({
-        ...game,
-        round_id: activeRound.value.id,
-        created_by: auth.user?.id ?? null,
-      })
-      .select()
-      .single()
-    if (error) throw error
+    const row = { ...game, round_id: activeRound.value.id, created_by: auth.user?.id ?? null }
+    let data
+    try {
+      const res = await supaCall(
+        'game_configs.upsert',
+        supabase.from('game_configs').upsert(row).select().single(),
+        6000,
+      )
+      if (res.error) throw res.error
+      data = res.data
+    } catch (e) {
+      if (!e.message?.includes('timed out')) throw e
+      if (game.id) {
+        const { id: _id, ...patch } = row
+        const rows = await supaRawUpdate('game_configs', `id=eq.${game.id}`, patch, 10000)
+        data = Array.isArray(rows) ? rows[0] : rows
+      } else {
+        const rows = await supaRawInsert('game_configs', row, 10000)
+        data = Array.isArray(rows) ? rows[0] : rows
+      }
+    }
     const idx = activeGames.value.findIndex(g => g.id === data.id)
     if (idx >= 0) activeGames.value[idx] = data
     else activeGames.value.push(data)
@@ -795,8 +807,17 @@ export const useRoundsStore = defineStore('rounds', () => {
       return
     }
 
-    const { error } = await supabase.from('game_configs').delete().eq('id', gameId)
-    if (error) throw error
+    try {
+      const res = await supaCall(
+        'game_configs.delete',
+        supabase.from('game_configs').delete().eq('id', gameId),
+        6000,
+      )
+      if (res.error) throw res.error
+    } catch (e) {
+      if (!e.message?.includes('timed out')) throw e
+      await supaRawDelete('game_configs', `id=eq.${gameId}`, 10000)
+    }
     activeGames.value = activeGames.value.filter(g => g.id !== gameId)
   }
 
@@ -811,8 +832,17 @@ export const useRoundsStore = defineStore('rounds', () => {
       return
     }
 
-    const { error } = await supabase.from('rounds').update({ date: dateStr }).eq('id', roundId)
-    if (error) throw error
+    try {
+      const res = await supaCall(
+        'rounds.date-update',
+        supabase.from('rounds').update({ date: dateStr }).eq('id', roundId),
+        6000,
+      )
+      if (res.error) throw res.error
+    } catch (e) {
+      if (!e.message?.includes('timed out')) throw e
+      await supaRawUpdate('rounds', `id=eq.${roundId}`, { date: dateStr }, 10000)
+    }
     if (activeRound.value?.id === roundId) activeRound.value.date = dateStr
     // Also update in history list
     const idx = rounds.value.findIndex(r => r.id === roundId)
@@ -839,13 +869,20 @@ export const useRoundsStore = defineStore('rounds', () => {
         .maybeSingle()
 
       if (!existing) {
-        await supabase.from('round_members').insert({
+        const memberRow = {
           round_id: round.id,
           profile_id: auth.user.id,
           short_name: auth.profile?.short_name ?? auth.profile?.display_name?.slice(0, 6),
           ghin_index: auth.profile?.ghin_index,
           role: 'scorer',
-        })
+        }
+        try {
+          const res = await supaCall('round_members.join', supabase.from('round_members').insert(memberRow), 6000)
+          if (res.error) throw res.error
+        } catch (e) {
+          if (!e.message?.includes('timed out')) throw e
+          await supaRawInsert('round_members', memberRow, 10000)
+        }
       }
     }
 

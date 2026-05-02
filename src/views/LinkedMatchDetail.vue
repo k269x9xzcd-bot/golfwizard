@@ -16,6 +16,17 @@
     </div>
 
     <template v-else>
+      <!-- DEBUG: on-screen diagnostics (remove after fix confirmed) -->
+      <div v-if="debugInfo" style="background:#1a1a2e;border:1px solid #e94560;border-radius:8px;margin:8px 16px;padding:10px 12px;font-size:12px;color:#eee;font-family:monospace;line-height:1.5;word-break:break-all;">
+        <div style="color:#e94560;font-weight:bold;margin-bottom:4px;">v3.10.119 debug</div>
+        <div>match: {{ match?.id?.slice(0,8) }} status={{ match?.status }}</div>
+        <div>roundA: {{ roundA ? `${roundA.id?.slice(0,8)} members=${roundA.round_members?.length} scores=${roundA.scores?.length}` : 'null' }}</div>
+        <div>roundB: {{ roundB ? `${roundB.id?.slice(0,8)} members=${roundB.round_members?.length} scores=${roundB.scores?.length}` : 'null' }}</div>
+        <div>result: holesBoth={{ result?.holesBoth ?? '?' }} leader={{ result?.currentLeader ?? 'none' }} teamA={{ result?.teamA?.name || '?' }} teamB={{ result?.teamB?.name || '?' }}</div>
+        <div v-if="computeError" style="color:#ff4444;margin-top:4px;">ERROR: {{ computeError }}</div>
+        <div>config: balls={{ match?.match_config?.ballsToCount }} stake={{ match?.match_config?.stake }} hcpPct={{ match?.match_config?.hcpPct }}</div>
+      </div>
+
       <!-- Status card -->
       <div class="lmd-status-card" :class="`lmd-status--${summary.state}`">
         <div class="lmd-status-label">{{ summary.label }}</div>

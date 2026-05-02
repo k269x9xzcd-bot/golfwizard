@@ -223,13 +223,20 @@ export const useRosterStore = defineStore('roster', () => {
       return p
     }
     const row = { ...player, owner_id: auth.user.id }
+    console.log('[addPlayer payload]', JSON.stringify(row))
+    const { supaCall: _supaCall } = await import('../modules/supabaseOps')
+    const { supaRawInsert: _rawIns, supaRawUpdate: _rawUpd } = await import('../modules/supaRaw')
     let data, error
     // Try plain insert first. Partial unique indexes (ghin_number, email) can't be
     // used as ON CONFLICT targets in Supabase — use insert + catch-and-update instead.
-    ;({ data, error } = await supabase
-      .from('roster_players')
-      .insert(row)
-      .select().single())
+    try {
+      const insRes = await _supaCall('roster.insert', supabase.from('roster_players').insert(row).select().single(), 6000)
+      ;({ data, error } = insRes)
+    } catch (e) {
+      if (!e.message?.includes('timed out')) throw e
+      const rows = await _rawIns('roster_players', row, 10000)
+      data = Array.isArray(rows) ? rows[0] : rows
+    }
     if (error && error.code === '23505') {
       // Unique violation — find the existing row and update it
       let matchQuery = supabase.from('roster_players').select('id').eq('owner_id', auth.user.id)
@@ -238,11 +245,15 @@ export const useRosterStore = defineStore('roster', () => {
       else                  matchQuery = matchQuery.eq('name', row.name)
       const { data: existing } = await matchQuery.maybeSingle()
       if (existing?.id) {
-        ;({ data, error } = await supabase
-          .from('roster_players')
-          .update(row)
-          .eq('id', existing.id)
-          .select().single())
+        try {
+          const updRes = await _supaCall('roster.update', supabase.from('roster_players').update(row).eq('id', existing.id).select().single(), 6000)
+          ;({ data, error } = updRes)
+        } catch (e) {
+          if (!e.message?.includes('timed out')) throw e
+          const rows = await _rawUpd('roster_players', `id=eq.${existing.id}`, row, 10000)
+          data = Array.isArray(rows) ? rows[0] : rows
+          error = null
+        }
       }
     }
     if (error) throw error
@@ -331,8 +342,15 @@ export const useRosterStore = defineStore('roster', () => {
       _saveLocal()
       return
     }
-    const { error } = await supabase.from('roster_players').delete().eq('id', id)
-    if (error) throw error
+    try {
+      const { supaCall: _supaCall } = await import('../modules/supabaseOps')
+      const res = await _supaCall('roster.delete', supabase.from('roster_players').delete().eq('id', id), 5000)
+      if (res.error) throw res.error
+    } catch (e) {
+      if (!e.message?.includes('timed out')) throw e
+      const { supaRawDelete: _rawDel } = await import('../modules/supaRaw')
+      await _rawDel('roster_players', `id=eq.${id}`, 8000)
+    }
     players.value = players.value.filter(p => p.id !== id)
   }
 

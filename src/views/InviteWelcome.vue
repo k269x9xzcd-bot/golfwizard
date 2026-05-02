@@ -244,18 +244,31 @@ async function syncGhin() {
   ghinMsg.value = ''
   ghinErr.value = ''
   try {
+    const { supaCall: _sc } = await import('../modules/supabaseOps')
+    const { supaRawUpdate: _ru, supaRawEdgeFunction: _ref } = await import('../modules/supaRaw')
+
     // Save credentials first
-    await supabase.from('profiles').update({
-      ghin_number: ghinNum.value.trim(),
-      ghin_password: ghinPw.value.trim(),
-    }).eq('id', authStore.user.id)
+    try {
+      const res = await _sc('profiles.ghin-creds', supabase.from('profiles').update({ ghin_number: ghinNum.value.trim(), ghin_password: ghinPw.value.trim() }).eq('id', authStore.user.id), 5000)
+      if (res.error) throw res.error
+    } catch (e) {
+      if (!e.message?.includes('timed out')) throw e
+      await _ru('profiles', `id=eq.${authStore.user.id}`, { ghin_number: ghinNum.value.trim(), ghin_password: ghinPw.value.trim() }, 8000)
+    }
 
     // Sync handicap
-    const { data, error } = await supabase.functions.invoke('ghin-sync', {
-      body: { ghin_number: ghinNum.value.trim(), password: ghinPw.value.trim() }
-    })
-    if (error) throw error
-    if (data?.error) throw new Error(data.error)
+    const _ghinBody = { ghin_number: ghinNum.value.trim(), password: ghinPw.value.trim() }
+    let data
+    try {
+      const r = await _sc('ghin-sync', supabase.functions.invoke('ghin-sync', { body: _ghinBody }), 8000)
+      if (r.error) throw r.error
+      if (r.data?.error) throw new Error(r.data.error)
+      data = r.data
+    } catch (e) {
+      if (!e.message?.includes('timed out')) throw e
+      data = await _ref('ghin-sync', _ghinBody, 12000)
+      if (data?.error) throw new Error(data.error)
+    }
 
     // Update profile with HCP and update their roster entry
     await authStore.updateProfile({ ghin_index: data.handicap_index })
@@ -267,9 +280,13 @@ async function syncGhin() {
 
     // Also update ghin_number + ghin_index on their own roster entry
     if (authStore.user?.email) {
-      await supabase.from('roster_players')
-        .update({ ghin_number: ghinNum.value.trim(), ghin_index: data.handicap_index, ghin_synced_at: new Date().toISOString() })
-        .eq('email', authStore.user.email)
+      const rosterPatch = { ghin_number: ghinNum.value.trim(), ghin_index: data.handicap_index, ghin_synced_at: new Date().toISOString() }
+      try {
+        await _sc('roster.ghin-patch', supabase.from('roster_players').update(rosterPatch).eq('email', authStore.user.email), 5000)
+      } catch (e) {
+        if (!e.message?.includes('timed out')) throw e
+        await _ru('roster_players', `email=eq.${authStore.user.email}`, rosterPatch, 8000).catch(() => {})
+      }
     }
 
     ghinMsg.value = `✓ Handicap synced: ${data.hi_display} (${data.full_name})`

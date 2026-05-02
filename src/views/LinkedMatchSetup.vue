@@ -226,7 +226,7 @@
       </div>
     </div>
 
-    <!-- Step 3: WizardOverlay -->
+    <!-- Step 3: WizardOverlay — pre-populate with favorites so player step is skipped -->
     <WizardOverlay
       v-if="step === 'wizard'"
       :skipOpponents="true"

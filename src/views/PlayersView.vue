@@ -340,8 +340,8 @@
               </button>
             </div>
 
-            <!-- No credentials -->
-            <div v-if="!authStore.profile?.ghin_password" class="ghin-no-creds">
+            <!-- No credentials and no batch cache -->
+            <div v-if="!authStore.profile?.ghin_password && !ghinScoresFetched" class="ghin-no-creds">
               <div class="ghin-scores-note">GHIN login required</div>
               <div class="ghin-scores-sub">Add your GHIN password in Settings → Profile to load score history.</div>
               <button class="btn-ghost btn-sm" style="margin-top:10px;" @click="showGhinSheet = false; $router.push('/settings')">Go to Settings →</button>
@@ -996,11 +996,50 @@ function formatScoreDate(dateStr) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })
 }
 
+// ── Shared helper: apply score data to reactive state ──
+function _applyScoreData(data) {
+  ghinScores.value = data.scores || []
+  ghinScoresPosted.value = data.scores_posted ?? null
+  const aggStats = data.aggregate_stats ?? null
+  const rawScores = (data.scores || []).map(s => s.adjusted_gross_score).filter(v => v != null)
+  const scoreRange = rawScores.length ? {
+    lowest_score: Math.min(...rawScores),
+    highest_score: Math.max(...rawScores),
+    average: rawScores.reduce((a, b) => a + b, 0) / rawScores.length,
+  } : {}
+  ghinScoreStats.value = aggStats ? { ...aggStats, ...scoreRange } : (rawScores.length ? scoreRange : null)
+  ghinLiveHI.value = data.handicap_index ?? null
+  ghinLiveLowHI.value = data.low_hi_display ?? null
+  ghinScoresFetched.value = true
+}
+
+// ── Try to load from the 6am batch cache on the roster_players row ──
+function _loadFromCache() {
+  const p = myRosterPlayer.value
+  if (!p?.score_cache || !p.score_cache_at) return false
+  // Consider cache valid for 26 hours (covers the 6am daily batch with margin)
+  const ageMs = Date.now() - new Date(p.score_cache_at).getTime()
+  if (ageMs > 26 * 60 * 60 * 1000) return false
+  // score_cache has { scores, scores_posted, score_stats, aggregate_stats }
+  const cache = p.score_cache
+  _applyScoreData({
+    scores: cache.scores ?? [],
+    scores_posted: cache.scores_posted ?? null,
+    aggregate_stats: cache.aggregate_stats ?? null,
+    handicap_index: p.ghin_index != null ? Number(p.ghin_index).toFixed(1) : null,
+    low_hi_display: p.ghin_low_hi != null ? Number(p.ghin_low_hi).toFixed(1) : null,
+  })
+  return true
+}
+
 function openGhinSheet() {
   showGhinSheet.value = true
-  // Auto-load if we have creds and haven't fetched yet
+  if (ghinScoresFetched.value || ghinScoresLoading.value) return
+  // 1) Try the pre-computed batch cache (instant, no network)
+  if (_loadFromCache()) return
+  // 2) Fall back to live edge function if user has GHIN creds
   const profile = authStore.profile
-  if (profile?.ghin_password && !ghinScoresFetched.value && !ghinScoresLoading.value) {
+  if (profile?.ghin_password) {
     fetchGhinScores()
   }
 }
@@ -1599,15 +1638,17 @@ async function saveEdit() {
 
 async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
   try {
-    const { data, error } = await supabase.functions.invoke('ghin-roster-sync', {
-      body: {
-        ghin_number: profile.ghin_number,
-        password: profile.ghin_password,
-        state: 'NY',
-        players: [{ id: playerId, name: '', ghin_number: ghinNumber }],
-      }
-    })
-    if (error || data?.error) return
+    const _body4 = { ghin_number: profile.ghin_number, password: profile.ghin_password, state: 'NY', players: [{ id: playerId, name: '', ghin_number: ghinNumber }] }
+    let data
+    try {
+      const r4 = await supaCall('ghin-roster-sync', supabase.functions.invoke('ghin-roster-sync', { body: _body4 }), 8000)
+      if (r4.error) return
+      data = r4.data
+    } catch (e) {
+      if (!e.message?.includes('timed out')) return
+      data = await supaRawEdgeFunction('ghin-roster-sync', _body4, 12000)
+    }
+    if (data?.error) return
     const r = data?.results?.[0]
     if (r?.status === 'found') {
       await rosterStore.updatePlayer(playerId, {

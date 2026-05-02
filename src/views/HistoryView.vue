@@ -10,6 +10,9 @@
       <div v-else-if="!soloRoundId && activeSegment === 'matches' && linkedMatchHistory.length" class="round-count">
         {{ linkedMatchHistory.length }} match{{ linkedMatchHistory.length !== 1 ? 'es' : '' }}
       </div>
+      <div v-else-if="activeSegment === 'matches' && linkedMatchHistory.length" class="round-count">
+        {{ linkedMatchHistory.length }} match{{ linkedMatchHistory.length !== 1 ? 'es' : '' }}
+      </div>
     </header>
 
     <!-- Segmented control — hidden in solo mode -->

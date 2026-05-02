@@ -120,7 +120,7 @@ import { useAuthStore } from '../stores/auth'
 import { supabase } from '../supabase'
 import AuthModal from '../components/AuthModal.vue'
 import { supaCall } from '../modules/supabaseOps'
-import { supaRawRequest, supaRawUpdate } from '../modules/supaRaw'
+import { supaRawRequest, supaRawUpdate, supaRawEdgeFunction } from '../modules/supaRaw'
 
 const authStore = useAuthStore()
 const showAuth = ref(false)
@@ -263,11 +263,18 @@ async function saveGhinCredentials() {
     // Auto-sync handicap if both credentials present
     if (num && pwd) {
       ghinSyncMsg.value = 'Syncing handicap…'
-      const { data: syncData, error: syncErr } = await supabase.functions.invoke('ghin-sync', {
-        body: { ghin_number: num, password: pwd }
-      })
-      if (syncErr) throw syncErr
-      if (syncData?.error) throw new Error(syncData.error)
+      const _syncBody = { ghin_number: num, password: pwd }
+      let syncData
+      try {
+        const r = await supaCall('ghin-sync', supabase.functions.invoke('ghin-sync', { body: _syncBody }), 8000)
+        if (r.error) throw r.error
+        if (r.data?.error) throw new Error(r.data.error)
+        syncData = r.data
+      } catch (e) {
+        if (!e.message?.includes('timed out')) throw e
+        syncData = await supaRawEdgeFunction('ghin-sync', _syncBody, 12000)
+        if (syncData?.error) throw new Error(syncData.error)
+      }
 
       // Update ghin_index in profile — same timeout + raw fallback
       try {
@@ -319,24 +326,34 @@ async function syncGhin() {
   ghinSyncMsg.value = ''
   ghinSyncErr.value = ''
   try {
-    const { data, error } = await supabase.functions.invoke('ghin-sync', {
-      body: { ghin_number: ghinNumber.value.trim(), password: ghinPassword.value.trim() }
-    })
-    if (error) throw error
-    if (data?.error) throw new Error(data.error)
+    const _syncBody2 = { ghin_number: ghinNumber.value.trim(), password: ghinPassword.value.trim() }
+    let data
+    try {
+      const r = await supaCall('ghin-sync', supabase.functions.invoke('ghin-sync', { body: _syncBody2 }), 8000)
+      if (r.error) throw r.error
+      if (r.data?.error) throw new Error(r.data.error)
+      data = r.data
+    } catch (e) {
+      if (!e.message?.includes('timed out')) throw e
+      data = await supaRawEdgeFunction('ghin-sync', _syncBody2, 12000)
+      if (data?.error) throw new Error(data.error)
+    }
     // Update ghin_index in profile
     await authStore.updateProfile({ ghin_index: data.handicap_index })
     ghinIndex.value = String(data.handicap_index)
 
     // Update matching roster_players row
-    await supabase
-      .from('roster_players')
-      .update({
-        ghin_index: data.handicap_index,
-        ghin_number: ghinNumber.value.trim(),
-        ghin_synced_at: new Date().toISOString(),
-      })
-      .eq('profile_id', authStore.user.id)
+    const rosterPatch2 = {
+      ghin_index: data.handicap_index,
+      ghin_number: ghinNumber.value.trim(),
+      ghin_synced_at: new Date().toISOString(),
+    }
+    try {
+      await supaCall('roster.update-ghin-sync', supabase.from('roster_players').update(rosterPatch2).eq('profile_id', authStore.user.id), 3000)
+    } catch (e) {
+      if (!e.message?.includes('timed out')) throw e
+      await supaRawUpdate('roster_players', `profile_id=eq.${authStore.user.id}`, rosterPatch2, 8000).catch(() => {})
+    }
 
     ghinSyncMsg.value = `✓ Handicap synced: ${data.hi_display} (${data.full_name})`
     setTimeout(() => { ghinSyncMsg.value = '' }, 4000)
