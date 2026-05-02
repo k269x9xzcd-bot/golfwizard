@@ -64,6 +64,8 @@ export const useAuthStore = defineStore('auth', () => {
           linkUserToRosterPlayer()     // fire-and-forget; non-blocking
           backfillRoundMembership()    // fire-and-forget; backfill profile_id on old round_members rows
           syncRoundMembersToRoster()   // fire-and-forget; auto-add round co-players to this user's roster
+          // Claim any roster shares addressed to this email, then load pending banner
+          import('./roster').then(m => m.useRosterStore().claimRosterShares()).catch(() => {})
         } else {
           profile.value = null
         }

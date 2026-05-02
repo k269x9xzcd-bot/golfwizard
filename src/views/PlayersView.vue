@@ -44,6 +44,22 @@
     <!-- Invite hint -->
     <div v-if="inviteHint" class="invite-hint-banner">{{ inviteHint }}</div>
 
+    <!-- Pending roster-share banners -->
+    <div
+      v-for="share in rosterStore.pendingShares"
+      :key="share.id"
+      class="roster-share-banner"
+    >
+      <div class="rsb-body">
+        <div class="rsb-title">📋 {{ share.sender_name || 'Someone' }} shared {{ share.player_count }} players with you</div>
+        <div class="rsb-sub">Add them to your roster?</div>
+      </div>
+      <div class="rsb-actions">
+        <button class="rsb-accept" @click="rosterStore.acceptRosterShare(share.id)">Add all</button>
+        <button class="rsb-decline" @click="rosterStore.declineRosterShare(share.id)">Dismiss</button>
+      </div>
+    </div>
+
     <!-- Gear menu — main sheet -->
     <Sheet
       :model-value="showGearMenu && gearSubMenu === null"
@@ -637,7 +653,7 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, nextTick } from 'vue'
+import { ref, computed, reactive, nextTick, onMounted } from 'vue'
 import { Sheet, ListItem, Avatar, Pill } from '../components/ui'
 import { useRosterStore, displayInitials } from '../stores/roster'
 import { buildInviteUrl, buildInviteEmail } from '../modules/preset'
@@ -649,6 +665,10 @@ import { supaRawEdgeFunction } from '../modules/supaRaw'
 
 const rosterStore = useRosterStore()
 const authStore = useAuthStore()
+
+onMounted(() => {
+  if (authStore.isAuthenticated) rosterStore.loadPendingShares()
+})
 
 // ── GHIN sync dot helpers ────────────────────────────────────────
 function ghinSyncStatus(p) {
@@ -841,35 +861,15 @@ async function shareGroupInvite() {
   }
 }
 
-function shareRosterWith(recipient) {
+async function shareRosterWith(recipient) {
   if (!recipient.email) return
-  const senderName = authStore.profile?.display_name?.split(' ')[0] || 'Me'
-  const favorites = rosterStore.players.filter(p => p.is_favorite)
-  const rosterLines = favorites
-    .map(p => `• ${p.name}${p.ghin_index != null ? ' (' + Number(p.ghin_index).toFixed(1) + ')' : ''}`)
-    .join('\n')
-
-  // Build invite URL — preset encodes Jason's roster for new users
-  const url = buildInviteUrl(recipient.email || '', '', '', '', '')
-
   const first = recipient.name.split(' ')[0]
-  const subject = `${senderName} shared their GolfWizard roster with you`
-  const body = [
-    `Hey ${first},`,
-    '',
-    `I shared my GolfWizard player list with you (${favorites.length} players). When you open the link below and sign in, they'll all be in your roster:`,
-    '',
-    url,
-    '',
-    `Here's who's included:`,
-    rosterLines,
-    '',
-    `See you on the course,`,
-    senderName,
-  ].join('\n')
-
-  window.open(`mailto:${encodeURIComponent(recipient.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank')
-  showInviteHint(`Roster shared with ${first}!`)
+  try {
+    await rosterStore.shareRoster(recipient)
+    showInviteHint(`✓ Roster shared with ${first}! They'll see it when they sign in.`)
+  } catch (e) {
+    showInviteHint(`Failed to share with ${first}: ${e?.message ?? 'unknown error'}`)
+  }
 }
 
 function showInviteHint(msg) {
@@ -2280,6 +2280,23 @@ async function _autoSyncGhinNumber(playerId, ghinNumber, profile) {
   margin: 4px 0 8px; padding: 8px 12px; border-radius: 10px;
   background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.3);
   color: #4ade80; font-size: 12px; font-weight: 700; text-align: center;
+}
+.roster-share-banner {
+  margin: 4px 0 8px; padding: 12px 14px; border-radius: 12px;
+  background: rgba(96,165,250,.10); border: 1px solid rgba(96,165,250,.3);
+  display: flex; align-items: center; gap: 10px;
+}
+.rsb-body { flex: 1; min-width: 0; }
+.rsb-title { font-size: 13px; font-weight: 700; color: var(--gw-text-primary); }
+.rsb-sub { font-size: 11px; color: var(--gw-text-muted); margin-top: 2px; }
+.rsb-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.rsb-accept {
+  padding: 6px 12px; border-radius: 8px; border: none; cursor: pointer;
+  background: rgba(96,165,250,.25); color: #93c5fd; font-size: 12px; font-weight: 700;
+}
+.rsb-decline {
+  padding: 6px 10px; border-radius: 8px; border: none; cursor: pointer;
+  background: transparent; color: var(--gw-text-muted); font-size: 12px;
 }
 .player-invite-btn {
   font-size: 16px; background: transparent; border: none; cursor: pointer;

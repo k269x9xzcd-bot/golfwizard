@@ -234,16 +234,20 @@ export const useRosterStore = defineStore('roster', () => {
       ;({ data, error } = insRes)
     } catch (e) {
       if (!e.message?.includes('timed out')) throw e
+      console.warn('[roster.insert] SJS timeout, raw fallback')
       const rows = await _rawIns('roster_players', row, 10000)
       data = Array.isArray(rows) ? rows[0] : rows
     }
     if (error && error.code === '23505') {
-      // Unique violation — find the existing row and update it
-      let matchQuery = supabase.from('roster_players').select('id').eq('owner_id', auth.user.id)
-      if (row.ghin_number) matchQuery = matchQuery.eq('ghin_number', row.ghin_number)
-      else if (row.email)   matchQuery = matchQuery.eq('email', row.email)
-      else                  matchQuery = matchQuery.eq('name', row.name)
-      const { data: existing } = await matchQuery.maybeSingle()
+      // Unique violation — find the existing row and update it via raw (avoid stuck-socket on lookup)
+      const { supaRawSelect: _rawSel } = await import('../modules/supaRaw')
+      const matchFilter = row.ghin_number
+        ? `ghin_number=eq.${row.ghin_number}&owner_id=eq.${auth.user.id}`
+        : row.email
+          ? `email=eq.${encodeURIComponent(row.email)}&owner_id=eq.${auth.user.id}`
+          : `name=eq.${encodeURIComponent(row.name)}&owner_id=eq.${auth.user.id}`
+      const existingRows = await _rawSel('roster_players', `select=id&${matchFilter}`, 6000).catch(() => [])
+      const existing = Array.isArray(existingRows) ? existingRows[0] : null
       if (existing?.id) {
         try {
           const updRes = await _supaCall('roster.update', supabase.from('roster_players').update(row).eq('id', existing.id).select().single(), 6000)
@@ -391,11 +395,82 @@ export const useRosterStore = defineStore('roster', () => {
 
   const favoritePlayers = computed(() => players.value.filter(p => p.is_favorite))
 
+  // ── Roster sharing ────────────────────────────────────────────────
+
+  const pendingShares = ref([])
+
+  async function shareRoster(recipientPlayer) {
+    const auth = useAuthStore()
+    if (!auth.isAuthenticated || !recipientPlayer?.email) throw new Error('Cannot share: not signed in or no recipient email')
+    const favorites = players.value.filter(p => p.is_favorite)
+    const row = {
+      sender_id: auth.user.id,
+      sender_name: auth.profile?.display_name || null,
+      recipient_email: recipientPlayer.email.toLowerCase().trim(),
+      players_json: favorites,
+      player_count: favorites.length,
+    }
+    const { data, error } = await supabase.from('roster_shares').insert(row).select().single()
+    if (error) throw error
+    return data
+  }
+
+  async function claimRosterShares() {
+    const auth = useAuthStore()
+    if (!auth.isAuthenticated || !auth.user?.email) return
+    try {
+      await supabase.from('roster_shares')
+        .update({ recipient_id: auth.user.id })
+        .eq('recipient_email', auth.user.email.toLowerCase().trim())
+        .is('recipient_id', null)
+      await loadPendingShares()
+    } catch (e) {
+      console.warn('[roster] claimRosterShares error:', e?.message)
+    }
+  }
+
+  async function loadPendingShares() {
+    const auth = useAuthStore()
+    if (!auth.isAuthenticated) return
+    try {
+      const { data } = await supabase.from('roster_shares')
+        .select('*')
+        .eq('recipient_id', auth.user.id)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+      pendingShares.value = data || []
+    } catch (e) {
+      console.warn('[roster] loadPendingShares error:', e?.message)
+    }
+  }
+
+  async function acceptRosterShare(shareId) {
+    const share = pendingShares.value.find(s => s.id === shareId)
+    if (!share) return
+    const incoming = share.players_json || []
+    for (const p of incoming) {
+      // Strip DB-specific fields from snapshot; addPlayer will re-assign owner_id
+      const { id: _id, owner_id: _owner, created_at: _ca, updated_at: _ua, user_id: _uid, ...rest } = p
+      await addPlayer({ ...rest, is_favorite: true }).catch(() => {})
+    }
+    await supabase.from('roster_shares')
+      .update({ status: 'accepted', accepted_at: new Date().toISOString() })
+      .eq('id', shareId)
+    pendingShares.value = pendingShares.value.filter(s => s.id !== shareId)
+  }
+
+  async function declineRosterShare(shareId) {
+    await supabase.from('roster_shares').update({ status: 'declined' }).eq('id', shareId)
+    pendingShares.value = pendingShares.value.filter(s => s.id !== shareId)
+  }
+
   return {
     players, favoritePlayers, loading,
     fetchPlayers, addPlayer, updatePlayer, deletePlayer,
     toggleFavorite, migrateFromLocalStorage,
     displayName, displayInitials,
+    pendingShares, shareRoster, claimRosterShares, loadPendingShares,
+    acceptRosterShare, declineRosterShare,
   }
 })
 

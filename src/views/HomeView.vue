@@ -56,6 +56,22 @@
       <div class="mib-arrow">›</div>
     </div>
 
+    <!-- Pending roster-share banners -->
+    <div
+      v-for="share in rosterStore.pendingShares"
+      :key="share.id"
+      class="roster-share-banner"
+    >
+      <div class="rsb-body">
+        <div class="rsb-title">📋 {{ share.sender_name || 'Someone' }} shared {{ share.player_count }} players with you</div>
+        <div class="rsb-sub">Add them to your Players list?</div>
+      </div>
+      <div class="rsb-actions">
+        <button class="rsb-accept" @click="rosterStore.acceptRosterShare(share.id)">Add all</button>
+        <button class="rsb-decline" @click="rosterStore.declineRosterShare(share.id)">Dismiss</button>
+      </div>
+    </div>
+
     <button class="new-round-pill" @click="openWizard()">+ New Round</button>
 
     <!-- 4v4 Cross Match entry card -->
@@ -148,6 +164,7 @@ import { ref, computed, onMounted, watch, inject } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useRoundsStore } from '../stores/rounds'
+import { useRosterStore } from '../stores/roster'
 import { useTournamentStore } from '../stores/tournament.js'
 import { useLinkedMatchesStore } from '../stores/linkedMatches'
 import AuthModal from '../components/AuthModal.vue'
@@ -159,6 +176,7 @@ const appVersion = __APP_VERSION__
 
 const authStore = useAuthStore()
 const roundsStore = useRoundsStore()
+const rosterStore = useRosterStore()
 const { theme, toggle: toggleTheme } = useTheme()
 const tournamentStore = useTournamentStore()
 const linkedStore = useLinkedMatchesStore()
@@ -193,6 +211,7 @@ onMounted(async () => {
     tournamentStore.init()
     linkedStore.fetchUserLinkedMatches()
     linkedStore.fetchPendingInvites()
+    rosterStore.loadPendingShares()
   }
 })
 
@@ -202,6 +221,7 @@ watch(() => authStore.isAuthenticated, async (authed) => {
     tournamentStore.init()
     linkedStore.fetchUserLinkedMatches()
     linkedStore.fetchPendingInvites()
+    rosterStore.loadPendingShares()
   }
 })
 
@@ -255,6 +275,27 @@ async function openRound(id) {
 .mib-title { font-family: var(--gw-font-display); font-size: 15px; font-weight: 700; color: var(--gw-gold); }
 .mib-sub { font-size: 12px; color: rgba(240,237,224,.6); margin-top: 2px; }
 .mib-arrow { font-size: 22px; color: var(--gw-gold); opacity: .7; }
+
+.roster-share-banner {
+  display: flex; align-items: center; gap: 10px;
+  margin: 12px 16px 0; padding: 12px 14px;
+  background: rgba(96,165,250,.10); border: 1px solid rgba(96,165,250,.3);
+  border-radius: 14px;
+}
+.rsb-body { flex: 1; min-width: 0; }
+.rsb-title { font-size: 14px; font-weight: 700; color: var(--gw-text-primary); }
+.rsb-sub { font-size: 12px; color: var(--gw-text-muted); margin-top: 2px; }
+.rsb-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.rsb-accept {
+  padding: 7px 13px; border-radius: 8px; border: none; cursor: pointer;
+  background: rgba(96,165,250,.25); color: #93c5fd; font-size: 12px; font-weight: 700;
+  -webkit-tap-highlight-color: transparent;
+}
+.rsb-decline {
+  padding: 7px 10px; border-radius: 8px; border: none; cursor: pointer;
+  background: transparent; color: var(--gw-text-muted); font-size: 12px;
+  -webkit-tap-highlight-color: transparent;
+}
 
 .new-round-pill {
   display: block;
