@@ -793,6 +793,86 @@ describe('computeFiveThreeOne', () => {
     const sum = result.settlements.reduce((s, x) => s + x.net, 0)
     expect(Math.abs(sum)).toBeLessThan(0.01)
   })
+
+  it('birdieBonus tiered: net birdie +1, net eagle +2', () => {
+    const scores = { a: {}, b: {}, c: {} }
+    for (let h = 1; h <= 18; h++) {
+      if (h === 1) { scores.a[h] = 3; scores.b[h] = 2; scores.c[h] = 4 }  // a birdie, b eagle, c par
+      else { scores.a[h] = 4; scores.b[h] = 4; scores.c[h] = 4 }
+    }
+    const ctx = {
+      course: makeCourse(), tee: 'white', holesMode: '18',
+      members: [makeMember('a','A'), makeMember('b','B'), makeMember('c','C')],
+      scores,
+    }
+    const r = computeFiveThreeOne(ctx, { ppt: 1, players: ['a','b','c'], birdieBonus: true })
+    const h1 = r.holeResults.find(x => x.hole === 1)
+    // Base: b=5 (low), a=3 (second), c=1 (third). Bonus: b +2, a +1, c +0.
+    expect(h1.holePts.b).toBe(7)
+    expect(h1.holePts.a).toBe(4)
+    expect(h1.holePts.c).toBe(1)
+    expect(h1.birdieBonus).toEqual(expect.arrayContaining([
+      { id: 'a', shots: 1 },
+      { id: 'b', shots: 2 },
+    ]))
+  })
+
+  it('birdieBonus stacks on tied gross birdies', () => {
+    const scores = { a: {}, b: {}, c: {} }
+    for (let h = 1; h <= 18; h++) {
+      scores.a[h] = h === 1 ? 3 : 4
+      scores.b[h] = h === 1 ? 3 : 4
+      scores.c[h] = 4
+    }
+    const ctx = {
+      course: makeCourse(), tee: 'white', holesMode: '18',
+      members: [makeMember('a','A'), makeMember('b','B'), makeMember('c','C')],
+      scores,
+    }
+    const r = computeFiveThreeOne(ctx, { ppt: 1, players: ['a','b','c'], birdieBonus: true })
+    const h1 = r.holeResults.find(x => x.hole === 1)
+    expect(h1.holePts.a).toBe(5)  // base 4 + bonus 1
+    expect(h1.holePts.b).toBe(5)  // base 4 + bonus 1
+    expect(h1.holePts.c).toBe(1)
+    expect(h1.birdieBonus).toHaveLength(2)
+  })
+
+  it('birdieBonus uses FULL course handicap (stroke recipient who pars qualifies)', () => {
+    const scores = { a: {}, b: {}, c: {} }
+    for (let h = 1; h <= 18; h++) {
+      scores.a[h] = h === 1 ? 4 : 5  // par hole 1, bogey rest
+      scores.b[h] = 5
+      scores.c[h] = 5
+    }
+    const ctx = {
+      course: makeCourse(), tee: 'white', holesMode: '18',
+      members: [makeMember('a','A',5), makeMember('b','B',5), makeMember('c','C',5)],
+      scores,
+    }
+    const r = computeFiveThreeOne(ctx, { ppt: 1, players: ['a','b','c'], birdieBonus: true })
+    const h1 = r.holeResults.find(x => x.hole === 1)
+    // Each gets a stroke on SI 1. Course nets: a=3, b=4, c=4. a is the only net birdie.
+    // Low-man net (all hcp 5 → adjHcp 0): a=4 alone low, b=5, c=5 → base a=5, b=2, c=2.
+    // a course-net 3 < par 4 → bonus +1.
+    expect(h1.holePts.a).toBe(6)
+    expect(h1.holePts.b).toBe(2)
+    expect(h1.holePts.c).toBe(2)
+    expect(h1.birdieBonus).toEqual([{ id: 'a', shots: 1 }])
+  })
+
+  it('birdieBonus disabled → no bonus emitted', () => {
+    const scores = { a: {}, b: {}, c: {} }
+    for (let h = 1; h <= 18; h++) { scores.a[h] = 3; scores.b[h] = 4; scores.c[h] = 5 }
+    const ctx = {
+      course: makeCourse(), tee: 'white', holesMode: '18',
+      members: [makeMember('a','A'), makeMember('b','B'), makeMember('c','C')],
+      scores,
+    }
+    const r = computeFiveThreeOne(ctx, { ppt: 1, players: ['a','b','c'], birdieBonus: false })
+    const h1 = r.holeResults.find(x => x.hole === 1)
+    expect(h1.holePts.a).toBe(5)
+    expect(h1.birdieBonus).toBeUndefined()
+  })
 })
 
 // ─────────────────────────────────────────────────────────────────

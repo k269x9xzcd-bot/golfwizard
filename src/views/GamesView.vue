@@ -897,8 +897,11 @@ function fiveThreeOneEvents(result) {
       events.push({ hole: hr.hole, icon: '🧹', name: `${name} swept` })
     }
     if (hr.birdieBonus) {
-      const name = names[hr.birdieBonus] ?? hr.birdieBonus
-      events.push({ hole: hr.hole, icon: '🐦', name: `${name} birdie +1` })
+      for (const entry of hr.birdieBonus) {
+        const name = names[entry.id] ?? entry.id
+        const label = entry.shots === 1 ? 'birdie' : entry.shots === 2 ? 'eagle' : 'albatross'
+        events.push({ hole: hr.hole, icon: '🐦', name: `${name} net ${label} +${entry.shots}` })
+      }
     }
   }
   return events
@@ -915,8 +918,10 @@ function fiveThreeOneTallies(result) {
       tallies[hr.sweep].sweeps++
     }
     if (hr.birdieBonus) {
-      tallies[hr.birdieBonus] = tallies[hr.birdieBonus] || { sweeps: 0, birdies: 0 }
-      tallies[hr.birdieBonus].birdies++
+      for (const entry of hr.birdieBonus) {
+        tallies[entry.id] = tallies[entry.id] || { sweeps: 0, birdies: 0 }
+        tallies[entry.id].birdies += entry.shots
+      }
     }
   }
   return tallies

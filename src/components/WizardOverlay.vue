@@ -810,7 +810,7 @@
                 <input type="checkbox" v-model="mainGame.config.birdieBonus" />
                 <span>🐦 Birdie bonus</span>
               </label>
-              <span class="toggle-desc">Solo net birdie = +{{ mainGame.config.birdieBonusPts ?? 1 }} extra pt</span>
+              <span class="toggle-desc">Net birdie or better = +{{ mainGame.config.birdieBonusPts ?? 1 }} pt per shot under net par (full course handicap; stacks)</span>
             </div>
             <div v-if="mainGame.config.birdieBonus" class="config-field config-field--sub">
               <label>Bonus pts</label>
@@ -1015,7 +1015,7 @@
                     <input type="checkbox" v-model="sideGames.nines.birdieBonus" />
                     <span>🐦 Birdie bonus</span>
                   </label>
-                  <span class="toggle-desc">Solo net birdie = +{{ sideGames.nines.birdieBonusPts ?? 1 }} extra pt</span>
+                  <span class="toggle-desc">Net birdie or better = +{{ sideGames.nines.birdieBonusPts ?? 1 }} pt per shot under net par (full course handicap; stacks)</span>
                 </div>
                 <div v-if="sideGames.nines.birdieBonus" class="config-field config-field--sub">
                   <label>Bonus pts</label>

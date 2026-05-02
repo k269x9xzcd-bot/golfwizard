@@ -1549,8 +1549,8 @@ export function computeNines(ctx, config) {
     players: pids,
     sweepBonus = false,   // if sole winner beats 2nd place by ≥ sweepMargin net strokes, wins all 9 pts
     sweepMargin = 2,      // net strokes margin required to trigger sweep
-    birdieBonus = false,  // if exactly one player nets a birdie, they get +1 extra pt
-    birdieBonusPts = 1,   // extra points awarded for solo net birdie
+    birdieBonus = false,  // each player who nets a birdie or better gets +birdieBonusPts × shots-under-net-par (uses full course handicap, stacks across players)
+    birdieBonusPts = 1,   // points per shot under net par awarded as the bonus
     birdieDouble = false, // birdie on hole doubles that player's pts (5→10, 3→6, 1→2)
   } = config
 
@@ -1620,16 +1620,22 @@ export function computeNines(ctx, config) {
     }
 
     // ── Birdie bonus ─────────────────────────────────────────────
-    // Exactly one player nets a birdie → +birdieBonusPts to that player.
-    let birdieBonusId = null
+    // Each player who nets a birdie or better gets +birdieBonusPts per shot
+    // under net par. Uses each player's FULL course handicap (memberNetOnHole),
+    // NOT the low-man-adjusted net used for base scoring — so a stroke recipient
+    // who pars qualifies even when the low-man also pars. Stacks: net birdie = +1,
+    // net eagle = +2, net albatross = +3.
+    const birdieBonusEntries = []  // [{ id, shots }]
     if (birdieBonus) {
       const par = holePar(ctx.course, h)
-      // Low-man net — compare against par adjusted for the fact that the low-man
-      // gets no strokes.  A net score below par counts as a birdie.
-      const birdieScorers = scores.filter(s => s.net < par)
-      if (birdieScorers.length === 1) {
-        birdieBonusId = birdieScorers[0].id
-        holePts[birdieBonusId] = Math.round((holePts[birdieBonusId] + birdieBonusPts) * 100) / 100
+      for (const m of members) {
+        const courseNet = memberNetOnHole(ctx, m, h)
+        if (courseNet != null && courseNet < par) {
+          const shots = par - courseNet  // 1=birdie, 2=eagle, 3=albatross
+          const bonus = shots * birdieBonusPts
+          holePts[m.id] = Math.round((holePts[m.id] + bonus) * 100) / 100
+          birdieBonusEntries.push({ id: m.id, shots })
+        }
       }
     }
 
@@ -1641,7 +1647,7 @@ export function computeNines(ctx, config) {
     holeResults.push({
       hole: h, scores, holePts,
       ...(sweepWinnerId ? { sweep: sweepWinnerId } : {}),
-      ...(birdieBonusId ? { birdieBonus: birdieBonusId } : {}),
+      ...(birdieBonusEntries.length ? { birdieBonus: birdieBonusEntries } : {}),
     })
   }
 

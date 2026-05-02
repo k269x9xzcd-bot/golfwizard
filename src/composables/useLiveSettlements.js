@@ -572,7 +572,12 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         const ftoTallies = {}
         for (const hr of (r.holeResults || [])) {
           if (hr.sweep) { ftoTallies[hr.sweep] = ftoTallies[hr.sweep] || { sweeps: 0, birdies: 0 }; ftoTallies[hr.sweep].sweeps++ }
-          if (hr.birdieBonus) { ftoTallies[hr.birdieBonus] = ftoTallies[hr.birdieBonus] || { sweeps: 0, birdies: 0 }; ftoTallies[hr.birdieBonus].birdies++ }
+          if (hr.birdieBonus) {
+            for (const entry of hr.birdieBonus) {
+              ftoTallies[entry.id] = ftoTallies[entry.id] || { sweeps: 0, birdies: 0 }
+              ftoTallies[entry.id].birdies += entry.shots  // count points awarded, not occurrences
+            }
+          }
         }
         const hasSweep = r.hasSweep
         const hasBirdie = r.hasBirdie

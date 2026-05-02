@@ -251,11 +251,11 @@ export const WOLF_HOLE_MODES=[{k:'normal',l:'🤝 Partner'},{k:'lone',l:'🐺 Lo
     wagering:'$ per point difference, pairwise. Common: $1/pt. Example: A=42pts, B=38pts, C=20pts. A collects $4 from B and $22 from C; B collects $18 from C.',
     hcpNote:'Low-man method: subtract the lowest handicap in the group from everyone. Strokes applied by stroke index.',
     example:'Hole 5: net scores 3,4,6. 3=5pts, 4=3pts, 6=1pt. Birdie double: if the 3 is a net birdie that player gets 10pts.',
-    variations:'Sweep bonus: sole winner beats 2nd by >=2 net strokes, takes all 9pts. Birdie bonus: solo net birdie = +1 extra pt. Birdie double: birdie doubles pts that hole. All opt-in, agree before teeing off.',
+    variations:'Sweep bonus: sole winner beats 2nd by >=2 net strokes, takes all 9pts. Birdie bonus: net birdie or better = +1 pt per shot under net par (uses your full course handicap; stacks across players — net birdie = +1, net eagle = +2, net albatross = +3). Birdie double: birdie doubles pts that hole. All opt-in, agree before teeing off.',
     variationConfig: {
       sweepBonus: { type: 'boolean', default: false, label: 'Sweep bonus', desc: 'Win by 2+ net strokes -> take all 9 pts' },
       sweepMargin: { type: 'number', default: 2, label: 'Sweep margin (strokes)', min: 1, max: 5, dependsOn: 'sweepBonus' },
-      birdieBonus: { type: 'boolean', default: false, label: 'Birdie bonus', desc: 'Solo net birdie = +1 extra pt' },
+      birdieBonus: { type: 'boolean', default: false, label: 'Birdie bonus', desc: 'Net birdie or better = +1 pt per shot under net par (full course handicap; stacks)' },
       birdieBonusPts: { type: 'number', default: 1, label: 'Birdie bonus pts', min: 1, max: 3, dependsOn: 'birdieBonus' },
       birdieDouble: { type: 'boolean', default: false, label: 'Birdie double', desc: 'Net birdie doubles pts that hole (5->10, 3->6, 1->2)' },
     }},
