@@ -824,6 +824,7 @@ async function invitePlayer(player) {
     showInviteHint(`${player.name.split(' ')[0]} already has an account`)
     return
   }
+  inviteHint.value = ''
   inviteStatus.value[player.id] = 'sending'
   try {
     const invokeResult = await Promise.race([
