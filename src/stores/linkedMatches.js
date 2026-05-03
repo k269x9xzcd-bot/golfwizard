@@ -167,8 +167,8 @@ export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
 
     // Step 2: load both round bundles in parallel using raw-only fast path
     const [roundA, roundB] = await Promise.all([
-      _loadRoundBundleFast(match.round_a_id),
-      match.round_b_id ? _loadRoundBundleFast(match.round_b_id) : Promise.resolve(null),
+      _loadRoundBundle(match.round_a_id),
+      match.round_b_id ? _loadRoundBundle(match.round_b_id) : Promise.resolve(null),
     ])
 
     console.log(`[linkedMatches] full detail loaded in ${Date.now() - t0}ms`)
