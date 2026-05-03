@@ -167,7 +167,7 @@
             v-for="match in round.matches"
             :key="match.id"
             class="match-card"
-            :class="{ 'match-played': match.result, 'match-pending': !match.result }"
+            :class="{ 'match-played': match.result, 'match-inprogress': !match.result && match.roundId, 'match-pending': !match.result && !match.roundId }"
             @click="openMatch(round, match)"
           >
             <div class="mc-teams">
@@ -210,7 +210,28 @@
               </div>
             </div>
 
-            <!-- Pending -->
+            <!-- In progress (round started, no result yet) -->
+            <template v-else-if="match.roundId">
+              <div class="mc-pending mc-pending--inprogress">
+                <span class="mc-pending-dot mc-pending-dot--live"></span>
+                <span class="mc-pending-text">Round in progress</span>
+                <span class="mc-arrow">›</span>
+              </div>
+              <div v-if="liveStatus(match.roundId, match)" class="mc-live-status">
+                <span class="mc-live-thru">Thru {{ liveStatus(match.roundId, match).thru }}</span>
+                <span class="mc-live-sep">·</span>
+                <span class="mc-live-label"
+                  :style="liveStatus(match.roundId, match).diff !== 0
+                    ? { color: liveStatus(match.roundId, match).diff > 0 ? getTeam(match.team1).color : getTeam(match.team2).color }
+                    : {}"
+                >{{ liveStatus(match.roundId, match).statusLabel }}</span>
+              </div>
+              <div v-else-if="liveRoundData[match.roundId]" class="mc-live-status mc-live-status--loading">
+                Loading…
+              </div>
+            </template>
+
+            <!-- Not yet started -->
             <div v-else class="mc-pending">
               <span class="mc-pending-dot"></span>
               <span class="mc-pending-text">Not yet played</span>
@@ -570,11 +591,26 @@
 
             <!-- Launch round wizard button -->
             <div class="mm-launch-wrap">
-              <button class="mm-btn-launch" @click="launchRound" :disabled="launchingRound">
+              <button
+                v-if="!activeMatch.match.roundId"
+                class="mm-btn-launch"
+                @click="launchRound"
+                :disabled="launchingRound"
+              >
                 <span class="mm-launch-icon">⛳</span>
                 {{ launchingRound ? 'Creating Round…' : 'Start Round' }}
               </button>
-              <div class="mm-launch-hint">Creates Best Ball with tournament players & opens scoring</div>
+              <button
+                v-else
+                class="mm-btn-launch mm-btn-launch--resume"
+                @click="router.push('/scoring')"
+              >
+                <span class="mm-launch-icon">⛳</span>
+                Resume Round
+              </button>
+              <div class="mm-launch-hint">
+                {{ activeMatch.match.roundId ? 'Round already started — tap to continue scoring' : 'Creates Best Ball with tournament players & opens scoring' }}
+              </div>
             </div>
 
             <div class="mm-footer">
@@ -776,12 +812,14 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, triggerRef, nextTick, onMounted, watch, watchEffect } from 'vue'
+import { ref, computed, reactive, triggerRef, nextTick, onMounted, onUnmounted, watch, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useRoundsStore } from '../stores/rounds'
 import { useRosterStore } from '../stores/roster'
 import { useCoursesStore } from '../stores/courses'
+import { supabase } from '../supabase'
+import { strokesOnHole } from '../modules/gameEngine'
 import {
   TOURNAMENT, TEAMS, SCHEDULE,
   getTeam, matchPoints, computeStandings, teamMatches,
@@ -825,6 +863,127 @@ const tab = ref('standings')
 // Reactive trigger — SCHEDULE is a plain object so Vue can't detect mutations.
 // Increment this after any mutation to force computed properties to re-evaluate.
 const scheduleVersion = ref(0)
+
+// ── Live match tracking ─────────────────────────────────────────
+// liveRoundData: roundId → { members, scores, courseSnapshot, tee }
+const liveRoundData = ref({})
+const _liveChannels = {} // roundId → supabase channel — managed outside Vue reactivity
+
+async function _subscribeToLiveRound(roundId) {
+  if (!roundId || _liveChannels[roundId]) return
+  _liveChannels[roundId] = true // placeholder to prevent double-subscribe
+
+  try {
+    const [roundRes, membersRes, scoresRes] = await Promise.all([
+      supabase.from('rounds').select('course_snapshot, tee').eq('id', roundId).single(),
+      supabase.from('round_members').select('id, team, round_hcp, short_name, nickname').eq('round_id', roundId),
+      supabase.from('scores').select('member_id, hole, score').eq('round_id', roundId),
+    ])
+
+    const scoresMap = {}
+    for (const s of (scoresRes.data || [])) {
+      if (!scoresMap[s.member_id]) scoresMap[s.member_id] = {}
+      scoresMap[s.member_id][s.hole] = s.score
+    }
+
+    liveRoundData.value = {
+      ...liveRoundData.value,
+      [roundId]: {
+        members: membersRes.data || [],
+        scores: scoresMap,
+        courseSnapshot: roundRes.data?.course_snapshot ?? null,
+        tee: roundRes.data?.tee ?? null,
+      },
+    }
+  } catch (e) {
+    console.warn('[live] failed to fetch round data:', e)
+  }
+
+  const channel = supabase
+    .channel(`tourn_live:${roundId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'scores', filter: `round_id=eq.${roundId}` },
+      payload => {
+        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+          const s = payload.new
+          const existing = liveRoundData.value[roundId]
+          if (!existing) return
+          const scores = { ...existing.scores }
+          scores[s.member_id] = { ...scores[s.member_id], [s.hole]: s.score }
+          liveRoundData.value = { ...liveRoundData.value, [roundId]: { ...existing, scores } }
+        }
+      })
+    .subscribe()
+  _liveChannels[roundId] = channel
+}
+
+function _teardownLiveChannels() {
+  for (const ch of Object.values(_liveChannels)) {
+    if (ch && typeof ch.unsubscribe === 'function') {
+      try { supabase.removeChannel(ch) } catch {}
+    }
+  }
+  for (const k of Object.keys(_liveChannels)) delete _liveChannels[k]
+}
+
+onUnmounted(_teardownLiveChannels)
+
+// Activate subscriptions for any match that has a roundId set
+watch(
+  () => {
+    const ids = []
+    for (const round of SCHEDULE) {
+      for (const m of round.matches) {
+        if (m.roundId && !m.result) ids.push(m.roundId)
+      }
+    }
+    return ids
+  },
+  (ids) => { for (const id of ids) _subscribeToLiveRound(id) },
+  { deep: true, immediate: false },
+)
+
+// Compute live status for a given roundId
+function liveStatus(roundId, match) {
+  const data = liveRoundData.value[roundId]
+  if (!data) return null
+
+  const { members, scores, courseSnapshot } = data
+  const siArr = courseSnapshot?.si || []
+
+  const hcpMap = {}
+  for (const m of members) hcpMap[m.id] = m.round_hcp ?? 0
+
+  const t1Members = members.filter(m => m.team === 1)
+  const t2Members = members.filter(m => m.team === 2)
+
+  let thru = 0
+  for (const memberId of Object.keys(scores)) {
+    const holes = Object.keys(scores[memberId]).map(Number)
+    if (holes.length) thru = Math.max(thru, ...holes)
+  }
+
+  let t1Up = 0, t2Up = 0
+  for (let h = 1; h <= thru; h++) {
+    const si = siArr[h - 1] ?? h
+    const t1Nets = t1Members.map(m => scores[m.id]?.[h] != null ? scores[m.id][h] - strokesOnHole(hcpMap[m.id] ?? 0, si) : null).filter(n => n != null)
+    const t2Nets = t2Members.map(m => scores[m.id]?.[h] != null ? scores[m.id][h] - strokesOnHole(hcpMap[m.id] ?? 0, si) : null).filter(n => n != null)
+    if (!t1Nets.length || !t2Nets.length) continue
+    const t1BB = Math.min(...t1Nets), t2BB = Math.min(...t2Nets)
+    if (t1BB < t2BB) t1Up++
+    else if (t2BB < t1BB) t2Up++
+  }
+
+  const diff = t1Up - t2Up
+  let statusLabel
+  if (diff === 0) statusLabel = thru ? 'All square' : 'Tee off'
+  else {
+    const leadTeam = diff > 0 ? getTeam(match.team1) : getTeam(match.team2)
+    const holesLeft = 18 - thru
+    statusLabel = `${leadTeam.name} ${Math.abs(diff)} up` + (holesLeft > 0 ? ` thru ${thru}` : '')
+  }
+
+  return { thru, t1Up, t2Up, diff, statusLabel }
+}
 
 // ── Tournament name/format edit (persisted to Supabase) ────────
 // editedName/editedFormat are local UI state only; TOURNAMENT.name/format
@@ -1184,7 +1343,6 @@ function saveResult() {
     playedDate: editResult.playedDate || new Date().toISOString().slice(0, 10),
   }
   activeMatch.value = null
-  // Persist to localStorage so results survive refresh
   _saveResults()
 }
 
@@ -1231,12 +1389,12 @@ function swapPairings() {
 
 async function confirmPairingsAndLaunch() {
   if (!pairingPicker.value) return
-  const { match, t1, t2, isFinal, pairings } = pairingPicker.value
+  const { match, t1, t2, isFinal, pairings, course, tee } = pairingPicker.value
   pairingPicker.value = null
-  await _doLaunchRound({ match, t1, t2, isFinal, pairings })
+  await _doLaunchRound({ match, t1, t2, isFinal, pairings, course, tee })
 }
 
-async function _doLaunchRound({ match, t1, t2, isFinal, pairings }) {
+async function _doLaunchRound({ match, t1, t2, isFinal, pairings, course, tee }) {
   // Build player list with team assignments and stable temp IDs
   const ts = Date.now()
   const players = [
@@ -1306,14 +1464,14 @@ async function _doLaunchRound({ match, t1, t2, isFinal, pairings }) {
   launchError.value = null
   try { localStorage.setItem('gw_create_log', '[]') } catch {}
 
-  const courseName = pairingPicker.value?.course || TOURNAMENT.defaultCourse || 'Bonnie Briar Country Club'
-  const tee = pairingPicker.value?.tee || TOURNAMENT.defaultTee || 'Blue'
+  const courseName = course || TOURNAMENT.defaultCourse || 'Bonnie Briar Country Club'
+  const teeVal = tee || TOURNAMENT.defaultTee || 'Blue'
 
   try {
     const round = await roundsStore.createRound({
       name: isFinal ? `FINAL: ${t1.name} vs ${t2.name}` : `${t1.name} vs ${t2.name}`,
       courseName,
-      tee,
+      tee: teeVal,
       holesMode: '18',
       format: 'tournament',
       players,
@@ -1324,6 +1482,14 @@ async function _doLaunchRound({ match, t1, t2, isFinal, pairings }) {
       const msg = 'Round creation returned no data.'
       launchError.value = { message: msg, trace: buildLaunchDiagnostic(msg), copied: false }
       return
+    }
+
+    // Link this round back to the tournament match so all devices can find it
+    if (match._dbId) {
+      tournamentStore.linkRoundToMatch(match._dbId, round.id).catch(e => {
+        console.warn('[tournament] Failed to link round to match:', e)
+      })
+      match.roundId = round.id
     }
 
     activeMatch.value = null
@@ -1384,29 +1550,53 @@ function _saveResults() {
   const saved = {}
   for (const round of SCHEDULE) {
     for (const match of round.matches) {
-      if (match.result) saved[match.id] = match.result
+      if (match.result) {
+        saved[match.id] = match.result
+        if (match._dbId) {
+          tournamentStore.saveMatchResult(match._dbId, match.result).catch(e => {
+            console.warn('[tournament] Failed to sync result to Supabase:', e)
+          })
+        }
+      }
     }
   }
   localStorage.setItem(RESULTS_KEY, JSON.stringify(saved))
-  scheduleVersion.value++ // trigger Vue reactivity for SCHEDULE-dependent computeds
+  scheduleVersion.value++
 }
 
 function _loadResults() {
+  // Primary: SCHEDULE already has results from Supabase (loaded by tournamentStore.init()).
+  // Fallback: localStorage covers simulate/reset and any offline edits not yet synced.
   try {
     const raw = localStorage.getItem(RESULTS_KEY)
     if (!raw) return
     const saved = JSON.parse(raw)
     for (const round of SCHEDULE) {
       for (const match of round.matches) {
-        if (saved[match.id]) match.result = saved[match.id]
+        // Only apply localStorage value if Supabase didn't already provide one
+        if (!match.result && saved[match.id]) match.result = saved[match.id]
       }
     }
   } catch (e) { /* ignore */ }
 }
 
-// Load results on mount
-_loadResults()
-scheduleVersion.value++ // ensure computeds pick up loaded results
+// Reload results from Supabase whenever the store finishes loading
+watch(
+  () => tournamentStore.loaded,
+  (loaded) => {
+    if (loaded) {
+      _loadResults()
+      scheduleVersion.value++
+      // Subscribe to any rounds already in progress
+      for (const round of SCHEDULE) {
+        for (const m of round.matches) {
+          if (m.roundId && !m.result) _subscribeToLiveRound(m.roundId)
+        }
+      }
+    }
+  },
+  { immediate: true },
+)
 
 // ── Championship Final ─────────────────────────────────────────
 // Derived from the top 2 teams in standings (only meaningful when allDone)
@@ -1742,12 +1932,36 @@ _loadFinalResult()
   display: flex; align-items: center; gap: 8px;
   color: rgba(240,237,224,.35); font-size: 12px;
 }
+.mc-pending--inprogress { color: rgba(251,191,36,.7); }
 .mc-pending-dot {
   width: 6px; height: 6px; border-radius: 50%;
   background: rgba(240,237,224,.2);
 }
+.mc-pending-dot--live {
+  background: #fbbf24;
+  box-shadow: 0 0 0 0 rgba(251,191,36,.6);
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%   { box-shadow: 0 0 0 0 rgba(251,191,36,.6); }
+  60%  { box-shadow: 0 0 0 5px rgba(251,191,36,0); }
+  100% { box-shadow: 0 0 0 0 rgba(251,191,36,0); }
+}
+.match-card.match-inprogress { border-color: rgba(251,191,36,.25); }
 .mc-pending-text { flex: 1; }
 .mc-arrow { font-size: 16px; color: rgba(240,237,224,.2); }
+.mm-btn-launch--resume { background: rgba(251,191,36,.15); border-color: rgba(251,191,36,.4); color: #fbbf24; }
+
+.mc-live-status {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 6px; padding-top: 6px;
+  border-top: 1px solid rgba(251,191,36,.15);
+  font-size: 12px; font-weight: 700;
+}
+.mc-live-thru { color: rgba(240,237,224,.5); font-weight: 600; }
+.mc-live-sep { color: rgba(240,237,224,.25); }
+.mc-live-label { color: rgba(240,237,224,.85); }
+.mc-live-status--loading { color: rgba(240,237,224,.3); font-weight: 400; font-style: italic; }
 
 /* Finals teaser */
 .finals-teaser {

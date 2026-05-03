@@ -225,6 +225,35 @@ export const useTournamentStore = defineStore('tournament', () => {
     }
   }
 
+  // ── linkRoundToMatch: write round_id back to tournament_matches ──
+  async function linkRoundToMatch(matchDbId, roundId) {
+    if (!matchDbId || !roundId) return
+    await supaCallWithRetry(
+      'tournament.linkRound',
+      () => supabase.from('tournament_matches').update({ round_id: roundId }).eq('id', matchDbId),
+      8000,
+    )
+    // Patch local schedule so roundId reflects immediately
+    const sch = schedule.value
+    if (sch) {
+      for (const round of sch) {
+        for (const m of (round.matches || [])) {
+          if (m._dbId === matchDbId) { m.roundId = roundId; break }
+        }
+      }
+    }
+  }
+
+  // ── saveMatchResult: write result JSON to tournament_matches ──────
+  async function saveMatchResult(matchDbId, result) {
+    if (!matchDbId) return
+    await supaCallWithRetry(
+      'tournament.saveResult',
+      () => supabase.from('tournament_matches').update({ result }).eq('id', matchDbId),
+      8000,
+    )
+  }
+
   // ── updateTournamentMeta: update name/format in Supabase ───────
   async function updateTournamentMeta(updates) {
     const { data, error } = await supaCallWithRetry(
@@ -257,6 +286,8 @@ export const useTournamentStore = defineStore('tournament', () => {
     hasTournamentAccessAsync,
     saveTeamPlayers,
     updateTournamentMeta,
+    linkRoundToMatch,
+    saveMatchResult,
   }
 })
 
