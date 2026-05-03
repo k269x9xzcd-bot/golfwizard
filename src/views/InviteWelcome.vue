@@ -59,18 +59,28 @@
         </div>
       </div>
 
+      <!-- Handoff code (shown after sign-in, while still in Safari) -->
+      <div v-if="handoffCode" class="handoff-card">
+        <div class="handoff-title">Open the GolfWizard app and enter this code</div>
+        <div class="handoff-code">{{ handoffCode }}</div>
+        <div class="handoff-timer" :class="{ 'handoff-timer--urgent': handoffSecsLeft < 60 }">
+          Expires in {{ handoffSecsDisplay }}
+        </div>
+        <div class="handoff-hint">Tap the GolfWizard icon on your home screen, then tap "Have a code?" on the sign-in screen.</div>
+      </div>
+
       <!-- Sign in / Continue -->
       <div class="invite-actions">
         <button v-if="!authStore.isAuthenticated" class="invite-btn-primary" @click="showAuth = true">
           {{ inviteEmail ? `Sign In as ${inviteEmail.split('@')[0]} →` : 'Sign In with Email →' }}
         </button>
-        <button v-else-if="!ghinDone" class="invite-btn-primary" @click="showGhinStep = true">
+        <button v-else-if="!ghinDone && !handoffCode" class="invite-btn-primary" @click="showGhinStep = true">
           Set Up Your Handicap →
         </button>
-        <button v-else class="invite-btn-primary" @click="router.push('/')">
+        <button v-else-if="!handoffCode" class="invite-btn-primary" @click="router.push('/')">
           Go to GolfWizard →
         </button>
-        <button class="invite-btn-ghost" @click="router.push('/')">
+        <button v-if="!authStore.isAuthenticated" class="invite-btn-ghost" @click="router.push('/')">
           Continue without signing in
         </button>
       </div>
@@ -160,6 +170,39 @@ const seeding = ref(true)
 const showAuth = ref(false)
 const fromName = ref('Jason Spieler')
 
+// Handoff code (Safari→PWA session transfer)
+const handoffCode = ref(null)
+const handoffSecsLeft = ref(300)
+const handoffSecsDisplay = computed(() => {
+  const m = Math.floor(handoffSecsLeft.value / 60)
+  const s = handoffSecsLeft.value % 60
+  return m > 0 ? `${m}:${String(s).padStart(2, '0')}` : `${s}s`
+})
+let handoffInterval = null
+
+async function generateHandoffCode() {
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
+    const { data, error } = await supabase.rpc('create_handoff', {
+      p_access_token: session.access_token,
+      p_refresh_token: session.refresh_token,
+    })
+    if (error) { console.warn('[invite] create_handoff error:', error.message); return }
+    handoffCode.value = data
+    handoffSecsLeft.value = 300
+    handoffInterval = setInterval(() => {
+      handoffSecsLeft.value--
+      if (handoffSecsLeft.value <= 0) {
+        clearInterval(handoffInterval)
+        handoffCode.value = null
+      }
+    }, 1000)
+  } catch (e) {
+    console.warn('[invite] generateHandoffCode failed:', e?.message)
+  }
+}
+
 // GHIN step
 const showGhinStep = ref(false)
 const ghinDone = ref(false)
@@ -225,8 +268,11 @@ async function onAuthClose() {
     })
   }
 
-  // Prompt GHIN setup if they don't have it yet
-  if (!authStore.profile?.ghin_number) {
+  // Generate a handoff code so the user can sign into the PWA from Safari
+  await generateHandoffCode()
+
+  // Prompt GHIN setup if they don't have it yet (and no handoff to focus on)
+  if (!authStore.profile?.ghin_number && !handoffCode.value) {
     showGhinStep.value = true
   }
 }
@@ -606,6 +652,46 @@ onMounted(async () => {
 .ghin-success-msg { font-size: 13px; color: #34d399; font-weight: 600; background: rgba(52,211,153,.1); border: 1px solid rgba(52,211,153,.2); border-radius: 8px; padding: 10px 12px; }
 .ghin-error-msg { font-size: 13px; color: #f87171; background: rgba(248,113,113,.1); border: 1px solid rgba(248,113,113,.2); border-radius: 8px; padding: 10px 12px; }
 .ghin-step-note { font-size: 11px; color: rgba(240,237,224,.3); text-align: center; }
+
+/* Handoff code card */
+.handoff-card {
+  padding: 20px 16px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(212,175,55,.15) 0%, rgba(212,175,55,.05) 100%);
+  border: 1.5px solid rgba(212,175,55,.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+.handoff-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(240,237,224,.75);
+  letter-spacing: .02em;
+}
+.handoff-code {
+  font-family: var(--gw-font-mono, monospace);
+  font-size: 42px;
+  font-weight: 800;
+  letter-spacing: .25em;
+  color: var(--gw-gold, #d4af37);
+  line-height: 1;
+  padding: 4px 0;
+}
+.handoff-timer {
+  font-size: 12px;
+  color: rgba(240,237,224,.5);
+  font-weight: 600;
+}
+.handoff-timer--urgent { color: #f87171; }
+.handoff-hint {
+  font-size: 12px;
+  color: rgba(240,237,224,.45);
+  line-height: 1.5;
+  max-width: 280px;
+}
 
 .invite-mismatch-banner {
   background: rgba(251,191,36,.1);

@@ -50,6 +50,50 @@
             Continue as guest
             <span class="guest-note">Data saved locally on this device</span>
           </button>
+
+          <button class="btn-has-code" @click="step = 'handoff'">
+            Have an invite code?
+          </button>
+        </div>
+
+        <!-- Step: Redeem handoff code -->
+        <div v-else-if="step === 'handoff'" class="auth-body">
+          <div class="otp-icon">🔑</div>
+          <h2 class="auth-title">Enter your invite code</h2>
+          <p class="auth-sub">Sign in with the 6-character code from your invite page.</p>
+
+          <form @submit.prevent="redeemCode" class="auth-form">
+            <label class="auth-label" for="auth-handoff">Invite code</label>
+            <input
+              v-model="handoffInput"
+              type="text"
+              class="auth-input auth-input--otp"
+              placeholder="ABC123"
+              autocomplete="off"
+              autocapitalize="characters"
+              maxlength="6"
+              id="auth-handoff"
+              required
+              ref="handoffInput_ref"
+            />
+            <button
+              type="submit"
+              class="btn-magic"
+              :disabled="redeeming || handoffInput.trim().length < 6"
+            >
+              <span v-if="redeeming" class="btn-spinner">⟳</span>
+              <span v-else>✓</span>
+              {{ redeeming ? 'Signing in…' : 'Sign in with code' }}
+            </button>
+          </form>
+
+          <div v-if="error" class="auth-error">
+            <span class="error-icon">⚠️</span> {{ error }}
+          </div>
+
+          <button class="btn-retry" @click="step = 'email'">
+            ← Sign in with email instead
+          </button>
         </div>
 
         <!-- Step 2: Enter sign-in code -->
@@ -113,6 +157,7 @@
 <script setup>
 import { ref, nextTick, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
+import { supabase } from '../supabase'
 
 const props = defineProps({
   prefillEmail: { type: String, default: '' },
@@ -127,6 +172,11 @@ const sending = ref(false)
 const verifying = ref(false)
 const error = ref('')
 const otpInput = ref(null)
+
+// Handoff code redemption
+const handoffInput = ref('')
+const handoffInput_ref = ref(null)
+const redeeming = ref(false)
 
 async function sendOtp() {
   if (!email.value.trim()) return
@@ -166,6 +216,30 @@ function resetForm() {
   step.value = 'email'
   otp.value = ''
   error.value = ''
+}
+
+async function redeemCode() {
+  if (handoffInput.value.trim().length < 6) return
+  redeeming.value = true
+  error.value = ''
+  try {
+    const { data, error: rpcErr } = await supabase.rpc('redeem_handoff', {
+      p_code: handoffInput.value.trim().toUpperCase(),
+    })
+    if (rpcErr) throw rpcErr
+    if (data?.error) throw new Error(data.error)
+    await supabase.auth.setSession({
+      access_token: data.access_token,
+      refresh_token: data.refresh_token,
+    })
+    step.value = 'success'
+    setTimeout(() => emit('close'), 2000)
+  } catch (e) {
+    error.value = e.message?.includes('Invalid') ? 'Invalid or expired code — check and try again.' : (e.message || 'Could not redeem code.')
+    handoffInput.value = ''
+  } finally {
+    redeeming.value = false
+  }
 }
 
 // If opened with a pre-filled email (from invite link), auto-send the OTP
@@ -386,6 +460,23 @@ onMounted(async () => {
   color: var(--gw-text-muted);
   font-weight: 400;
 }
+
+/* ── Have a code ─────────────────────────────────────────── */
+.btn-has-code {
+  display: block;
+  width: 100%;
+  text-align: center;
+  background: none;
+  border: none;
+  color: rgba(240,237,224,.45);
+  font-family: var(--gw-font-body);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 10px 8px 2px;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-has-code:active { color: var(--gw-gold); }
 
 /* ── Retry ───────────────────────────────────────────────── */
 .btn-retry {

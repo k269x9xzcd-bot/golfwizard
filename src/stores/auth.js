@@ -169,6 +169,9 @@ export const useAuthStore = defineStore('auth', () => {
           first_name: firstName,
           last_name: lastName,
           ghin_number: rosterMatch?.ghin_number ?? null,
+          ghin_index: rosterMatch?.ghin_index ?? null,
+          nickname: rosterMatch?.nickname ?? null,
+          use_nickname: rosterMatch?.use_nickname ?? false,
         }, { onConflict: 'id', ignoreDuplicates: true })  // never overwrite existing profile
 
       if (!error) {
