@@ -250,7 +250,8 @@ const sparkBars = computed(() => {
 
 function formatDate(dateStr) {
   if (!dateStr) return '—'
-  const d = new Date(dateStr)
+  const parts = String(dateStr).slice(0, 10).split('-').map(Number)
+  const d = parts.length === 3 ? new Date(parts[0], parts[1] - 1, parts[2]) : new Date(dateStr)
   if (isNaN(d)) return dateStr
   return d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })
 }

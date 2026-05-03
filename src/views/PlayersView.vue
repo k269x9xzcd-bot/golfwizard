@@ -1001,7 +1001,9 @@ function ghinSyncDate(p) {
 
 function formatScoreDate(dateStr) {
   if (!dateStr) return '—'
-  const d = new Date(dateStr)
+  // Parse date-only strings (YYYY-MM-DD) as local time to avoid UTC-offset day shift
+  const parts = String(dateStr).slice(0, 10).split('-').map(Number)
+  const d = parts.length === 3 ? new Date(parts[0], parts[1] - 1, parts[2]) : new Date(dateStr)
   if (isNaN(d.getTime())) return dateStr.slice(0, 10)
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })
 }
