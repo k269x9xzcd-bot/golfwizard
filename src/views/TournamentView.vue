@@ -217,16 +217,29 @@
                 <span class="mc-pending-text">Round in progress</span>
                 <span class="mc-arrow">›</span>
               </div>
-              <div v-if="liveStatus(match.roundId, match)" class="mc-live-status">
-                <span class="mc-live-thru">Thru {{ liveStatus(match.roundId, match).thru }}</span>
-                <span class="mc-live-sep">·</span>
-                <span class="mc-live-label"
-                  :style="liveStatus(match.roundId, match).diff !== 0
-                    ? { color: liveStatus(match.roundId, match).diff > 0 ? getTeam(match.team1).color : getTeam(match.team2).color }
-                    : {}"
-                >{{ liveStatus(match.roundId, match).statusLabel }}</span>
-              </div>
-              <div v-else-if="liveRoundData[match.roundId]" class="mc-live-status mc-live-status--loading">
+              <template v-if="liveStatus(match.roundId, match)">
+                <div class="mc-live-row">
+                  <span class="mc-live-game-label">2BB</span>
+                  <span class="mc-live-thru">Thru {{ liveStatus(match.roundId, match).thru }}</span>
+                  <span class="mc-live-sep">·</span>
+                  <span class="mc-live-label" :style="liveStatus(match.roundId, match).bb.leadColor ? { color: liveStatus(match.roundId, match).bb.leadColor } : {}">
+                    {{ liveStatus(match.roundId, match).bb.label }}
+                  </span>
+                </div>
+                <div
+                  v-for="(s, si) in liveStatus(match.roundId, match).singles"
+                  :key="si"
+                  class="mc-live-row"
+                >
+                  <span class="mc-live-game-label">1v1</span>
+                  <span class="mc-live-matchup">{{ s.p1Name }} v {{ s.p2Name }}</span>
+                  <span class="mc-live-sep">·</span>
+                  <span class="mc-live-label" :style="s.leadColor ? { color: s.leadColor } : {}">
+                    {{ s.label }}
+                  </span>
+                </div>
+              </template>
+              <div v-else-if="liveRoundData[match.roundId]" class="mc-live-row mc-live-status--loading">
                 Loading…
               </div>
             </template>
@@ -874,10 +887,11 @@ async function _subscribeToLiveRound(roundId) {
   _liveChannels[roundId] = true // placeholder to prevent double-subscribe
 
   try {
-    const [roundRes, membersRes, scoresRes] = await Promise.all([
+    const [roundRes, membersRes, scoresRes, gamesRes] = await Promise.all([
       supabase.from('rounds').select('course_snapshot, tee').eq('id', roundId).single(),
       supabase.from('round_members').select('id, team, round_hcp, short_name, nickname').eq('round_id', roundId),
       supabase.from('scores').select('member_id, hole, score').eq('round_id', roundId),
+      supabase.from('game_configs').select('type, config').eq('round_id', roundId),
     ])
 
     const scoresMap = {}
@@ -886,6 +900,14 @@ async function _subscribeToLiveRound(roundId) {
       scoresMap[s.member_id][s.hole] = s.score
     }
 
+    // Parse 1v1 game configs to extract pairing member IDs
+    const singles = (gamesRes.data || [])
+      .filter(g => g.type === 'match1v1')
+      .map(g => {
+        const cfg = typeof g.config === 'string' ? JSON.parse(g.config) : g.config
+        return { p1: cfg.player1, p2: cfg.player2 }
+      })
+
     liveRoundData.value = {
       ...liveRoundData.value,
       [roundId]: {
@@ -893,6 +915,7 @@ async function _subscribeToLiveRound(roundId) {
         scores: scoresMap,
         courseSnapshot: roundRes.data?.course_snapshot ?? null,
         tee: roundRes.data?.tee ?? null,
+        singles,
       },
     }
   } catch (e) {
@@ -943,15 +966,20 @@ watch(
 )
 
 // Compute live status for a given roundId
+// Returns { thru, bb, singles[] } where bb and each singular have { diff, label, leadColor }
 function liveStatus(roundId, match) {
   const data = liveRoundData.value[roundId]
   if (!data) return null
 
-  const { members, scores, courseSnapshot } = data
+  const { members, scores, courseSnapshot, singles = [] } = data
   const siArr = courseSnapshot?.si || []
 
   const hcpMap = {}
-  for (const m of members) hcpMap[m.id] = m.round_hcp ?? 0
+  const memberById = {}
+  for (const m of members) {
+    hcpMap[m.id] = m.round_hcp ?? 0
+    memberById[m.id] = m
+  }
 
   const t1Members = members.filter(m => m.team === 1)
   const t2Members = members.filter(m => m.team === 2)
@@ -962,6 +990,7 @@ function liveStatus(roundId, match) {
     if (holes.length) thru = Math.max(thru, ...holes)
   }
 
+  // ── 2BB ──
   let t1Up = 0, t2Up = 0
   for (let h = 1; h <= thru; h++) {
     const si = siArr[h - 1] ?? h
@@ -972,17 +1001,53 @@ function liveStatus(roundId, match) {
     if (t1BB < t2BB) t1Up++
     else if (t2BB < t1BB) t2Up++
   }
+  const bbDiff = t1Up - t2Up
+  const bbLabel = bbDiff === 0
+    ? (thru ? 'AS' : '—')
+    : `${Math.abs(bbDiff)} up`
+  const bbLeadColor = bbDiff > 0 ? getTeam(match.team1)?.color : bbDiff < 0 ? getTeam(match.team2)?.color : null
 
-  const diff = t1Up - t2Up
-  let statusLabel
-  if (diff === 0) statusLabel = thru ? 'All square' : 'Tee off'
-  else {
-    const leadTeam = diff > 0 ? getTeam(match.team1) : getTeam(match.team2)
-    const holesLeft = 18 - thru
-    statusLabel = `${leadTeam.name} ${Math.abs(diff)} up` + (holesLeft > 0 ? ` thru ${thru}` : '')
-  }
+  // ── 1v1 singles ──
+  const singlesStatus = singles.map(({ p1: p1id, p2: p2id }) => {
+    const p1 = memberById[p1id]
+    const p2 = memberById[p2id]
+    if (!p1 || !p2) return null
 
-  return { thru, t1Up, t2Up, diff, statusLabel }
+    let standing = 0 // positive = p1 winning
+    let holesPlayed = 0
+    for (let h = 1; h <= thru; h++) {
+      const si   = siArr[h - 1] ?? h
+      const g1   = scores[p1id]?.[h]
+      const g2   = scores[p2id]?.[h]
+      if (g1 == null || g2 == null) continue
+      const net1 = g1 - strokesOnHole(hcpMap[p1id] ?? 0, si)
+      const net2 = g2 - strokesOnHole(hcpMap[p2id] ?? 0, si)
+      if (net1 < net2) standing++
+      else if (net2 < net1) standing--
+      holesPlayed++
+      // Closeout
+      const holesLeft = thru - holesPlayed
+      if (Math.abs(standing) > holesLeft) break
+    }
+
+    const p1Name = p1.nickname || p1.short_name || '?'
+    const p2Name = p2.nickname || p2.short_name || '?'
+    const p1Team = p1.team === 1 ? match.team1 : match.team2
+    const p2Team = p2.team === 1 ? match.team1 : match.team2
+
+    let label, leadColor
+    if (standing === 0) {
+      label = holesPlayed ? 'AS' : '—'
+      leadColor = null
+    } else {
+      const leadName = standing > 0 ? p1Name : p2Name
+      label = `${leadName} ${Math.abs(standing)} up`
+      leadColor = standing > 0 ? getTeam(p1Team)?.color : getTeam(p2Team)?.color
+    }
+    return { p1Name, p2Name, label, leadColor, standing }
+  }).filter(Boolean)
+
+  return { thru, bb: { diff: bbDiff, label: bbLabel, leadColor: bbLeadColor }, singles: singlesStatus }
 }
 
 // ── Tournament name/format edit (persisted to Supabase) ────────
@@ -1952,16 +2017,26 @@ _loadFinalResult()
 .mc-arrow { font-size: 16px; color: rgba(240,237,224,.2); }
 .mm-btn-launch--resume { background: rgba(251,191,36,.15); border-color: rgba(251,191,36,.4); color: #fbbf24; }
 
-.mc-live-status {
-  display: flex; align-items: center; gap: 6px;
+.mc-live-row {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 600;
+}
+.mc-live-row:first-of-type {
   margin-top: 6px; padding-top: 6px;
   border-top: 1px solid rgba(251,191,36,.15);
-  font-size: 12px; font-weight: 700;
 }
-.mc-live-thru { color: rgba(240,237,224,.5); font-weight: 600; }
-.mc-live-sep { color: rgba(240,237,224,.25); }
-.mc-live-label { color: rgba(240,237,224,.85); }
-.mc-live-status--loading { color: rgba(240,237,224,.3); font-weight: 400; font-style: italic; }
+.mc-live-game-label {
+  font-size: 9px; font-weight: 800; letter-spacing: .06em;
+  color: rgba(251,191,36,.7);
+  background: rgba(251,191,36,.1);
+  border-radius: 3px; padding: 1px 4px;
+  flex-shrink: 0;
+}
+.mc-live-thru { color: rgba(240,237,224,.45); font-weight: 600; }
+.mc-live-matchup { color: rgba(240,237,224,.55); font-weight: 600; }
+.mc-live-sep { color: rgba(240,237,224,.2); }
+.mc-live-label { color: rgba(240,237,224,.9); flex: 1; }
+.mc-live-status--loading { color: rgba(240,237,224,.3); font-weight: 400; font-style: italic; margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(251,191,36,.15); }
 
 /* Finals teaser */
 .finals-teaser {
