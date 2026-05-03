@@ -86,7 +86,7 @@ GitHub MCP `push_files` truncates over ~40-50KB. CI threshold currently blocks `
 ## Deploy
 
 ```bash
-cd ~/Library/Mobile\ Documents/com~apple~CloudDocs/ClaudeAI/GolfWizard/GolfWizard/gw
+cd ~/Desktop/golfwizard
 npm run deploy
 ```
 
@@ -392,10 +392,10 @@ Plays at Bonnie Briar Country Club primarily. `bb_member_index` table holds the 
 
 ---
 
-## ADR-003 — workspace migration (DONE 2026-04-21)
+## ADR-003 — workspace migration (DONE 2026-04-21, updated 2026-05-02)
 
-- Single canonical repo at `~/Library/Mobile Documents/com~apple~CloudDocs/ClaudeAI/GolfWizard/GolfWizard/gw` — has `.git`
-- Old Desktop copy purged; project lives in iCloud Drive under ClaudeAI/ folder
+- Single canonical repo at `~/Desktop/golfwizard` — has `.git`
+- Old iCloud Drive copy at `~/Library/Mobile Documents/com~apple~CloudDocs/ClaudeAI/GolfWizard/` is stale and should be deleted after prod verification
 - ScoringView.vue split: 166KB → 64KB (extracted `useScorecardHelpers`, `useGameNotation`, `useLiveSettlements`, `GameEditorOverlay`, `RetroScoreOverlay`, `ScoringView.css`)
 - CI gate: `.vue > 110KB` blocks deploy (110 to accommodate WizardOverlay at 101KB)
 - Rollback anchor: tag `v3.9.569-pre-adr003`
@@ -420,7 +420,7 @@ Plays at Bonnie Briar Country Club primarily. `bb_member_index` table holds the 
 | Repo | github.com/k269x9xzcd-bot/golfwizard |
 | Supabase project | mhzhdmsiliyfnijzddhu |
 | Current version | v3.10.221 (origin) → v3.10.222 in flight |
-| Deploy | `cd ~/Desktop/GolfWizard/GolfWizard/src && npm run deploy` |
+| Deploy | `cd ~/Desktop/golfwizard && npm run deploy` |
 | CI | https://github.com/k269x9xzcd-bot/golfwizard/actions |
 | Domain | golfwizard.net (DNS → Resend pending) |
 | Tests | `npm test` (vitest, 50 game-engine tests) |

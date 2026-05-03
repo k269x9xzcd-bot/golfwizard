@@ -1287,7 +1287,10 @@ async function add() {
     showAdd.value = false
     showToast(`${fullName} added`, 'gold')
   } catch (err) {
-    addError.value = err?.message || 'Could not add player.'
+    const msg = err?.message || ''
+    addError.value = msg.includes('unique constraint')
+      ? 'A player with that email or GHIN number is already in your roster.'
+      : msg || 'Could not add player.'
   } finally {
     addingPlayer.value = false
   }

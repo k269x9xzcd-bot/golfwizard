@@ -66,6 +66,7 @@ export const useAuthStore = defineStore('auth', () => {
           syncRoundMembersToRoster()   // fire-and-forget; auto-add round co-players to this user's roster
           // Claim any roster shares addressed to this email, then load pending banner
           import('./roster').then(m => m.useRosterStore().claimRosterShares()).catch(() => {})
+          linkTournamentMembership()   // fire-and-forget; links user_id on first sign-in
         } else {
           profile.value = null
         }
@@ -91,6 +92,23 @@ export const useAuthStore = defineStore('auth', () => {
         .is('user_id', null) // only set once; don't overwrite if already linked
     } catch (e) {
       console.warn('[auth] linkUserToRosterPlayer failed:', e?.message)
+    }
+  }
+
+  // After sign-in, link this user's auth uid to their tournament_members row.
+  // Runs fire-and-forget so new members (e.g. Marty Durkin) get access the
+  // first time they sign in without any manual DB intervention needed.
+  async function linkTournamentMembership() {
+    if (!user.value?.email) return
+    const email = user.value.email.toLowerCase().trim()
+    try {
+      await supabase
+        .from('tournament_members')
+        .update({ user_id: user.value.id })
+        .eq('email', email)
+        .is('user_id', null)
+    } catch (e) {
+      console.warn('[auth] linkTournamentMembership failed:', e?.message)
     }
   }
 
@@ -207,11 +225,12 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function signInWithEmail(email) {
-    // No emailRedirectTo — this forces Supabase to send a 6-digit OTP code
-    // instead of a magic link. The code is verified in-app via verifyOtp().
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { shouldCreateUser: true },
+      options: {
+        shouldCreateUser: true,
+        emailRedirectTo: 'https://k269x9xzcd-bot.github.io/golfwizard',
+      },
     })
     if (error) throw error
   }
@@ -349,12 +368,37 @@ export const useAuthStore = defineStore('auth', () => {
     await supabase.auth.signOut()
     user.value = null
     profile.value = null
+
+    // Clear all GolfWizard localStorage keys to prevent ghost rounds and
+    // stale guest data from leaking across sign-out/sign-in cycles.
+    const GW_PREFIXES = [
+      'gw_guest_round_',
+      'gw_known_rounds',
+      'gw_guest_rounds_index',
+      'gw_score_queue',
+      'gw_create_log',
+      'gw_roster',
+      'golf_favorites',
+      'golf_custom_courses',
+      'golf_pending_courses',
+      'gw_courses_migrated',
+      'golf_active_round',
+      'golf_players',
+    ]
+    const keysToRemove = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key && GW_PREFIXES.some(p => key.startsWith(p) || key === p)) {
+        keysToRemove.push(key)
+      }
+    }
+    keysToRemove.forEach(k => localStorage.removeItem(k))
   }
 
   return {
     user, profile, loading, isGuest, isAuthenticated,
     init, fetchProfile, updateProfile, upsertRosterEntry, linkUserToRosterPlayer,
-    bootstrapProfileFromRoster,
+    bootstrapProfileFromRoster, linkTournamentMembership,
     backfillRoundMembership, syncRoundMembersToRoster,
     signInWithGoogle, signInWithApple, signInWithEmail, verifyOtp, signOut,
   }

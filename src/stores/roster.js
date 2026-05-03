@@ -244,8 +244,8 @@ export const useRosterStore = defineStore('roster', () => {
       const matchFilter = row.ghin_number
         ? `ghin_number=eq.${row.ghin_number}&owner_id=eq.${auth.user.id}`
         : row.email
-          ? `email=eq.${encodeURIComponent(row.email)}&owner_id=eq.${auth.user.id}`
-          : `name=eq.${encodeURIComponent(row.name)}&owner_id=eq.${auth.user.id}`
+          ? `email=eq.${row.email}&owner_id=eq.${auth.user.id}`
+          : `name=eq.${row.name}&owner_id=eq.${auth.user.id}`
       const existingRows = await _rawSel('roster_players', `select=id&${matchFilter}`, 6000).catch(() => [])
       const existing = Array.isArray(existingRows) ? existingRows[0] : null
       if (existing?.id) {
