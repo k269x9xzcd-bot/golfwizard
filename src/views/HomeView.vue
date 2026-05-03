@@ -192,7 +192,6 @@ const showTournament = computed(() => {
     return tournamentStore.members.some(m => m.email?.toLowerCase().trim() === norm)
   }
   const AUTHORIZED = [
-    'jayspieler@aol.com',
     'alexcarroll333@gmail.com','bcimons19@yahoo.com',
     'jcourt93@gmail.com','craggo@recordandreturn.com',
     'matt@derosasports.com','bonga13@gmail.com',

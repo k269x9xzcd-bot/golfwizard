@@ -280,10 +280,49 @@
 
     <!-- ══ EVENTS segment ══ -->
     <template v-if="activeSegment === 'events'">
-      <div class="empty-state">
+      <!-- Loading -->
+      <div v-if="tournamentStore.loading" class="loading-state">
+        <div class="loading-spinner" />
+        <div class="loading-text">Loading events…</div>
+      </div>
+      <!-- No tournament data -->
+      <div v-else-if="!tournamentStore.loaded || !tournamentSchedule.length" class="empty-state">
         <div class="empty-icon">🏆</div>
-        <div class="empty-title">Coming soon</div>
-        <div class="empty-sub">Tournament history will appear here.</div>
+        <div class="empty-title">No events yet</div>
+        <div class="empty-sub">Tournament rounds will appear here.</div>
+      </div>
+      <!-- Schedule rounds -->
+      <div v-else class="events-list">
+        <div v-for="schedRound in tournamentSchedule" :key="schedRound.round" class="events-round-group">
+          <div class="events-round-header">
+            <span class="events-round-label">{{ schedRound.label }}</span>
+            <span v-if="schedRound.deadline" class="events-round-deadline">{{ formatDate(schedRound.deadline) }}</span>
+          </div>
+          <div v-if="!schedRound.matches.length" class="events-empty-round">No matches scheduled</div>
+          <div v-for="match in schedRound.matches" :key="match.id" class="events-match-card">
+            <div class="emc-teams">
+              <span class="emc-team" :style="{ color: teamColor(match.team1) }">{{ teamName(match.team1) }}</span>
+              <span class="emc-vs">vs</span>
+              <span class="emc-team" :style="{ color: teamColor(match.team2) }">{{ teamName(match.team2) }}</span>
+            </div>
+            <div v-if="match.result" class="emc-result">
+              <template v-if="eventMatchResult(match)">
+                <span class="emc-result-label">{{ eventMatchResult(match).label }}</span>
+              </template>
+              <template v-if="eventMatchPoints(match)">
+                <span class="emc-pts">
+                  {{ eventMatchPoints(match).t1 }}–{{ eventMatchPoints(match).t2 }} singles
+                </span>
+              </template>
+            </div>
+            <div v-else class="emc-result emc-pending">Pending</div>
+            <button
+              v-if="match.roundId"
+              class="emc-scorecard-btn"
+              @click="router.push({ path: '/history', query: { solo: match.roundId } })"
+            >Scorecard ›</button>
+          </div>
+        </div>
       </div>
     </template><!-- end events segment -->
 
@@ -297,6 +336,7 @@ import { useCoursesStore } from '../stores/courses'
 import { useRouter, useRoute } from 'vue-router'
 import { useLinkedMatchesStore } from '../stores/linkedMatches'
 import { useAuthStore } from '../stores/auth'
+import { useTournamentStore } from '../stores/tournament'
 import { supaRawRequest } from '../modules/supaRaw'
 import { computeAllSettlements } from '../modules/settlements'
 import { shareHistoryRecap } from '../modules/scorecardShare'
@@ -316,6 +356,7 @@ const route = useRoute()
 const soloRoundId = ref(route.query?.solo || null)
 const linkedMatchesStore = useLinkedMatchesStore()
 const authStore = useAuthStore()
+const tournamentStore = useTournamentStore()
 
 // ── Segment state ──
 const activeSegment = ref('rounds')
@@ -324,6 +365,8 @@ const matchesLoading = ref(true)
 
 onMounted(async () => {
   await roundsStore.fetchRounds()
+  // Pre-load tournament data for Events segment (non-blocking)
+  tournamentStore.init()
   // Fetch linked matches for Matches segment
   matchesLoading.value = true
   try {
@@ -1072,6 +1115,43 @@ function matchResultClass(match) {
   if (label === 'Loss') return 'badge-loss'
   return 'badge-tie'
 }
+
+// ── Events segment helpers ──────────────────────────────────
+const tournamentSchedule = computed(() => tournamentStore.schedule || [])
+
+function teamName(key) {
+  const t = tournamentStore.teams.find(t => t.id === key)
+  return t?.short || t?.name || key || '?'
+}
+
+function teamColor(key) {
+  const t = tournamentStore.teams.find(t => t.id === key)
+  return t?.color || 'var(--gw-gold)'
+}
+
+function eventMatchResult(match) {
+  if (!match.result) return null
+  const r = match.result
+  // bestBall: 't1' | 't2' | 'halved'
+  const bb = r.bestBall
+  if (!bb) return null
+  if (bb === 'halved') return { label: 'Halved', winner: null }
+  const winKey = bb === 't1' ? match.team1 : match.team2
+  return { label: teamName(winKey), winner: bb === 't1' ? match.team1 : match.team2 }
+}
+
+function eventMatchPoints(match) {
+  if (!match.result) return null
+  const pts = match.result.singles
+  if (!Array.isArray(pts)) return null
+  let t1 = 0; let t2 = 0
+  for (const p of pts) {
+    if (p.winner === 't1') t1++
+    else if (p.winner === 't2') t2++
+    else { t1 += 0.5; t2 += 0.5 }
+  }
+  return { t1, t2 }
+}
 </script>
 
 <style scoped>
@@ -1762,4 +1842,86 @@ function matchResultClass(match) {
 }
 .status-complete { color: var(--gw-green-400); }
 .status-linked   { color: #fbbf24; }
+
+/* ── Events segment ─────────────────────────────────────── */
+.events-list {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.events-round-group {}
+.events-round-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.events-round-label {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gw-gold);
+}
+.events-round-deadline {
+  font-size: 11px;
+  color: var(--gw-text-muted);
+}
+.events-empty-round {
+  font-size: 13px;
+  color: var(--gw-text-muted);
+  padding: 8px 0;
+}
+.events-match-card {
+  background: var(--gw-bg-card);
+  border-radius: var(--gw-radius);
+  border: 1px solid var(--gw-border-subtle);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.emc-teams {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.emc-vs {
+  font-size: 11px;
+  color: var(--gw-text-muted);
+  font-weight: 400;
+}
+.emc-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.emc-result-label {
+  font-weight: 600;
+  color: var(--gw-green-400);
+}
+.emc-pending {
+  color: var(--gw-text-muted);
+  font-style: italic;
+}
+.emc-pts {
+  color: var(--gw-text-dim);
+  font-size: 12px;
+}
+.emc-scorecard-btn {
+  align-self: flex-start;
+  background: none;
+  border: 1px solid var(--gw-border-subtle);
+  color: var(--gw-gold);
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: var(--gw-radius-full);
+  cursor: pointer;
+  margin-top: 2px;
+}
 </style>
