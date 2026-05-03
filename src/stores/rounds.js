@@ -576,6 +576,12 @@ export const useRoundsStore = defineStore('rounds', () => {
     activeGames.value = gameRows
     activeScores.value = {}
 
+    // Cache game rows to localStorage so loadRound can recover them if the background
+    // insert fails or RLS blocks the SELECT on resume.
+    if (gameRows.length) {
+      try { localStorage.setItem(`gw_games_cache_${round.id}`, JSON.stringify(gameRows)) } catch {}
+    }
+
     console.log('[rounds] Round active, members:', activeMembers.value.length, 'games:', gameRows.length)
 
     // ── Insert games in background — non-blocking ───────────────────
@@ -655,6 +661,23 @@ export const useRoundsStore = defineStore('rounds', () => {
 
     activeRound.value = data
     activeGames.value = data.game_configs ?? []
+
+    // If Supabase returned no game_configs (background insert may have failed,
+    // or RLS gap for tournament rounds), recover from localStorage cache.
+    if (activeGames.value.length === 0) {
+      const cached = rounds.value.find(r => r.id === roundId)
+      if (cached?.game_configs?.length) {
+        activeGames.value = cached.game_configs
+      } else {
+        try {
+          const raw = localStorage.getItem(`gw_games_cache_${roundId}`)
+          if (raw) {
+            const cached = JSON.parse(raw)
+            if (Array.isArray(cached) && cached.length) activeGames.value = cached
+          }
+        } catch {}
+      }
+    }
 
     // Derive team from game config if round_member.team is null
     // (handles rounds created before the team-derivation fix)
@@ -1320,6 +1343,7 @@ export const useRoundsStore = defineStore('rounds', () => {
     rounds, myRounds, loading, activeRoundId, scoreSyncError,
     pendingQueueCount,
     flushQueue: _flushQueue,
+    patchActiveGames: (games) => { activeGames.value = games },
     fetchRounds, createRound, loadRound, setScore,
     saveGameConfig, updateGameConfig, deleteGameConfig,
     updateRoundDate,

@@ -1204,6 +1204,17 @@ onMounted(async () => {
       try { await roundsStore.loadRound(candidate.id) } catch (e) { console.warn('[scoring] auto-load failed:', e?.message) }
     }
   }
+
+  // If the round is loaded but games are missing (tournament round where game_configs
+  // weren't fetched — background insert failed or RLS gap), try a targeted fetch now.
+  if (roundsStore.activeRound && roundsStore.activeGames.length === 0 && authStore.isAuthenticated) {
+    try {
+      const { data } = await import('../supabase').then(m =>
+        m.supabase.from('game_configs').select('*').eq('round_id', roundsStore.activeRound.id)
+      )
+      if (data?.length) roundsStore.patchActiveGames(data)
+    } catch {}
+  }
 })
 
 onUnmounted(() => {
