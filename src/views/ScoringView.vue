@@ -84,6 +84,9 @@
           <button class="round-menu-item" v-if="isCaptain && !roundsStore.activeRound?.is_complete" :disabled="finishing" @click="showRoundMenu = false; finishRound()">
             {{ finishing ? '⏳ Finishing…' : '✅ Finish Round' }}
           </button>
+          <button class="round-menu-item" v-if="isCaptain && roundsStore.activeRound?.is_complete && !roundsStore.activeRound?.owner_id && authStore.isAuthenticated" :disabled="syncing" @click="syncToAccount">
+            {{ syncing ? '⏳ Syncing…' : '☁️ Sync to Account' }}
+          </button>
           <button class="round-menu-item" @click="doShareScorecard" :disabled="sharing">
             {{ sharing ? '⏳ Sharing…' : '📸 Share Scorecard' }}
           </button>
@@ -1953,6 +1956,20 @@ const roundCompletionInfo = computed(() => {
 
 const finishing = ref(false)
 const finishError = ref(null)
+const syncing = ref(false)
+
+async function syncToAccount() {
+  syncing.value = true
+  showRoundMenu.value = false
+  try {
+    await roundsStore.syncGuestRoundToDb()
+    router.push('/history')
+  } catch (e) {
+    alert('Sync failed: ' + (e.message || 'Unknown error'))
+  } finally {
+    syncing.value = false
+  }
+}
 
 async function finishRound() {
   if (!roundsStore.activeRound || finishing.value) return

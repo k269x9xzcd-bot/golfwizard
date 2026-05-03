@@ -1216,6 +1216,104 @@ export const useRoundsStore = defineStore('rounds', () => {
     return _loadQueue().length
   }
 
+  // ── Sync a completed guest round to Supabase ───────────────
+  // Called when a user was signed out during a round, then signs in and
+  // wants to recover the round into their account history.
+  async function syncGuestRoundToDb() {
+    const auth = useAuthStore()
+    if (!auth.isAuthenticated || !activeRound.value) return
+    const r = activeRound.value
+    if (!r.is_complete) throw new Error('Round is not complete')
+    if (r.owner_id) throw new Error('Round already linked to an account')
+
+    const uid = auth.user.id
+
+    // 1. Insert the round row
+    const { data: newRound, error: rErr } = await supabase
+      .from('rounds')
+      .insert({
+        id: r.id,
+        date: r.date,
+        format: r.format,
+        course_id: r.course_id,
+        course_name: r.course_name,
+        tee_name: r.tee_name,
+        hole_count: r.hole_count,
+        owner_id: uid,
+        is_complete: true,
+        room_code: r.room_code || null,
+      })
+      .select()
+      .single()
+
+    if (rErr) {
+      // If already exists (duplicate round_id), just update owner
+      if (rErr.code === '23505') {
+        await supabase.from('rounds').update({ owner_id: uid, is_complete: true }).eq('id', r.id)
+      } else {
+        throw rErr
+      }
+    }
+
+    // 2. Insert members
+    if (activeMembers.value?.length) {
+      const memberRows = activeMembers.value.map(m => ({
+        round_id: r.id,
+        guest_name: m.guest_name || m.name || null,
+        short_name: m.short_name || null,
+        ghin_index: m.ghin_index ?? null,
+        ghin_number: m.ghin_number || null,
+        email: m.email || null,
+        profile_id: m.profile_id || (m.is_self ? uid : null) || null,
+        nickname: m.nickname || null,
+        use_nickname: m.use_nickname || false,
+        tee_name: m.tee_name || r.tee_name || null,
+        group_index: m.group_index ?? null,
+      }))
+      await supabase.from('round_members').upsert(memberRows, { onConflict: 'round_id,guest_name', ignoreDuplicates: true })
+    }
+
+    // 3. Insert scores
+    if (activeScores.value?.length) {
+      const scoreRows = activeScores.value.map(s => ({
+        round_id: r.id,
+        member_id: s.member_id,
+        hole: s.hole,
+        strokes: s.strokes,
+        putts: s.putts ?? null,
+        fairway: s.fairway ?? null,
+      }))
+      await supabase.from('scores').upsert(scoreRows, { onConflict: 'round_id,member_id,hole', ignoreDuplicates: true })
+    }
+
+    // 4. Insert game configs
+    if (activeGames.value?.length) {
+      const gameRows = activeGames.value.map(g => ({
+        round_id: r.id,
+        type: g.type,
+        config: g.config,
+        created_by: uid,
+      }))
+      await supabase.from('game_configs').upsert(gameRows, { onConflict: 'round_id,type', ignoreDuplicates: true })
+    }
+
+    // 5. Save settlement snapshot if present
+    if (r.settlements) {
+      await supabase.from('round_settlements').upsert({
+        round_id: r.id,
+        settlement_json: r.settlements,
+        computed_at: new Date().toISOString(),
+      }, { onConflict: 'round_id' }).catch(() => {})
+    }
+
+    // 6. Update local state to reflect it's now a DB round
+    activeRound.value = { ...activeRound.value, owner_id: uid }
+    // Remove from guest index
+    const idx = JSON.parse(localStorage.getItem('gw_guest_rounds_index') || '[]')
+    localStorage.setItem('gw_guest_rounds_index', JSON.stringify(idx.filter(id => id !== r.id)))
+    localStorage.removeItem(_guestKey(r.id))
+  }
+
   return {
     activeRound, activeMembers, activeScores, activeGames,
     knownRounds,
@@ -1230,5 +1328,6 @@ export const useRoundsStore = defineStore('rounds', () => {
     subscribeToRound, unsubscribe,
     saveGuestRound, loadGuestRounds,
     clearActiveRound,
+    syncGuestRoundToDb,
   }
 })
