@@ -470,13 +470,32 @@
         </div>
         </div><!-- /.scorecard-outer -->
 
-        <!-- Live Games Summary -->
-        <div v-if="roundsStore.activeGames.length > 0" class="live-games-box">
+        <!-- Tournament Match Status (2BB + 1v1, works without game_configs) -->
+        <div v-if="tournamentMatchStatus" class="live-games-box">
           <div class="live-games-label collapsible-header" @click="gamesExpanded = !gamesExpanded">
-            {{ gamesExpanded ? '▼' : '▶' }} 🎲 Live Games
+            {{ gamesExpanded ? '▼' : '▶' }} 🏆 Match · Thru {{ tournamentMatchStatus.thru || '—' }}
           </div>
           <div v-show="gamesExpanded">
-            <div v-for="game in roundsStore.activeGames" :key="game.id" class="live-game-summary" v-html="gameSummaryHtml(game)"></div>
+            <div class="live-game-summary tourn-status-row">
+              <span class="tourn-stat-lbl">2BB</span>
+              <span class="tourn-stat-val">{{ tournamentMatchStatus.bb.label }}{{ tournamentMatchStatus.bb.leader ? ' · ' + tournamentMatchStatus.bb.leader + ' leading' : '' }}</span>
+            </div>
+            <div v-for="(s, idx) in tournamentMatchStatus.singles" :key="idx" class="live-game-summary tourn-status-row">
+              <span class="tourn-stat-lbl">1v1</span>
+              <span class="tourn-stat-matchup">{{ s.p1Name }} v {{ s.p2Name }}</span>
+              <span class="tourn-stat-sep">·</span>
+              <span class="tourn-stat-val">{{ s.label }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live Games Summary (side bets; in tournament rounds shows only non-tournament games) -->
+        <div v-if="liveGamesToShow.length > 0" class="live-games-box">
+          <div class="live-games-label collapsible-header" @click="sideGamesExpanded = !sideGamesExpanded">
+            {{ sideGamesExpanded ? '▼' : '▶' }} 🎲 Live Games
+          </div>
+          <div v-show="sideGamesExpanded">
+            <div v-for="game in liveGamesToShow" :key="game.id" class="live-game-summary" v-html="gameSummaryHtml(game)"></div>
           </div>
         </div>
 
@@ -1060,6 +1079,89 @@ const {
   liveSettlements, gameSummaryHtml,
 } = useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitialsStr, pInit, memberDisplay, visibleHoles, rosterPlayers: computed(() => rosterStore.players) })
 
+
+// ── Tournament match status (works without game_configs) ──────────
+// Computes live 2BB + 1v1 standings from activeMembers/activeScores
+// directly, so the panel shows even when activeGames is empty.
+const tournamentMatchStatus = computed(() => {
+  const round = roundsStore.activeRound
+  if (round?.format !== 'tournament') return null
+  const members = roundsStore.activeMembers
+  const scores = roundsStore.activeScores
+  const si = round.course_snapshot?.si || []
+  const t1 = members.filter(m => m.team === 1)
+  const t2 = members.filter(m => m.team === 2)
+  if (!t1.length || !t2.length) return null
+
+  let thru = 0
+  for (const memberId of Object.keys(scores)) {
+    const holes = Object.keys(scores[memberId]).map(Number)
+    if (holes.length) thru = Math.max(thru, ...holes)
+  }
+
+  // 2BB net best ball
+  let t1Up = 0, t2Up = 0
+  for (let h = 1; h <= thru; h++) {
+    const siH = si[h - 1] ?? h
+    const t1Nets = t1.map(m => { const g = scores[m.id]?.[h]; return g != null ? g - strokesOnHole(m.round_hcp ?? 0, siH) : null }).filter(n => n != null)
+    const t2Nets = t2.map(m => { const g = scores[m.id]?.[h]; return g != null ? g - strokesOnHole(m.round_hcp ?? 0, siH) : null }).filter(n => n != null)
+    if (!t1Nets.length || !t2Nets.length) continue
+    const t1BB = Math.min(...t1Nets), t2BB = Math.min(...t2Nets)
+    if (t1BB < t2BB) t1Up++
+    else if (t2BB < t1BB) t2Up++
+  }
+  const bbDiff = t1Up - t2Up
+  const bbLabel = bbDiff === 0 ? (thru ? 'All Square' : '—') : `${Math.abs(bbDiff)} up`
+  const bbLeader = bbDiff > 0
+    ? (t1[0]?.nickname || t1[0]?.short_name || 'T1')
+    : bbDiff < 0 ? (t2[0]?.nickname || t2[0]?.short_name || 'T2') : null
+
+  // 1v1 from game_configs or team-order fallback
+  const hcpMap = Object.fromEntries(members.map(m => [m.id, m.round_hcp ?? 0]))
+  const memberById = Object.fromEntries(members.map(m => [m.id, m]))
+  const singles1v1 = roundsStore.activeGames.filter(g => g.type === 'match1v1')
+
+  function _calcStanding(p1id, p2id) {
+    let standing = 0
+    for (let h = 1; h <= thru; h++) {
+      const siH = si[h - 1] ?? h
+      const g1 = scores[p1id]?.[h], g2 = scores[p2id]?.[h]
+      if (g1 == null || g2 == null) continue
+      const n1 = g1 - strokesOnHole(hcpMap[p1id] ?? 0, siH)
+      const n2 = g2 - strokesOnHole(hcpMap[p2id] ?? 0, siH)
+      if (n1 < n2) standing++
+      else if (n2 < n1) standing--
+    }
+    return standing
+  }
+
+  let singlesMatches = []
+  if (singles1v1.length) {
+    singlesMatches = singles1v1.map(game => {
+      const cfg = typeof game.config === 'string' ? JSON.parse(game.config) : game.config
+      const p1 = memberById[cfg.player1], p2 = memberById[cfg.player2]
+      if (!p1 || !p2) return null
+      const standing = _calcStanding(cfg.player1, cfg.player2)
+      const p1Name = p1.nickname || p1.short_name || '?'
+      const p2Name = p2.nickname || p2.short_name || '?'
+      const label = standing === 0 ? (thru ? 'AS' : '—') : `${standing > 0 ? p1Name : p2Name} ${Math.abs(standing)} up`
+      return { p1Name, p2Name, label, standing }
+    }).filter(Boolean)
+  } else {
+    const pairs = Math.min(t1.length, t2.length)
+    for (let i = 0; i < pairs; i++) {
+      const p1 = t1[i], p2 = t2[i]
+      if (!p1 || !p2) continue
+      const standing = _calcStanding(p1.id, p2.id)
+      const p1Name = p1.nickname || p1.short_name || '?'
+      const p2Name = p2.nickname || p2.short_name || '?'
+      const label = standing === 0 ? (thru ? 'AS' : '—') : `${standing > 0 ? p1Name : p2Name} ${Math.abs(standing)} up`
+      singlesMatches.push({ p1Name, p2Name, label, standing })
+    }
+  }
+
+  return { thru, bb: { diff: bbDiff, label: bbLabel, leader: bbLeader }, singles: singlesMatches }
+})
 
 const showRetroScore = ref(false)
 const retroOverlayRef = ref(null)
@@ -1754,6 +1856,22 @@ onUnmounted(() => {
   _landscapeHandler = null
 })
 const gamesExpanded = ref(true)
+const sideGamesExpanded = ref(true)
+
+// In tournament rounds: hide internal tournament game_configs (covered by tournamentMatchStatus panel).
+// Show everything in non-tournament rounds.
+const liveGamesToShow = computed(() => {
+  const games = roundsStore.activeGames
+  if (roundsStore.activeRound?.format === 'tournament') {
+    return games.filter(g => {
+      try {
+        const cfg = typeof g.config === 'string' ? JSON.parse(g.config) : (g.config || {})
+        return !cfg.tournament
+      } catch { return true }
+    })
+  }
+  return games
+})
 
 const swipeStartX = ref(0)
 const swipeStartY = ref(0)
@@ -2427,6 +2545,37 @@ function formatDate(dateStr) {
   border-color: rgba(13,95,60,.2) !important;
 }
 [data-theme="light"] .hole-nav-swipe-hint { color: rgba(13,31,18,.35) !important; }
+
+/* ── Tournament match status rows ── */
+.tourn-status-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--gw-text-primary, #f0ede0);
+  border-top: 1px solid rgba(240,237,224,.08);
+}
+.tourn-stat-lbl {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  opacity: .6;
+  width: 28px;
+  flex-shrink: 0;
+}
+.tourn-stat-matchup {
+  font-size: 12px;
+  opacity: .8;
+}
+.tourn-stat-sep {
+  opacity: .4;
+}
+.tourn-stat-val {
+  font-size: 13px;
+  font-weight: 600;
+  margin-left: auto;
+}
 
 /* ── Live games box ── */
 [data-theme="light"] .live-games-box {

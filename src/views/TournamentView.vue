@@ -1554,8 +1554,9 @@ async function _doLaunchRound({ match, t1, t2, isFinal, pairings, course, tee })
       tournamentStore.linkRoundToMatch(match._dbId, round.id).catch(e => {
         console.warn('[tournament] Failed to link round to match:', e)
       })
-      match.roundId = round.id
     }
+    match.roundId = round.id
+    _saveRoundIds() // localStorage fallback if Supabase linkage fails on iOS
 
     activeMatch.value = null
     router.push('/scoring')
@@ -1608,6 +1609,68 @@ function resetTournament() {
   _saveResults()
 }
 
+// ── Round ID persistence (survives app restart if Supabase linkage fails) ──
+const ROUND_IDS_KEY = 'gw_tourn_roundids_2025'
+
+function _saveRoundIds() {
+  try {
+    const cache = {}
+    for (const round of SCHEDULE) {
+      for (const m of round.matches) {
+        if (m.roundId) cache[m.id] = m.roundId
+      }
+    }
+    localStorage.setItem(ROUND_IDS_KEY, JSON.stringify(cache))
+  } catch {}
+}
+
+function _loadRoundIds() {
+  try {
+    const cache = JSON.parse(localStorage.getItem(ROUND_IDS_KEY) || '{}')
+
+    // Also check if there's an active tournament round in memory that we can map.
+    // This covers the case where the round was created before the localStorage cache existed.
+    // Match by round name: _doLaunchRound sets name = "${t1.name} vs ${t2.name}"
+    const activeRound = roundsStore.activeRound
+    if (activeRound?.format === 'tournament' && activeRound.id) {
+      const roundName = (activeRound.name || '').toLowerCase()
+      for (const round of SCHEDULE) {
+        for (const m of round.matches) {
+          if (!m.roundId && !m.result && !cache[m.id]) {
+            const t1 = getTeam(m.team1)
+            const t2 = getTeam(m.team2)
+            if (!t1 || !t2) continue
+            const t1Name = t1.name.toLowerCase()
+            const t2Name = t2.name.toLowerCase()
+            // Round name contains both team names
+            if (roundName.includes(t1Name) && roundName.includes(t2Name)) {
+              cache[m.id] = activeRound.id
+            }
+          }
+        }
+      }
+    }
+
+    for (const round of SCHEDULE) {
+      for (const m of round.matches) {
+        if (!m.roundId && cache[m.id]) {
+          m.roundId = cache[m.id]
+          if (!m.result) _subscribeToLiveRound(m.roundId)
+        }
+      }
+    }
+    // Persist the enriched cache
+    const updated = {}
+    for (const round of SCHEDULE) {
+      for (const m of round.matches) {
+        if (m.roundId) updated[m.id] = m.roundId
+      }
+    }
+    localStorage.setItem(ROUND_IDS_KEY, JSON.stringify(updated))
+    scheduleVersion.value++ // trigger re-render if roundIds were updated
+  } catch {}
+}
+
 // Persist/restore match results to localStorage
 const RESULTS_KEY = 'gw_tournament_results_2025'
 
@@ -1651,6 +1714,7 @@ watch(
   (loaded) => {
     if (loaded) {
       _loadResults()
+      _loadRoundIds() // restore roundId from localStorage for any match where Supabase linkage failed
       scheduleVersion.value++
       // Subscribe to any rounds already in progress
       for (const round of SCHEDULE) {
