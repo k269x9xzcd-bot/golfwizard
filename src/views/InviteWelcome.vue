@@ -268,12 +268,85 @@ async function onAuthClose() {
     })
   }
 
+  // Ensure the user has their own roster entry with correct name + GHIN so the
+  // "YOU" pill appears immediately. This runs every time (upsert is safe).
+  await upsertSelfRosterEntry()
+
   // Generate a handoff code so the user can sign into the PWA from Safari
   await generateHandoffCode()
 
   // Prompt GHIN setup if they don't have it yet (and no handoff to focus on)
   if (!authStore.profile?.ghin_number && !handoffCode.value) {
     showGhinStep.value = true
+  }
+}
+
+async function upsertSelfRosterEntry() {
+  if (!authStore.user?.id || !authStore.user?.email) return
+
+  const firstName = inviteFirst.value || authStore.profile?.first_name || ''
+  const lastName  = inviteLast.value  || authStore.profile?.last_name  || ''
+  const selfName  = [firstName, lastName].filter(Boolean).join(' ')
+                    || authStore.profile?.display_name
+                    || authStore.user.email.split('@')[0]
+
+  // Fetch GHIN data from the inviter's roster row for this player
+  let ghinIndex  = authStore.profile?.ghin_index  ?? null
+  let ghinNumber = authStore.profile?.ghin_number ?? null
+  const rawGhin  = route.query.ghin
+  if (!ghinNumber && rawGhin && typeof rawGhin === 'string') {
+    ghinNumber = decodeURIComponent(rawGhin)
+  }
+  if (inviteRid.value && (ghinIndex == null || !ghinNumber)) {
+    try {
+      const { data: rRow } = await supabase
+        .from('roster_players')
+        .select('ghin_index, ghin_number')
+        .eq('id', inviteRid.value)
+        .maybeSingle()
+      if (rRow) {
+        if (ghinIndex  == null) ghinIndex  = rRow.ghin_index
+        if (!ghinNumber)        ghinNumber = rRow.ghin_number
+      }
+    } catch {}
+  }
+
+  const nameParts = selfName.trim().split(/\s+/)
+  const shortName = nameParts.length >= 2
+    ? nameParts[nameParts.length - 1].slice(0, 8)
+    : selfName.slice(0, 8)
+
+  const selfRow = {
+    owner_id:     authStore.user.id,
+    user_id:      authStore.user.id,
+    email:        authStore.user.email.toLowerCase(),
+    name:         selfName,
+    first_name:   nameParts[0] || null,
+    last_name:    nameParts.slice(1).join(' ') || null,
+    short_name:   shortName,
+    nickname:     authStore.profile?.nickname      ?? null,
+    use_nickname: authStore.profile?.use_nickname  ?? false,
+    ghin_index:   ghinIndex,
+    ghin_number:  ghinNumber ?? null,
+    is_favorite:  false,
+  }
+
+  try {
+    // Check if the user already owns a row with this email
+    const { data: existing } = await supabase
+      .from('roster_players')
+      .select('id')
+      .eq('owner_id', authStore.user.id)
+      .eq('email', authStore.user.email.toLowerCase())
+      .maybeSingle()
+
+    if (existing) {
+      await supabase.from('roster_players').update(selfRow).eq('id', existing.id)
+    } else {
+      await supabase.from('roster_players').insert(selfRow)
+    }
+  } catch (e) {
+    console.warn('[invite] upsertSelfRosterEntry failed:', e?.message)
   }
 }
 

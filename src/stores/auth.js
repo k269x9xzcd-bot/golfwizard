@@ -148,12 +148,16 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
 
-  // On first login, look for this user's email in any roster_players row across all owners.
-  // If found, auto-create their profiles row so the "You" card appears immediately —
-  // no manual Settings visit required.
+  // On first login (or when profile is incomplete), look for this user's email in any
+  // roster_players row across all owners. If found, populate the profile so the "You"
+  // card appears immediately — no manual Settings visit required.
   // Also captures Apple/Google OAuth full_name as a fallback.
   async function bootstrapProfileFromRoster(session) {
-    if (!user.value || profile.value) return  // already has profile
+    if (!user.value) return
+    // Run if no profile, OR if profile exists but is missing name data (e.g. empty row
+    // auto-created by Supabase on first magic-link sign-in before we populated it)
+    const profileIsComplete = profile.value?.first_name || profile.value?.display_name
+    if (profileIsComplete) return
     const email = user.value.email?.toLowerCase().trim()
     if (!email) return
 
@@ -192,7 +196,7 @@ export const useAuthStore = defineStore('auth', () => {
           ghin_index: rosterMatch?.ghin_index ?? null,
           nickname: rosterMatch?.nickname ?? null,
           use_nickname: rosterMatch?.use_nickname ?? false,
-        }, { onConflict: 'id', ignoreDuplicates: true })  // never overwrite existing profile
+        }, { onConflict: 'id', ignoreDuplicates: false })  // update incomplete profiles
 
       if (!error) {
         await fetchProfile()
