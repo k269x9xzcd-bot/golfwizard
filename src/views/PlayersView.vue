@@ -751,6 +751,13 @@ async function syncAllGhin() {
     }
     await Promise.all(updatePromises)
 
+    // Refresh tournament handicaps so they stay in sync with updated roster
+    try {
+      const { useTournamentStore } = await import('../stores/tournament')
+      const tStore = useTournamentStore()
+      if (tStore.loaded) await tStore.refreshHandicaps()
+    } catch {}
+
     // Show a useful message based on what actually happened
     const withGhin = rosterStore.players.filter(
       p => p.ghin_number && !(authStore.isAuthenticated && String(p.id).startsWith('default_'))

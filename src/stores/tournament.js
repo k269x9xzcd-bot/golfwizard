@@ -71,6 +71,9 @@ export const useTournamentStore = defineStore('tournament', () => {
         _dbId: t.id,
       }))
 
+      // Refresh handicaps with live values from roster_players
+      await _refreshHandicapsFromRoster()
+
       // 5. Schedule
       const rawRounds = await supaRawRequest('GET', `tournament_schedule?tournament_id=eq.${TOURNAMENT_ID}&select=*&order=sort_order.asc`, null, 6000)
 
@@ -102,6 +105,52 @@ export const useTournamentStore = defineStore('tournament', () => {
     } finally {
       loading.value = false
     }
+  }
+
+  // ── refreshHandicaps: pull live ghin_index from roster for all tournament players ──
+  // Called automatically in init() and can be called explicitly after a GHIN sync.
+  async function _refreshHandicapsFromRoster() {
+    const allEmails = teams.value.flatMap(t => t.players.map(p => p.email).filter(Boolean))
+    if (!allEmails.length) return
+    try {
+      // Query roster_players for all player emails. The roster_select_by_email RLS policy
+      // allows cross-owner lookup so we see each player's own authoritative row.
+      // Order by ghin_synced_at descending so the most recently synced value wins.
+      const emailList = allEmails.map(e => encodeURIComponent(e.toLowerCase())).join(',')
+      const liveRows = await supaRawRequest(
+        'GET',
+        `roster_players?email=in.(${emailList})&select=email,ghin_index,ghin_synced_at&order=ghin_synced_at.desc.nullslast`,
+        null,
+        5000,
+      )
+      if (!Array.isArray(liveRows) || !liveRows.length) return
+
+      // Keep the most recently synced row per email
+      const liveByEmail = {}
+      for (const row of liveRows) {
+        const key = row.email?.toLowerCase()
+        if (key && !liveByEmail[key] && row.ghin_index != null) {
+          liveByEmail[key] = row.ghin_index
+        }
+      }
+
+      // Update teams in place
+      teams.value = teams.value.map(t => ({
+        ...t,
+        players: t.players.map(p => {
+          const live = p.email ? liveByEmail[p.email.toLowerCase()] : undefined
+          return live != null ? { ...p, ghinIndex: live } : p
+        }),
+      }))
+    } catch (e) {
+      console.warn('[tournament] live HCP refresh failed:', e?.message)
+    }
+  }
+
+  // Public wrapper — call after a GHIN bulk sync to pick up new indices without
+  // reloading the entire tournament. Resets `loaded` so a full init also re-runs HCPs.
+  async function refreshHandicaps() {
+    await _refreshHandicapsFromRoster()
   }
 
   // ── hasTournamentAccess (async — checks Supabase) ──────────────
@@ -204,6 +253,7 @@ export const useTournamentStore = defineStore('tournament', () => {
     loading,
     initError,
     init,
+    refreshHandicaps,
     hasTournamentAccessAsync,
     saveTeamPlayers,
     updateTournamentMeta,
