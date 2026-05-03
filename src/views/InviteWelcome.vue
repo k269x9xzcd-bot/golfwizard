@@ -272,6 +272,10 @@ async function onAuthClose() {
   // "YOU" pill appears immediately. This runs every time (upsert is safe).
   await upsertSelfRosterEntry()
 
+  // Seed group players into the user's Supabase roster (is_favorite: true) so
+  // syncRoundMembersToRoster() finds them already and doesn't add them as non-favorites.
+  await seedGroupPlayersToRoster()
+
   // Generate a handoff code so the user can sign into the PWA from Safari
   await generateHandoffCode()
 
@@ -347,6 +351,48 @@ async function upsertSelfRosterEntry() {
     }
   } catch (e) {
     console.warn('[invite] upsertSelfRosterEntry failed:', e?.message)
+  }
+}
+
+async function seedGroupPlayersToRoster() {
+  if (!authStore.user?.id) return
+  const seedKey = `gw_invite_group_seeded_${authStore.user.id}`
+  if (localStorage.getItem(seedKey)) return  // already seeded for this user
+
+  try {
+    // Fetch the group roster (Jason's players via public view — no auth required)
+    const { data: presetPlayers } = await supabase
+      .from('public_preset_roster')
+      .select('name, short_name, first_name, last_name, ghin_index, ghin_number, nickname, use_nickname, email')
+    if (!presetPlayers?.length) return
+
+    const userEmail = authStore.user.email.toLowerCase()
+
+    // Build insert rows, skipping the user's own email
+    const rows = presetPlayers
+      .filter(p => !p.email || p.email.toLowerCase() !== userEmail)
+      .map(p => ({
+        owner_id:     authStore.user.id,
+        name:         p.name,
+        first_name:   p.first_name || null,
+        last_name:    p.last_name  || null,
+        short_name:   p.short_name || null,
+        nickname:     p.nickname   || null,
+        use_nickname: p.use_nickname || false,
+        ghin_number:  p.ghin_number  || null,
+        ghin_index:   p.ghin_index   ?? null,
+        email:        p.email        || null,
+        is_favorite:  true,
+      }))
+
+    if (!rows.length) return
+
+    // Insert with ignoreDuplicates so re-running is safe
+    await supabase.from('roster_players').insert(rows)
+
+    localStorage.setItem(seedKey, '1')
+  } catch (e) {
+    console.warn('[invite] seedGroupPlayersToRoster failed:', e?.message)
   }
 }
 
