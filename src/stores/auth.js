@@ -141,7 +141,7 @@ export const useAuthStore = defineStore('auth', () => {
       // Cross-owner lookup enabled by roster_select_by_email RLS policy
       const { data: rosterMatch } = await supabase
         .from('roster_players')
-        .select('name, short_name, ghin_index, ghin_number, nickname, use_nickname')
+        .select('name, first_name, last_name, short_name, ghin_index, ghin_number, nickname, use_nickname')
         .eq('email', email)
         .not('name', 'is', null)
         .order('ghin_index', { ascending: false, nullsFirst: false })
@@ -156,11 +156,18 @@ export const useAuthStore = defineStore('auth', () => {
       const displayName = rosterMatch?.name || oauthName
       if (!displayName) return  // truly unknown user — they fill Settings manually
 
+      // Derive first/last from roster or by splitting the display name
+      const nameParts = displayName.trim().split(/\s+/)
+      const firstName = rosterMatch?.first_name?.trim() || nameParts[0] || null
+      const lastName  = rosterMatch?.last_name?.trim()  || (nameParts.length > 1 ? nameParts.slice(1).join(' ') : null)
+
       const { error } = await supabase
         .from('profiles')
         .upsert({
           id: user.value.id,
           display_name: displayName,
+          first_name: firstName,
+          last_name: lastName,
           ghin_number: rosterMatch?.ghin_number ?? null,
         }, { onConflict: 'id', ignoreDuplicates: true })  // never overwrite existing profile
 
@@ -225,12 +232,12 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function signInWithEmail(email) {
+    // No emailRedirectTo — OTP code is the only sign-in path for iOS PWA.
+    // Magic link opens in Safari (separate localStorage from PWA) so we
+    // remove it from the email template in Supabase dashboard entirely.
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: {
-        shouldCreateUser: true,
-        emailRedirectTo: 'https://k269x9xzcd-bot.github.io/golfwizard',
-      },
+      options: { shouldCreateUser: true },
     })
     if (error) throw error
   }
