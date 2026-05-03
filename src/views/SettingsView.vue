@@ -26,11 +26,11 @@
         <div class="field-row-split">
           <div class="field-group">
             <label class="field-label">First Name <span class="req-star">*</span></label>
-            <input v-model="firstName" class="wiz-input" placeholder="e.g. Jason" type="text" autocomplete="given-name" />
+            <input v-model="firstName" class="wiz-input" placeholder="First name" type="text" autocomplete="given-name" />
           </div>
           <div class="field-group">
             <label class="field-label">Last Name <span class="req-star">*</span></label>
-            <input v-model="lastName" class="wiz-input" placeholder="e.g. Spieler" type="text" autocomplete="family-name" />
+            <input v-model="lastName" class="wiz-input" placeholder="Last name" type="text" autocomplete="family-name" />
           </div>
         </div>
 
@@ -39,7 +39,7 @@
             Nickname
             <span class="field-hint"> — shown on scorecards when toggled on</span>
           </label>
-          <input v-model="nickname" class="wiz-input" placeholder="e.g. Spiels" type="text" autocomplete="off" />
+          <input v-model="nickname" class="wiz-input" placeholder="Nickname" type="text" autocomplete="off" />
         </div>
 
         <div class="nickname-toggle-row" v-if="nickname.trim()">
@@ -51,7 +51,7 @@
 
         <div class="field-group">
           <label class="field-label">GHIN Index</label>
-          <input v-model="ghinIndex" class="wiz-input" placeholder="e.g. 14.2" type="number" step="0.1" />
+          <input v-model="ghinIndex" class="wiz-input" placeholder="Handicap index" type="number" step="0.1" />
         </div>
 
         <div v-if="saveError" class="error-msg">{{ saveError }}</div>
@@ -70,7 +70,7 @@
 
         <div class="field-group">
           <label class="field-label">GHIN Number</label>
-          <input v-model="ghinNumber" class="wiz-input" placeholder="e.g. 1234567" type="text" inputmode="numeric" autocomplete="off" />
+          <input v-model="ghinNumber" class="wiz-input" placeholder="GHIN number" type="text" inputmode="numeric" autocomplete="off" />
         </div>
 
         <div class="field-group">

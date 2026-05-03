@@ -595,7 +595,7 @@
             <input v-model="editFirst" class="wiz-input" placeholder="First name" @input="onEditNameInput" />
             <input v-model="editLast" class="wiz-input" placeholder="Last name" @input="onEditNameInput" />
           </div>
-          <input v-model="editGhin" class="wiz-input" placeholder="GHIN Index (e.g. 12.4)" type="text" inputmode="decimal" />
+          <input v-model="editGhin" class="wiz-input" placeholder="GHIN Index" type="text" inputmode="decimal" />
           <div v-if="editTarget?.club_name" class="edit-club-row">
             <img
               v-if="editTarget.club_name.toLowerCase().includes('bonnie briar')"
@@ -607,7 +607,7 @@
             <span class="edit-club-name">{{ editTarget.club_name }}</span>
           </div>
           <div class="ghin-number-row">
-            <input v-model="editGhinNumber" class="wiz-input" placeholder="GHIN # (e.g. 1321498)" type="text" inputmode="numeric" style="flex:1" />
+            <input v-model="editGhinNumber" class="wiz-input" placeholder="GHIN #" type="text" inputmode="numeric" style="flex:1" />
             <span v-if="ghinSearching" class="ghin-live-indicator">searching…</span>
             <button
               v-else-if="ghinSearchError"
@@ -631,7 +631,7 @@
           </div>
           <div v-if="ghinSearchMsg" class="ghin-search-msg">{{ ghinSearchMsg }}</div>
           <div class="edit-nickname-row">
-            <input v-model="editNickname" class="wiz-input" placeholder="Nickname (e.g. Spiels)" style="flex:1" />
+            <input v-model="editNickname" class="wiz-input" placeholder="Nickname" style="flex:1" />
             <label class="nick-toggle-label">
               <input type="checkbox" v-model="editUseNickname" class="nick-toggle-cb" />
               <span class="nick-toggle-text">Use nickname</span>
