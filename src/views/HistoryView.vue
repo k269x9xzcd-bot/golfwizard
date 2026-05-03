@@ -320,7 +320,7 @@ const authStore = useAuthStore()
 // ── Segment state ──
 const activeSegment = ref('rounds')
 const linkedMatchHistory = ref([])
-const matchesLoading = ref(false)
+const matchesLoading = ref(true)
 
 onMounted(async () => {
   await roundsStore.fetchRounds()

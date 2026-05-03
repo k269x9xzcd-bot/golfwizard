@@ -2315,7 +2315,7 @@ export function computeCrossBestBall(roundA, roundB, config = {}) {
   const {
     ballsToCount = 1,
     stake = 20,
-    hcpPct = 0.90,
+    hcpPct = 1.0,
     sideBets: rawSideBets,
   } = config
   // null means side bets were explicitly disabled; undefined means not set (use defaults)
