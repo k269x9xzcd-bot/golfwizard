@@ -51,8 +51,26 @@ export const useAuthStore = defineStore('auth', () => {
         if (!profile.value) await bootstrapProfileFromRoster(session)
       }
 
-      // Listen for auth state changes
-      supabase.auth.onAuthStateChange(async (_event, session) => {
+      // Listen for auth state changes.
+      // Also clears loading on the INITIAL_SESSION event so we never show a
+      // signed-out flash while Supabase is still restoring a valid session.
+      supabase.auth.onAuthStateChange(async (event, session) => {
+        // On app startup Supabase fires INITIAL_SESSION — use it as the
+        // authoritative source of truth and clear loading here instead of
+        // in the finally block, so the UI never renders signed-out while
+        // a valid session is still being restored from localStorage.
+        if (event === 'INITIAL_SESSION') {
+          user.value = session?.user ?? null
+          if (user.value) {
+            await fetchProfile()
+            if (!profile.value) await bootstrapProfileFromRoster(session)
+          } else {
+            profile.value = null
+          }
+          loading.value = false
+          return
+        }
+
         const wasGuest = !user.value
         user.value = session?.user ?? null
         if (user.value) {
@@ -74,8 +92,10 @@ export const useAuthStore = defineStore('auth', () => {
     } catch (e) {
       console.warn('Auth init error:', e)
     } finally {
-      // Always clear loading — no matter what — so the app never stays blank
-      loading.value = false
+      // Safety net — clears loading if INITIAL_SESSION never fires (e.g. no
+      // stored session at all). The 3s delay gives onAuthStateChange time to
+      // fire first so we don't race against it on slow connections.
+      setTimeout(() => { loading.value = false }, 3000)
     }
   }
 
