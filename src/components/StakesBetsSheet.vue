@@ -13,20 +13,40 @@
     <section v-if="isTournament" class="sb-section">
       <header class="sb-section-h">Tournament wagers</header>
       <div class="sb-row">
-        <label class="sb-row-lbl">$ per point</label>
+        <label class="sb-row-lbl">Team BB $</label>
         <input
           type="number"
           inputmode="numeric"
           min="0"
-          v-model.number="pricePerPoint"
-          @change="savePricePerPoint"
+          v-model.number="wagerEdits.bb"
+          @change="saveTournamentWagers"
+          class="sb-input sb-input--money"
+        />
+      </div>
+      <div class="sb-row">
+        <label class="sb-row-lbl">1v1 Match 1 $</label>
+        <input
+          type="number"
+          inputmode="numeric"
+          min="0"
+          v-model.number="wagerEdits.s1"
+          @change="saveTournamentWagers"
+          class="sb-input sb-input--money"
+        />
+      </div>
+      <div class="sb-row">
+        <label class="sb-row-lbl">1v1 Match 2 $</label>
+        <input
+          type="number"
+          inputmode="numeric"
+          min="0"
+          v-model.number="wagerEdits.s2"
+          @change="saveTournamentWagers"
           class="sb-input sb-input--money"
         />
       </div>
       <div class="sb-info">
-        <div>Team BB: {{ bbPoints }} pt × ${{ pricePerPoint || 0 }} = <strong>${{ bbPoints * (pricePerPoint || 0) }}</strong></div>
-        <div>1v1 #1: {{ singlePoints }} pt × ${{ pricePerPoint || 0 }} = <strong>${{ singlePoints * (pricePerPoint || 0) }}</strong></div>
-        <div>1v1 #2: {{ singlePoints }} pt × ${{ pricePerPoint || 0 }} = <strong>${{ singlePoints * (pricePerPoint || 0) }}</strong></div>
+        Flat $ — winner of each matchup collects from the other team. Tie = $0.
       </div>
     </section>
 
@@ -57,7 +77,8 @@
           type="number"
           inputmode="numeric"
           min="0"
-          v-model.number="g.config.ppt"
+          :value="pairBetEdits[g.id] ?? g.config?.ppt ?? 0"
+          @input="onPairBetInput(g, $event)"
           @change="savePairBet(g)"
           class="sb-input sb-input--money"
         />
@@ -124,12 +145,13 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import Sheet from './ui/Sheet.vue'
 import { useRoundsStore } from '../stores/rounds'
 import { useTournamentStore } from '../stores/tournament'
 import { useLinkedMatchesStore } from '../stores/linkedMatches'
+import { normalizeWagers } from '../modules/tournamentWagers'
 
 const props = defineProps({
   show: { type: Boolean, required: true },
@@ -152,15 +174,38 @@ const tournMatch = computed(() => {
   if (!r?.id) return null
   return tournamentStore.matchByRoundId?.(r.id) || null
 })
-const pricePerPoint = ref(tournMatch.value?.wagers?.pricePerPoint ?? 0)
-const bbPoints = computed(() => tournamentStore.tournament?.best_ball_points ?? 2)
-const singlePoints = computed(() => tournamentStore.tournament?.singles_points ?? 1)
 
-async function savePricePerPoint() {
+// Local edit refs (avoid mutating Pinia state mid-typing).
+// Seeded from current DB values via watcher; flushed back via saveTournamentWagers.
+const wagerEdits = reactive({ bb: 0, s1: 0, s2: 0 })
+watch(
+  () => tournMatch.value?.wagers,
+  (raw) => {
+    const n = normalizeWagers(raw)
+    wagerEdits.bb = n.bb
+    wagerEdits.s1 = n.s1
+    wagerEdits.s2 = n.s2
+  },
+  { immediate: true, deep: true },
+)
+// Re-seed when the sheet is re-opened (in case the user discarded edits)
+watch(() => props.show, (open) => {
+  if (open) {
+    const n = normalizeWagers(tournMatch.value?.wagers)
+    wagerEdits.bb = n.bb
+    wagerEdits.s1 = n.s1
+    wagerEdits.s2 = n.s2
+  }
+})
+
+async function saveTournamentWagers() {
   if (!tournMatch.value?._dbId) return
-  const v = Math.max(0, Number(pricePerPoint.value) || 0)
-  pricePerPoint.value = v
-  await tournamentStore.updateMatchWagers(tournMatch.value._dbId, { pricePerPoint: v })
+  const num = v => Math.max(0, Number(v) || 0)
+  const next = { bb: num(wagerEdits.bb), s1: num(wagerEdits.s1), s2: num(wagerEdits.s2) }
+  wagerEdits.bb = next.bb
+  wagerEdits.s1 = next.s1
+  wagerEdits.s2 = next.s2
+  await tournamentStore.updateMatchWagers(tournMatch.value._dbId, next)
 }
 
 // ── Side games / pair bets ───────────────────────────────────────
@@ -189,10 +234,16 @@ function stakesSummary(g) {
   return ''
 }
 
+// Per-game local edits avoid mutating Pinia state during typing
+const pairBetEdits = reactive({})
+function onPairBetInput(g, e) {
+  pairBetEdits[g.id] = Number(e.target.value) || 0
+}
 async function savePairBet(g) {
-  const v = Math.max(0, Number(g.config.ppt) || 0)
-  g.config.ppt = v
-  await roundsStore.updateGameConfig(g.id, { ...g.config })
+  const draft = pairBetEdits[g.id]
+  const v = Math.max(0, Number(draft != null ? draft : g.config?.ppt) || 0)
+  delete pairBetEdits[g.id]
+  await roundsStore.updateGameConfig(g.id, { ...g.config, ppt: v })
 }
 
 // ── Add pair bet form ────────────────────────────────────────────
