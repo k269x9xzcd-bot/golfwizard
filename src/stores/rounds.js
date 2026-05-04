@@ -679,14 +679,14 @@ export const useRoundsStore = defineStore('rounds', () => {
       }
     }
 
-    // Tournament rounds: strip any stale best_ball / match1v1 entries — these
-    // represent tournament structure that is now derived from tournament_matches
-    // (Match panel) and must never appear as Live Games chips. May exist in
-    // localStorage cache or DB from an older app version.
+    // Tournament rounds: strip stale best_ball entries (tournament Team BB is
+    // now derived from tournament_matches.wagers, not from a game_configs row).
+    // match1v1 is NOT stripped here — those are legitimate user-created side
+    // bets distinct from the tournament's structural singles pairings. The
+    // display layer (buildLiveSections) is responsible for de-duping any
+    // match1v1 whose players match the tournament's singles_order pairing.
     if (data.format === 'tournament') {
-      activeGames.value = activeGames.value.filter(
-        g => g.type !== 'best_ball' && g.type !== 'match1v1',
-      )
+      activeGames.value = activeGames.value.filter(g => g.type !== 'best_ball')
       try { localStorage.setItem(`gw_games_cache_${roundId}`, JSON.stringify(activeGames.value)) } catch {}
     }
 
