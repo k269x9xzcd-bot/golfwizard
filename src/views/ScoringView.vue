@@ -474,7 +474,6 @@
         <div v-if="tournamentMatchStatus" class="live-games-box">
           <div class="live-games-label collapsible-header" @click="gamesExpanded = !gamesExpanded">
             {{ gamesExpanded ? '▼' : '▶' }} 🏆 Match · Thru {{ tournamentMatchStatus.thru || '—' }}
-            <span v-if="tournamentMatchStatus.pricePerPoint > 0" class="tourn-wager-pill">${{ tournamentMatchStatus.pricePerPoint }}/pt</span>
           </div>
           <div v-show="gamesExpanded">
             <div class="live-game-summary tourn-status-row">
@@ -482,14 +481,14 @@
               <span v-if="tournamentMatchStatus.bb.teamLabel" class="tourn-stat-matchup">{{ tournamentMatchStatus.bb.teamLabel }}</span>
               <span v-if="tournamentMatchStatus.bb.teamLabel" class="tourn-stat-sep">·</span>
               <span class="tourn-stat-val">{{ tournamentMatchStatus.bb.label }}</span>
-              <span v-if="tournamentMatchStatus.pricePerPoint > 0 && tournamentMatchStatus.bb.diff !== 0" class="tourn-stat-money">+${{ tournamentMatchStatus.pricePerPoint * 2 }}</span>
+              <span v-if="tournamentMatchStatus.wagers.bb > 0 && tournamentMatchStatus.bb.diff !== 0" class="tourn-stat-money">${{ tournamentMatchStatus.wagers.bb }}</span>
             </div>
             <div v-for="(s, idx) in tournamentMatchStatus.singles" :key="idx" class="live-game-summary tourn-status-row">
               <span class="tourn-stat-lbl">1v1</span>
               <span class="tourn-stat-matchup">{{ s.p1Name }} v {{ s.p2Name }}</span>
               <span class="tourn-stat-sep">·</span>
               <span class="tourn-stat-val">{{ s.label }}</span>
-              <span v-if="tournamentMatchStatus.pricePerPoint > 0 && s.standing !== 0" class="tourn-stat-money">+${{ tournamentMatchStatus.pricePerPoint }}</span>
+              <span v-if="(idx === 0 ? tournamentMatchStatus.wagers.s1 : tournamentMatchStatus.wagers.s2) > 0 && s.standing !== 0" class="tourn-stat-money">${{ idx === 0 ? tournamentMatchStatus.wagers.s1 : tournamentMatchStatus.wagers.s2 }}</span>
             </div>
           </div>
         </div>
@@ -525,6 +524,19 @@
             >
               <span class="settle-name">{{ pt.name }}</span>
               <span class="settle-amount">{{ pt.total > 0 ? '+' : '' }}${{ pt.total.toFixed(0) }}</span>
+            </div>
+          </div>
+          <!-- Tournament breakdown — one line per component -->
+          <div v-if="tournamentSettlementLines.length > 0" class="settle-tournament">
+            <div class="settle-group-label">🏆 Tournament</div>
+            <div v-for="(line, i) in tournamentSettlementLines" :key="'ts-'+i" class="settle-tourn-line">
+              <span class="settle-tourn-lbl">{{ line.label }}</span>
+              <span class="settle-tourn-sep">·</span>
+              <span class="settle-tourn-detail">{{ line.detail }}</span>
+              <span class="settle-tourn-sep">·</span>
+              <span class="settle-tourn-status">{{ line.status }}</span>
+              <span v-if="line.winnerName && line.amount > 0" class="settle-tourn-money">{{ line.winnerName }} +${{ line.amount }}</span>
+              <span v-else class="settle-tourn-tie">tie · no $</span>
             </div>
           </div>
           <!-- Ledger -->
@@ -998,6 +1010,7 @@ import { useGameNotation } from '../composables/useGameNotation'
 import { useHoleMath } from '../composables/useHoleMath'
 import { useLiveSettlements } from '../composables/useLiveSettlements'
 import { computeNassau, computeHammer, computeFidget, courseHandicap, holeSI, strokesOnHole } from '../modules/gameEngine'
+import { normalizeWagers, buildTournamentWagerGames } from '../modules/tournamentWagers'
 import { simulateRound } from '../modules/simulator'
 
 const authStore = useAuthStore()
@@ -1161,59 +1174,70 @@ const tournamentMatchStatus = computed(() => {
     thru,
     bb: { diff: bbDiff, label: bbLabel, teamLabel: bbTeamLabel },
     singles: singlesMatches,
-    pricePerPoint: tournMatch?.wagers?.pricePerPoint ?? 0,
+    wagers: normalizeWagers(tournMatch?.wagers),
   }
 })
 
 // ── Tournament wagers as synthetic settlement entries ──────────────
-// Builds best_ball + 1v1 game configs from the live tournament context with
-// ppt = points × pricePerPoint, fed into the existing settlement engine. Empty
-// when wagers are 0 or no tournament match is linked.
+// Each component (Team BB, 1v1 Match 1, 1v1 Match 2) is a standalone bet at a
+// flat dollar amount — no $/point math. Wager dictionary on tournament_matches
+// is { bb, s1, s2 }. Components with $0 are omitted (no settlement entry).
 const tournamentWagerGames = computed(() => {
   const round = roundsStore.activeRound
   if (round?.format !== 'tournament') return []
   const status = tournamentMatchStatus.value
   if (!status) return []
-  const ppp = status.pricePerPoint || 0
-  if (ppp <= 0) return []
   const members = roundsStore.activeMembers
   const t1Ids = members.filter(m => m.team === 1).map(m => m.id)
   const t2Ids = members.filter(m => m.team === 2).map(m => m.id)
-  if (!t1Ids.length || !t2Ids.length) return []
-  const bbPoints = tournamentStore.tournament?.best_ball_points ?? 2
-  const singlePoints = tournamentStore.tournament?.singles_points ?? 1
-  const games = [
-    {
-      id: '__tourn_bb',
-      type: 'best_ball',
-      config: {
-        team1: t1Ids,
-        team2: t2Ids,
-        ballsPerTeam: 1,
-        ppt: ppp * bbPoints,
-        scoring: 'closeout',
-        __tournament: true,
-        label: `Team BB (${bbPoints} pts)`,
-      },
-    },
-  ]
+  return buildTournamentWagerGames({
+    wagers: status.wagers,
+    t1Ids,
+    t2Ids,
+    singles: status.singles,
+  })
+})
+
+// ── Tournament settlement breakdown (per-component $ for the settle box) ──
+// Reads liveSettlements.summary keyed by the synthetic ids built above
+// (__tourn_bb, __tourn_s1, __tourn_s2) and renders one line per non-zero
+// component so users see exactly where the $ came from.
+const tournamentSettlementLines = computed(() => {
+  if (!liveSettlements.value) return []
+  const status = tournamentMatchStatus.value
+  if (!status) return []
+  const summary = liveSettlements.value.summary || {}
+  const lines = []
+  // Team BB
+  const bb = summary.__tourn_bb
+  if (bb && status.wagers.bb > 0) {
+    const winners = (bb.nets || []).filter(n => n.net > 0)
+    const matchup = `${status.bb.teamLabel || 'Team BB'}`
+    if (winners.length) {
+      lines.push({ label: 'Team BB', detail: matchup, status: status.bb.label, winnerName: winners.map(w => w.name).join('+'), amount: status.wagers.bb })
+    } else {
+      lines.push({ label: 'Team BB', detail: matchup, status: status.bb.label, winnerName: null, amount: 0 })
+    }
+  }
+  // Singles
   for (let i = 0; i < status.singles.length; i++) {
     const s = status.singles[i]
-    if (!s.p1Id || !s.p2Id) continue
-    games.push({
-      id: `__tourn_s${i + 1}`,
-      type: 'match1v1',
-      config: {
-        player1: s.p1Id,
-        player2: s.p2Id,
-        ppt: ppp * singlePoints,
-        scoring: 'closeout',
-        __tournament: true,
-        label: `Single (${singlePoints} pt)`,
-      },
+    const key = i === 0 ? '__tourn_s1' : '__tourn_s2'
+    const wagerKey = i === 0 ? 's1' : 's2'
+    const wager = status.wagers[wagerKey]
+    if (wager <= 0) continue
+    const game = summary[key]
+    if (!game) continue
+    const winners = (game.nets || []).filter(n => n.net > 0)
+    lines.push({
+      label: i === 0 ? '1v1 Match 1' : '1v1 Match 2',
+      detail: `${s.p1Name} v ${s.p2Name}`,
+      status: s.label,
+      winnerName: winners[0]?.name || null,
+      amount: winners[0] ? wager : 0,
     })
   }
-  return games
+  return lines
 })
 
 const showRetroScore = ref(false)

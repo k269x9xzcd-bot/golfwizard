@@ -684,25 +684,58 @@
                 Default is based on round-robin rotation ({{ pairingPicker.match.singlesOrder === 0 ? 'first meeting' : 'rematch' }}). Tap swap if you want different matchups.
               </div>
 
-              <!-- Per-match wager ($/point) -->
+              <!-- Per-match wagers — three independent flat-dollar bets -->
               <div class="pairing-wager-row">
-                <label class="mm-section-label">Stakes ($ per point, optional)</label>
-                <div class="pairing-wager-input-wrap">
-                  <span class="pairing-wager-prefix">$</span>
-                  <input
-                    type="number"
-                    inputmode="decimal"
-                    v-model.number="pairingPicker.pricePerPoint"
-                    class="mm-text-input pairing-wager-input"
-                    min="0"
-                    step="1"
-                    placeholder="0"
-                  />
-                  <span class="pairing-wager-suffix">/point</span>
+                <label class="mm-section-label">Stakes (flat $, optional)</label>
+                <div class="pairing-wager-grid">
+                  <div class="pairing-wager-field">
+                    <span class="pairing-wager-field-lbl">Team BB</span>
+                    <div class="pairing-wager-input-wrap">
+                      <span class="pairing-wager-prefix">$</span>
+                      <input
+                        type="number"
+                        inputmode="decimal"
+                        v-model.number="pairingPicker.wagerBb"
+                        class="mm-text-input pairing-wager-input"
+                        min="0"
+                        step="1"
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+                  <div class="pairing-wager-field">
+                    <span class="pairing-wager-field-lbl">1v1 Match 1</span>
+                    <div class="pairing-wager-input-wrap">
+                      <span class="pairing-wager-prefix">$</span>
+                      <input
+                        type="number"
+                        inputmode="decimal"
+                        v-model.number="pairingPicker.wagerS1"
+                        class="mm-text-input pairing-wager-input"
+                        min="0"
+                        step="1"
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+                  <div class="pairing-wager-field">
+                    <span class="pairing-wager-field-lbl">1v1 Match 2</span>
+                    <div class="pairing-wager-input-wrap">
+                      <span class="pairing-wager-prefix">$</span>
+                      <input
+                        type="number"
+                        inputmode="decimal"
+                        v-model.number="pairingPicker.wagerS2"
+                        class="mm-text-input pairing-wager-input"
+                        min="0"
+                        step="1"
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
                 </div>
                 <div class="pairing-hint">
-                  Team BB = 2 pts ({{ TOURNAMENT.bestBallPoints }}). Each Single = 1 pt.
-                  Winner of each gets pts × $/pt from the loser. Halved = 0 net.
+                  Each component is its own bet. Winner takes the full $; tie = no $.
                 </div>
               </div>
 
@@ -1447,7 +1480,7 @@ function openLaunchFlow() {
 
   if (isFinal) {
     // Final: no singles, just BB. Skip picker.
-    _doLaunchRound({ match, t1, t2, isFinal: true, pairings: [], effectiveSinglesOrder: 0, pricePerPoint: 0 })
+    _doLaunchRound({ match, t1, t2, isFinal: true, pairings: [], effectiveSinglesOrder: 0, wagerBb: 0, wagerS1: 0, wagerS2: 0 })
     return
   }
 
@@ -1457,11 +1490,16 @@ function openLaunchFlow() {
     ? [{ t1pid: t1.players[0].id, t2pid: t2.players[1].id }, { t1pid: t1.players[1].id, t2pid: t2.players[0].id }]
     : [{ t1pid: t1.players[0].id, t2pid: t2.players[0].id }, { t1pid: t1.players[1].id, t2pid: t2.players[1].id }]
 
+  // Read existing wagers; default each component to $0 (no surprise bets carried forward
+  // from legacy { pricePerPoint } shape — Jason wants explicit per-component setup).
+  const existing = match.wagers || {}
   pairingPicker.value = {
     match, t1, t2, isFinal: false,
     pairings: defaultPairings,
     effectiveSinglesOrder: initialOrder,
-    pricePerPoint: match.wagers?.pricePerPoint ?? 0,
+    wagerBb: Number.isFinite(+existing.bb) ? +existing.bb : 0,
+    wagerS1: Number.isFinite(+existing.s1) ? +existing.s1 : 0,
+    wagerS2: Number.isFinite(+existing.s2) ? +existing.s2 : 0,
     course: TOURNAMENT.defaultCourse || 'Bonnie Briar Country Club',
     tee: TOURNAMENT.defaultTee || 'Blue',
   }
@@ -1480,12 +1518,12 @@ function swapPairings() {
 
 async function confirmPairingsAndLaunch() {
   if (!pairingPicker.value) return
-  const { match, t1, t2, isFinal, pairings, course, tee, effectiveSinglesOrder, pricePerPoint } = pairingPicker.value
+  const { match, t1, t2, isFinal, pairings, course, tee, effectiveSinglesOrder, wagerBb, wagerS1, wagerS2 } = pairingPicker.value
   pairingPicker.value = null
-  await _doLaunchRound({ match, t1, t2, isFinal, pairings, course, tee, effectiveSinglesOrder, pricePerPoint })
+  await _doLaunchRound({ match, t1, t2, isFinal, pairings, course, tee, effectiveSinglesOrder, wagerBb, wagerS1, wagerS2 })
 }
 
-async function _doLaunchRound({ match, t1, t2, isFinal, pairings, course, tee, effectiveSinglesOrder, pricePerPoint }) {
+async function _doLaunchRound({ match, t1, t2, isFinal, pairings, course, tee, effectiveSinglesOrder, wagerBb, wagerS1, wagerS2 }) {
   // Build player list with team assignments and stable temp IDs
   const ts = Date.now()
   const players = [
@@ -1557,12 +1595,19 @@ async function _doLaunchRound({ match, t1, t2, isFinal, pairings, course, tee, e
           console.warn('[tournament] Failed to persist singles_order:', e)
         })
       }
-      // Persist wagers (per-match $/point) chosen at launch.
-      const ppp = Number.isFinite(+pricePerPoint) ? +pricePerPoint : 0
-      const newWagers = ppp > 0 ? { pricePerPoint: ppp } : null
-      const prevPpp = match.wagers?.pricePerPoint ?? 0
-      if (ppp !== prevPpp) {
-        tournamentStore.updateMatchWagers(match._dbId, newWagers).catch(e => {
+      // Persist wagers — three independent flat-dollar bets. Save the dictionary
+      // even when all are zero so the row reflects "explicitly no wager" rather
+      // than legacy null/old-shape ambiguity.
+      const num = v => (Number.isFinite(+v) && +v > 0 ? +v : 0)
+      const newWagers = { bb: num(wagerBb), s1: num(wagerS1), s2: num(wagerS2) }
+      const prev = match.wagers || {}
+      const changed = newWagers.bb !== (prev.bb ?? 0)
+        || newWagers.s1 !== (prev.s1 ?? 0)
+        || newWagers.s2 !== (prev.s2 ?? 0)
+        || prev.pricePerPoint != null  // legacy shape — overwrite
+      if (changed) {
+        const payload = (newWagers.bb || newWagers.s1 || newWagers.s2) ? newWagers : null
+        tournamentStore.updateMatchWagers(match._dbId, payload).catch(e => {
           console.warn('[tournament] Failed to persist wagers:', e)
         })
       }
@@ -2638,6 +2683,21 @@ _loadFinalResult()
 }
 .pairing-wager-suffix {
   color: rgba(240,237,224,.4); font-size: 12px;
+}
+.pairing-wager-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.pairing-wager-field {
+  display: flex; flex-direction: column; gap: 2px;
+}
+.pairing-wager-field-lbl {
+  font-size: 10px;
+  color: rgba(240,237,224,.6);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
 }
 .pairing-course-row {
   display: flex; gap: 8px; margin-top: 4px;

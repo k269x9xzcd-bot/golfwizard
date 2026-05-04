@@ -804,6 +804,35 @@
 .settle-to { font-weight: 700; color: #4ade80; }
 .settle-pay { font-weight: 800; color: var(--gw-gold, #d4af37); }
 .settle-even-msg { font-size: 12px; color: rgba(240,237,224,.4); text-align: center; padding: 4px 0; }
+.settle-tournament {
+  border-top: 1px solid rgba(255,255,255,.07);
+  padding: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.settle-group-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: rgba(212,175,55,.7);
+  margin-bottom: 2px;
+}
+.settle-tourn-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: rgba(240,237,224,.75);
+  flex-wrap: wrap;
+}
+.settle-tourn-lbl { font-weight: 700; color: rgba(240,237,224,.9); }
+.settle-tourn-sep { color: rgba(240,237,224,.3); }
+.settle-tourn-detail { color: rgba(240,237,224,.65); }
+.settle-tourn-status { font-weight: 600; color: rgba(240,237,224,.75); }
+.settle-tourn-money { margin-left: auto; font-weight: 800; color: #4ade80; }
+.settle-tourn-tie { margin-left: auto; font-weight: 600; color: rgba(212,175,55,.6); font-size: 11px; }
 
 /* Scorecard grid styles moved to style.css (shared with ScorecardGrid.vue) */
 

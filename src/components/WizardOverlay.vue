@@ -361,12 +361,12 @@
           <div class="tournament-lock-row">
             <span class="tournament-lock-lbl">Team BB</span>
             <span class="tournament-lock-val">{{ tournamentLockSummary.teamBb }}</span>
-            <span v-if="tournamentLockSummary.pricePerPoint > 0" class="tournament-lock-money">${{ tournamentLockSummary.pricePerPoint * 2 }} on the line</span>
+            <span v-if="tournamentLockSummary.wagers.bb > 0" class="tournament-lock-money">${{ tournamentLockSummary.wagers.bb }} on the line</span>
           </div>
           <div v-for="(s, i) in tournamentLockSummary.singles" :key="i" class="tournament-lock-row">
             <span class="tournament-lock-lbl">Single {{ i + 1 }}</span>
             <span class="tournament-lock-val">{{ s }}</span>
-            <span v-if="tournamentLockSummary.pricePerPoint > 0" class="tournament-lock-money">${{ tournamentLockSummary.pricePerPoint }} on the line</span>
+            <span v-if="(i === 0 ? tournamentLockSummary.wagers.s1 : tournamentLockSummary.wagers.s2) > 0" class="tournament-lock-money">${{ i === 0 ? tournamentLockSummary.wagers.s1 : tournamentLockSummary.wagers.s2 }} on the line</span>
           </div>
           <div class="tournament-lock-hint">
             Set in the Tournament tab at round launch. Side bets below are unaffected.
@@ -1357,6 +1357,7 @@ import { useAuthStore } from '../stores/auth'
 import { supabase } from '../supabase'
 import { Toggle } from './ui'
 import { GAME_DEFS } from '../modules/courses'
+import { normalizeWagers } from '../modules/tournamentWagers'
 import { usePlayerSearch } from '../composables/usePlayerSearch'
 
 // ── TeamPicker component (inline) ────────────────────────────────
@@ -1505,7 +1506,7 @@ const tournamentLockSummary = computed(() => {
     singles: singles
       .filter(s => s.p1 && s.p2)
       .map(s => `${nm(s.p1)} vs ${nm(s.p2)}`),
-    pricePerPoint: tm.wagers?.pricePerPoint ?? 0,
+    wagers: normalizeWagers(tm.wagers),
   }
 })
 

@@ -271,7 +271,8 @@ export const useTournamentStore = defineStore('tournament', () => {
   }
 
   // ── updateMatchWagers: persist per-match wager config ─────────────
-  // wagers shape: { pricePerPoint: number } | null
+  // wagers shape: { bb: number, s1: number, s2: number } — three independent
+  // flat-dollar bets (Team BB, 1v1 Match 1, 1v1 Match 2). null = no bets.
   async function updateMatchWagers(matchDbId, wagers) {
     if (!matchDbId) return
     await supaCallWithRetry(
