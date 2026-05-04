@@ -470,10 +470,11 @@
         </div>
         </div><!-- /.scorecard-outer -->
 
-        <!-- Tournament Match Status (2BB + 1v1, works without game_configs) -->
+        <!-- Tournament Match Status (Team BB + 1v1, derived from tournament tables) -->
         <div v-if="tournamentMatchStatus" class="live-games-box">
           <div class="live-games-label collapsible-header" @click="gamesExpanded = !gamesExpanded">
             {{ gamesExpanded ? '▼' : '▶' }} 🏆 Match · Thru {{ tournamentMatchStatus.thru || '—' }}
+            <span v-if="tournamentMatchStatus.pricePerPoint > 0" class="tourn-wager-pill">${{ tournamentMatchStatus.pricePerPoint }}/pt</span>
           </div>
           <div v-show="gamesExpanded">
             <div class="live-game-summary tourn-status-row">
@@ -481,12 +482,14 @@
               <span v-if="tournamentMatchStatus.bb.teamLabel" class="tourn-stat-matchup">{{ tournamentMatchStatus.bb.teamLabel }}</span>
               <span v-if="tournamentMatchStatus.bb.teamLabel" class="tourn-stat-sep">·</span>
               <span class="tourn-stat-val">{{ tournamentMatchStatus.bb.label }}</span>
+              <span v-if="tournamentMatchStatus.pricePerPoint > 0 && tournamentMatchStatus.bb.diff !== 0" class="tourn-stat-money">+${{ tournamentMatchStatus.pricePerPoint * 2 }}</span>
             </div>
             <div v-for="(s, idx) in tournamentMatchStatus.singles" :key="idx" class="live-game-summary tourn-status-row">
               <span class="tourn-stat-lbl">1v1</span>
               <span class="tourn-stat-matchup">{{ s.p1Name }} v {{ s.p2Name }}</span>
               <span class="tourn-stat-sep">·</span>
               <span class="tourn-stat-val">{{ s.label }}</span>
+              <span v-if="tournamentMatchStatus.pricePerPoint > 0 && s.standing !== 0" class="tourn-stat-money">+${{ tournamentMatchStatus.pricePerPoint }}</span>
             </div>
           </div>
         </div>
@@ -502,7 +505,7 @@
         </div>
 
         <!-- Settle Up Panel -->
-        <div v-if="liveSettlements && roundsStore.activeGames.length > 0 && (roundsStore.activeRound?.is_complete || roundCompletionInfo.allScored)" class="settle-box">
+        <div v-if="liveSettlements && (roundsStore.activeGames.length > 0 || tournamentWagerGames.length > 0) && (roundsStore.activeRound?.is_complete || roundCompletionInfo.allScored)" class="settle-box">
           <div class="settle-box-header">
             <div class="settle-box-label">💵 Settle Up</div>
             <img
@@ -982,6 +985,7 @@ import { useAuthStore } from '../stores/auth'
 import { useRoundsStore } from '../stores/rounds'
 import { useCoursesStore } from '../stores/courses'
 import { useRosterStore, displayName as rosterDisplayName, displayInitials as rosterDisplayInitials } from '../stores/roster'
+import { useTournamentStore } from '../stores/tournament'
 import { shareScorecard, shareRecap } from '../modules/scorecardShare'
 import CrossMatchBanner from '../components/CrossMatchBanner.vue'
 import WizardOverlay from '../components/WizardOverlay.vue'
@@ -998,6 +1002,7 @@ import { simulateRound } from '../modules/simulator'
 
 const authStore = useAuthStore()
 const roundsStore = useRoundsStore()
+const tournamentStore = useTournamentStore()
 const coursesStore = useCoursesStore()
 const rosterStore = useRosterStore()
 const router = useRouter()
@@ -1079,12 +1084,14 @@ const { holeMathLines } = useHoleMath({ buildCtx, pInit, teamInitialsStr })
 // ── Composable: live settlements ──────────────────────────────────
 const {
   liveSettlements, gameSummaryHtml,
-} = useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitialsStr, pInit, memberDisplay, visibleHoles, rosterPlayers: computed(() => rosterStore.players) })
+} = useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitialsStr, pInit, memberDisplay, visibleHoles, rosterPlayers: computed(() => rosterStore.players), tournamentWagerGames: computed(() => tournamentWagerGames.value) })
 
 
-// ── Tournament match status (works without game_configs) ──────────
-// Computes live 2BB + 1v1 standings from activeMembers/activeScores
-// directly, so the panel shows even when activeGames is empty.
+// ── Tournament match status (single source of truth — tournament tables only) ──
+// Computes live Team BB + 1v1 standings from activeMembers/activeScores plus the
+// tournament_match record (singles_order + wagers). Never reads game_configs for
+// tournament structure. Tournament structure is locked: launched pairings come
+// from tournament_matches.singles_order, swap is persisted there at launch.
 const tournamentMatchStatus = computed(() => {
   const round = roundsStore.activeRound
   if (round?.format !== 'tournament') return null
@@ -1101,7 +1108,7 @@ const tournamentMatchStatus = computed(() => {
     if (holes.length) thru = Math.max(thru, ...holes)
   }
 
-  // 2BB net best ball
+  // Team Best Ball (net) — winner of each hole +1, no carryover
   let t1Up = 0, t2Up = 0
   for (let h = 1; h <= thru; h++) {
     const siH = si[h - 1] ?? h
@@ -1117,11 +1124,7 @@ const tournamentMatchStatus = computed(() => {
   const teamNames = team => team.map(m => m.nickname || m.short_name || '?').join('+')
   const bbTeamLabel = bbDiff > 0 ? teamNames(t1) : bbDiff < 0 ? teamNames(t2) : ''
 
-  // 1v1 from game_configs or team-order fallback
   const hcpMap = Object.fromEntries(members.map(m => [m.id, m.round_hcp ?? 0]))
-  const memberById = Object.fromEntries(members.map(m => [m.id, m]))
-  const singles1v1 = roundsStore.activeGames.filter(g => g.type === 'match1v1')
-
   function _calcStanding(p1id, p2id) {
     let standing = 0
     for (let h = 1; h <= thru; h++) {
@@ -1136,32 +1139,81 @@ const tournamentMatchStatus = computed(() => {
     return standing
   }
 
-  let singlesMatches = []
-  if (singles1v1.length) {
-    singlesMatches = singles1v1.map(game => {
-      const cfg = typeof game.config === 'string' ? JSON.parse(game.config) : game.config
-      const p1 = memberById[cfg.player1], p2 = memberById[cfg.player2]
-      if (!p1 || !p2) return null
-      const standing = _calcStanding(cfg.player1, cfg.player2)
-      const p1Name = p1.nickname || p1.short_name || '?'
-      const p2Name = p2.nickname || p2.short_name || '?'
-      const label = standing === 0 ? (thru ? 'AS' : '—') : `${standing > 0 ? p1Name : p2Name} ${Math.abs(standing)} up`
-      return { p1Name, p2Name, label, standing }
-    }).filter(Boolean)
-  } else {
-    const pairs = Math.min(t1.length, t2.length)
-    for (let i = 0; i < pairs; i++) {
-      const p1 = t1[i], p2 = t2[i]
-      if (!p1 || !p2) continue
-      const standing = _calcStanding(p1.id, p2.id)
-      const p1Name = p1.nickname || p1.short_name || '?'
-      const p2Name = p2.nickname || p2.short_name || '?'
-      const label = standing === 0 ? (thru ? 'AS' : '—') : `${standing > 0 ? p1Name : p2Name} ${Math.abs(standing)} up`
-      singlesMatches.push({ p1Name, p2Name, label, standing })
-    }
+  // Singles pairings come from tournament_matches.singles_order (0=straight, 1=swapped).
+  // Falls back to straight order if the tournament store doesn't yet know about this round.
+  const tournMatch = tournamentStore.matchByRoundId?.(round.id) || null
+  const order = tournMatch?.singlesOrder === 1 ? 1 : 0
+  const singlesPairs = order === 1
+    ? [{ p1: t1[0], p2: t2[1] }, { p1: t1[1], p2: t2[0] }]
+    : [{ p1: t1[0], p2: t2[0] }, { p1: t1[1], p2: t2[1] }]
+
+  const singlesMatches = []
+  for (const { p1, p2 } of singlesPairs) {
+    if (!p1 || !p2) continue
+    const standing = _calcStanding(p1.id, p2.id)
+    const p1Name = p1.nickname || p1.short_name || '?'
+    const p2Name = p2.nickname || p2.short_name || '?'
+    const label = standing === 0 ? (thru ? 'AS' : '—') : `${standing > 0 ? p1Name : p2Name} ${Math.abs(standing)} up`
+    singlesMatches.push({ p1Name, p2Name, p1Id: p1.id, p2Id: p2.id, label, standing })
   }
 
-  return { thru, bb: { diff: bbDiff, label: bbLabel, teamLabel: bbTeamLabel }, singles: singlesMatches }
+  return {
+    thru,
+    bb: { diff: bbDiff, label: bbLabel, teamLabel: bbTeamLabel },
+    singles: singlesMatches,
+    pricePerPoint: tournMatch?.wagers?.pricePerPoint ?? 0,
+  }
+})
+
+// ── Tournament wagers as synthetic settlement entries ──────────────
+// Builds best_ball + 1v1 game configs from the live tournament context with
+// ppt = points × pricePerPoint, fed into the existing settlement engine. Empty
+// when wagers are 0 or no tournament match is linked.
+const tournamentWagerGames = computed(() => {
+  const round = roundsStore.activeRound
+  if (round?.format !== 'tournament') return []
+  const status = tournamentMatchStatus.value
+  if (!status) return []
+  const ppp = status.pricePerPoint || 0
+  if (ppp <= 0) return []
+  const members = roundsStore.activeMembers
+  const t1Ids = members.filter(m => m.team === 1).map(m => m.id)
+  const t2Ids = members.filter(m => m.team === 2).map(m => m.id)
+  if (!t1Ids.length || !t2Ids.length) return []
+  const bbPoints = tournamentStore.tournament?.best_ball_points ?? 2
+  const singlePoints = tournamentStore.tournament?.singles_points ?? 1
+  const games = [
+    {
+      id: '__tourn_bb',
+      type: 'best_ball',
+      config: {
+        team1: t1Ids,
+        team2: t2Ids,
+        ballsPerTeam: 1,
+        ppt: ppp * bbPoints,
+        scoring: 'closeout',
+        __tournament: true,
+        label: `Team BB (${bbPoints} pts)`,
+      },
+    },
+  ]
+  for (let i = 0; i < status.singles.length; i++) {
+    const s = status.singles[i]
+    if (!s.p1Id || !s.p2Id) continue
+    games.push({
+      id: `__tourn_s${i + 1}`,
+      type: 'match1v1',
+      config: {
+        player1: s.p1Id,
+        player2: s.p2Id,
+        ppt: ppp * singlePoints,
+        scoring: 'closeout',
+        __tournament: true,
+        label: `Single (${singlePoints} pt)`,
+      },
+    })
+  }
+  return games
 })
 
 const showRetroScore = ref(false)
@@ -1306,6 +1358,12 @@ onMounted(async () => {
     if (candidate) {
       try { await roundsStore.loadRound(candidate.id) } catch (e) { console.warn('[scoring] auto-load failed:', e?.message) }
     }
+  }
+
+  // Tournament rounds: ensure the tournament store is loaded so the Match
+  // panel can derive singles_order + wagers from tournament_matches.
+  if (roundsStore.activeRound?.format === 'tournament' && !tournamentStore.loaded) {
+    tournamentStore.init().catch(e => console.warn('[scoring] tournament init failed:', e?.message))
   }
 
   // If the round is loaded but games are missing (tournament round where game_configs
@@ -1859,17 +1917,13 @@ onUnmounted(() => {
 const gamesExpanded = ref(true)
 const sideGamesExpanded = ref(true)
 
-// In tournament rounds: hide internal tournament game_configs (covered by tournamentMatchStatus panel).
-// Show everything in non-tournament rounds.
+// In tournament rounds: hide tournament structure entirely. Team BB and 1v1
+// singles render ONLY in the Match panel (derived from tournament tables).
+// Live Games shows side games (skins, nassau, BBN tracker, etc.) only.
 const liveGamesToShow = computed(() => {
   const games = roundsStore.activeGames
   if (roundsStore.activeRound?.format === 'tournament') {
-    return games.filter(g => {
-      try {
-        const cfg = typeof g.config === 'string' ? JSON.parse(g.config) : (g.config || {})
-        return !cfg.tournament
-      } catch { return true }
-    })
+    return games.filter(g => g.type !== 'best_ball' && g.type !== 'match1v1')
   }
   return games
 })
@@ -2576,6 +2630,25 @@ function formatDate(dateStr) {
   font-size: 13px;
   font-weight: 600;
   margin-left: auto;
+}
+.tourn-stat-money {
+  font-size: 12px;
+  font-weight: 700;
+  color: #4ade80;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+.tourn-wager-pill {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(212,175,55,.12);
+  border: 1px solid rgba(212,175,55,.3);
+  color: #d4af37;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .3px;
 }
 
 /* ── Live games box ── */

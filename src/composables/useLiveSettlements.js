@@ -40,14 +40,17 @@ function makeUniqueLabels(members, partsOf) {
   return L
 }
 
-export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitialsStr, pInit, memberDisplay, visibleHoles, rosterPlayers }) {
+export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitialsStr, pInit, memberDisplay, visibleHoles, rosterPlayers, tournamentWagerGames }) {
   const roundsStore = useRoundsStore()
 
   const liveSettlements = computed(() => {
-    if (!roundsStore.activeRound || roundsStore.activeGames.length === 0) return null
+    if (!roundsStore.activeRound) return null
+    const tournGames = tournamentWagerGames?.value ?? []
+    const sideGames = roundsStore.activeGames
+    if (tournGames.length === 0 && sideGames.length === 0) return null
     const ctx = buildCtx()
     try {
-      return computeAllSettlements(ctx, roundsStore.activeGames)
+      return computeAllSettlements(ctx, [...tournGames, ...sideGames])
     } catch (e) {
       return null
     }

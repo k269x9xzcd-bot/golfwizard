@@ -679,6 +679,17 @@ export const useRoundsStore = defineStore('rounds', () => {
       }
     }
 
+    // Tournament rounds: strip any stale best_ball / match1v1 entries — these
+    // represent tournament structure that is now derived from tournament_matches
+    // (Match panel) and must never appear as Live Games chips. May exist in
+    // localStorage cache or DB from an older app version.
+    if (data.format === 'tournament') {
+      activeGames.value = activeGames.value.filter(
+        g => g.type !== 'best_ball' && g.type !== 'match1v1',
+      )
+      try { localStorage.setItem(`gw_games_cache_${roundId}`, JSON.stringify(activeGames.value)) } catch {}
+    }
+
     // Derive team from game config if round_member.team is null
     // (handles rounds created before the team-derivation fix)
     const members = data.round_members ?? []

@@ -684,6 +684,28 @@
                 Default is based on round-robin rotation ({{ pairingPicker.match.singlesOrder === 0 ? 'first meeting' : 'rematch' }}). Tap swap if you want different matchups.
               </div>
 
+              <!-- Per-match wager ($/point) -->
+              <div class="pairing-wager-row">
+                <label class="mm-section-label">Stakes ($ per point, optional)</label>
+                <div class="pairing-wager-input-wrap">
+                  <span class="pairing-wager-prefix">$</span>
+                  <input
+                    type="number"
+                    inputmode="decimal"
+                    v-model.number="pairingPicker.pricePerPoint"
+                    class="mm-text-input pairing-wager-input"
+                    min="0"
+                    step="1"
+                    placeholder="0"
+                  />
+                  <span class="pairing-wager-suffix">/point</span>
+                </div>
+                <div class="pairing-hint">
+                  Team BB = 2 pts ({{ TOURNAMENT.bestBallPoints }}). Each Single = 1 pt.
+                  Winner of each gets pts × $/pt from the loser. Halved = 0 net.
+                </div>
+              </div>
+
               <!-- Course + tee dropdowns -->
               <div class="pairing-course-row">
                 <div class="pairing-course-field">
@@ -1425,18 +1447,21 @@ function openLaunchFlow() {
 
   if (isFinal) {
     // Final: no singles, just BB. Skip picker.
-    _doLaunchRound({ match, t1, t2, isFinal: true, pairings: [] })
+    _doLaunchRound({ match, t1, t2, isFinal: true, pairings: [], effectiveSinglesOrder: 0, pricePerPoint: 0 })
     return
   }
 
   // Default pairings based on singlesOrder (0 = straight, 1 = swapped)
-  const defaultPairings = match.singlesOrder === 1
+  const initialOrder = match.singlesOrder === 1 ? 1 : 0
+  const defaultPairings = initialOrder === 1
     ? [{ t1pid: t1.players[0].id, t2pid: t2.players[1].id }, { t1pid: t1.players[1].id, t2pid: t2.players[0].id }]
     : [{ t1pid: t1.players[0].id, t2pid: t2.players[0].id }, { t1pid: t1.players[1].id, t2pid: t2.players[1].id }]
 
   pairingPicker.value = {
     match, t1, t2, isFinal: false,
     pairings: defaultPairings,
+    effectiveSinglesOrder: initialOrder,
+    pricePerPoint: match.wagers?.pricePerPoint ?? 0,
     course: TOURNAMENT.defaultCourse || 'Bonnie Briar Country Club',
     tee: TOURNAMENT.defaultTee || 'Blue',
   }
@@ -1450,16 +1475,17 @@ function swapPairings() {
     { t1pid: a.t1pid, t2pid: b.t2pid },
     { t1pid: b.t1pid, t2pid: a.t2pid },
   ]
+  pairingPicker.value.effectiveSinglesOrder = pairingPicker.value.effectiveSinglesOrder === 0 ? 1 : 0
 }
 
 async function confirmPairingsAndLaunch() {
   if (!pairingPicker.value) return
-  const { match, t1, t2, isFinal, pairings, course, tee } = pairingPicker.value
+  const { match, t1, t2, isFinal, pairings, course, tee, effectiveSinglesOrder, pricePerPoint } = pairingPicker.value
   pairingPicker.value = null
-  await _doLaunchRound({ match, t1, t2, isFinal, pairings, course, tee })
+  await _doLaunchRound({ match, t1, t2, isFinal, pairings, course, tee, effectiveSinglesOrder, pricePerPoint })
 }
 
-async function _doLaunchRound({ match, t1, t2, isFinal, pairings, course, tee }) {
+async function _doLaunchRound({ match, t1, t2, isFinal, pairings, course, tee, effectiveSinglesOrder, pricePerPoint }) {
   // Build player list with team assignments and stable temp IDs
   const ts = Date.now()
   const players = [
@@ -1487,43 +1513,12 @@ async function _doLaunchRound({ match, t1, t2, isFinal, pairings, course, tee })
     })),
   ]
 
-  // Build game configs
-  const t1Ids = players.filter(p => p.team === 1).map(p => p.id)
-  const t2Ids = players.filter(p => p.team === 2).map(p => p.id)
-
-  const games = [
-    // Best Ball match play (worth 2 tournament points)
-    { type: 'best_ball', config: {
-      team1: t1Ids, team2: t2Ids,
-      ballsPerTeam: 1,
-      ppt: 0,
-      tournament: true,
-      points: 2,
-      label: '2v2 Best Ball (2 pts)',
-    }},
-  ]
-
-  // Regular rounds also get 2 × 1v1 matches (worth 1 pt each)
-  if (!isFinal) {
-    for (const pairing of pairings) {
-      const p1 = players.find(pl => pl._tournId === pairing.t1pid)
-      const p2 = players.find(pl => pl._tournId === pairing.t2pid)
-      if (p1 && p2) {
-        games.push({
-          type: 'match1v1',
-          config: {
-            player1: p1.id,
-            player2: p2.id,
-            ppt: 0,
-            scoring: 'closeout',
-            tournament: true,
-            points: 1,
-            label: `1v1: ${p1.shortName} vs ${p2.shortName} (1 pt)`,
-          },
-        })
-      }
-    }
-  }
+  // Tournament structure (Team BB + 2 × 1v1) is no longer persisted as
+  // game_configs. It is derived in the Match panel from tournament_teams +
+  // tournament_team_players + tournament_matches.singles_order, and wagers
+  // are stored on tournament_matches.wagers. This guarantees a single source
+  // of truth — Live Games never duplicates the Team BB / Singles chips.
+  const games = []
 
   launchingRound.value = true
   launchError.value = null
@@ -1554,6 +1549,23 @@ async function _doLaunchRound({ match, t1, t2, isFinal, pairings, course, tee })
       tournamentStore.linkRoundToMatch(match._dbId, round.id).catch(e => {
         console.warn('[tournament] Failed to link round to match:', e)
       })
+      // Persist swap (effectiveSinglesOrder) so the Match panel can derive
+      // the same pairings later without reading game_configs.
+      const desiredOrder = effectiveSinglesOrder ?? match.singlesOrder ?? 0
+      if (!isFinal && desiredOrder !== (match.singlesOrder ?? 0)) {
+        tournamentStore.updateMatchSinglesOrder(match._dbId, desiredOrder).catch(e => {
+          console.warn('[tournament] Failed to persist singles_order:', e)
+        })
+      }
+      // Persist wagers (per-match $/point) chosen at launch.
+      const ppp = Number.isFinite(+pricePerPoint) ? +pricePerPoint : 0
+      const newWagers = ppp > 0 ? { pricePerPoint: ppp } : null
+      const prevPpp = match.wagers?.pricePerPoint ?? 0
+      if (ppp !== prevPpp) {
+        tournamentStore.updateMatchWagers(match._dbId, newWagers).catch(e => {
+          console.warn('[tournament] Failed to persist wagers:', e)
+        })
+      }
     }
     match.roundId = round.id
     _saveRoundIds() // localStorage fallback if Supabase linkage fails on iOS
@@ -2601,6 +2613,31 @@ _loadFinalResult()
   font-size: 11px; color: rgba(240,237,224,.4);
   text-align: center; line-height: 1.4;
   padding: 0 4px;
+}
+.pairing-wager-row {
+  display: flex; flex-direction: column; gap: 4px;
+  margin-top: 8px;
+}
+.pairing-wager-input-wrap {
+  display: flex; align-items: center; gap: 4px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(212,175,55,.25);
+  border-radius: 10px;
+  padding: 4px 10px;
+}
+.pairing-wager-prefix {
+  color: #d4af37; font-weight: 700; font-size: 14px;
+}
+.pairing-wager-input {
+  flex: 1;
+  background: transparent !important;
+  border: none !important;
+  text-align: right;
+  font-weight: 700;
+  font-size: 14px;
+}
+.pairing-wager-suffix {
+  color: rgba(240,237,224,.4); font-size: 12px;
 }
 .pairing-course-row {
   display: flex; gap: 8px; margin-top: 4px;

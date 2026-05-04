@@ -93,6 +93,7 @@ export const useTournamentStore = defineStore('tournament', () => {
             singlesOrder: m.singles_order ?? 0,
             result: m.result ?? null,
             roundId: m.round_id ?? null,
+            wagers: m.wagers ?? null,
             _dbId: m.id,
           })),
       }))
@@ -254,6 +255,48 @@ export const useTournamentStore = defineStore('tournament', () => {
     )
   }
 
+  // ── updateMatchSinglesOrder: persist a swap of singles pairings ──
+  async function updateMatchSinglesOrder(matchDbId, singlesOrder) {
+    if (!matchDbId) return
+    await supaCallWithRetry(
+      'tournament.updateSinglesOrder',
+      () => supabase.from('tournament_matches').update({ singles_order: singlesOrder }).eq('id', matchDbId),
+      8000,
+    )
+    for (const round of (schedule.value || [])) {
+      for (const m of (round.matches || [])) {
+        if (m._dbId === matchDbId) { m.singlesOrder = singlesOrder; break }
+      }
+    }
+  }
+
+  // ── updateMatchWagers: persist per-match wager config ─────────────
+  // wagers shape: { pricePerPoint: number } | null
+  async function updateMatchWagers(matchDbId, wagers) {
+    if (!matchDbId) return
+    await supaCallWithRetry(
+      'tournament.updateWagers',
+      () => supabase.from('tournament_matches').update({ wagers }).eq('id', matchDbId),
+      8000,
+    )
+    for (const round of (schedule.value || [])) {
+      for (const m of (round.matches || [])) {
+        if (m._dbId === matchDbId) { m.wagers = wagers; break }
+      }
+    }
+  }
+
+  // ── matchByRoundId: lookup a tournament match by its linked round id ──
+  function matchByRoundId(roundId) {
+    if (!roundId) return null
+    for (const round of (schedule.value || [])) {
+      for (const m of (round.matches || [])) {
+        if (m.roundId === roundId) return m
+      }
+    }
+    return null
+  }
+
   // ── updateTournamentMeta: update name/format in Supabase ───────
   async function updateTournamentMeta(updates) {
     const { data, error } = await supaCallWithRetry(
@@ -288,6 +331,9 @@ export const useTournamentStore = defineStore('tournament', () => {
     updateTournamentMeta,
     linkRoundToMatch,
     saveMatchResult,
+    updateMatchSinglesOrder,
+    updateMatchWagers,
+    matchByRoundId,
   }
 })
 

@@ -351,6 +351,28 @@
       <!-- ── Step 3: Games ──────────────────────────────────── -->
       <div v-if="step === 3" class="wizard-step">
 
+        <!-- Tournament structure (locked, read-only) -->
+        <div v-if="tournamentLockSummary" class="tournament-lock-card">
+          <div class="tournament-lock-header">
+            <span class="tournament-lock-icon">🔒</span>
+            <span class="tournament-lock-title">Tournament structure</span>
+            <span class="tournament-lock-pill">Locked</span>
+          </div>
+          <div class="tournament-lock-row">
+            <span class="tournament-lock-lbl">Team BB</span>
+            <span class="tournament-lock-val">{{ tournamentLockSummary.teamBb }}</span>
+            <span v-if="tournamentLockSummary.pricePerPoint > 0" class="tournament-lock-money">${{ tournamentLockSummary.pricePerPoint * 2 }} on the line</span>
+          </div>
+          <div v-for="(s, i) in tournamentLockSummary.singles" :key="i" class="tournament-lock-row">
+            <span class="tournament-lock-lbl">Single {{ i + 1 }}</span>
+            <span class="tournament-lock-val">{{ s }}</span>
+            <span v-if="tournamentLockSummary.pricePerPoint > 0" class="tournament-lock-money">${{ tournamentLockSummary.pricePerPoint }} on the line</span>
+          </div>
+          <div class="tournament-lock-hint">
+            Set in the Tournament tab at round launch. Side bets below are unaffected.
+          </div>
+        </div>
+
         <!-- Main game selector -->
         <div class="game-section-label">Main Game</div>
 
@@ -1330,6 +1352,7 @@ let _globalCreating = false
 import { useCoursesStore } from '../stores/courses'
 import { useRosterStore } from '../stores/roster'
 import { useRoundsStore } from '../stores/rounds'
+import { useTournamentStore } from '../stores/tournament'
 import { useAuthStore } from '../stores/auth'
 import { supabase } from '../supabase'
 import { Toggle } from './ui'
@@ -1455,6 +1478,36 @@ const coursesStore = useCoursesStore()
 const rosterStore = useRosterStore()
 const authStore = useAuthStore()
 const roundsStore = useRoundsStore()
+const tournamentStore = useTournamentStore()
+
+// In edit mode for a tournament round, surface the locked tournament structure
+// (Team BB + Singles) at the top of step 3 so users can see what's auto-applied
+// without thinking they need to add it as a side game. Pricing flows from the
+// per-match wagers stored on tournament_matches, not from the wizard.
+const isTournamentEdit = computed(() =>
+  !!props.editMode && roundsStore.activeRound?.format === 'tournament'
+)
+const tournamentLockSummary = computed(() => {
+  if (!isTournamentEdit.value) return null
+  const round = roundsStore.activeRound
+  const tm = tournamentStore.matchByRoundId?.(round?.id)
+  if (!tm) return null
+  const t1 = tournamentStore.teams.find(t => t.id === tm.team1)
+  const t2 = tournamentStore.teams.find(t => t.id === tm.team2)
+  if (!t1 || !t2) return null
+  const order = tm.singlesOrder === 1 ? 1 : 0
+  const singles = order === 1
+    ? [{ p1: t1.players[0], p2: t2.players[1] }, { p1: t1.players[1], p2: t2.players[0] }]
+    : [{ p1: t1.players[0], p2: t2.players[0] }, { p1: t1.players[1], p2: t2.players[1] }]
+  const nm = p => p?.nickname || p?.name?.split(' ')[0] || '?'
+  return {
+    teamBb: `${t1.players.map(nm).join('+')} vs ${t2.players.map(nm).join('+')}`,
+    singles: singles
+      .filter(s => s.p1 && s.p2)
+      .map(s => `${nm(s.p1)} vs ${nm(s.p2)}`),
+    pricePerPoint: tm.wagers?.pricePerPoint ?? 0,
+  }
+})
 
 const step = ref(props.editMode ? 3 : (props.startStep || 1))
 // When players are locked (cross-match flow), step 2 is skipped — only 2 steps total
@@ -2683,7 +2736,13 @@ async function saveEditedGames() {
   }
 }
 
-onMounted(() => { if (props.editMode) _loadEditGames() })
+onMounted(() => {
+  if (props.editMode) _loadEditGames()
+  // Ensure tournament store is loaded so the lock banner can render team / wager info.
+  if (props.editMode && roundsStore.activeRound?.format === 'tournament' && !tournamentStore.loaded) {
+    tournamentStore.init().catch(() => {})
+  }
+})
 
 // ── Create round ─────────────────────────────────────────────────
 function _wizLog(msg) {
@@ -2866,6 +2925,62 @@ function reloadApp() {
 </script>
 
 <style scoped>
+/* ── Tournament structure (locked) banner in edit-games mode ── */
+.tournament-lock-card {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(212,175,55,.08);
+  border: 1px solid rgba(212,175,55,.3);
+}
+.tournament-lock-header {
+  display: flex; align-items: center; gap: 6px;
+  margin-bottom: 8px;
+}
+.tournament-lock-icon { font-size: 14px; }
+.tournament-lock-title {
+  font-weight: 700; font-size: 13px;
+  color: #d4af37;
+  letter-spacing: .3px;
+}
+.tournament-lock-pill {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(212,175,55,.15);
+  color: #d4af37;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .3px;
+}
+.tournament-lock-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 0;
+  border-top: 1px solid rgba(212,175,55,.12);
+  font-size: 12px;
+}
+.tournament-lock-row:first-of-type { border-top: 0; }
+.tournament-lock-lbl {
+  font-weight: 700;
+  color: rgba(240,237,224,.65);
+  min-width: 70px;
+}
+.tournament-lock-val {
+  flex: 1;
+  color: rgba(240,237,224,.92);
+}
+.tournament-lock-money {
+  color: #4ade80;
+  font-weight: 700;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.tournament-lock-hint {
+  margin-top: 6px;
+  font-size: 10px;
+  color: rgba(240,237,224,.45);
+  font-style: italic;
+}
 /* ── Course search: pinned at top of the step scroll area so keyboard doesn't push it down ── */
 .wiz-course-search {
   position: sticky;
