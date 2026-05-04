@@ -541,14 +541,31 @@
                 v-html="gameSummaryHtml(item.game)"
               ></div>
 
-              <!-- Cross-match row — tap to standings -->
+              <!-- Cross-match row — inline summary, tap for full detail -->
               <router-link
                 v-else-if="item.kind === 'cross-match'"
                 :to="`/cross-match/${item.match.id}`"
-                class="live-row cross-row"
+                class="live-row cross-row cross-row--inline"
               >
-                <span class="live-row-label">vs Foursome {{ item.match.round_a_id === roundsStore.activeRound?.id ? 'B' : 'A' }}</span>
-                <span class="live-row-status">Standings ›</span>
+                <template v-if="crossMatchSummary">
+                  <div class="cm-grid">
+                    <span class="cm-team-name">{{ crossMatchSummary.teamA.name }}</span>
+                    <span class="cm-team-vs-par" :class="vsParClass(crossMatchSummary.teamA.vsPar)">{{ formatVsPar(crossMatchSummary.teamA.vsPar) }}</span>
+                    <span class="cm-team-name">{{ crossMatchSummary.teamB.name }}</span>
+                    <span class="cm-team-vs-par" :class="vsParClass(crossMatchSummary.teamB.vsPar)">{{ formatVsPar(crossMatchSummary.teamB.vsPar) }}</span>
+                  </div>
+                  <div class="cm-status-row">
+                    <span class="cm-leader">{{ crossMatchLeaderText }}</span>
+                    <span class="cm-stake-arrow">
+                      <span v-if="crossMatchSummary.stake > 0" class="cm-stake">${{ crossMatchSummary.stake }}/p</span>
+                      <span class="cm-arrow">tap for detail ›</span>
+                    </span>
+                  </div>
+                </template>
+                <template v-else>
+                  <span class="live-row-label">vs Foursome {{ item.match.round_a_id === roundsStore.activeRound?.id ? 'B' : 'A' }}</span>
+                  <span class="live-row-status">Standings ›</span>
+                </template>
               </router-link>
             </template>
           </div>
@@ -1065,6 +1082,7 @@ import { useLiveSettlements } from '../composables/useLiveSettlements'
 import { computeNassau, computeHammer, computeFidget, courseHandicap, holeSI, strokesOnHole } from '../modules/gameEngine'
 import { normalizeWagers, buildTournamentWagerGames } from '../modules/tournamentWagers'
 import { buildLiveSections } from '../modules/liveSections'
+import { useCrossMatchSummary } from '../composables/useCrossMatchSummary'
 import { simulateRound } from '../modules/simulator'
 
 const authStore = useAuthStore()
@@ -1317,6 +1335,33 @@ const liveSections = computed(() =>
     liveCrossMatch: liveCrossMatch.value,
   })
 )
+
+// ── Cross-match inline summary (loads + computes both rounds) ─────
+const { summary: crossMatchSummary } = useCrossMatchSummary(liveCrossMatch)
+const crossMatchLeaderText = computed(() => {
+  const s = crossMatchSummary.value
+  if (!s) return ''
+  if (!s.holesBoth) return 'Waiting for both foursomes to tee off'
+  if (s.allComplete) {
+    if (!s.currentLeader) return 'All square — final'
+    const winner = s.currentLeader === 'A' ? s.teamA.name : s.teamB.name
+    return `${winner} wins by ${s.delta}`
+  }
+  if (!s.currentLeader) return `All square thru ${s.holesBoth} holes`
+  const leader = s.currentLeader === 'A' ? s.teamA.name : s.teamB.name
+  return `${leader} leading by ${s.delta} thru ${s.holesBoth} holes`
+})
+function formatVsPar(n) {
+  const v = Number(n) || 0
+  if (v === 0) return 'E'
+  return v > 0 ? `+${v}` : `${v}`
+}
+function vsParClass(n) {
+  const v = Number(n) || 0
+  if (v < 0) return 'cm-vp-under'
+  if (v > 0) return 'cm-vp-over'
+  return 'cm-vp-even'
+}
 
 const showRetroScore = ref(false)
 const retroOverlayRef = ref(null)

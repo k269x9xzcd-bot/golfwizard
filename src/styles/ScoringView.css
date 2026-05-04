@@ -768,6 +768,56 @@
 }
 .cross-row .live-row-status { color: #4ade80; font-weight: 700; }
 
+/* Cross-match inline summary (on the Score tab CROSS-MATCH section) */
+.cross-row--inline {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 6px;
+}
+.cm-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  row-gap: 2px;
+  column-gap: 10px;
+  align-items: baseline;
+  font-size: 13px;
+}
+.cm-team-name {
+  font-weight: 700;
+  color: var(--gw-text, #f0ede0);
+  overflow-wrap: anywhere;
+}
+.cm-team-vs-par {
+  font-family: var(--gw-font-mono, monospace);
+  font-weight: 700;
+  font-size: 13px;
+  text-align: right;
+}
+.cm-vp-under { color: #ef4444; }
+.cm-vp-over  { color: rgba(240,237,224,.65); }
+.cm-vp-even  { color: rgba(240,237,224,.7); }
+.cm-status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  color: rgba(240,237,224,.7);
+}
+.cm-leader { font-weight: 600; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.cm-stake-arrow { display: flex; gap: 8px; align-items: baseline; flex-shrink: 0; }
+.cm-stake { color: #d4af37; font-weight: 700; font-family: var(--gw-font-mono, monospace); }
+.cm-arrow { color: #4ade80; font-weight: 700; font-size: 11px; }
+
+[data-theme="light"] .cm-team-name { color: #0d1f12 !important; }
+[data-theme="light"] .cm-vp-under { color: #b91c1c !important; }
+[data-theme="light"] .cm-vp-over  { color: rgba(13,31,18,.65) !important; }
+[data-theme="light"] .cm-vp-even  { color: rgba(13,31,18,.7) !important; }
+[data-theme="light"] .cm-status-row { color: rgba(13,31,18,.7) !important; }
+[data-theme="light"] .cm-stake { color: #9a7a1e !important; }
+[data-theme="light"] .cm-arrow { color: #0d3325 !important; }
+
 [data-theme="light"] .live-panel {
   background: rgba(22,101,52,.06) !important;
   border-color: rgba(22,101,52,.2) !important;
