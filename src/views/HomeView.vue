@@ -30,7 +30,11 @@
     <div
       v-if="roundsStore.activeRound && !roundsStore.activeRound.is_complete && !isTournamentRound"
       class="active-round-card card"
+      role="button"
+      tabindex="0"
       @click="$router.push('/scoring')"
+      @keydown.enter.prevent="$router.push('/scoring')"
+      @keydown.space.prevent="$router.push('/scoring')"
     >
       <div class="card-label">In Progress</div>
       <div class="card-title">{{ roundsStore.activeRound.course_name }}</div>
@@ -86,21 +90,32 @@
 
     <!-- Tournament / Cup entry card (only for authorized users) -->
     <template v-if="showTournament">
-      <!-- Cup with in-progress tournament round nested -->
-      <div v-if="isTournamentRound" class="cup-home-card cup-home-card--active">
+      <!-- Cup with in-progress tournament round(s) nested -->
+      <div v-if="myTournamentInProgress.length" class="cup-home-card cup-home-card--active">
         <RouterLink to="/tournament" class="cup-home-header">
           <div class="cup-home-icon">🏆</div>
           <div class="cup-home-body">
             <div class="cup-home-title">The Cup</div>
-            <div class="cup-home-sub">Tournament in progress</div>
+            <div class="cup-home-sub">
+              {{ myTournamentInProgress.length === 1 ? 'Tournament in progress' : `${myTournamentInProgress.length} matches in progress` }}
+            </div>
           </div>
           <div class="cup-home-arrow">›</div>
         </RouterLink>
-        <div class="cup-active-round" @click="$router.push('/scoring')">
+        <div
+          v-for="row in myTournamentInProgress"
+          :key="row.round.id"
+          class="cup-active-round"
+          role="button"
+          tabindex="0"
+          @click="openRound(row.round.id)"
+          @keydown.enter.prevent="openRound(row.round.id)"
+          @keydown.space.prevent="openRound(row.round.id)"
+        >
           <div class="car-badge">LIVE</div>
           <div class="car-body">
-            <div class="car-title">{{ roundsStore.activeRound.name || roundsStore.activeRound.course_name }}</div>
-            <div class="car-sub">{{ roundsStore.activeRound.course_name }} · {{ roundsStore.activeMembers.length }} players</div>
+            <div class="car-title">{{ row.matchupLabel || row.round.name || row.round.course_name }}</div>
+            <div class="car-sub">{{ row.round.course_name }} · {{ (row.round.round_members || []).length }} players</div>
           </div>
           <div class="car-cta">Continue →</div>
         </div>
@@ -202,6 +217,29 @@ const showTournament = computed(() => {
 const isTournamentRound = computed(() => {
   const r = roundsStore.activeRound
   return !!(r && r.format === 'tournament')
+})
+
+// All in-progress tournament rounds the user is a member or owner of.
+// Cross-references rounds with tournament_matches so each row can show
+// the matchup label (e.g. "BC+CR vs JC+AC").
+const myTournamentInProgress = computed(() => {
+  const uid = authStore.user?.id
+  if (!uid) return []
+  const rows = roundsStore.rounds.filter(r =>
+    r.format === 'tournament' &&
+    !r.is_complete &&
+    (r.owner_id === uid || (r.round_members || []).some(m => m.profile_id === uid))
+  )
+  return rows.map(r => {
+    const tm = tournamentStore.matchByRoundId?.(r.id)
+    let matchupLabel = ''
+    if (tm) {
+      const t1 = tournamentStore.teams.find(t => t.id === tm.team1)
+      const t2 = tournamentStore.teams.find(t => t.id === tm.team2)
+      if (t1 && t2) matchupLabel = `${t1.short} vs ${t2.short}`
+    }
+    return { round: r, matchupLabel }
+  })
 })
 
 onMounted(async () => {
@@ -374,6 +412,7 @@ async function openRound(id) {
   -webkit-tap-highlight-color: transparent;
   transition: background .12s;
 }
+.cup-active-round + .cup-active-round { border-top: 1px solid rgba(212,175,55,.18); }
 .cup-active-round:active { background: rgba(212,175,55,.08); }
 .car-badge {
   display: inline-flex;
