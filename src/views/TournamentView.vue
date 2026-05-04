@@ -1501,13 +1501,6 @@ async function _doLaunchRound({ match, t1, t2, isFinal, pairings, course, tee })
       points: 2,
       label: '2v2 Best Ball (2 pts)',
     }},
-    // 2BB side tracker — shows in Live Games panel separate from tournament standings
-    { type: 'best_ball', config: {
-      team1: t1Ids, team2: t2Ids,
-      ballsPerTeam: 1,
-      ppt: 1,
-      label: '2BB Tracker',
-    }},
   ]
 
   // Regular rounds also get 2 × 1v1 matches (worth 1 pt each)

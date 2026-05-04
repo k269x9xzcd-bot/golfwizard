@@ -477,8 +477,10 @@
           </div>
           <div v-show="gamesExpanded">
             <div class="live-game-summary tourn-status-row">
-              <span class="tourn-stat-lbl">2BB</span>
-              <span class="tourn-stat-val">{{ tournamentMatchStatus.bb.label }}{{ tournamentMatchStatus.bb.leader ? ' · ' + tournamentMatchStatus.bb.leader + ' leading' : '' }}</span>
+              <span class="tourn-stat-lbl">Team BB</span>
+              <span v-if="tournamentMatchStatus.bb.teamLabel" class="tourn-stat-matchup">{{ tournamentMatchStatus.bb.teamLabel }}</span>
+              <span v-if="tournamentMatchStatus.bb.teamLabel" class="tourn-stat-sep">·</span>
+              <span class="tourn-stat-val">{{ tournamentMatchStatus.bb.label }}</span>
             </div>
             <div v-for="(s, idx) in tournamentMatchStatus.singles" :key="idx" class="live-game-summary tourn-status-row">
               <span class="tourn-stat-lbl">1v1</span>
@@ -1111,10 +1113,9 @@ const tournamentMatchStatus = computed(() => {
     else if (t2BB < t1BB) t2Up++
   }
   const bbDiff = t1Up - t2Up
-  const bbLabel = bbDiff === 0 ? (thru ? 'All Square' : '—') : `${Math.abs(bbDiff)} up`
-  const bbLeader = bbDiff > 0
-    ? (t1[0]?.nickname || t1[0]?.short_name || 'T1')
-    : bbDiff < 0 ? (t2[0]?.nickname || t2[0]?.short_name || 'T2') : null
+  const bbLabel = bbDiff === 0 ? (thru ? 'AS' : '—') : `${Math.abs(bbDiff)} up`
+  const teamNames = team => team.map(m => m.nickname || m.short_name || '?').join('+')
+  const bbTeamLabel = bbDiff > 0 ? teamNames(t1) : bbDiff < 0 ? teamNames(t2) : ''
 
   // 1v1 from game_configs or team-order fallback
   const hcpMap = Object.fromEntries(members.map(m => [m.id, m.round_hcp ?? 0]))
@@ -1160,7 +1161,7 @@ const tournamentMatchStatus = computed(() => {
     }
   }
 
-  return { thru, bb: { diff: bbDiff, label: bbLabel, leader: bbLeader }, singles: singlesMatches }
+  return { thru, bb: { diff: bbDiff, label: bbLabel, teamLabel: bbTeamLabel }, singles: singlesMatches }
 })
 
 const showRetroScore = ref(false)
@@ -2561,7 +2562,7 @@ function formatDate(dateStr) {
   font-weight: 700;
   letter-spacing: .06em;
   opacity: .6;
-  width: 28px;
+  min-width: 56px;
   flex-shrink: 0;
 }
 .tourn-stat-matchup {
