@@ -35,6 +35,12 @@
               alt="Bonnie Briar Country Club"
             />
             <h1 class="course-name" :class="{ 'course-name--with-logo': isBonnieBriar }">{{ roundsStore.activeRound.course_name }}</h1>
+            <button
+              v-if="isCaptain"
+              class="btn-stakes-chip"
+              @click.stop="showStakesSheet = true"
+              title="Stakes & Bets"
+            >⚙️ Stakes</button>
           </div>
           <div class="header-meta">
             <span class="meta-tag">{{ roundsStore.activeRound.tee }}</span>
@@ -203,6 +209,16 @@
 
       <!-- ── Game Editor Overlay ────────────────────────────────── -->
       <WizardOverlay v-if="showGameEditor" edit-mode @close="showGameEditor = false" />
+
+      <!-- ── Stakes & Bets Sheet ─────────────────────────────────── -->
+      <StakesBetsSheet
+        :show="showStakesSheet"
+        :game-label="gameLabel"
+        :game-icon="gameIcon"
+        @update:show="showStakesSheet = $event"
+        @edit-game="(g) => { showStakesSheet = false; selectedGame = g }"
+        @add-side-game="() => { showStakesSheet = false; showGameEditor = true }"
+      />
 
       <!-- ── Retro score overlay (bulk-enter scores from paper card) ── -->
       <RetroScoreOverlay
@@ -1019,6 +1035,7 @@ import { shareScorecard, shareRecap } from '../modules/scorecardShare'
 import CrossMatchBanner from '../components/CrossMatchBanner.vue'
 import WizardOverlay from '../components/WizardOverlay.vue'
 import RetroScoreOverlay from '../components/RetroScoreOverlay.vue'
+import StakesBetsSheet from '../components/StakesBetsSheet.vue'
 import HcpEditorModal from '../components/scoring/HcpEditorModal.vue'
 import RoundPickerSheet from '../components/scoring/RoundPickerSheet.vue'
 import FinishRoundOverlay from '../components/scoring/FinishRoundOverlay.vue'
@@ -1521,6 +1538,7 @@ const showRoundMenu = ref(false)
 const showRoundPicker = ref(false)
 const confirmDeleteActive = ref(false)
 const showGameEditor = ref(false)
+const showStakesSheet = ref(false)
 const showHcpEditor = ref(false)
 const showOppEditor = ref(false)
 const showDateEditor = ref(false)
