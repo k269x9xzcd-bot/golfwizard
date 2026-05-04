@@ -6,4 +6,5 @@ dist/
 
 # Claude Code local context — do not commit
 CLAUDE.local.md
+.claude/
 .vercel
