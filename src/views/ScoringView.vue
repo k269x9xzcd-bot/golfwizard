@@ -1064,6 +1064,7 @@ import { useHoleMath } from '../composables/useHoleMath'
 import { useLiveSettlements } from '../composables/useLiveSettlements'
 import { computeNassau, computeHammer, computeFidget, courseHandicap, holeSI, strokesOnHole } from '../modules/gameEngine'
 import { normalizeWagers, buildTournamentWagerGames } from '../modules/tournamentWagers'
+import { buildLiveSections } from '../modules/liveSections'
 import { simulateRound } from '../modules/simulator'
 
 const authStore = useAuthStore()
@@ -1308,82 +1309,14 @@ const liveCrossMatch = computed(() => {
   ) || null
 })
 
-const liveSections = computed(() => {
-  const sections = []
-
-  // 1) TOURNAMENT (only on tournament rounds) — three flat $ per matchup
-  const t = tournamentMatchStatus.value
-  if (t) {
-    const w = t.wagers || { bb: 0, s1: 0, s2: 0 }
-    const items = []
-    items.push({
-      kind: 'tournament-bb',
-      key: 'bb',
-      teamLabel: t.bb.teamLabel,
-      statusLabel: t.bb.label,
-      money: w.bb > 0 && t.bb.diff !== 0 ? w.bb : 0,
-    })
-    t.singles.forEach((s, i) => {
-      const wager = i === 0 ? w.s1 : w.s2
-      items.push({
-        kind: 'tournament-1v1',
-        key: 's' + i,
-        matchup: `${s.p1Name} v ${s.p2Name}`,
-        statusLabel: s.label,
-        money: wager > 0 && s.standing !== 0 ? wager : 0,
-      })
-    })
-    sections.push({
-      key: 'tournament',
-      title: 'TOURNAMENT',
-      headerNote: t.thru ? `match thru ${t.thru}` : '',
-      items,
-    })
-  }
-
-  // 2) SIDE GAMES (foursome) — exclude match1v1 (those are pair bets);
-  //    in tournament rounds also exclude best_ball (would dup the BB row above).
-  const allGames = roundsStore.activeGames || []
-  const isTourn = roundsStore.activeRound?.format === 'tournament'
-  const sideGames = allGames.filter(g => {
-    if (g.type === 'match1v1') return false
-    if (isTourn && g.type === 'best_ball') return false
-    return true
+const liveSections = computed(() =>
+  buildLiveSections({
+    tournamentStatus: tournamentMatchStatus.value,
+    activeGames: roundsStore.activeGames || [],
+    isTournamentRound: roundsStore.activeRound?.format === 'tournament',
+    liveCrossMatch: liveCrossMatch.value,
   })
-  if (sideGames.length) {
-    sections.push({
-      key: 'side',
-      title: 'SIDE GAMES',
-      headerNote: 'foursome',
-      items: sideGames.map(g => ({ kind: 'side-game', key: g.id, game: g })),
-    })
-  }
-
-  // 3) PAIR BETS — every match1v1 in activeGames (tournament 1v1's are synthetic,
-  //    not persisted as game_configs, so anything here is a side pair bet).
-  const pairBets = allGames.filter(g => g.type === 'match1v1')
-  if (pairBets.length) {
-    sections.push({
-      key: 'pair',
-      title: 'PAIR BETS',
-      headerNote: '',
-      items: pairBets.map(g => ({ kind: 'pair-bet', key: g.id, game: g })),
-    })
-  }
-
-  // 4) CROSS-MATCH (linked match for this round, if linked)
-  const cm = liveCrossMatch.value
-  if (cm) {
-    sections.push({
-      key: 'cross',
-      title: 'CROSS-MATCH',
-      headerNote: cm.name || '',
-      items: [{ kind: 'cross-match', key: cm.id, match: cm }],
-    })
-  }
-
-  return sections
-})
+)
 
 const showRetroScore = ref(false)
 const retroOverlayRef = ref(null)
