@@ -470,36 +470,52 @@
         </div>
         </div><!-- /.scorecard-outer -->
 
-        <!-- Tournament Match Status (Team BB + 1v1, derived from tournament tables) -->
-        <div v-if="tournamentMatchStatus" class="live-games-box">
-          <div class="live-games-label collapsible-header" @click="gamesExpanded = !gamesExpanded">
-            {{ gamesExpanded ? '▼' : '▶' }} 🏆 Match · Thru {{ tournamentMatchStatus.thru || '—' }}
-          </div>
-          <div v-show="gamesExpanded">
-            <div class="live-game-summary tourn-status-row">
-              <span class="tourn-stat-lbl">Team BB</span>
-              <span v-if="tournamentMatchStatus.bb.teamLabel" class="tourn-stat-matchup">{{ tournamentMatchStatus.bb.teamLabel }}</span>
-              <span v-if="tournamentMatchStatus.bb.teamLabel" class="tourn-stat-sep">·</span>
-              <span class="tourn-stat-val">{{ tournamentMatchStatus.bb.label }}</span>
-              <span v-if="tournamentMatchStatus.wagers.bb > 0 && tournamentMatchStatus.bb.diff !== 0" class="tourn-stat-money">${{ tournamentMatchStatus.wagers.bb }}</span>
+        <!-- Unified Live panel — one source of truth for tournament + side games + pair bets + cross-match -->
+        <div v-if="liveSections.length > 0" class="live-panel">
+          <div v-for="section in liveSections" :key="section.key" class="live-section">
+            <div class="live-section-header">
+              <span class="live-section-title">{{ section.title }}</span>
+              <span v-if="section.headerNote" class="live-section-note">— {{ section.headerNote }}</span>
             </div>
-            <div v-for="(s, idx) in tournamentMatchStatus.singles" :key="idx" class="live-game-summary tourn-status-row">
-              <span class="tourn-stat-lbl">1v1</span>
-              <span class="tourn-stat-matchup">{{ s.p1Name }} v {{ s.p2Name }}</span>
-              <span class="tourn-stat-sep">·</span>
-              <span class="tourn-stat-val">{{ s.label }}</span>
-              <span v-if="(idx === 0 ? tournamentMatchStatus.wagers.s1 : tournamentMatchStatus.wagers.s2) > 0 && s.standing !== 0" class="tourn-stat-money">${{ idx === 0 ? tournamentMatchStatus.wagers.s1 : tournamentMatchStatus.wagers.s2 }}</span>
-            </div>
-          </div>
-        </div>
 
-        <!-- Live Games Summary (side bets; in tournament rounds shows only non-tournament games) -->
-        <div v-if="liveGamesToShow.length > 0" class="live-games-box">
-          <div class="live-games-label collapsible-header" @click="sideGamesExpanded = !sideGamesExpanded">
-            {{ sideGamesExpanded ? '▼' : '▶' }} 🎲 Live Games
-          </div>
-          <div v-show="sideGamesExpanded">
-            <div v-for="game in liveGamesToShow" :key="game.id" class="live-game-summary" v-html="gameSummaryHtml(game)"></div>
+            <template v-for="item in section.items" :key="item.key">
+              <!-- Tournament Team BB row -->
+              <div v-if="item.kind === 'tournament-bb'" class="live-row tourn-row">
+                <span class="live-row-label">Team BB</span>
+                <span v-if="item.teamLabel" class="live-row-detail">{{ item.teamLabel }}</span>
+                <span class="live-row-status">{{ item.statusLabel }}</span>
+                <span v-if="item.money > 0" class="live-row-money">+${{ item.money }}</span>
+              </div>
+
+              <!-- Tournament 1v1 row -->
+              <div v-else-if="item.kind === 'tournament-1v1'" class="live-row tourn-row">
+                <span class="live-row-label">1v1</span>
+                <span class="live-row-detail">{{ item.matchup }}</span>
+                <span class="live-row-status">{{ item.statusLabel }}</span>
+                <span v-if="item.money > 0" class="live-row-money">+${{ item.money }}</span>
+              </div>
+
+              <!-- Side game / pair bet row — tap to edit -->
+              <div
+                v-else-if="item.kind === 'side-game' || item.kind === 'pair-bet'"
+                class="live-row live-row-game"
+                role="button"
+                tabindex="0"
+                @click="selectedGame = item.game"
+                @keyup.enter="selectedGame = item.game"
+                v-html="gameSummaryHtml(item.game)"
+              ></div>
+
+              <!-- Cross-match row — tap to standings -->
+              <router-link
+                v-else-if="item.kind === 'cross-match'"
+                :to="`/cross-match/${item.match.id}`"
+                class="live-row cross-row"
+              >
+                <span class="live-row-label">vs Foursome {{ item.match.round_a_id === roundsStore.activeRound?.id ? 'B' : 'A' }}</span>
+                <span class="live-row-status">Standings ›</span>
+              </router-link>
+            </template>
           </div>
         </div>
 
@@ -998,6 +1014,7 @@ import { useRoundsStore } from '../stores/rounds'
 import { useCoursesStore } from '../stores/courses'
 import { useRosterStore, displayName as rosterDisplayName, displayInitials as rosterDisplayInitials } from '../stores/roster'
 import { useTournamentStore } from '../stores/tournament'
+import { useLinkedMatchesStore } from '../stores/linkedMatches'
 import { shareScorecard, shareRecap } from '../modules/scorecardShare'
 import CrossMatchBanner from '../components/CrossMatchBanner.vue'
 import WizardOverlay from '../components/WizardOverlay.vue'
@@ -1016,6 +1033,7 @@ import { simulateRound } from '../modules/simulator'
 const authStore = useAuthStore()
 const roundsStore = useRoundsStore()
 const tournamentStore = useTournamentStore()
+const linkedStore = useLinkedMatchesStore()
 const coursesStore = useCoursesStore()
 const rosterStore = useRosterStore()
 const router = useRouter()
@@ -1238,6 +1256,95 @@ const tournamentSettlementLines = computed(() => {
     })
   }
   return lines
+})
+
+// ── Unified Live panel sections (single source of truth for live status) ──
+// Replaces the old separate Match + Live Games panels. Sections render only
+// when they have at least one row.
+const liveCrossMatch = computed(() => {
+  const round = roundsStore.activeRound
+  if (!round?.id || !authStore.isAuthenticated) return null
+  const matches = linkedStore.linkedMatches || []
+  return matches.find(m =>
+    m.status === 'linked' && (m.round_a_id === round.id || m.round_b_id === round.id),
+  ) || null
+})
+
+const liveSections = computed(() => {
+  const sections = []
+
+  // 1) TOURNAMENT (only on tournament rounds) — three flat $ per matchup
+  const t = tournamentMatchStatus.value
+  if (t) {
+    const w = t.wagers || { bb: 0, s1: 0, s2: 0 }
+    const items = []
+    items.push({
+      kind: 'tournament-bb',
+      key: 'bb',
+      teamLabel: t.bb.teamLabel,
+      statusLabel: t.bb.label,
+      money: w.bb > 0 && t.bb.diff !== 0 ? w.bb : 0,
+    })
+    t.singles.forEach((s, i) => {
+      const wager = i === 0 ? w.s1 : w.s2
+      items.push({
+        kind: 'tournament-1v1',
+        key: 's' + i,
+        matchup: `${s.p1Name} v ${s.p2Name}`,
+        statusLabel: s.label,
+        money: wager > 0 && s.standing !== 0 ? wager : 0,
+      })
+    })
+    sections.push({
+      key: 'tournament',
+      title: 'TOURNAMENT',
+      headerNote: t.thru ? `match thru ${t.thru}` : '',
+      items,
+    })
+  }
+
+  // 2) SIDE GAMES (foursome) — exclude match1v1 (those are pair bets);
+  //    in tournament rounds also exclude best_ball (would dup the BB row above).
+  const allGames = roundsStore.activeGames || []
+  const isTourn = roundsStore.activeRound?.format === 'tournament'
+  const sideGames = allGames.filter(g => {
+    if (g.type === 'match1v1') return false
+    if (isTourn && g.type === 'best_ball') return false
+    return true
+  })
+  if (sideGames.length) {
+    sections.push({
+      key: 'side',
+      title: 'SIDE GAMES',
+      headerNote: 'foursome',
+      items: sideGames.map(g => ({ kind: 'side-game', key: g.id, game: g })),
+    })
+  }
+
+  // 3) PAIR BETS — every match1v1 in activeGames (tournament 1v1's are synthetic,
+  //    not persisted as game_configs, so anything here is a side pair bet).
+  const pairBets = allGames.filter(g => g.type === 'match1v1')
+  if (pairBets.length) {
+    sections.push({
+      key: 'pair',
+      title: 'PAIR BETS',
+      headerNote: '',
+      items: pairBets.map(g => ({ kind: 'pair-bet', key: g.id, game: g })),
+    })
+  }
+
+  // 4) CROSS-MATCH (linked match for this round, if linked)
+  const cm = liveCrossMatch.value
+  if (cm) {
+    sections.push({
+      key: 'cross',
+      title: 'CROSS-MATCH',
+      headerNote: cm.name || '',
+      items: [{ kind: 'cross-match', key: cm.id, match: cm }],
+    })
+  }
+
+  return sections
 })
 
 const showRetroScore = ref(false)
@@ -1939,18 +2046,6 @@ onUnmounted(() => {
   _landscapeHandler = null
 })
 const gamesExpanded = ref(true)
-const sideGamesExpanded = ref(true)
-
-// In tournament rounds: hide tournament structure entirely. Team BB and 1v1
-// singles render ONLY in the Match panel (derived from tournament tables).
-// Live Games shows side games (skins, nassau, BBN tracker, etc.) only.
-const liveGamesToShow = computed(() => {
-  const games = roundsStore.activeGames
-  if (roundsStore.activeRound?.format === 'tournament') {
-    return games.filter(g => g.type !== 'best_ball' && g.type !== 'match1v1')
-  }
-  return games
-})
 
 const swipeStartX = ref(0)
 const swipeStartY = ref(0)
