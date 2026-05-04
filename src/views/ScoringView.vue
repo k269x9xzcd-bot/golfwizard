@@ -52,9 +52,27 @@
           <div v-if="isViewOnly" style="margin-top:6px">
             <button class="back-to-history-btn" @click="goBackToHistory">← Back to History</button>
           </div>
-          <!-- Round switcher chip — only when 2+ known active rounds -->
+          <!-- Round switcher
+               2-3 active rounds → inline pills (instant switch, no sheet)
+               4+ active rounds → keep dropdown chip (rare for one user) -->
+          <div
+            v-if="!isViewOnly && roundsStore.knownRounds.length > 1 && roundsStore.knownRounds.length <= 3"
+            class="round-switch-pills"
+            role="tablist"
+            aria-label="Switch active round"
+          >
+            <button
+              v-for="kr in roundsStore.knownRounds"
+              :key="kr.id"
+              class="round-switch-pill"
+              :class="{ 'round-switch-pill--active': kr.id === roundsStore.activeRound?.id }"
+              role="tab"
+              :aria-selected="kr.id === roundsStore.activeRound?.id"
+              @click.stop="switchToRound(kr.id)"
+            >{{ knownRoundLabel(kr) }}</button>
+          </div>
           <button
-            v-if="!isViewOnly && roundsStore.knownRounds.length > 1"
+            v-else-if="!isViewOnly && roundsStore.knownRounds.length > 3"
             class="round-switch-chip"
             @click.stop="showRoundPicker = true"
           >⇄ Switch round</button>
@@ -519,6 +537,7 @@
                 tabindex="0"
                 @click="selectedGame = item.game"
                 @keyup.enter="selectedGame = item.game"
+                @keyup.space.prevent="selectedGame = item.game"
                 v-html="gameSummaryHtml(item.game)"
               ></div>
 
@@ -1282,8 +1301,10 @@ const liveCrossMatch = computed(() => {
   const round = roundsStore.activeRound
   if (!round?.id || !authStore.isAuthenticated) return null
   const matches = linkedStore.linkedMatches || []
+  // Show pending matches too — banner should appear immediately on link, not only after both rounds tee off
   return matches.find(m =>
-    m.status === 'linked' && (m.round_a_id === round.id || m.round_b_id === round.id),
+    (m.status === 'linked' || m.status === 'pending') &&
+    (m.round_a_id === round.id || m.round_b_id === round.id),
   ) || null
 })
 
@@ -1498,7 +1519,11 @@ onMounted(async () => {
   // Auto-open the user's in-progress round when none is currently loaded —
   // covers participants returning to the Score tab after the active state was cleared.
   if (!roundsStore.activeRound && authStore.isAuthenticated) {
+    if (!roundsStore.rounds.length) {
+      try { await roundsStore.fetchRounds() } catch {}
+    }
     const uid = authStore.user?.id
+    // rounds is ordered date desc — first match is most recent in-progress round
     const candidate = roundsStore.rounds.find(r =>
       !r.is_complete &&
       (r.owner_id === uid || r.round_members?.some(m => m.profile_id === uid))
@@ -1903,6 +1928,23 @@ async function switchToRound(roundId) {
   showRoundPicker.value = false
   activeHole.value = 0
   await roundsStore.loadRound(roundId)
+}
+
+// Pill label for the inline switcher
+function knownRoundLabel(kr) {
+  if (!kr) return ''
+  // Tournament: prefer the matchup label if we have one
+  const tm = tournamentStore.matchByRoundId?.(kr.id)
+  if (tm) {
+    const t1 = tournamentStore.teams.find(t => t.id === tm.team1)
+    const t2 = tournamentStore.teams.find(t => t.id === tm.team2)
+    if (t1 && t2) return `${t1.short} vs ${t2.short}`
+  }
+  // Non-tournament: course + player count
+  const parts = [kr.courseName || 'Round']
+  const count = (kr.players || '').split(',').filter(Boolean).length
+  if (count) parts.push(`${count} player${count === 1 ? '' : 's'}`)
+  return parts.join(' · ')
 }
 
 // ── Opponent editor state ─────────────────────────────────────────

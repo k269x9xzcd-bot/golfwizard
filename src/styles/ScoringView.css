@@ -1767,6 +1767,33 @@
 }
 .round-switch-chip:active { background: rgba(212,175,55,.2); }
 
+/* Round switcher inline pills (2-3 active rounds) */
+.round-switch-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 5px;
+}
+.round-switch-pill {
+  background: rgba(212,175,55,.06);
+  color: rgba(240,237,224,.7);
+  border: 1px solid rgba(212,175,55,.18);
+  border-radius: 14px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.round-switch-pill:active { background: rgba(212,175,55,.18); }
+.round-switch-pill--active {
+  background: rgba(212,175,55,.18);
+  color: #d4af37;
+  border-color: rgba(212,175,55,.55);
+}
+
 /* Round picker sheet rows */
 .round-picker-sheet .junk-sheet-body { padding: 8px 0; }
 .round-picker-row {
