@@ -68,7 +68,7 @@ export const useLinkedMatchesStore = defineStore('linkedMatches', () => {
       match_config: {
         ballsToCount: ballsToCount ?? 1,
         stake: stake ?? 20,
-        hcpPct: hcpPct ?? 0.90,
+        hcpPct: hcpPct ?? 1.0,
         sideBets: sideBets?.length ? sideBets : null,
         courseName: courseName ?? null,
         tee: tee ?? null,

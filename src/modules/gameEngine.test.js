@@ -29,6 +29,7 @@ import {
   computeBbb,
   computeScotch6s,
   computeTeamDay,
+  computeCrossBestBall,
 } from './gameEngine.js'
 
 // ─────────────────────────────────────────────────────────────────
@@ -1069,5 +1070,154 @@ describe('computeTeamDay', () => {
     const result = computeTeamDay(ctx, { team1: ['a', 'b'], team2: ['c', 'd'], bestNets: 2, bestGross: 0, ppt: 1 })
     const sum = result.standings.reduce((s, x) => s + x.net, 0)
     expect(Math.abs(sum)).toBeLessThan(0.01)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────
+// ── CROSS BEST BALL (4v4 linked match) ───────────────────────────
+// ─────────────────────────────────────────────────────────────────
+describe('computeCrossBestBall (4v4 cross-match, 2BB net)', () => {
+  // Build a round bundle in the shape computeCrossBestBall expects.
+  // memberDefs = [{ id, name, idx? }], scoresByPid = { id: { hole: gross } }
+  function makeCrossRound(memberDefs, scoresByPid) {
+    const round_members = memberDefs.map(d => ({
+      id: d.id,
+      short_name: d.name,
+      ghin_index: d.idx ?? 0,
+      round_hcp: d.idx ?? 0,
+    }))
+    const scores = []
+    for (const m of memberDefs) {
+      const ps = scoresByPid[m.id] || {}
+      for (const [hole, score] of Object.entries(ps)) {
+        if (score != null) scores.push({ member_id: m.id, hole: Number(hole), score })
+      }
+    }
+    return {
+      round_members,
+      scores,
+      course_snapshot: {
+        par: Array(18).fill(4),
+        si: Array.from({ length: 18 }, (_, i) => i + 1),
+      },
+      holes_mode: '18',
+    }
+  }
+
+  function constCard(g) {
+    return Object.fromEntries(Array.from({ length: 18 }, (_, i) => [i + 1, g]))
+  }
+
+  it('all-scratch ballsToCount=2: cumulative delta = sum(2 best gross − 2×par) per hole', () => {
+    // A = a,b,c,d; B = e,f,g,h; all scratch. Distinct grosses to verify "2 best" is computed.
+    // A: 3,4,5,6 → 2 best = 7, basis = 8, vsPar = -1 per hole, total = -18
+    // B: all par 4 → 2 best = 8, vsPar = 0 per hole, total = 0
+    // delta = vsParA - vsParB = -18 → A leading
+    const aDefs = [{ id: 'a', name: 'A1' }, { id: 'b', name: 'A2' }, { id: 'c', name: 'A3' }, { id: 'd', name: 'A4' }]
+    const bDefs = [{ id: 'e', name: 'B1' }, { id: 'f', name: 'B2' }, { id: 'g', name: 'B3' }, { id: 'h', name: 'B4' }]
+    const aScores = { a: constCard(3), b: constCard(4), c: constCard(5), d: constCard(6) }
+    const bScores = Object.fromEntries(['e', 'f', 'g', 'h'].map(id => [id, constCard(4)]))
+    const roundA = makeCrossRound(aDefs, aScores)
+    const roundB = makeCrossRound(bDefs, bScores)
+    const result = computeCrossBestBall(roundA, roundB, { ballsToCount: 2, hcpPct: 1.0, sideBets: null, stake: 20 })
+
+    expect(result.allHolesComplete).toBe(true)
+    expect(result.teamA.vsPar).toBe(-18)
+    expect(result.teamB.vsPar).toBe(0)
+    expect(result.delta).toBe(-18)
+    expect(result.settlement.winner).toBe('A')
+  })
+
+  it('per-player full course handicap: high-hcp player gets own strokes despite scratch teammates', () => {
+    // A: a(idx=18), b/c/d(idx=0). B: all idx=0. ballsToCount=1, hcpPct=1.0.
+    // a's playing hcp = round(18 * 113/113 + (72-72)) * 1.0 = 18 → stroke on every hole.
+    // Everyone shoots 4. a's net = 3. Best A = 3, Best B = 4.
+    // Per hole vsPar: A = -1, B = 0. delta = -18.
+    // If hcp were "low-man" (lowest idx in team = 0), a would get 0 strokes and delta = 0.
+    const aDefs = [
+      { id: 'a', name: 'A1', idx: 18 },
+      { id: 'b', name: 'A2', idx: 0 },
+      { id: 'c', name: 'A3', idx: 0 },
+      { id: 'd', name: 'A4', idx: 0 },
+    ]
+    const bDefs = [
+      { id: 'e', name: 'B1', idx: 0 },
+      { id: 'f', name: 'B2', idx: 0 },
+      { id: 'g', name: 'B3', idx: 0 },
+      { id: 'h', name: 'B4', idx: 0 },
+    ]
+    const allFours = (ids) => Object.fromEntries(ids.map(id => [id, constCard(4)]))
+    const roundA = makeCrossRound(aDefs, allFours(['a', 'b', 'c', 'd']))
+    const roundB = makeCrossRound(bDefs, allFours(['e', 'f', 'g', 'h']))
+    const result = computeCrossBestBall(roundA, roundB, { ballsToCount: 1, hcpPct: 1.0, sideBets: null, stake: 20 })
+
+    expect(result.teamA.hcpMap.a).toBe(18)
+    expect(result.teamA.hcpMap.b).toBe(0)
+    expect(result.teamA.vsPar).toBe(-18)
+    expect(result.teamB.vsPar).toBe(0)
+    expect(result.delta).toBe(-18)
+  })
+
+  it('DNF (3 of 4 scored) still computes — best ball needs only ballsToCount nets', () => {
+    // A: a has no scores; b,c,d shoot 4 every hole. B: all four shoot 4. ballsToCount=1.
+    // A best per hole = min(4,4,4) = 4, vsPar = 0. B same. delta = 0. allHolesComplete = true.
+    const aDefs = [
+      { id: 'a', name: 'A1' },
+      { id: 'b', name: 'A2' },
+      { id: 'c', name: 'A3' },
+      { id: 'd', name: 'A4' },
+    ]
+    const bDefs = [
+      { id: 'e', name: 'B1' },
+      { id: 'f', name: 'B2' },
+      { id: 'g', name: 'B3' },
+      { id: 'h', name: 'B4' },
+    ]
+    const aScores = { b: constCard(4), c: constCard(4), d: constCard(4) } // a omitted
+    const bScores = Object.fromEntries(['e', 'f', 'g', 'h'].map(id => [id, constCard(4)]))
+    const roundA = makeCrossRound(aDefs, aScores)
+    const roundB = makeCrossRound(bDefs, bScores)
+    const result = computeCrossBestBall(roundA, roundB, { ballsToCount: 1, hcpPct: 1.0, sideBets: null, stake: 20 })
+
+    expect(result.allHolesComplete).toBe(true)
+    expect(result.teamA.holesFullyScored).toBe(18)
+    expect(result.teamA.vsPar).toBe(0)
+    expect(result.teamB.vsPar).toBe(0)
+    expect(result.delta).toBe(0)
+    expect(result.settlement.winner).toBeNull()
+  })
+
+  it('eagle on one hole produces negative delta that reduces total for that team', () => {
+    // A: a eagles hole 1 (gross 2 on par 4), all others par. B: all par.
+    // ballsToCount=1. Hole 1: A best = 2, vsPar = -2; B best = 4, vsPar = 0; diff = -2.
+    // Holes 2-18: both 4, diff = 0. Total delta = -2 → A wins by 2.
+    const aDefs = [
+      { id: 'a', name: 'A1' },
+      { id: 'b', name: 'A2' },
+      { id: 'c', name: 'A3' },
+      { id: 'd', name: 'A4' },
+    ]
+    const bDefs = [
+      { id: 'e', name: 'B1' },
+      { id: 'f', name: 'B2' },
+      { id: 'g', name: 'B3' },
+      { id: 'h', name: 'B4' },
+    ]
+    const aScores = {
+      a: { ...constCard(4), 1: 2 }, // eagle on hole 1
+      b: constCard(4), c: constCard(4), d: constCard(4),
+    }
+    const bScores = Object.fromEntries(['e', 'f', 'g', 'h'].map(id => [id, constCard(4)]))
+    const roundA = makeCrossRound(aDefs, aScores)
+    const roundB = makeCrossRound(bDefs, bScores)
+    const result = computeCrossBestBall(roundA, roundB, { ballsToCount: 1, hcpPct: 1.0, sideBets: null, stake: 20 })
+
+    const h1 = result.perHole.find(r => r.hole === 1)
+    expect(h1.a.vsPar).toBe(-2)
+    expect(h1.b.vsPar).toBe(0)
+    expect(result.teamA.vsPar).toBe(-2)
+    expect(result.teamB.vsPar).toBe(0)
+    expect(result.delta).toBe(-2)
+    expect(result.settlement.winner).toBe('A')
   })
 })
