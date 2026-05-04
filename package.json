@@ -1,7 +1,7 @@
 {
   "name": "golfwizard",
   "private": true,
-  "version": "3.10.248",
+  "version": "3.10.249",
   "type": "module",
   "scripts": {
     "dev": "vite",
