@@ -68,7 +68,7 @@ try {
 } catch (e) {
   console.log('Nothing new to commit — pushing existing HEAD.')
 }
-run('git push origin main')
+run('git push origin HEAD:main')
 
 console.log(`\n✅ Done — v${pkg.version} pushed. GitHub Actions will deploy in ~30s.`)
 console.log(`   Check: https://github.com/k269x9xzcd-bot/golfwizard/actions`)
