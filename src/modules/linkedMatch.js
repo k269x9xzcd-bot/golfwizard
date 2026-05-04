@@ -51,9 +51,11 @@ export function summarizeLinkedMatch(linkedMatch, roundA, roundB, result, myRoun
     if (!s.winner) {
       return { state: 'final', label: '🏆 4v4 final · All square · No payout', tone: 'tie' }
     }
+    // Compact label — full description (with "Foursome A/B" prefix) is shown on the detail page
+    const totalPot = s.totalPot ? ` · $${s.totalPot} total` : ''
     return {
       state: 'final',
-      label: `🏆 4v4 final · ${teamLabel(s.winner)} win · ${s.description}`,
+      label: `🏆 4v4 final · ${teamLabel(s.winner)} win${totalPot}`,
       tone: 'win',
     }
   }

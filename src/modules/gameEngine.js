@@ -2114,11 +2114,21 @@ function _crossHoleRange(holesMode) {
 }
 
 function _crossTeamName(members) {
+  // Disambiguated initials format ("BC+CR+JC+AC") so the cross-match banner
+  // fits comfortably on iPhone. Prefers full_name → guest_name → short_name.
   return (members || [])
     .map(m => {
-      const full = (m.guest_name || m.short_name || '').trim()
-      const parts = full.split(/\s+/)
-      return parts.length >= 2 ? parts[parts.length - 1] : full || '?'
+      const sn = (m.short_name || '').trim()
+      // If short_name is already a 2-3 char abbreviation (tournament rounds set
+      // nickname here), use it verbatim.
+      if (sn && sn.length <= 3 && !/\s/.test(sn)) return sn.toUpperCase()
+      const full = (m.full_name || m.guest_name || sn || '').trim()
+      if (!full) return '?'
+      const parts = full.split(/\s+/).filter(Boolean)
+      if (parts.length >= 2) {
+        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+      }
+      return parts[0].slice(0, 2).toUpperCase()
     })
     .join('+')
 }

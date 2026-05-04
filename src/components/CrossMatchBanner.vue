@@ -540,11 +540,11 @@ onUnmounted(() => {
   min-width: 0;
   font-size: 13px;
   font-weight: 700;
+  line-height: 1.3;
   letter-spacing: .01em;
   color: var(--gw-text, #f0ede0);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .cmb-arrow {
   font-size: 20px;
