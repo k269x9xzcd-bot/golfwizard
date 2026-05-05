@@ -66,6 +66,14 @@ import { useRoundsStore } from '../stores/rounds'
 import { useLinkedMatchesStore } from '../stores/linkedMatches'
 import { computeLinkedMatch, summarizeLinkedMatch } from '../modules/linkedMatch'
 
+const props = defineProps({
+  // When true, hide the banner once the cross-match is complete (both rounds final
+  // or linked_match.status === 'complete'). Used on Home so the live banner clears
+  // after the match wraps; History keeps its own final card. Score tab leaves this
+  // false so the banner remains visible from inside the round.
+  hideWhenFinal: { type: Boolean, default: false },
+})
+
 const authStore = useAuthStore()
 const roundsStore = useRoundsStore()
 const linkedStore = useLinkedMatchesStore()
@@ -148,6 +156,18 @@ const relevantMatch = computed(() => {
   return myMatches[0] || null
 })
 
+// True when the cross-match has wrapped: explicit status, completed_at timestamp,
+// or both linked rounds flagged is_complete. Used to suppress the Home banner.
+const isMatchComplete = computed(() => {
+  const m = relevantMatch.value
+  if (!m) return false
+  if (m.status === 'complete' || m.completed_at) return true
+  const ra = roundsCache.value[m.round_a_id]
+  const rb = roundsCache.value[m.round_b_id]
+  if (ra && rb && ra.is_complete && rb.is_complete) return true
+  return false
+})
+
 /**
  * Compute the visible banner state. Returns null when we should render nothing.
  */
@@ -157,6 +177,9 @@ const display = computed(() => {
   tick.value
   const m = relevantMatch.value
   if (!m) return null
+
+  // Home banner hides once the match is final; History keeps its own card.
+  if (props.hideWhenFinal && isMatchComplete.value) return null
 
   // Pending — no round B yet. Show simple waiting chip.
   if (m.status === 'pending' || !m.round_b_id) {

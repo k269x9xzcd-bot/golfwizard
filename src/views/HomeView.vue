@@ -34,8 +34,8 @@
       <div class="card-cta">Continue →</div>
     </div>
 
-    <!-- Active cross-match banner (host/round owner) -->
-    <CrossMatchBanner />
+    <!-- Active cross-match banner (host/round owner) — hidden once both rounds finalize -->
+    <CrossMatchBanner :hide-when-final="true" />
 
     <!-- Pending 4v4 match invites banner -->
     <div
