@@ -163,94 +163,26 @@
 
         <!-- Matches in this round -->
         <div class="round-matches">
-          <div
+          <ScheduleMatchCard
             v-for="match in round.matches"
             :key="match.id"
-            class="match-card"
-            :class="{ 'match-played': match.result, 'match-inprogress': !match.result && match.roundId, 'match-pending': !match.result && !match.roundId }"
-            @click="openMatch(round, match)"
-          >
-            <div class="mc-teams">
-              <div class="mc-team" :style="{ '--tc': getTeam(match.team1).color }">
-                <span class="mc-dot" :style="{ background: getTeam(match.team1).color }"></span>
-                <span class="mc-team-name">{{ getTeam(match.team1).name }}</span>
-              </div>
-              <div class="mc-vs-col">
-                <span class="mc-vs">vs</span>
-              </div>
-              <div class="mc-team mc-team--right" :style="{ '--tc': getTeam(match.team2).color }">
-                <span class="mc-team-name">{{ getTeam(match.team2).name }}</span>
-                <span class="mc-dot" :style="{ background: getTeam(match.team2).color }"></span>
-              </div>
-            </div>
-
-            <!-- Result summary if played -->
-            <div v-if="match.result" class="mc-result">
-              <div v-if="match.result.playedDate" class="mc-played-date">Played {{ fmtDate(match.result.playedDate) }}</div>
-              <div class="mc-result-row">
-                <span class="mc-result-label">Best Ball</span>
-                <span class="mc-result-val" :class="resultClass(match, 'bestBall')">
-                  {{ bestBallLabel(match) }}
-                </span>
-              </div>
-              <div class="mc-result-row" v-for="(s, si) in (match.result.singles || [])" :key="si">
-                <span class="mc-result-label">{{ singlesLabel(match, si) }}</span>
-                <span class="mc-result-val" :class="singlesClass(match, s)">
-                  {{ singlesWinnerLabel(match, s) }}
-                </span>
-              </div>
-              <div class="mc-pts-row">
-                <span class="mc-pts-team" :style="{ color: getTeam(match.team1).color }">
-                  {{ teamLabel(match.team1) }} {{ matchPoints(match.result).t1pts }}
-                </span>
-                <span class="mc-pts-sep">—</span>
-                <span class="mc-pts-team" :style="{ color: getTeam(match.team2).color }">
-                  {{ matchPoints(match.result).t2pts }} {{ teamLabel(match.team2) }}
-                </span>
-              </div>
-            </div>
-
-            <!-- In progress (round started, no result yet) -->
-            <template v-else-if="match.roundId">
-              <div class="mc-pending mc-pending--inprogress">
-                <span class="mc-pending-dot mc-pending-dot--live"></span>
-                <span class="mc-pending-text">Round in progress</span>
-                <span class="mc-arrow">›</span>
-              </div>
-              <template v-if="liveStatus(match.roundId, match)">
-                <div class="mc-live-row">
-                  <span class="mc-live-game-label">2BB</span>
-                  <span class="mc-live-thru">Thru {{ liveStatus(match.roundId, match).thru }}</span>
-                  <span class="mc-live-sep">·</span>
-                  <span class="mc-live-label" :style="liveStatus(match.roundId, match).bb.leadColor ? { color: liveStatus(match.roundId, match).bb.leadColor } : {}">
-                    {{ liveStatus(match.roundId, match).bb.label }}
-                  </span>
-                </div>
-                <div
-                  v-for="(s, si) in liveStatus(match.roundId, match).singles"
-                  :key="si"
-                  class="mc-live-row"
-                >
-                  <span class="mc-live-game-label">1v1</span>
-                  <span class="mc-live-matchup">{{ s.p1Name }} v {{ s.p2Name }}</span>
-                  <span class="mc-live-sep">·</span>
-                  <span class="mc-live-label" :style="s.leadColor ? { color: s.leadColor } : {}">
-                    {{ s.label }}
-                  </span>
-                </div>
-              </template>
-              <div v-else-if="liveRoundData[match.roundId]" class="mc-live-row mc-live-status--loading">
-                Loading…
-              </div>
-            </template>
-
-            <!-- Not yet started -->
-            <div v-else class="mc-pending">
-              <span class="mc-pending-dot"></span>
-              <span class="mc-pending-text">Not yet played</span>
-              <span class="mc-arrow">›</span>
-            </div>
-          </div>
+            :round="round"
+            :match="match"
+            :live-data="match.roundId ? liveRoundData[match.roundId] : null"
+            :live-status-fn="liveStatus"
+            :get-team="getTeam"
+            :match-points="matchPoints"
+            :date-and-days="dateAndDays"
+            :wagers-settlement-fn="wagersSettlement"
+            :bb-cell-label="bbCellLabel"
+            :singles-cell-label="singlesCellLabel"
+            :live-partial-points="livePartialPoints"
+            :inline-side-game-labels="inlineSideGameLabels"
+            :inline-cross-match="inlineCrossMatch"
+            :round-completeness="roundCompleteness"
+            @open="openMatch(round, match)"
+            @manual-entry="openManualResultEntry(round, match)"
+          />
         </div>
       </div>
 
@@ -888,6 +820,8 @@ import { useRosterStore } from '../stores/roster'
 import { useCoursesStore } from '../stores/courses'
 import { supabase } from '../supabase'
 import { strokesOnHole } from '../modules/gameEngine'
+import { normalizeWagers } from '../modules/tournamentWagers'
+import ScheduleMatchCard from '../components/ScheduleMatchCard.vue'
 import {
   TOURNAMENT, TEAMS, SCHEDULE,
   getTeam, matchPoints, computeStandings, teamMatches,
@@ -955,13 +889,29 @@ async function _subscribeToLiveRound(roundId) {
       scoresMap[s.member_id][s.hole] = s.score
     }
 
-    // Parse 1v1 game configs to extract pairing member IDs
-    const singles = (gamesRes.data || [])
+    // All game_configs (parsed)
+    const allGames = (gamesRes.data || []).map(g => ({
+      ...g,
+      config: typeof g.config === 'string' ? JSON.parse(g.config) : g.config,
+    }))
+    // Singles pairings — for live 1v1 status
+    const singles = allGames
       .filter(g => g.type === 'match1v1')
-      .map(g => {
-        const cfg = typeof g.config === 'string' ? JSON.parse(g.config) : g.config
-        return { p1: cfg.player1, p2: cfg.player2 }
-      })
+      .map(g => ({ p1: g.config?.player1, p2: g.config?.player2 }))
+
+    // Cross-match link (if any)
+    let crossMatch = null
+    try {
+      const cm = await supabase
+        .from('linked_matches')
+        .select('id, name, status, round_a_id, round_b_id')
+        .or(`round_a_id.eq.${roundId},round_b_id.eq.${roundId}`)
+        .neq('status', 'cancelled')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      crossMatch = cm.data || null
+    } catch { /* non-fatal */ }
 
     liveRoundData.value = {
       ...liveRoundData.value,
@@ -971,6 +921,8 @@ async function _subscribeToLiveRound(roundId) {
         courseSnapshot: roundRes.data?.course_snapshot ?? null,
         tee: roundRes.data?.tee ?? null,
         singles,
+        games: allGames,
+        crossMatch,
       },
     }
   } catch (e) {
@@ -1005,13 +957,15 @@ function _teardownLiveChannels() {
 
 onUnmounted(_teardownLiveChannels)
 
-// Activate subscriptions for any match that has a roundId set
+// Activate subscriptions for any match that has a roundId set —
+// load BOTH in-progress and completed rounds so cards can show side-game
+// settlements + cross-match status inline.
 watch(
   () => {
     const ids = []
     for (const round of SCHEDULE) {
       for (const m of round.matches) {
-        if (m.roundId && !m.result) ids.push(m.roundId)
+        if (m.roundId) ids.push(m.roundId)
       }
     }
     return ids
@@ -1103,6 +1057,136 @@ function liveStatus(roundId, match) {
   }).filter(Boolean)
 
   return { thru, bb: { diff: bbDiff, label: bbLabel, leadColor: bbLeadColor }, singles: singlesStatus }
+}
+
+// ── Schedule card derived state ──────────────────────────────────
+// Round completeness, regardless of tournament result entry. Returns
+// 'final' if all 18 holes scored for all members, 'partial' if any
+// scores exist, 'none' otherwise. Used by openMatch routing + card render.
+function roundCompleteness(roundId) {
+  if (!roundId) return 'none'
+  const data = liveRoundData.value[roundId]
+  if (!data?.members?.length) return 'none'
+  const holes = (data.courseSnapshot?.si?.length) || 18
+  let scored = 0, total = 0
+  for (const m of data.members) {
+    for (let h = 1; h <= holes; h++) {
+      total++
+      if (data.scores?.[m.id]?.[h] != null) scored++
+    }
+  }
+  if (scored === 0) return 'none'
+  if (scored >= total) return 'final'
+  return 'partial'
+}
+
+// "Sun, May 31 · 27d away" / "Today" / "Tomorrow" / "Sun, May 31"
+function dateAndDays(deadline) {
+  if (!deadline) return ''
+  const days = daysUntil(deadline)
+  const d = fmtDate(deadline)
+  if (days === 0) return `${d} · Today`
+  if (days === 1) return `${d} · Tomorrow`
+  if (days > 1) return `${d} · ${days}d away`
+  if (days === -1) return `${d} · Yesterday`
+  return d
+}
+
+// Final wager settlement: total $ collected by winning team across
+// the three components (bb, s1, s2). Returns { winnerTeamId, total } or null.
+function wagersSettlement(match) {
+  if (!match?.result || !match.wagers) return null
+  const w = normalizeWagers(match.wagers)
+  if (!w.bb && !w.s1 && !w.s2) return null
+  let t1 = 0, t2 = 0
+  if (match.result.bestBall === 't1') t1 += w.bb
+  else if (match.result.bestBall === 't2') t2 += w.bb
+  const sArr = match.result.singles || []
+  if (sArr[0]?.winner === 't1') t1 += w.s1
+  else if (sArr[0]?.winner === 't2') t2 += w.s1
+  if (sArr[1]?.winner === 't1') t1 += w.s2
+  else if (sArr[1]?.winner === 't2') t2 += w.s2
+  if (t1 === t2) return null
+  const winnerTeamId = t1 > t2 ? match.team1 : match.team2
+  return { winnerTeamId, total: Math.abs(t1 - t2) }
+}
+
+// Best Ball cell label for final cards (e.g. "BB AS" / "BB BC+CR" / "BB JC+AC")
+function bbCellLabel(match) {
+  const r = match.result
+  if (!r) return ''
+  if (r.bestBall === 'halved') return 'BB AS'
+  const tid = r.bestBall === 't1' ? match.team1 : match.team2
+  const t = getTeam(tid)
+  return `BB ${t?.short || teamLabel(tid)}`
+}
+
+// Singles cell label for final cards
+function singlesCellLabel(match, idx) {
+  const s = match.result?.singles?.[idx]
+  if (!s) return ''
+  if (s.winner === 'halved') return '1v1 AS'
+  // Use the matched player's nickname when we have live data
+  const data = match.roundId ? liveRoundData.value[match.roundId] : null
+  const pair = data?.singles?.[idx]
+  const p1 = pair ? data.members.find(m => m.id === pair.p1) : null
+  const p2 = pair ? data.members.find(m => m.id === pair.p2) : null
+  const winnerName = s.winner === 't1'
+    ? (p1?.nickname || p1?.short_name || (getTeam(match.team1)?.short))
+    : (p2?.nickname || p2?.short_name || (getTeam(match.team2)?.short))
+  return `1v1 ${winnerName} won`
+}
+
+// Live partial points (closed-out only counts; in-progress = "leading X-Y pts")
+function livePartialPoints(roundId, match) {
+  const live = liveStatus(roundId, match)
+  if (!live) return null
+  let t1 = 0, t2 = 0
+  // BB closeout heuristic: if diff is 0 with all 18 played, halved (1+1)
+  // Otherwise grant the lead team 2 only when it can no longer be caught.
+  // Simpler approach: don't lock until match.result is entered.
+  // Show projected lead in pts based on current standing.
+  if (live.bb.diff > 0) t1 += 2
+  else if (live.bb.diff < 0) t2 += 2
+  for (const s of live.singles || []) {
+    if (s.standing > 0) t1 += 1
+    else if (s.standing < 0) t2 += 1
+  }
+  if (t1 === 0 && t2 === 0) return null
+  return { t1, t2 }
+}
+
+// Side game labels for inline display ("+ Fidget · Nassau · Skins")
+function inlineSideGameLabels(roundId, match) {
+  const data = roundId ? liveRoundData.value[roundId] : null
+  if (!data?.games?.length) return []
+  const out = []
+  for (const g of data.games) {
+    const t = (g.type || '').toLowerCase()
+    if (t === 'match1v1') continue           // shown as 1v1 components
+    if (t === 'best_ball' || t === 'bestball') continue  // dup of Team BB
+    out.push({ id: g.id, type: t, label: SIDE_GAME_NAMES[t] || g.type, icon: SIDE_GAME_ICONS[t] || '🎮' })
+  }
+  return out
+}
+
+const SIDE_GAME_NAMES = {
+  nassau: 'Nassau', skins: 'Skins', snake: 'Snake', dots: 'Dots',
+  fidget: 'Fidget', bbn: '2BB Net', vegas: 'Vegas', hilow: 'Hi-Low',
+  stableford: 'Stableford', wolf: 'Wolf', hammer: 'Hammer', sixes: 'Sixes',
+  fivethreeone: '9s', nines: '9s', bbb: 'BBB',
+}
+const SIDE_GAME_ICONS = {
+  nassau: '💰', skins: '💎', snake: '🐍', dots: '🎯',
+  fidget: '😬', bbn: '🏌️', vegas: '🎰', hilow: '📊',
+  stableford: '⭐', wolf: '🐺', hammer: '🔨', sixes: '🎲',
+  fivethreeone: '9️⃣', nines: '9️⃣', bbb: '🏌️',
+}
+
+// Cross-match summary for inline display
+function inlineCrossMatch(roundId) {
+  const data = roundId ? liveRoundData.value[roundId] : null
+  return data?.crossMatch || null
 }
 
 // ── Tournament name/format edit (persisted to Supabase) ────────
@@ -1344,37 +1428,27 @@ function matchScoreForTeam(match, teamId) {
   return `${fmt(myPts)}–${fmt(theirPts)}`
 }
 
-// ── Match card display ──────────────────────────────────────────
-function bestBallLabel(match) {
-  if (!match.result) return ''
-  if (match.result.bestBall === 'halved') return 'Halved'
-  const winner = match.result.bestBall === 't1' ? match.team1 : match.team2
-  return teamLabel(winner) + ' win'
-}
-function resultClass(match, field) {
-  if (field === 'bestBall') {
-    if (match.result?.bestBall === 'halved') return 'rc-halved'
-  }
-  return ''
-}
-function singlesLabel(match, idx) {
-  const mu = singlesMatchups(match)
-  return mu[idx] ? `${mu[idx].p1} vs ${mu[idx].p2}` : `Singles ${idx + 1}`
-}
-function singlesClass(match, s) {
-  if (s.winner === 'halved') return 'rc-halved'
-  return ''
-}
-function singlesWinnerLabel(match, s) {
-  if (s.winner === 'halved') return 'Halved'
-  const teamId = s.winner === 't1' ? match.team1 : match.team2
-  return teamLabel(teamId) + ' win'
-}
-
-// Singles matchup builder
+// Singles matchup builder — falls back to tournament_matches.singles_order
+// for the match modal. Live cards read pairings directly from game_configs
+// via liveData.singles to avoid stale ordering.
 function singlesMatchups(match) {
   const t1 = getTeam(match.team1)
   const t2 = getTeam(match.team2)
+  // Prefer LIVE pairings from game_configs if we have them — this stays
+  // in sync with whatever the user picked at launch, even if singles_order
+  // changed mid-round.
+  const live = match.roundId ? liveRoundData.value[match.roundId] : null
+  if (live?.singles?.length === 2 && live.members?.length) {
+    const memById = Object.fromEntries(live.members.map(m => [m.id, m]))
+    return live.singles.map(s => {
+      const p1m = memById[s.p1], p2m = memById[s.p2]
+      return {
+        p1: p1m?.nickname || p1m?.short_name || '?',
+        p2: p2m?.nickname || p2m?.short_name || '?',
+      }
+    })
+  }
+  // Fallback for matches with no live data yet
   const order = match.singlesOrder || 0
   return [
     { p1: t1.players[order === 0 ? 0 : 1].nickname || t1.players[order === 0 ? 0 : 1].name, p2: t2.players[order === 0 ? 0 : 1].nickname || t2.players[order === 0 ? 0 : 1].name },
@@ -1411,9 +1485,47 @@ async function copyLaunchDiagnostic() {
 }
 const editResult = reactive({ bestBall: null, singles: [], playedDate: '' })
 
-function openMatch(round, match) {
+// Tap router — branches by round state so the manual result form only
+// appears for cases that actually need it (saved results to view/edit, OR
+// explicit retroactive backfill via openManualResultEntry).
+async function openMatch(round, match) {
+  // 1) Final result already saved → open match modal in display/edit mode
+  if (match.result) {
+    activeMatch.value = { round, match }
+    editResult.bestBall = match.result.bestBall
+    editResult.singles = (match.result.singles || []).map(s => ({ ...s }))
+    editResult.playedDate = match.result.playedDate || ''
+    return
+  }
+  // 2) Round is live (started AND has any scoring) → jump to scorecard
+  if (match.roundId && roundCompleteness(match.roundId) !== 'none') {
+    try { await roundsStore.loadRound(match.roundId) }
+    catch (e) { console.warn('[tournament] loadRound failed:', e?.message) }
+    router.push('/scoring')
+    return
+  }
+  // 3) Round shell exists but no scores yet → also jump to scorecard
+  //    (so user lands on the launch flow / fresh card)
+  if (match.roundId) {
+    try { await roundsStore.loadRound(match.roundId) }
+    catch (e) { console.warn('[tournament] loadRound failed:', e?.message) }
+    router.push('/scoring?stakes=launch')
+    return
+  }
+  // 4) No round yet → open the pairing picker (becomes the launch screen)
   activeMatch.value = { round, match }
-  // Pre-fill if result exists
+  editResult.bestBall = null
+  editResult.singles = [null, null]
+  editResult.playedDate = new Date().toISOString().slice(0, 10)
+  // Auto-advance to launch flow (skip the manual result form)
+  // openLaunchFlow reads from activeMatch.value.match
+  openLaunchFlow()
+}
+
+// Explicit retroactive entry — opens the manual match modal so a user
+// can record results for a round they didn't score with the app.
+function openManualResultEntry(round, match) {
+  activeMatch.value = { round, match }
   if (match.result) {
     editResult.bestBall = match.result.bestBall
     editResult.singles = (match.result.singles || []).map(s => ({ ...s }))
