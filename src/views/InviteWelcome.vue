@@ -66,7 +66,7 @@
         <div class="handoff-timer" :class="{ 'handoff-timer--urgent': handoffSecsLeft < 60 }">
           Expires in {{ handoffSecsDisplay }}
         </div>
-        <div class="handoff-hint">Tap the GolfWizard icon on your home screen, then tap "Have a code?" on the sign-in screen.</div>
+        <div class="handoff-hint">Tap the GolfWizard icon on your home screen, expand "Advanced" on the sign-in screen, and enter this code.</div>
       </div>
 
       <!-- Sign in / Continue -->

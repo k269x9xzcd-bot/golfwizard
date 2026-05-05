@@ -11,8 +11,8 @@
 
         <!-- Step 1: Enter email -->
         <div v-if="step === 'email'" class="auth-body">
-          <h2 class="auth-title">Sign in to sync your rounds</h2>
-          <p class="auth-sub">Your rounds, roster, and history — on every device.</p>
+          <h2 class="auth-title">{{ isReturning ? `Welcome back, ${email}` : 'Sign in to sync your rounds' }}</h2>
+          <p v-if="!isReturning" class="auth-sub">We'll email you a 6-digit code — no password, no link.</p>
 
           <form @submit.prevent="sendOtp" class="auth-form">
             <label class="auth-label" for="auth-email">Email address</label>
@@ -51,19 +51,24 @@
             <span class="guest-note">Data saved locally on this device</span>
           </button>
 
-          <button class="btn-has-code" @click="step = 'handoff'">
-            Have an invite code?
-          </button>
+          <details class="advanced-disclosure">
+            <summary>Advanced</summary>
+            <button class="btn-has-code" @click="step = 'handoff'">
+              I have a sign-in code from another device
+            </button>
+          </details>
         </div>
 
-        <!-- Step: Redeem handoff code -->
+        <!-- Step: Redeem handoff code (advanced flow — cross-device handoff
+             from InviteWelcome). Surfaced via Advanced disclosure to avoid
+             confusing new users who don't have a code. -->
         <div v-else-if="step === 'handoff'" class="auth-body">
           <div class="otp-icon">🔑</div>
-          <h2 class="auth-title">Enter your invite code</h2>
-          <p class="auth-sub">Sign in with the 6-character code from your invite page.</p>
+          <h2 class="auth-title">Enter your sign-in code</h2>
+          <p class="auth-sub">Sign in with the 6-character code from your invite page on another device.</p>
 
           <form @submit.prevent="redeemCode" class="auth-form">
-            <label class="auth-label" for="auth-handoff">Invite code</label>
+            <label class="auth-label" for="auth-handoff">Code</label>
             <input
               v-model="handoffInput"
               type="text"
@@ -136,6 +141,16 @@
             <span class="error-icon">⚠️</span> {{ error }}
           </div>
 
+          <button
+            class="btn-resend"
+            :disabled="resending || resendCooldown > 0"
+            @click="resendOtp"
+          >
+            <span v-if="resending">Sending…</span>
+            <span v-else-if="resendCooldown > 0">Resend code in {{ resendCooldown }}s</span>
+            <span v-else>Resend code</span>
+          </button>
+
           <button class="btn-retry" @click="resetForm">
             ← Try a different email
           </button>
@@ -155,7 +170,7 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted } from 'vue'
+import { ref, nextTick, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { supabase } from '../supabase'
 
@@ -173,10 +188,38 @@ const verifying = ref(false)
 const error = ref('')
 const otpInput = ref(null)
 
-// Handoff code redemption
-const handoffInput = ref('')
-const handoffInput_ref = ref(null)
-const redeeming = ref(false)
+// Returning user: prefilled from a known email (invite handoff or stored hint)
+// → swap copy to "Welcome back" and skip the value-prop subtitle.
+const isReturning = ref(!!props.prefillEmail)
+
+// Resend cooldown — prevents users from spamming Supabase OTP API
+// (which would itself rate-limit and surface confusing errors).
+const RESEND_COOLDOWN = 30
+const resendCooldown = ref(0)
+const resending = ref(false)
+let cooldownTimer = null
+function startCooldown() {
+  resendCooldown.value = RESEND_COOLDOWN
+  if (cooldownTimer) clearInterval(cooldownTimer)
+  cooldownTimer = setInterval(() => {
+    resendCooldown.value -= 1
+    if (resendCooldown.value <= 0) {
+      clearInterval(cooldownTimer)
+      cooldownTimer = null
+    }
+  }, 1000)
+}
+onUnmounted(() => { if (cooldownTimer) clearInterval(cooldownTimer) })
+
+function fmtSendError(e) {
+  // Surface Supabase's actual error string (rate limit, invalid email, SMTP
+  // rejection) so the user can act on it. Prior behavior masked everything as
+  // "Could not send code".
+  const raw = (e?.message || '').toString().trim()
+  if (!raw) return "Couldn't send code. Please try again."
+  const truncated = raw.length > 120 ? raw.slice(0, 117) + '…' : raw
+  return `Couldn't send code: ${truncated}`
+}
 
 async function sendOtp() {
   if (!email.value.trim()) return
@@ -185,13 +228,33 @@ async function sendOtp() {
   try {
     await authStore.signInWithEmail(email.value.trim())
     step.value = 'otp'
-    // Focus OTP input after transition
+    startCooldown()
     await nextTick()
     setTimeout(() => otpInput.value?.focus(), 100)
   } catch (e) {
-    error.value = e.message || 'Could not send code. Please try again.'
+    error.value = fmtSendError(e)
   } finally {
     sending.value = false
+  }
+}
+
+async function resendOtp() {
+  if (resendCooldown.value > 0 || resending.value || !email.value.trim()) return
+  resending.value = true
+  error.value = ''
+  try {
+    // shouldCreateUser:false — at this step the user already exists.
+    // Re-creating them would clobber the just-sent OTP and surface a confusing error.
+    const { error: e } = await supabase.auth.signInWithOtp({
+      email: email.value.trim(),
+      options: { shouldCreateUser: false },
+    })
+    if (e) throw e
+    startCooldown()
+  } catch (e) {
+    error.value = fmtSendError(e)
+  } finally {
+    resending.value = false
   }
 }
 
@@ -202,7 +265,6 @@ async function verifyOtp() {
   try {
     await authStore.verifyOtp(email.value.trim(), otp.value.trim())
     step.value = 'success'
-    // Auto-close after 2 seconds
     setTimeout(() => emit('close'), 2000)
   } catch (e) {
     error.value = e.message || 'Invalid code. Please check and try again.'
@@ -216,7 +278,14 @@ function resetForm() {
   step.value = 'email'
   otp.value = ''
   error.value = ''
+  isReturning.value = false
 }
+
+// Cross-device handoff redemption — kept behind Advanced disclosure
+// since new users without an invite shouldn't see it as a primary path.
+const handoffInput = ref('')
+const handoffInput_ref = ref(null)
+const redeeming = ref(false)
 
 async function redeemCode() {
   if (handoffInput.value.trim().length < 6) return
@@ -235,7 +304,9 @@ async function redeemCode() {
     step.value = 'success'
     setTimeout(() => emit('close'), 2000)
   } catch (e) {
-    error.value = e.message?.includes('Invalid') ? 'Invalid or expired code — check and try again.' : (e.message || 'Could not redeem code.')
+    error.value = e.message?.includes('Invalid')
+      ? 'Invalid or expired code — check and try again.'
+      : (e.message || 'Could not redeem code.')
     handoffInput.value = ''
   } finally {
     redeeming.value = false
@@ -461,22 +532,60 @@ onMounted(async () => {
   font-weight: 400;
 }
 
-/* ── Have a code ─────────────────────────────────────────── */
+/* ── Advanced disclosure ─────────────────────────────────── */
+.advanced-disclosure {
+  margin-top: 14px;
+  text-align: center;
+}
+.advanced-disclosure summary {
+  display: inline-block;
+  list-style: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--gw-text-muted);
+  padding: 4px 8px;
+  -webkit-tap-highlight-color: transparent;
+}
+.advanced-disclosure summary::-webkit-details-marker { display: none; }
+.advanced-disclosure summary::before { content: '▸ '; font-size: 10px; }
+.advanced-disclosure[open] summary::before { content: '▾ '; }
 .btn-has-code {
+  display: block;
+  width: 100%;
+  text-align: center;
+  background: rgba(255,255,255,.04);
+  border: 1px solid var(--gw-card-border);
+  border-radius: var(--gw-radius-sm);
+  color: var(--gw-text);
+  font-family: var(--gw-font-body);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 10px;
+  margin-top: 8px;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-has-code:active { background: rgba(255,255,255,.08); }
+
+/* ── Resend code ─────────────────────────────────────────── */
+.btn-resend {
   display: block;
   width: 100%;
   text-align: center;
   background: none;
   border: none;
-  color: rgba(240,237,224,.45);
+  color: var(--gw-gold);
   font-family: var(--gw-font-body);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  padding: 10px 8px 2px;
+  padding: 12px 8px 4px;
   -webkit-tap-highlight-color: transparent;
 }
-.btn-has-code:active { color: var(--gw-gold); }
+.btn-resend:disabled {
+  color: rgba(240,237,224,.35);
+  cursor: default;
+}
 
 /* ── Retry ───────────────────────────────────────────────── */
 .btn-retry {
