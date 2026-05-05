@@ -120,9 +120,78 @@
           <span class="sb-row-arrow">›</span>
         </button>
       </div>
-      <div v-else class="sb-empty">
-        <button class="sb-add-btn" @click="goLink">+ Link to another foursome</button>
-      </div>
+      <template v-else>
+        <div v-if="!showLinkForm" class="sb-empty">
+          <button class="sb-add-btn" @click="openLinkForm">+ Link to another foursome</button>
+        </div>
+        <div v-else class="sb-link-form">
+          <div class="sb-link-form-h">
+            <span>Link 4v4 match</span>
+            <button class="sb-link-close" @click="cancelLinkForm" aria-label="Cancel">×</button>
+          </div>
+          <div class="sb-link-hint">Pick the other foursome from your roster — they'll get an invite code to join.</div>
+
+          <!-- Team B player picker -->
+          <div class="sb-link-field">
+            <label class="sb-link-lbl">Other foursome (Team B)</label>
+            <div v-if="linkTeamB.length" class="sb-link-chips">
+              <span v-for="p in linkTeamB" :key="p.id" class="sb-link-chip" @click="toggleLinkPlayer(p)">
+                {{ playerLastName(p) }}<span class="sb-link-chip-x">×</span>
+              </span>
+            </div>
+            <div class="sb-link-roster">
+              <button
+                v-for="p in linkRoster"
+                :key="p.id"
+                class="sb-link-roster-row"
+                :class="{ 'sb-link-roster-row--on': isLinkPlayerOn(p) }"
+                :disabled="!isLinkPlayerOn(p) && linkTeamB.length >= 4"
+                @click="toggleLinkPlayer(p)"
+              >
+                <span class="sb-link-roster-name">{{ p.name }}</span>
+                <span v-if="p.ghin_index != null" class="sb-link-roster-hcp">{{ Number(p.ghin_index).toFixed(1) }}</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Format -->
+          <div class="sb-link-field sb-link-field--row">
+            <label class="sb-link-lbl">Format</label>
+            <div class="sb-link-pills">
+              <button class="sb-link-pill" :class="{ 'sb-link-pill--on': linkBalls === 1 }" @click="linkBalls = 1">1 BB</button>
+              <button class="sb-link-pill" :class="{ 'sb-link-pill--on': linkBalls === 2 }" @click="linkBalls = 2">2 BB</button>
+            </div>
+          </div>
+
+          <!-- Stake -->
+          <div class="sb-link-field sb-link-field--row">
+            <label class="sb-link-lbl">Stake $/player</label>
+            <input type="number" inputmode="numeric" min="1" v-model.number="linkStake" class="sb-input sb-input--money" />
+          </div>
+
+          <!-- HCP % -->
+          <div class="sb-link-field sb-link-field--row">
+            <label class="sb-link-lbl">HCP {{ linkHcpPct }}%</label>
+            <input type="range" min="70" max="100" step="5" v-model.number="linkHcpPct" class="sb-link-slider" />
+          </div>
+
+          <!-- Match name -->
+          <div class="sb-link-field sb-link-field--row">
+            <label class="sb-link-lbl">Name (optional)</label>
+            <input type="text" v-model="linkName" placeholder="Saturday 4v4" class="sb-input sb-input--name" />
+          </div>
+
+          <div v-if="linkError" class="sb-link-error">{{ linkError }}</div>
+
+          <button
+            class="sb-link-go"
+            :disabled="!canCreateLink || creatingLink"
+            @click="createInlineLink"
+          >
+            {{ creatingLink ? 'Creating…' : 'Create cross-match' }}
+          </button>
+        </div>
+      </template>
     </section>
 
     <!-- Launch button (only in launchMode) -->
@@ -151,6 +220,7 @@ import Sheet from './ui/Sheet.vue'
 import { useRoundsStore } from '../stores/rounds'
 import { useTournamentStore } from '../stores/tournament'
 import { useLinkedMatchesStore } from '../stores/linkedMatches'
+import { useRosterStore } from '../stores/roster'
 import { normalizeWagers } from '../modules/tournamentWagers'
 
 const props = defineProps({
@@ -164,6 +234,7 @@ const emit = defineEmits(['update:show', 'edit-game', 'add-side-game', 'launch']
 const roundsStore = useRoundsStore()
 const tournamentStore = useTournamentStore()
 const linkedStore = useLinkedMatchesStore()
+const rosterStore = useRosterStore()
 const router = useRouter()
 
 const isTournament = computed(() => roundsStore.activeRound?.format === 'tournament')
@@ -297,10 +368,95 @@ function goCrossMatch(id) {
   emit('update:show', false)
   router.push(`/cross-match/${id}`)
 }
-function goLink() {
-  emit('update:show', false)
-  router.push('/cross-match/setup')
+
+// ── Inline link form ─────────────────────────────────────────────
+// In-place flow so the captain doesn't lose the launch sheet. The standalone
+// /cross-match/setup route stays as-is for direct navigation (Home + invite paths).
+const showLinkForm = ref(false)
+const linkTeamB = ref([])
+const linkBalls = ref(2)
+const linkStake = ref(20)
+const linkHcpPct = ref(100)
+const linkName = ref('')
+const linkError = ref('')
+const creatingLink = ref(false)
+
+const activeMemberIds = computed(() => new Set((roundsStore.activeMembers || []).map(m => m.id)))
+
+function lastNameKey(p) { return (p.name || '').split(/\s+/).pop()?.toLowerCase() || '' }
+
+const linkRoster = computed(() => {
+  const all = (rosterStore.players || []).filter(p => !activeMemberIds.value.has(p.id))
+  const favs = all.filter(p => p.is_favorite).slice().sort((a, b) => lastNameKey(a).localeCompare(lastNameKey(b)))
+  const others = all.filter(p => !p.is_favorite).slice().sort((a, b) => lastNameKey(a).localeCompare(lastNameKey(b)))
+  return [...favs, ...others]
+})
+
+function playerLastName(p) { return (p.name || '').split(/\s+/).slice(-1)[0] }
+function isLinkPlayerOn(p) { return linkTeamB.value.some(x => x.id === p.id) }
+function toggleLinkPlayer(p) {
+  const i = linkTeamB.value.findIndex(x => x.id === p.id)
+  if (i >= 0) linkTeamB.value.splice(i, 1)
+  else if (linkTeamB.value.length < 4) linkTeamB.value.push(p)
 }
+
+const canCreateLink = computed(() => linkTeamB.value.length > 0 && Number(linkStake.value) > 0)
+
+function openLinkForm() {
+  if (!rosterStore.players?.length) rosterStore.fetchPlayers?.()
+  linkError.value = ''
+  showLinkForm.value = true
+}
+function cancelLinkForm() {
+  showLinkForm.value = false
+  linkTeamB.value = []
+  linkBalls.value = 2
+  linkStake.value = 20
+  linkHcpPct.value = 100
+  linkName.value = ''
+  linkError.value = ''
+}
+
+async function createInlineLink() {
+  if (!canCreateLink.value || creatingLink.value) return
+  const round = roundsStore.activeRound
+  if (!round?.id) { linkError.value = 'No active round.'; return }
+  creatingLink.value = true
+  linkError.value = ''
+  try {
+    const foursomeBPayload = linkTeamB.value.map(p => ({
+      id: p.id,
+      name: p.name,
+      short_name: p.short_name || (p.name || '').split(' ')[0],
+      ghin_index: p.ghin_index ?? null,
+      ghin_number: p.ghin_number ?? null,
+      nickname: p.nickname ?? null,
+      use_nickname: p.use_nickname ?? false,
+    }))
+    await linkedStore.createLinkedMatch({
+      name: linkName.value.trim() || `4v4 · ${round.course_name || ''}`.trim(),
+      roundAId: round.id,
+      ballsToCount: linkBalls.value,
+      stake: Number(linkStake.value) || 20,
+      hcpPct: linkHcpPct.value / 100,
+      sideBets: null,
+      courseName: round.course_name,
+      tee: round.tee,
+      holesMode: round.holes_mode || '18',
+      courseSnapshot: round.course_snapshot || null,
+      foursomeBPlayers: foursomeBPayload,
+    })
+    cancelLinkForm()
+  } catch (e) {
+    linkError.value = e?.message || 'Could not create the cross-match.'
+  } finally {
+    creatingLink.value = false
+  }
+}
+
+// Reset the form whenever the sheet re-opens so a previously dismissed draft
+// doesn't reappear next time.
+watch(() => props.show, (open) => { if (!open) showLinkForm.value = false })
 </script>
 
 <style scoped>
@@ -465,4 +621,133 @@ function goLink() {
 }
 .sb-confirm-cancel { background: rgba(255,255,255,.06); color: var(--gw-text, #f0ede0); }
 .sb-confirm-go { background: #f87171; color: #fff; }
+
+/* ── Inline cross-match link form ──────────────────────────── */
+.sb-link-form {
+  margin-top: 4px;
+  padding: 12px;
+  background: rgba(99,179,237,.05);
+  border: 1px solid rgba(99,179,237,.2);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sb-link-form-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: #93c5fd;
+}
+.sb-link-close {
+  background: none;
+  border: none;
+  color: var(--gw-text-tertiary, rgba(240,237,224,.5));
+  font-size: 18px;
+  line-height: 1;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.sb-link-close:active { background: rgba(255,255,255,.06); }
+.sb-link-hint { font-size: 11px; color: rgba(240,237,224,.55); line-height: 1.4; }
+.sb-link-field { display: flex; flex-direction: column; gap: 6px; }
+.sb-link-field--row { flex-direction: row; align-items: center; gap: 10px; }
+.sb-link-field--row .sb-link-lbl { flex: 1; }
+.sb-link-lbl {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--gw-text-tertiary, rgba(240,237,224,.55));
+}
+.sb-link-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.sb-link-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: 14px;
+  background: rgba(99,179,237,.15);
+  border: 1px solid rgba(99,179,237,.35);
+  color: #93c5fd;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sb-link-chip-x { font-size: 11px; opacity: .65; margin-left: 2px; }
+.sb-link-roster {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--gw-border-subtle, rgba(255,255,255,.07));
+  border-radius: 8px;
+  background: rgba(0,0,0,.18);
+  -webkit-overflow-scrolling: touch;
+}
+.sb-link-roster-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--gw-border-subtle, rgba(255,255,255,.05));
+  color: var(--gw-text, #f0ede0);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.sb-link-roster-row:last-child { border-bottom: none; }
+.sb-link-roster-row:disabled { opacity: .3; cursor: default; }
+.sb-link-roster-row--on { background: rgba(99,179,237,.12); }
+.sb-link-roster-name { font-size: 13px; font-weight: 600; flex: 1; }
+.sb-link-roster-hcp { font-size: 11px; color: var(--gw-text-tertiary, rgba(240,237,224,.5)); font-family: var(--gw-font-mono, monospace); }
+.sb-link-pills { display: flex; gap: 6px; }
+.sb-link-pill {
+  padding: 6px 12px;
+  border-radius: 14px;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.1);
+  color: var(--gw-text-tertiary, rgba(240,237,224,.55));
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.sb-link-pill--on {
+  background: rgba(99,179,237,.18);
+  border-color: rgba(99,179,237,.4);
+  color: #93c5fd;
+}
+.sb-link-slider { flex: 0 0 110px; accent-color: #93c5fd; }
+.sb-input--name { width: 140px; }
+.sb-link-error {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(248,113,113,.1);
+  border: 1px solid rgba(248,113,113,.3);
+  color: #f87171;
+  font-size: 12px;
+}
+.sb-link-go {
+  margin-top: 4px;
+  padding: 12px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #93c5fd, #60a5fa);
+  color: #0c0f0d;
+  border: none;
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.sb-link-go:disabled { opacity: .35; cursor: not-allowed; }
+.sb-link-go:active:not(:disabled) { transform: scale(.99); }
 </style>
