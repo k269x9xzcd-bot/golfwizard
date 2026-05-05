@@ -5,6 +5,7 @@ import { useAuthStore } from './auth'
 import { useCoursesStore } from './courses'
 import { useRosterStore } from './roster'
 import { computeAllSettlements } from '../modules/settlements'
+import { computeMatchOutcome } from '../modules/tournamentOutcome'
 import { getCourse, COURSES as BUILTIN_COURSES } from '../modules/courses'
 import { supaRawInsert, supaRawSelect, supaRawUpdate, supaRawRequest, supaRawDelete } from '../modules/supaRaw'
 import { supaCall } from '../modules/supabaseOps'
@@ -1108,6 +1109,50 @@ export const useRoundsStore = defineStore('rounds', () => {
           console.warn('Failed to save ledger entries:', e.message)
           // Non-fatal
         }
+      }
+    }
+
+    // 4. Tournament round → derive structural outcome (BB + singles) and
+    //    persist to tournament_matches.result. Without this the standings tab
+    //    never picks up the points and the schedule card has no recovery path.
+    //    Same engine logic as ScoringView's live tournamentMatchStatus computed —
+    //    both call sites go through computeMatchOutcome to avoid drift.
+    if (activeRound.value?.id === roundId && activeRound.value?.format === 'tournament') {
+      try {
+        const { useTournamentStore } = await import('./tournament')
+        const tournStore = useTournamentStore()
+        const tournMatch = tournStore.matchByRoundId?.(roundId)
+        if (tournMatch?._dbId) {
+          const ctx = _buildSettlementCtx()
+          const outcome = ctx ? computeMatchOutcome({
+            members: ctx.members,
+            scores: ctx.scores,
+            si: ctx.course?.si || [],
+          }, tournMatch) : null
+          if (outcome) {
+            const payload = {
+              ...outcome,
+              playedDate: new Date().toISOString().slice(0, 10),
+            }
+            try {
+              await _withTimeout(
+                tournStore.saveMatchResult(tournMatch._dbId, payload),
+                5000, 'tournament.saveResult'
+              )
+              // Patch the in-memory schedule cache so the Schedule tab and any
+              // open match modal pick up the new result without a page reload.
+              for (const sched of (tournStore.schedule || [])) {
+                for (const m of (sched.matches || [])) {
+                  if (m._dbId === tournMatch._dbId) { m.result = payload; break }
+                }
+              }
+            } catch (e) {
+              console.warn('[rounds] saveMatchResult failed:', e?.message)
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[rounds] tournament outcome derivation failed:', e?.message)
       }
     }
 

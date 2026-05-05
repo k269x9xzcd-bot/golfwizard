@@ -1084,6 +1084,7 @@ import { useGameNotation } from '../composables/useGameNotation'
 import { useHoleMath } from '../composables/useHoleMath'
 import { useLiveSettlements } from '../composables/useLiveSettlements'
 import { computeNassau, computeHammer, computeFidget, courseHandicap, holeSI, strokesOnHole } from '../modules/gameEngine'
+import { computeMatchOutcome } from '../modules/tournamentOutcome'
 import { normalizeWagers, buildTournamentWagerGames } from '../modules/tournamentWagers'
 import { buildLiveSections } from '../modules/liveSections'
 import { useCrossMatchSummary } from '../composables/useCrossMatchSummary'
@@ -1178,10 +1179,9 @@ const {
 
 
 // ── Tournament match status (single source of truth — tournament tables only) ──
-// Computes live Team BB + 1v1 standings from activeMembers/activeScores plus the
-// tournament_match record (singles_order + wagers). Never reads game_configs for
-// tournament structure. Tournament structure is locked: launched pairings come
-// from tournament_matches.singles_order, swap is persisted there at launch.
+// Live Team BB + 1v1 standings derived from the same `computeMatchOutcome`
+// helper that completeRound persists at finish. Don't add structural math here
+// or it'll drift from what we save to tournament_matches.result.
 const tournamentMatchStatus = computed(() => {
   const round = roundsStore.activeRound
   if (round?.format !== 'tournament') return null
@@ -1192,60 +1192,31 @@ const tournamentMatchStatus = computed(() => {
   const t2 = members.filter(m => m.team === 2)
   if (!t1.length || !t2.length) return null
 
-  let thru = 0
-  for (const memberId of Object.keys(scores)) {
-    const holes = Object.keys(scores[memberId]).map(Number)
-    if (holes.length) thru = Math.max(thru, ...holes)
-  }
+  const tournMatch = tournamentStore.matchByRoundId?.(round.id) || null
+  const outcome = computeMatchOutcome({ members, scores, si }, tournMatch)
+  // Helper returns null pre-scores. Surface a "—" status so the banner still renders.
+  const thru = outcome?.thru ?? 0
+  const bbDiff = outcome?.bbDiff ?? 0
+  const standings = outcome?.singlesStandings ?? [0, 0]
 
-  // Team Best Ball (net) — winner of each hole +1, no carryover
-  let t1Up = 0, t2Up = 0
-  for (let h = 1; h <= thru; h++) {
-    const siH = si[h - 1] ?? h
-    const t1Nets = t1.map(m => { const g = scores[m.id]?.[h]; return g != null ? g - strokesOnHole(m.round_hcp ?? 0, siH) : null }).filter(n => n != null)
-    const t2Nets = t2.map(m => { const g = scores[m.id]?.[h]; return g != null ? g - strokesOnHole(m.round_hcp ?? 0, siH) : null }).filter(n => n != null)
-    if (!t1Nets.length || !t2Nets.length) continue
-    const t1BB = Math.min(...t1Nets), t2BB = Math.min(...t2Nets)
-    if (t1BB < t2BB) t1Up++
-    else if (t2BB < t1BB) t2Up++
-  }
-  const bbDiff = t1Up - t2Up
   const bbLabel = bbDiff === 0 ? (thru ? 'AS' : '—') : `${Math.abs(bbDiff)} up`
   const teamNames = team => team.map(m => m.nickname || m.short_name || '?').join('+')
   const bbTeamLabel = bbDiff > 0 ? teamNames(t1) : bbDiff < 0 ? teamNames(t2) : ''
 
-  const hcpMap = Object.fromEntries(members.map(m => [m.id, m.round_hcp ?? 0]))
-  function _calcStanding(p1id, p2id) {
-    let standing = 0
-    for (let h = 1; h <= thru; h++) {
-      const siH = si[h - 1] ?? h
-      const g1 = scores[p1id]?.[h], g2 = scores[p2id]?.[h]
-      if (g1 == null || g2 == null) continue
-      const n1 = g1 - strokesOnHole(hcpMap[p1id] ?? 0, siH)
-      const n2 = g2 - strokesOnHole(hcpMap[p2id] ?? 0, siH)
-      if (n1 < n2) standing++
-      else if (n2 < n1) standing--
-    }
-    return standing
-  }
-
-  // Singles pairings come from tournament_matches.singles_order (0=straight, 1=swapped).
-  // Falls back to straight order if the tournament store doesn't yet know about this round.
-  const tournMatch = tournamentStore.matchByRoundId?.(round.id) || null
   const order = tournMatch?.singlesOrder === 1 ? 1 : 0
   const singlesPairs = order === 1
     ? [{ p1: t1[0], p2: t2[1] }, { p1: t1[1], p2: t2[0] }]
     : [{ p1: t1[0], p2: t2[0] }, { p1: t1[1], p2: t2[1] }]
 
   const singlesMatches = []
-  for (const { p1, p2 } of singlesPairs) {
-    if (!p1 || !p2) continue
-    const standing = _calcStanding(p1.id, p2.id)
+  singlesPairs.forEach(({ p1, p2 }, i) => {
+    if (!p1 || !p2) return
+    const standing = standings[i] ?? 0
     const p1Name = p1.nickname || p1.short_name || '?'
     const p2Name = p2.nickname || p2.short_name || '?'
     const label = standing === 0 ? (thru ? 'AS' : '—') : `${standing > 0 ? p1Name : p2Name} ${Math.abs(standing)} up`
     singlesMatches.push({ p1Name, p2Name, p1Id: p1.id, p2Id: p2.id, label, standing })
-  }
+  })
 
   return {
     thru,
