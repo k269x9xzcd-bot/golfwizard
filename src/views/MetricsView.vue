@@ -345,7 +345,7 @@ import { ref, computed, onMounted, onActivated, watch } from 'vue'
 import { useRoundsStore } from '../stores/rounds'
 import { useAuthStore } from '../stores/auth'
 import { getCourse } from '../modules/courses'
-import { canonicalPlayerKey, groupMembersByCanonicalPlayer } from '../modules/canonicalPlayer'
+import { buildCanonicalGroups } from '../modules/canonicalPlayer'
 
 defineOptions({ name: 'MetricsView' })
 
@@ -431,12 +431,17 @@ function onCourseTabChange(e) {
 
 // Player identity — see src/modules/canonicalPlayer.js.
 // Same person across rounds (e.g. "Spiels" vs "Spieler") collapses into one chip.
+// canonicalGroups memoizes both the players array AND a keyOf(member) lookup
+// so findMember and h2hRecords can map any row → its group key, including
+// ghost rows that were attached to a profile group via name match.
+
+const canonicalGroups = computed(() => buildCanonicalGroups(allRounds.value))
 
 function extractPlayers() {
-  return groupMembersByCanonicalPlayer(allRounds.value)
+  return canonicalGroups.value.players
 }
 
-const allPlayers = computed(() => extractPlayers())
+const allPlayers = computed(() => canonicalGroups.value.players)
 
 const allCourses = computed(() => {
   const set = new Set()
@@ -449,7 +454,8 @@ const allCourses = computed(() => {
 // ── Find member in a round matching selectedPlayer ──────────
 function findMember(round) {
   if (!selectedPlayer.value) return null
-  return (round.round_members || []).find(m => canonicalPlayerKey(m) === selectedPlayer.value)
+  const keyOf = canonicalGroups.value.keyOf
+  return (round.round_members || []).find(m => keyOf(m) === selectedPlayer.value)
 }
 
 // ── Filtered rounds for this player + course ────────────────
@@ -704,9 +710,10 @@ const h2hRecords = computed(() => {
 
     const myMoney = settlementsMap.value[r.id]?.playerTotals?.[me.id]?.total ?? null
 
+    const keyOf = canonicalGroups.value.keyOf
     for (const opp of (r.round_members || [])) {
-      const oppKey = canonicalPlayerKey(opp)
-      if (oppKey === selectedPlayer.value) continue
+      const oppKey = keyOf(opp)
+      if (!oppKey || oppKey === selectedPlayer.value) continue
 
       const oppGross = scores.filter(s => s.member_id === opp.id).reduce((sum, s) => sum + (s.score ?? 0), 0)
       if (!oppGross) continue
