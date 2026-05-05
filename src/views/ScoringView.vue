@@ -1115,12 +1115,29 @@ const {
   teamInitialsStr, pInit, playerInitials,
 } = useScorecardHelpers({ showFullHcp })
 
+// ── Tournament 1v1 pairings (used by useGameNotation for per-hole notation rows) ──
+// Defined before useGameNotation so the computed is available for injection.
+// Independent of tournamentMatchStatus to avoid forward-reference (same source data).
+const tournamentSinglesForNotation = computed(() => {
+  const round = roundsStore.activeRound
+  if (round?.format !== 'tournament') return []
+  const members = roundsStore.activeMembers
+  const t1 = members.filter(m => m.team === 1)
+  const t2 = members.filter(m => m.team === 2)
+  if (t1.length < 2 || t2.length < 2) return []
+  const tournMatch = tournamentStore.matchByRoundId?.(round.id) || null
+  const order = tournMatch?.singlesOrder === 1 ? 1 : 0
+  return order === 1
+    ? [{ p1Id: t1[0].id, p2Id: t2[1].id }, { p1Id: t1[1].id, p2Id: t2[0].id }]
+    : [{ p1Id: t1[0].id, p2Id: t2[0].id }, { p1Id: t1[1].id, p2Id: t2[1].id }]
+})
+
 // ── Composable: game notation ─────────────────────────────────────
 // buildCtx is returned here so all composables share one definition
 const {
   HALVED_HTML, buildCtx, gameIcon, gameLabel, pressHoles, gameNotationRows, sixesHoleTeamMap,
   fidgetHoleWinners, isFidgetWinner,
-} = useGameNotation({ courseData, visibleHoles, teamInitialsStr, pInit })
+} = useGameNotation({ courseData, visibleHoles, teamInitialsStr, pInit, tournamentSingles: tournamentSinglesForNotation })
 
 // ── Double Fidget ──────────────────────────────────────────────────
 const showDoubleFidgetPrompt = ref(false)

@@ -18,7 +18,7 @@ function escHtml(str) {
   return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;')
 }
 
-export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pInit }) {
+export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pInit, tournamentSingles }) {
   const roundsStore = useRoundsStore()
 
   const HALVED_HTML = '<span class="nota-frac" aria-label="halved"><span class="nf-num">1</span><span class="nf-den">2</span></span>'
@@ -611,6 +611,41 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
         } catch(e) { /* skip */ }
       }
     }
+
+    // ── TOURNAMENT 1v1 ── (one row per singles pairing — MDU V JS, SC V MDE, etc.)
+    const singles = tournamentSingles?.value || []
+    for (let i = 0; i < singles.length; i++) {
+      const s = singles[i]
+      if (!s?.p1Id || !s?.p2Id) continue
+      try {
+        const r = computeMatch(ctx, { player1: s.p1Id, player2: s.p2Id })
+        if (!r) continue
+        const holeResults = r.holeResults || []
+        const finalUp = r.finalUp ?? 0
+        const playedCount = holeResults.filter(hr => !hr.incomplete).length
+        const remaining = visibleHoles.value.length - playedCount
+        const isDormie = remaining > 0 && Math.abs(finalUp) === remaining
+        const p1Label = pInit(r.p1?.id) || r.p1?.name?.slice(0, 2) || 'P1'
+        const p2Label = pInit(r.p2?.id) || r.p2?.name?.slice(0, 2) || 'P2'
+        const cells = {}
+        for (const hr of holeResults) {
+          if (hr.incomplete) { cells[hr.hole] = { text: '', cls: '' }; continue }
+          const up = hr.p1Up ?? 0
+          if (up > 0) cells[hr.hole] = { text: `U${up}`, cls: 'nota-t1' }
+          else if (up < 0) cells[hr.hole] = { text: `D${Math.abs(up)}`, cls: 'nota-t2' }
+          else cells[hr.hole] = { text: 'AS', cls: 'nota-halved' }
+        }
+        const leader = finalUp > 0 ? p1Label : p2Label
+        let summary = finalUp === 0 ? 'AS' : `${leader} ${Math.abs(finalUp)}up`
+        if (isDormie) summary = `<span class="nota-dormie">${summary} D!</span>`
+        rows.push({
+          icon: '⚔️', label: `${p1Label} V ${p2Label}`,
+          cells, outSummary: '', inSummary: '', totalSummary: summary,
+          game: { id: `__tourn_single_${i}`, type: 'match1v1' },
+        })
+      } catch (e) { /* skip */ }
+    }
+
     return rows
   })
 
