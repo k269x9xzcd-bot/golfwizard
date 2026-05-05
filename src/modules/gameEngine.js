@@ -2297,12 +2297,13 @@ function formatVsParEngine(v) {
 // ─────────────────────────────────────────────────────────────────
 // DEFAULT SIDE BETS CONFIG
 // ─────────────────────────────────────────────────────────────────
+// All bonus bets default to OFF — user opts in. (v3.10.253)
 export const DEFAULT_SIDE_BETS = [
-  { type: 'mostBirdies',   label: 'Most Birdies',    stake: 4,  enabled: true,  description: 'Team with most birdies wins the pot.' },
-  { type: 'front9',        label: 'Front 9',          stake: 5,  enabled: true,  description: 'Best-ball net on the front 9.' },
-  { type: 'back9',         label: 'Back 9',           stake: 5,  enabled: true,  description: 'Best-ball net on the back 9.' },
-  { type: 'eagleBounty',   label: 'Eagle Bounty',     stake: 3,  enabled: true,  description: 'Per eagle made, the other team pays $stake/player.' },
-  { type: 'fewestDoubles', label: 'Fewest Doubles',   stake: 4,  enabled: true,  description: 'Team with fewest double-bogeys or worse wins.' },
+  { type: 'mostBirdies',   label: 'Most Birdies',    stake: 4,  enabled: false, description: 'Team with most birdies wins the pot.' },
+  { type: 'front9',        label: 'Front 9',          stake: 5,  enabled: false, description: 'Best-ball net on the front 9.' },
+  { type: 'back9',         label: 'Back 9',           stake: 5,  enabled: false, description: 'Best-ball net on the back 9.' },
+  { type: 'eagleBounty',   label: 'Eagle Bounty',     stake: 3,  enabled: false, description: 'Per eagle made, the other team pays $stake/player.' },
+  { type: 'fewestDoubles', label: 'Fewest Doubles',   stake: 4,  enabled: false, description: 'Team with fewest double-bogeys or worse wins.' },
 ]
 
 // ───────────────────────────────────────���─────────────────────────
@@ -2328,8 +2329,9 @@ export function computeCrossBestBall(roundA, roundB, config = {}) {
     hcpPct = 1.0,
     sideBets: rawSideBets,
   } = config
-  // null means side bets were explicitly disabled; undefined means not set (use defaults)
-  const sideBets = rawSideBets === undefined ? DEFAULT_SIDE_BETS : (rawSideBets || [])
+  // Default to no side bets when unset. v3.10.253: cross-matches now opt-in only;
+  // legacy callers passing `undefined` no longer auto-enable every bonus bet.
+  const sideBets = Array.isArray(rawSideBets) ? rawSideBets : []
 
   const holesMode = roundA?.holes_mode || '18'
   const { from, to } = _crossHoleRange(holesMode)
