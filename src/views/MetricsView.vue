@@ -29,7 +29,7 @@
             class="pill"
             :class="{ active: selectedPlayer === p.id }"
             @click="selectedPlayer = p.id"
-          >{{ p.name }}</button>
+          >{{ p.label }}</button>
         </div>
       </div>
 
@@ -345,6 +345,7 @@ import { ref, computed, onMounted, onActivated, watch } from 'vue'
 import { useRoundsStore } from '../stores/rounds'
 import { useAuthStore } from '../stores/auth'
 import { getCourse } from '../modules/courses'
+import { canonicalPlayerKey, groupMembersByCanonicalPlayer } from '../modules/canonicalPlayer'
 
 defineOptions({ name: 'MetricsView' })
 
@@ -428,31 +429,11 @@ function onCourseTabChange(e) {
   localStorage.setItem(LS_COURSE_KEY, e.target.value)
 }
 
-// ── Player identity ──────────────────────────────────
-// Players sometimes appear with profile_id and sometimes without (guest entries).
-// Deduplicate by profile_id first, then by email, then by guest_name as fallback.
-function playerKey(m) {
-  if (m.profile_id) return `pid:${m.profile_id}`
-  if (m.email) return `email:${m.email.toLowerCase()}`
-  if (m.guest_name) return `name:${m.guest_name.toLowerCase().trim()}`
-  return `id:${m.id}`
-}
+// Player identity — see src/modules/canonicalPlayer.js.
+// Same person across rounds (e.g. "Spiels" vs "Spieler") collapses into one chip.
 
 function extractPlayers() {
-  const map = new Map()
-  for (const r of allRounds.value) {
-    for (const m of (r.round_members || [])) {
-      const key = m.profile_id || m.guest_name || m.email || m.id
-      if (!map.has(key)) {
-        map.set(key, {
-          id: key,
-          name: m.short_name || m.guest_name || '?',
-          ghin_number: m.ghin_number ?? null,
-        })
-      }
-    }
-  }
-  return Array.from(map.values())
+  return groupMembersByCanonicalPlayer(allRounds.value)
 }
 
 const allPlayers = computed(() => extractPlayers())
@@ -468,9 +449,7 @@ const allCourses = computed(() => {
 // ── Find member in a round matching selectedPlayer ──────────
 function findMember(round) {
   if (!selectedPlayer.value) return null
-  return (round.round_members || []).find(m =>
-    (m.profile_id || m.guest_name || m.email || m.id) === selectedPlayer.value
-  )
+  return (round.round_members || []).find(m => canonicalPlayerKey(m) === selectedPlayer.value)
 }
 
 // ── Filtered rounds for this player + course ────────────────
@@ -726,8 +705,8 @@ const h2hRecords = computed(() => {
     const myMoney = settlementsMap.value[r.id]?.playerTotals?.[me.id]?.total ?? null
 
     for (const opp of (r.round_members || [])) {
-      if ((opp.profile_id || opp.email || opp.guest_name || opp.id) === selectedPlayer.value) continue
-      const oppKey = opp.profile_id || opp.email || opp.guest_name || opp.id
+      const oppKey = canonicalPlayerKey(opp)
+      if (oppKey === selectedPlayer.value) continue
 
       const oppGross = scores.filter(s => s.member_id === opp.id).reduce((sum, s) => sum + (s.score ?? 0), 0)
       if (!oppGross) continue
