@@ -35,12 +35,6 @@
               alt="Bonnie Briar Country Club"
             />
             <h1 class="course-name" :class="{ 'course-name--with-logo': isBonnieBriar }">{{ roundsStore.activeRound.course_name }}</h1>
-            <button
-              v-if="isCaptain"
-              class="btn-stakes-chip"
-              @click.stop="showStakesSheet = true"
-              title="Stakes & Bets"
-            >⚙️ Stakes</button>
           </div>
           <div class="header-meta">
             <span class="meta-tag">{{ roundsStore.activeRound.tee }}</span>
@@ -78,8 +72,9 @@
           >⇄ Switch round</button>
         </div>
         <div class="header-right-actions">
+          <ThemeToggle size="sm" />
           <button
-            v-if="courseData?.greenCoords?.length"
+            v-if="isBonnieBriar && courseData?.greenCoords?.length"
             class="btn-gps-toggle"
             :class="{ 'gps-toggle--active': gpsEnabled }"
             @click="toggleGps"
@@ -90,6 +85,9 @@
         </div>
         <div v-if="showRoundMenu" class="round-menu-backdrop" @click="showRoundMenu = false"></div>
         <div v-if="showRoundMenu" class="round-menu-dropdown" @click.stop>
+          <button v-if="isCaptain" class="round-menu-item" @click="showRoundMenu = false; showStakesSheet = true">
+            ⚙️ Stakes &amp; Bets
+          </button>
           <button v-if="isCaptain" class="round-menu-item" @click="showRoundMenu = false; openDateEditor()">
             📅 Edit Round Date
           </button>
@@ -1072,6 +1070,7 @@ import CrossMatchBanner from '../components/CrossMatchBanner.vue'
 import WizardOverlay from '../components/WizardOverlay.vue'
 import RetroScoreOverlay from '../components/RetroScoreOverlay.vue'
 import StakesBetsSheet from '../components/StakesBetsSheet.vue'
+import ThemeToggle from '../components/ui/ThemeToggle.vue'
 import HcpEditorModal from '../components/scoring/HcpEditorModal.vue'
 import RoundPickerSheet from '../components/scoring/RoundPickerSheet.vue'
 import FinishRoundOverlay from '../components/scoring/FinishRoundOverlay.vue'
