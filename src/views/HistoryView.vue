@@ -118,40 +118,31 @@
                 </div>
               </div>
 
-              <!-- Game Recap -- per-game outcome -->
-              <template v-if="round.game_configs?.length">
-                <div class="detail-section-label">Game Recap</div>
-                <div class="game-recap-list">
+              <!-- Recap sections: TOURNAMENT / SIDE GAMES / PAIR BETS / CROSS-MATCH -->
+              <template v-for="(section, si) in buildRecapSections(round)" :key="'rs-'+si">
+                <div class="recap-section-h">{{ section.title }}<span v-if="section.subtitle" class="recap-section-sub">— {{ section.subtitle }}</span></div>
+                <div class="recap-section">
                   <div
-                    v-for="g in gameRecapRows(round)"
-                    :key="g.id"
-                    class="game-recap-row"
+                    v-for="(row, ri) in section.rows"
+                    :key="'rsr-'+si+'-'+ri"
+                    class="recap-row"
                   >
-                    <div class="grr-head">
-                      <span class="grr-icon">{{ g.icon }}</span>
-                      <span class="grr-name">{{ g.label }}</span>
-                      <span v-if="g.winnerLine" class="grr-winner">
-                        <span class="grr-star">⭐️</span>
-                        {{ g.winnerLine }}
-                      </span>
-                    </div>
-                    <div v-if="g.detail" class="grr-detail">{{ g.detail }}</div>
+                    <div class="rr-label">{{ row.label }}</div>
+                    <div class="rr-money" :class="row.moneyClass || ''">{{ row.money || '—' }}</div>
+                    <div class="rr-desc">{{ row.desc }}</div>
                   </div>
                 </div>
               </template>
 
-              <!-- Settlement -->
-              <template v-if="round.game_configs?.length">
-                <div class="detail-section-label">Settlement</div>
+              <!-- Settlement footer -->
+              <template v-if="round.game_configs?.length || round.format === 'tournament'">
+                <div class="recap-section-h">SETTLEMENT</div>
                 <div class="settlement-block">
-                  <!-- Loading: only for the first fraction of a second -->
                   <div v-if="settlementLoading[round.id]" class="settlement-placeholder">
                     <div class="settlement-ph-icon">💰</div>
                     <div class="settlement-ph-text">Computing…</div>
                   </div>
-                  <!-- Has settlement data -->
                   <template v-else-if="settlementsCache[round.id]">
-                    <!-- Player totals -->
                     <div v-if="settlementsCache[round.id].playerTotals" class="settlement-totals">
                       <div
                         v-for="(info, pid) in settlementsCache[round.id].playerTotals"
@@ -163,7 +154,6 @@
                         <span class="settlement-amount">{{ info.total > 0 ? '+' : '' }}{{ formatMoney(info.total) }}</span>
                       </div>
                     </div>
-                    <!-- Ledger (who pays whom) -->
                     <div v-if="settlementsCache[round.id].ledger?.length" class="settlement-ledger">
                       <div
                         v-for="(entry, i) in settlementsCache[round.id].ledger"
@@ -171,14 +161,13 @@
                         class="ledger-entry"
                       >
                         <span class="ledger-from">{{ entry.from_name }}</span>
-                        <span class="ledger-arrow">-></span>
+                        <span class="ledger-arrow">→</span>
                         <span class="ledger-to">{{ entry.to_name }}</span>
                         <span class="ledger-amount">${{ entry.amount }}</span>
                       </div>
                     </div>
-                    <div v-else class="settlement-even">All square -- no payments needed</div>
+                    <div v-else class="settlement-even">All square — no payments needed</div>
                   </template>
-                  <!-- No settlement yet -->
                   <div v-else class="settlement-placeholder">
                     <div class="settlement-ph-icon">💰</div>
                     <div class="settlement-ph-text">Not enough scores yet to compute settlement.</div>
@@ -271,7 +260,7 @@
               <span v-if="match.match_config?.stake" class="moc-stake">
                 ${{ match.match_config.stake }}/pt
               </span>
-              <span class="moc-status" :class="'status-' + match.status">{{ match.status }}</span>
+              <span class="moc-status" :class="'status-' + matchDisplayStatus(match)">{{ matchDisplayStatus(match) }}</span>
             </div>
           </div>
         </template>
@@ -339,6 +328,8 @@ import { useAuthStore } from '../stores/auth'
 import { useTournamentStore } from '../stores/tournament'
 import { supaRawRequest } from '../modules/supaRaw'
 import { computeAllSettlements } from '../modules/settlements'
+import { buildTournamentWagerGames, normalizeWagers } from '../modules/tournamentWagers'
+import { isCrossMatchComplete, crossMatchDisplayStatus } from '../modules/crossMatchStatus'
 import { shareHistoryRecap } from '../modules/scorecardShare'
 // ScorecardGrid removed -- share now uses ScorecardCapture component via scorecardShare.js
 import {
@@ -411,6 +402,7 @@ onMounted(async () => {
         _teamA: membersByRound[m.round_a_id] || [],
         _teamB: membersByRound[m.round_b_id] || [],
         _liveResult: liveResult,
+        _bothRoundsComplete: !!(rA?.is_complete && rB?.is_complete),
       }
     })
   } catch (e) {
@@ -448,13 +440,16 @@ async function toggleRound(id) {
       settlementLoading[id] = true
       const round = roundsStore.rounds.find(r => r.id === id)
       let data = null
-      // 1) Try saved snapshot first (fast, no engine run)
-      try {
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000))
-        const saved = await Promise.race([roundsStore.fetchSettlements(id), timeoutPromise])
-        if (saved) data = saved
-      } catch { /* fall through to compute */ }
-      // 2) Otherwise compute from stored scores on demand
+      // Tournament rounds: always recompute so wager dollars (Team BB + 1v1s)
+      // are included even when older snapshots predate the wager-aware fix.
+      const isTournament = round?.format === 'tournament'
+      if (!isTournament) {
+        try {
+          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000))
+          const saved = await Promise.race([roundsStore.fetchSettlements(id), timeoutPromise])
+          if (saved) data = saved
+        } catch { /* fall through to compute */ }
+      }
       if (!data && round) {
         try { data = _computeSettlementFromRound(round) } catch (e) { console.warn('compute settlement failed:', e) }
       }
@@ -689,6 +684,129 @@ function gameRecapRows(round) {
   if (!ctx) return []
   const games = round.game_configs || []
   return games.map(g => _recapOne(ctx, g)).filter(Boolean)
+}
+
+// ── Grouped recap (v3.10.253): TOURNAMENT / SIDE GAMES / PAIR BETS / CROSS-MATCH ──
+// Returns [{ title, subtitle?, rows: [{ label, money, desc, moneyClass? }] }].
+function buildRecapSections(round) {
+  const sections = []
+  const ctx = _buildCtxForRound(round)
+  const games = round.game_configs || []
+  const nick = m => m?.nickname || m?.short_name || m?.guest_name?.split(' ')?.[0] || '?'
+
+  // TOURNAMENT — derived from tournament_matches.result + wagers
+  if (round.format === 'tournament' && ctx) {
+    const tm = tournamentStore.matchByRoundId?.(round.id)
+    if (tm) {
+      const wagers = normalizeWagers(tm.wagers)
+      const t1 = ctx.members.filter(m => m.team === 1)
+      const t2 = ctx.members.filter(m => m.team === 2)
+      const rows = []
+
+      // Team BB
+      const bbDiff = tm.result?.bbDiff ?? 0
+      const bbWinSide = tm.result?.bestBall === 't1' ? 't1' : tm.result?.bestBall === 't2' ? 't2' : null
+      const bbWinTeam = bbWinSide === 't1' ? t1 : bbWinSide === 't2' ? t2 : null
+      const bbDesc = bbWinTeam
+        ? `${bbWinTeam.map(nick).join('+')} won ${Math.abs(bbDiff)} up`
+        : (tm.result ? 'AS' : 'In progress')
+      rows.push({
+        label: 'Team BB',
+        money: wagers.bb > 0 ? `$${wagers.bb}/player` : 'tracker only',
+        desc: bbDesc,
+        moneyClass: wagers.bb > 0 ? 'rr-money--live' : 'rr-money--mute',
+      })
+
+      // 1v1 #1 + #2 (resolved via singles_order)
+      const order = tm.singlesOrder === 1 ? 1 : 0
+      const pairs = order === 1
+        ? [[t1[0], t2[1]], [t1[1], t2[0]]]
+        : [[t1[0], t2[0]], [t1[1], t2[1]]]
+      for (let i = 0; i < pairs.length; i++) {
+        const [p1, p2] = pairs[i]
+        if (!p1 || !p2) continue
+        const winnerTok = tm.result?.singles?.[i]?.winner
+        const standing = tm.result?.singlesStandings?.[i] ?? 0
+        const winner = winnerTok === 't1' ? p1 : winnerTok === 't2' ? p2 : null
+        const loser = winnerTok === 't1' ? p2 : winnerTok === 't2' ? p1 : null
+        const wager = i === 0 ? wagers.s1 : wagers.s2
+        const moneyStr = wager > 0
+          ? (winner && loser ? `${nick(loser)}→${nick(winner)} $${wager}` : `$${wager}`)
+          : 'tracker only'
+        const desc = standing === 0
+          ? (tm.result ? `${nick(p1)} v ${nick(p2)} AS` : `${nick(p1)} v ${nick(p2)} — in progress`)
+          : `${nick(winner)} by ${Math.abs(standing)} up`
+        rows.push({
+          label: `1v1 #${i + 1}`,
+          money: moneyStr,
+          desc,
+          moneyClass: wager > 0 ? 'rr-money--live' : 'rr-money--mute',
+        })
+      }
+      if (rows.length) sections.push({ title: 'TOURNAMENT', rows })
+    }
+  }
+
+  // SIDE GAMES (foursome) + PAIR BETS — split from game_configs by 1v1-ness
+  const sideRows = []
+  const pairRows = []
+  if (ctx) {
+    for (const g of games) {
+      const t = (g.type || '').toLowerCase()
+      const r = _recapOne(ctx, g)
+      if (!r) continue
+      const isPairBet = (t === 'match' || t === 'match1v1') && g.config?.player1 && g.config?.player2
+      const row = {
+        label: `${r.icon} ${r.label}`,
+        money: r.winnerLine || 'tracker only',
+        desc: r.detail || '',
+        moneyClass: r.winnerLine ? 'rr-money--live' : 'rr-money--mute',
+      }
+      ;(isPairBet ? pairRows : sideRows).push(row)
+    }
+  }
+  if (sideRows.length) sections.push({ title: 'SIDE GAMES', subtitle: 'foursome', rows: sideRows })
+  if (pairRows.length) sections.push({ title: 'PAIR BETS', rows: pairRows })
+
+  // CROSS-MATCH — pulled from linkedMatchHistory if this round is linked
+  const linked = linkedMatchHistory.value.find(m => m.round_a_id === round.id || m.round_b_id === round.id)
+  if (linked) {
+    const isComplete = linked._bothRoundsComplete || linked.status === 'complete'
+    const teamA = linked._teamA?.length ? linked._teamA.join('+') : 'Foursome A'
+    const teamB = linked._teamB?.length ? linked._teamB.join('+') : 'Foursome B'
+    const isHostRound = linked.round_a_id === round.id
+    const myTeam = isHostRound ? teamA : teamB
+    const oppTeam = isHostRound ? teamB : teamA
+    const result = linked._liveResult || linked.settlement_json
+    let desc = 'Awaiting opponent'
+    let money = '—'
+    let moneyClass = 'rr-money--mute'
+    if (result?.teamA?.vsPar != null && result?.teamB?.vsPar != null) {
+      const a = result.teamA.vsPar
+      const b = result.teamB.vsPar
+      const fmt = v => v === 0 ? 'E' : (v > 0 ? `+${v}` : `${v}`)
+      desc = `Foursome A ${fmt(a)} · Foursome B ${fmt(b)}` + (
+        a === b ? ' · AS'
+          : ` · ${a < b ? 'A' : 'B'} by ${Math.abs(a - b)}`
+      )
+    }
+    if (isComplete && result) {
+      const stake = linked.match_config?.stake ?? 0
+      if (stake > 0) {
+        money = `$${stake}/player`
+        moneyClass = 'rr-money--live'
+      }
+    } else if (!isComplete) {
+      desc = result ? `In progress · ${desc}` : 'In progress'
+    }
+    sections.push({
+      title: 'CROSS-MATCH',
+      subtitle: `vs ${oppTeam}`,
+      rows: [{ label: myTeam, money, desc, moneyClass }],
+    })
+  }
+
+  return sections
 }
 
 function _recapOne(ctx, game) {
@@ -1044,7 +1162,27 @@ function _fmtWinnerValue(name, { pts, dollars }) {
 function _computeSettlementFromRound(round) {
   const ctx = _buildCtxForRound(round)
   if (!ctx) return null
-  const games = round.game_configs || []
+  let games = round.game_configs || []
+  // Tournament rounds: fold in synthetic Team BB + 1v1 wager games so totals
+  // include every dollar (matches what completeRound persists).
+  if (round.format === 'tournament') {
+    const tm = tournamentStore.matchByRoundId?.(round.id)
+    if (tm?.wagers) {
+      const t1 = ctx.members.filter(m => m.team === 1)
+      const t2 = ctx.members.filter(m => m.team === 2)
+      const order = tm.singlesOrder === 1 ? 1 : 0
+      const singles = order === 1
+        ? [{ p1Id: t1[0]?.id, p2Id: t2[1]?.id }, { p1Id: t1[1]?.id, p2Id: t2[0]?.id }]
+        : [{ p1Id: t1[0]?.id, p2Id: t2[0]?.id }, { p1Id: t1[1]?.id, p2Id: t2[1]?.id }]
+      const wagerGames = buildTournamentWagerGames({
+        wagers: tm.wagers,
+        t1Ids: t1.map(m => m.id),
+        t2Ids: t2.map(m => m.id),
+        singles,
+      })
+      games = [...wagerGames, ...games]
+    }
+  }
   if (!games.length) return null
   return computeAllSettlements(ctx, games)
 }
@@ -1097,8 +1235,14 @@ function matchWinner(match) {
   return 'tie'
 }
 
+// "Complete" = the persisted status flag is 'complete' OR both linked rounds
+// are marked is_complete in the DB. The latter handles cases where realtime
+// settlement-persist missed the round-finish (offline, race, missed sub).
+const _isMatchComplete = isCrossMatchComplete
+const matchDisplayStatus = crossMatchDisplayStatus
+
 function matchResultLabel(match) {
-  if (match.status === 'linked') return 'In Progress'
+  if (!_isMatchComplete(match)) return 'In Progress'
   const w = matchWinner(match)
   if (!w || w === 'tie') return 'Tie'
   // Determine if current user is host (round_a) or guest (round_b)
@@ -1109,7 +1253,7 @@ function matchResultLabel(match) {
 }
 
 function matchResultClass(match) {
-  if (match.status === 'linked') return 'badge-progress'
+  if (!_isMatchComplete(match)) return 'badge-progress'
   const label = matchResultLabel(match)
   if (label === 'Win') return 'badge-win'
   if (label === 'Loss') return 'badge-loss'
@@ -1700,6 +1844,68 @@ function eventMatchPoints(match) {
   font-size: 12px;
   color: rgba(240,237,224,.7);
   line-height: 1.4;
+}
+
+/* ── Grouped recap (v3.10.253) ─────────────────────────────── */
+.recap-section-h {
+  margin: 14px 0 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--gw-gold, #d4af37);
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.recap-section-sub {
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: none;
+  color: rgba(240,237,224,.55);
+  font-size: 11px;
+}
+.recap-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.recap-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) minmax(140px, auto) minmax(140px, 2fr);
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.3;
+}
+.rr-label {
+  font-weight: 800;
+  color: var(--gw-text, #f0ede0);
+}
+.rr-money {
+  font-family: var(--gw-font-mono, ui-monospace, monospace);
+  font-weight: 700;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.rr-money--live { color: #22c55e; }
+.rr-money--mute { color: rgba(240,237,224,.4); font-weight: 500; }
+.rr-desc {
+  font-size: 12px;
+  color: rgba(240,237,224,.75);
+  line-height: 1.4;
+}
+@media (max-width: 480px) {
+  .recap-row {
+    grid-template-columns: minmax(90px, 1fr) minmax(110px, auto);
+    grid-auto-flow: row;
+  }
+  .rr-desc { grid-column: 1 / -1; }
 }
 
 /* ── Segmented control ─────────────────────────────────────── */
