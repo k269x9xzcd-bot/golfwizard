@@ -484,6 +484,7 @@ export const useRoundsStore = defineStore('rounds', () => {
       guest_name: p.profileId ? null : p.name,
       short_name: p.shortName ?? p.name?.slice(0, 6),
       ghin_index: p.ghinIndex ?? null,
+      ghin_number: p.ghinNumber ?? null,
       round_hcp: p.roundHcp ?? null,
       stroke_override: p.stroke_override ?? null,
       team: p.team ?? null,

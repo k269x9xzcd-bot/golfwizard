@@ -1629,31 +1629,84 @@ async function confirmPairingsAndLaunch() {
 }
 
 async function _doLaunchRound({ match, t1, t2, isFinal, pairings, course, tee, effectiveSinglesOrder, wagerBb, wagerS1, wagerS2 }) {
+  // Resolve profile_id + ghin_number for each tournament player by their email,
+  // so the new round_members rows have full identity from creation. Without
+  // this, Metrics Lab dedup can't link tournament rounds back to a player's
+  // other rounds (the Spiels-on-tournament-round-e01e8f37 chip-split bug).
+  const allEmails = [...t1.players, ...t2.players]
+    .map(p => p.email?.toLowerCase().trim())
+    .filter(Boolean)
+  const identityByEmail = new Map()
+  if (allEmails.length) {
+    try {
+      const res = await Promise.race([
+        supabase.from('roster_players')
+          .select('email, user_id, ghin_number')
+          .in('email', allEmails),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('profile lookup timeout')), 4000))
+      ])
+      for (const row of (res?.data || [])) {
+        const k = row.email?.toLowerCase().trim()
+        if (!k) continue
+        const prev = identityByEmail.get(k)
+        // Prefer the row that has user_id set (the linked one); merge ghin_number opportunistically
+        if (!prev || (!prev.user_id && row.user_id)) {
+          identityByEmail.set(k, { user_id: row.user_id || null, ghin_number: row.ghin_number || prev?.ghin_number || null })
+        } else if (!prev.ghin_number && row.ghin_number) {
+          identityByEmail.set(k, { ...prev, ghin_number: row.ghin_number })
+        }
+      }
+    } catch (e) {
+      console.warn('[tournament] profile_id lookup failed (non-fatal):', e?.message)
+    }
+  }
+  function identityFor(p) {
+    const email = p.email?.toLowerCase().trim() || null
+    const hit = email ? identityByEmail.get(email) : null
+    return {
+      email,
+      profileId: hit?.user_id || null,
+      ghinNumber: hit?.ghin_number || null,
+    }
+  }
+
   // Build player list with team assignments and stable temp IDs
   const ts = Date.now()
   const players = [
-    ...t1.players.map((p, i) => ({
-      id: `wiz_t1_${i}_${ts}`,
-      _tournId: p.id, // keep a handle to the tournament player ID for pairing lookup
-      name: p.name,
-      shortName: p.nickname || p.name.split(' ')[0],
-      nickname: p.nickname,
-      use_nickname: !!p.nickname,
-      ghinIndex: p.ghinIndex || null,
-      team: 1,
-      groupIndex: 0,
-    })),
-    ...t2.players.map((p, i) => ({
-      id: `wiz_t2_${i}_${ts}`,
-      _tournId: p.id,
-      name: p.name,
-      shortName: p.nickname || p.name.split(' ')[0],
-      nickname: p.nickname,
-      use_nickname: !!p.nickname,
-      ghinIndex: p.ghinIndex || null,
-      team: 2,
-      groupIndex: 0,
-    })),
+    ...t1.players.map((p, i) => {
+      const ident = identityFor(p)
+      return {
+        id: `wiz_t1_${i}_${ts}`,
+        _tournId: p.id, // keep a handle to the tournament player ID for pairing lookup
+        name: p.name,
+        shortName: p.nickname || p.name.split(' ')[0],
+        nickname: p.nickname,
+        use_nickname: !!p.nickname,
+        ghinIndex: p.ghinIndex || null,
+        team: 1,
+        groupIndex: 0,
+        email: ident.email,
+        profileId: ident.profileId,
+        ghinNumber: ident.ghinNumber,
+      }
+    }),
+    ...t2.players.map((p, i) => {
+      const ident = identityFor(p)
+      return {
+        id: `wiz_t2_${i}_${ts}`,
+        _tournId: p.id,
+        name: p.name,
+        shortName: p.nickname || p.name.split(' ')[0],
+        nickname: p.nickname,
+        use_nickname: !!p.nickname,
+        ghinIndex: p.ghinIndex || null,
+        team: 2,
+        groupIndex: 0,
+        email: ident.email,
+        profileId: ident.profileId,
+        ghinNumber: ident.ghinNumber,
+      }
+    }),
   ]
 
   // Tournament structure (Team BB + 2 × 1v1) is no longer persisted as
