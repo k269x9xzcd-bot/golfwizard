@@ -1728,7 +1728,10 @@ async function _doLaunchRound({ match, t1, t2, isFinal, pairings, course, tee, e
     _saveRoundIds() // localStorage fallback if Supabase linkage fails on iOS
 
     activeMatch.value = null
-    router.push('/scoring')
+    // Land on the scorecard with the consolidated Stakes & Bets launch
+    // sheet open — wagers/pairings already saved, this lets the captain
+    // tack on side games / pair bets / cross-match before scoring starts.
+    router.push({ path: '/scoring', query: { stakes: 'launch' } })
   } catch (e) {
     console.error('Failed to create tournament round:', e)
     const msg = e.message || 'Failed to create round. Please try again.'

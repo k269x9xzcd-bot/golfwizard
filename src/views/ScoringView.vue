@@ -227,13 +227,18 @@
       <WizardOverlay v-if="showGameEditor" edit-mode @close="showGameEditor = false" />
 
       <!-- ── Stakes & Bets Sheet ─────────────────────────────────── -->
+      <!-- launchMode = true when the user just created the round
+           (?stakes=launch in the URL); the sheet then renders a "Start
+           Round →" button that closes the sheet to reveal the scorecard. -->
       <StakesBetsSheet
         :show="showStakesSheet"
+        :launch-mode="route.query.stakes === 'launch'"
         :game-label="gameLabel"
         :game-icon="gameIcon"
-        @update:show="showStakesSheet = $event"
+        @update:show="(v) => { v ? (showStakesSheet = true) : dismissStakesLaunch() }"
         @edit-game="(g) => { showStakesSheet = false; selectedGame = g }"
         @add-side-game="() => { showStakesSheet = false; showGameEditor = true }"
+        @launch="dismissStakesLaunch"
       />
 
       <!-- ── Retro score overlay (bulk-enter scores from paper card) ── -->
@@ -1526,7 +1531,28 @@ onMounted(async () => {
       if (data?.length) roundsStore.patchActiveGames(data)
     } catch {}
   }
+
+  // ?stakes=launch — opens the Stakes & Bets sheet in launch mode after a
+  // freshly created round (tournament _doLaunchRound or wizard onCreated).
+  if (route.query.stakes === 'launch' && roundsStore.activeRound) {
+    showStakesSheet.value = true
+  }
 })
+
+// Reactive route → also catch navigations within the same component instance
+watch(() => route.query.stakes, (val) => {
+  if (val === 'launch' && roundsStore.activeRound) {
+    showStakesSheet.value = true
+  }
+})
+
+function dismissStakesLaunch() {
+  showStakesSheet.value = false
+  // Clear the query param so a refresh doesn't re-open the sheet
+  if (route.query.stakes === 'launch') {
+    router.replace({ path: route.path, query: { ...route.query, stakes: undefined } })
+  }
+}
 
 onUnmounted(() => {
   if (_pendingInterval) clearInterval(_pendingInterval)

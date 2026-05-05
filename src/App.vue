@@ -305,7 +305,7 @@ async function onRoundCreated(round, meta) {
       console.warn('[app] linked match creation failed:', e)
     }
   }
-  router.push('/scoring')
+  router.push({ path: '/scoring', query: { stakes: 'launch' } })
 }
 
 async function copyInvite() {
