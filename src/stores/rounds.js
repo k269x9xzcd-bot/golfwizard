@@ -6,6 +6,7 @@ import { useCoursesStore } from './courses'
 import { useRosterStore } from './roster'
 import { computeAllSettlements } from '../modules/settlements'
 import { computeMatchOutcome } from '../modules/tournamentOutcome'
+import { buildTournamentWagerGames } from '../modules/tournamentWagers'
 import { getCourse, COURSES as BUILTIN_COURSES } from '../modules/courses'
 import { supaRawInsert, supaRawSelect, supaRawUpdate, supaRawRequest, supaRawDelete } from '../modules/supaRaw'
 import { supaCall } from '../modules/supabaseOps'
@@ -1024,11 +1025,37 @@ export const useRoundsStore = defineStore('rounds', () => {
         console.warn('[rounds] completeRound: game_configs fetch failed:', e.message)
       }
     }
-    if (activeRound.value?.id === roundId && gamesForSettlement.length) {
+    // For tournament rounds, fold in synthetic wager games (Team BB + 1v1s) so the
+    // persisted ledger reflects every dollar — not just side games on game_configs.
+    let tournMatchForSettlement = null
+    if (activeRound.value?.id === roundId && activeRound.value?.format === 'tournament') {
+      try {
+        const { useTournamentStore } = await import('./tournament')
+        const ts = useTournamentStore()
+        tournMatchForSettlement = ts.matchByRoundId?.(roundId) || null
+      } catch (e) { /* tournament data optional */ }
+    }
+    if (activeRound.value?.id === roundId && (gamesForSettlement.length || tournMatchForSettlement?.wagers)) {
       const ctx = _buildSettlementCtx()
       if (ctx) {
         try {
-          settlementData = computeAllSettlements(ctx, gamesForSettlement)
+          let games = [...gamesForSettlement]
+          if (tournMatchForSettlement?.wagers) {
+            const t1 = ctx.members.filter(m => m.team === 1)
+            const t2 = ctx.members.filter(m => m.team === 2)
+            const order = tournMatchForSettlement.singlesOrder === 1 ? 1 : 0
+            const singles = order === 1
+              ? [{ p1Id: t1[0]?.id, p2Id: t2[1]?.id }, { p1Id: t1[1]?.id, p2Id: t2[0]?.id }]
+              : [{ p1Id: t1[0]?.id, p2Id: t2[0]?.id }, { p1Id: t1[1]?.id, p2Id: t2[1]?.id }]
+            const wagerGames = buildTournamentWagerGames({
+              wagers: tournMatchForSettlement.wagers,
+              t1Ids: t1.map(m => m.id),
+              t2Ids: t2.map(m => m.id),
+              singles,
+            })
+            games = [...wagerGames, ...games]
+          }
+          settlementData = computeAllSettlements(ctx, games)
         } catch (e) {
           console.warn('Settlement computation failed:', e)
         }

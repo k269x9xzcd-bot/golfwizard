@@ -185,6 +185,29 @@ describe('three-flat-wager settlement (end-to-end)', () => {
     expect(ledger).toHaveLength(0)
   })
 
+  // Round 1 e01e8f37 canonical (v3.10.253) — verifies tournament wagers, team
+  // Nassau, and a 1v1 pair bet all aggregate into the same playerTotals dict,
+  // which is what HistoryView's recap settlement footer reads from.
+  it('Round 1 canonical: 1v1 wagers + Nassau + pair bet aggregate per-player', () => {
+    const ctx = fourPlayerTournCtx(t1SweepScores())
+    const games = [
+      ...buildTournamentWagerGames({
+        wagers: { bb: 0, s1: 20, s2: 20 },
+        t1Ids: T1, t2Ids: T2, singles: SINGLES,
+      }),
+      // Team Nassau (t1 vs t2): t1 sweeps front+back+overall = $40 per t1 player.
+      // pressAt:0 disables auto-presses so the dollar math is deterministic.
+      { id: 'nassau', type: 'nassau', config: { team1: T1, team2: T2, front: 10, back: 10, overall: 20, pressAt: 0 } },
+      // Pair bet (t1p2 vs t2p2): closeout $20 to t1p2
+      { id: 'pair', type: 'match1v1', config: { player1: 't1p2', player2: 't2p2', ppt: 20, scoring: 'closeout' } },
+    ]
+    const { playerTotals } = computeAllSettlements(ctx, games)
+    expect(playerTotals.t1p1.total).toBe(20 + 40)        // 1v1 #1 + Nassau
+    expect(playerTotals.t1p2.total).toBe(20 + 40 + 20)   // 1v1 #2 + Nassau + pair bet
+    expect(playerTotals.t2p1.total).toBe(-20 - 40)
+    expect(playerTotals.t2p2.total).toBe(-20 - 40 - 20)
+  })
+
   it('legacy { pricePerPoint } shape → defensive zero (no crash, no $)', () => {
     const ctx = fourPlayerTournCtx(t1SweepScores())
     const games = buildTournamentWagerGames({
