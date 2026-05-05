@@ -1710,9 +1710,9 @@ body {
 
 .header-logo-group {
   display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
 }
 
 .header-logo {
@@ -1720,32 +1720,15 @@ body {
   font-size: 22px;
   color: var(--gw-gold);
   letter-spacing: -0.3px;
+  line-height: 1;
 }
 
 .header-version {
   font-family: var(--gw-font-body);
   font-size: 10px;
-  color: var(--gw-text-muted);
+  color: var(--gw-text-secondary);
   letter-spacing: 0.5px;
-}
-
-/* Compact inline variant of the toggle — sits next to the logo */
-.theme-toggle-inline {
-  width: 36px !important;
-  height: 20px !important;
-  flex-shrink: 0;
-}
-.theme-toggle-inline::after {
-  width: 14px !important;
-  height: 14px !important;
-  top: 3px !important;
-  left: 3px !important;
-}
-.theme-toggle-inline.is-light::after {
-  left: calc(100% - 17px) !important;
-}
-.theme-toggle-inline .tt-icon {
-  font-size: 9px !important;
+  line-height: 1;
 }
 
 .header-actions {
@@ -2982,7 +2965,7 @@ body.gw-landscape .scorecard-grid tbody .col-player-name {
 
 /* Header logo area */
 [data-theme="light"] .header-logo { color: #e8c84a; }
-[data-theme="light"] .header-version { color: rgba(255,255,255,0.5); }
+[data-theme="light"] .header-version { color: var(--gw-text-secondary); }
 [data-theme="light"] .avatar-btn {
   background: rgba(255,255,255,0.18);
   color: #e8c84a;
@@ -2997,46 +2980,6 @@ body.gw-landscape .scorecard-grid tbody .col-player-name {
   border-color: #c8dace;
 }
 [data-theme="light"] input::placeholder { color: rgba(13,31,18,0.4); }
-
-/* Theme toggle button */
-.theme-toggle-btn {
-  width: 36px;
-  height: 22px;
-  border-radius: 11px;
-  background: rgba(255,255,255,0.18);
-  border: 1px solid rgba(255,255,255,0.25);
-  cursor: pointer;
-  position: relative;
-  flex-shrink: 0;
-  transition: background 0.25s;
-  -webkit-tap-highlight-color: transparent;
-}
-.theme-toggle-btn::after {
-  content: '';
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.9);
-  transition: transform 0.25s cubic-bezier(.4,0,.2,1);
-}
-.theme-toggle-btn.is-light::after {
-  transform: translateX(14px);
-}
-.theme-toggle-btn .tt-icon {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 10px;
-  line-height: 1;
-  pointer-events: none;
-}
-.theme-toggle-btn .tt-moon { left: 3px; }
-.theme-toggle-btn .tt-sun  { right: 2px; opacity: 0; }
-.theme-toggle-btn.is-light .tt-moon { opacity: 0; }
-.theme-toggle-btn.is-light .tt-sun  { opacity: 1; }
 
 /* ══════════════════════════════════════════════════════════════
    LIGHT THEME — global text & surface overrides

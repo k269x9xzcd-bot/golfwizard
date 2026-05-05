@@ -4,17 +4,9 @@
       <div class="header-logo-group">
         <div class="header-logo">⛳ GolfWizard</div>
         <div class="header-version">v{{ appVersion }}</div>
-        <button
-          class="theme-toggle-btn theme-toggle-inline"
-          :class="{ 'is-light': theme === 'light' }"
-          @click="toggleTheme"
-          :title="theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'"
-        >
-          <span class="tt-icon tt-moon">🌙</span>
-          <span class="tt-icon tt-sun">☀️</span>
-        </button>
       </div>
       <div class="header-actions">
+        <ThemeToggle />
         <button class="help-btn" @click="showHelp = true" title="Help & Support">?</button>
         <button v-if="!authStore.isAuthenticated" class="btn-signin" @click="showAuth = true">
           Sign In
@@ -185,14 +177,13 @@ import { useLinkedMatchesStore } from '../stores/linkedMatches'
 import AuthModal from '../components/AuthModal.vue'
 import HelpView from './HelpView.vue'
 import CrossMatchBanner from '../components/CrossMatchBanner.vue'
-import { useTheme } from '../composables/useTheme'
+import ThemeToggle from '../components/ui/ThemeToggle.vue'
 
 const appVersion = __APP_VERSION__
 
 const authStore = useAuthStore()
 const roundsStore = useRoundsStore()
 const rosterStore = useRosterStore()
-const { theme, toggle: toggleTheme } = useTheme()
 const tournamentStore = useTournamentStore()
 const linkedStore = useLinkedMatchesStore()
 const router = useRouter()
