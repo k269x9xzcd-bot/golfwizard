@@ -821,6 +821,7 @@ import { useCoursesStore } from '../stores/courses'
 import { supabase } from '../supabase'
 import { strokesOnHole } from '../modules/gameEngine'
 import { normalizeWagers } from '../modules/tournamentWagers'
+import { singles1v1Label } from '../modules/scheduleMatchLabels'
 import ScheduleMatchCard from '../components/ScheduleMatchCard.vue'
 import {
   TOURNAMENT, TEAMS, SCHEDULE,
@@ -1121,20 +1122,12 @@ function bbCellLabel(match) {
   return `BB ${t?.short || teamLabel(tid)}`
 }
 
-// Singles cell label for final cards
+// Singles cell label for final cards. Renders the winning PLAYER's nickname
+// + margin (never the team label). Logic lives in scheduleMatchLabels.js so
+// it stays unit-testable.
 function singlesCellLabel(match, idx) {
-  const s = match.result?.singles?.[idx]
-  if (!s) return ''
-  if (s.winner === 'halved') return '1v1 AS'
-  // Use the matched player's nickname when we have live data
-  const data = match.roundId ? liveRoundData.value[match.roundId] : null
-  const pair = data?.singles?.[idx]
-  const p1 = pair ? data.members.find(m => m.id === pair.p1) : null
-  const p2 = pair ? data.members.find(m => m.id === pair.p2) : null
-  const winnerName = s.winner === 't1'
-    ? (p1?.nickname || p1?.short_name || (getTeam(match.team1)?.short))
-    : (p2?.nickname || p2?.short_name || (getTeam(match.team2)?.short))
-  return `1v1 ${winnerName} won`
+  const live = match?.roundId ? liveRoundData.value[match.roundId] : null
+  return singles1v1Label({ match, idx, getTeam, live })
 }
 
 // Live partial points (closed-out only counts; in-progress = "leading X-Y pts")
