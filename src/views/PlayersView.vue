@@ -490,7 +490,8 @@
             <span v-else-if="p.soft_cap === 'true' || p.soft_cap === true" class="cap-badge cap-soft" title="Soft Cap applied">SC</span>
           </div>
           <div class="player-meta">
-            <span v-if="p.user_id" class="invite-status invite-status--joined" title="Has account">● In app</span>
+            <span v-if="p.joined_at" class="invite-status invite-status--joined" title="Signed in">● In app</span>
+            <span v-else-if="p.user_id" class="invite-status invite-status--pending" title="Invited — pending sign-in">✉ Pending</span>
             <span v-else-if="inviteStatus[p.id] === 'sending'" class="invite-status invite-status--sending">Sending…</span>
             <span v-else-if="inviteStatus[p.id] === 'sent' || p.invited_at" class="invite-status invite-status--sent" title="Invite sent">✉ Invited</span>
             <span v-else-if="p.email" class="invite-status invite-status--pending" title="Not yet invited">Not invited</span>
@@ -529,7 +530,8 @@
             <span v-else-if="p.soft_cap === 'true' || p.soft_cap === true" class="cap-badge cap-soft" title="Soft Cap applied">SC</span>
           </div>
           <div class="player-meta">
-            <span v-if="p.user_id" class="invite-status invite-status--joined" title="Has account">● In app</span>
+            <span v-if="p.joined_at" class="invite-status invite-status--joined" title="Signed in">● In app</span>
+            <span v-else-if="p.user_id" class="invite-status invite-status--pending" title="Invited — pending sign-in">✉ Pending</span>
             <span v-else-if="inviteStatus[p.id] === 'sending'" class="invite-status invite-status--sending">Sending…</span>
             <span v-else-if="inviteStatus[p.id] === 'sent' || p.invited_at" class="invite-status invite-status--sent" title="Invite sent">✉ Invited</span>
             <span v-else-if="p.email" class="invite-status invite-status--pending" title="Not yet invited">Not invited</span>
