@@ -825,6 +825,24 @@ function confirmInvite(player) {
   pendingInvitePlayer.value = player
 }
 
+async function invokeInvitePlayer(playerId, refreshed = false) {
+  const result = await Promise.race([
+    supabase.functions.invoke('invite-player', { body: { roster_player_id: playerId } }),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('[invite-player] timed out')), 15000)),
+  ])
+  // verify_jwt:true on this fn means a stale/expired bearer is rejected at the gateway
+  // before the function runs. supabase-js surfaces that as 'Failed to send a request to the Edge Function'.
+  // Refresh the session and retry once.
+  const msg = result?.error?.message || ''
+  const looksAuth = /failed to send a request|jwt|unauthor|401/i.test(msg)
+  if (result?.error && looksAuth && !refreshed) {
+    console.warn('[invite-player] auth-ish error, refreshing session and retrying:', msg)
+    try { await supabase.auth.refreshSession() } catch (e) { console.warn('[invite-player] refreshSession failed:', e?.message) }
+    return invokeInvitePlayer(playerId, true)
+  }
+  return result
+}
+
 async function invitePlayer(player) {
   if (!player.email) return
   if (player.user_id) {
@@ -834,11 +852,7 @@ async function invitePlayer(player) {
   inviteHint.value = ''
   inviteStatus.value[player.id] = 'sending'
   try {
-    const invokeResult = await Promise.race([
-      supabase.functions.invoke('invite-player', { body: { roster_player_id: player.id } }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('[invite-player] timed out')), 15000)),
-    ])
-    const { data, error } = invokeResult
+    const { data, error } = await invokeInvitePlayer(player.id)
     if (error) throw error
     if (data?.already_joined || data?.already_registered) {
       inviteStatus.value[player.id] = 'joined'
