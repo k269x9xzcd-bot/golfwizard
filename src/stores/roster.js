@@ -137,12 +137,26 @@ export const useRosterStore = defineStore('roster', () => {
               use_nickname: false,
             }
             const { supaCall: _supaCall } = await import('../modules/supabaseOps')
-            const ins = await _supaCall(
-              'roster.seed',
-              supabase.from('roster_players').insert([selfRow]),
-              5000,
-            )
-            if (!ins.error) localStorage.setItem(seedKey, '1')
+            let seeded = false
+            try {
+              const ins = await _supaCall(
+                'roster.seed',
+                supabase.from('roster_players').insert([selfRow]),
+                5000,
+              )
+              if (!ins.error) seeded = true
+            } catch (e) {
+              if (e.message?.includes('timed out')) {
+                try {
+                  const { supaRawInsert } = await import('../modules/supaRaw')
+                  await supaRawInsert('roster_players', [selfRow], 10000)
+                  seeded = true
+                } catch (rawErr) {
+                  console.warn('[roster.seed] raw fallback failed:', rawErr?.message)
+                }
+              }
+            }
+            if (seeded) localStorage.setItem(seedKey, '1')
           }
 
           const { supaRawSelect: _supaRawSelect } = await import('../modules/supaRaw')
@@ -312,10 +326,23 @@ export const useRosterStore = defineStore('roster', () => {
     const isTrivialUpdate = Object.keys(updates).length === 1 &&
       ['is_favorite', 'is_archived'].includes(Object.keys(updates)[0])
 
+    // PATCH that returns an empty array means 0 rows matched (RLS deny or stale
+    // cached id). Treat as a write failure — the optimistic state must NOT stick
+    // because the server has the old value, so a subsequent refresh would revert
+    // the UI and the user would see "edit disappeared". This was the silent-
+    // failure mode behind v3.10.265's incomplete fix.
+    const _isEmpty = (r) => r === null || r === undefined ||
+      (Array.isArray(r) && r.length === 0)
+
     try {
       if (isTrivialUpdate) {
         const { supaRawRequest } = await import('../modules/supaRaw')
         const rows = await supaRawRequest('PATCH', `roster_players?id=eq.${id}&select=*`, updates, 12000)
+        if (_isEmpty(rows)) {
+          console.warn('[roster] trivial PATCH returned 0 rows — RLS deny or stale id; reverting')
+          _revertById()
+          throw new Error('Update did not persist (no rows affected)')
+        }
         const row = Array.isArray(rows) ? rows[0] : rows
         _mergeServerRow(row)
         return
@@ -326,8 +353,12 @@ export const useRosterStore = defineStore('roster', () => {
         supabase.from('roster_players').update(updates).eq('id', id).select().single(),
         8000,
       )
-      if (!res.error && res.data) _mergeServerRow(res.data)
-      else if (res.error) throw res.error
+      if (res.error) throw res.error
+      if (_isEmpty(res.data)) {
+        // .single() should normally throw PGRST116 on 0 rows, but defense-in-depth.
+        throw new Error('Update did not persist (no rows affected)')
+      }
+      _mergeServerRow(res.data)
     } catch (e) {
       const isNameConflict = e?.code === '23505' || e?.status === 409 ||
         (e?.message || '').toLowerCase().includes('unique') ||
@@ -337,10 +368,18 @@ export const useRosterStore = defineStore('roster', () => {
         throw new Error(`A player named "${updates.name}" already exists in your roster. Use a different name or add a last initial (e.g. "Jason S").`)
       }
 
+      // Re-throw the no-rows-affected error from the trivial path — already reverted, do not retry.
+      if (e?.message?.includes('no rows affected')) throw e
+
       console.warn('[roster] SJS update failed, trying raw fetch:', e?.message)
       try {
         const { supaRawRequest } = await import('../modules/supaRaw')
         const rows = await supaRawRequest('PATCH', `roster_players?id=eq.${id}&select=*`, updates, 12000)
+        if (_isEmpty(rows)) {
+          console.warn('[roster] raw PATCH returned 0 rows — RLS deny or stale id; reverting')
+          _revertById()
+          throw new Error('Update did not persist (no rows affected)')
+        }
         const row = Array.isArray(rows) ? rows[0] : rows
         _mergeServerRow(row)
       } catch (rawErr) {
@@ -349,9 +388,10 @@ export const useRosterStore = defineStore('roster', () => {
           _revertById()
           throw new Error(`A player named "${updates.name}" already exists in your roster. Use a different name or add a last initial.`)
         }
-        // For non-conflict failures: keep optimistic update locally so the user
-        // doesn't see a flicker. The change might still have committed server-side
-        // (timeout != failure on iOS PWA). Log only.
+        if (rawErr?.message?.includes('no rows affected')) throw rawErr
+        // For non-conflict, non-empty-response failures (network timeout, 5xx):
+        // keep optimistic update locally — the change might still have committed
+        // server-side (timeout != failure on iOS PWA).
         console.warn('[roster] update did not confirm — keeping optimistic state:', rawErr?.message)
       }
     }
@@ -400,8 +440,22 @@ export const useRosterStore = defineStore('roster', () => {
       is_favorite: false,
     }))
 
-    const { error } = await supabase.from('roster_players').insert(rows)
-    if (!error) {
+    let ok = false
+    try {
+      const { supaCall } = await import('../modules/supabaseOps')
+      const res = await supaCall('roster.migrate', supabase.from('roster_players').insert(rows), 8000)
+      if (!res.error) ok = true
+    } catch (e) {
+      if (!e.message?.includes('timed out')) throw e
+      try {
+        const { supaRawInsert } = await import('../modules/supaRaw')
+        await supaRawInsert('roster_players', rows, 12000)
+        ok = true
+      } catch (rawErr) {
+        console.warn('[roster] migrateFromLocalStorage failed:', rawErr?.message)
+      }
+    }
+    if (ok) {
       localStorage.setItem('gw_roster_migrated', '1')
       await fetchPlayers()
     }

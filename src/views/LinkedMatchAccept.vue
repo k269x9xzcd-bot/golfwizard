@@ -383,7 +383,14 @@ async function acceptRosterImport() {
       use_nickname: p.use_nickname ?? false,
       is_favorite: true,
     }))
-    await supabase.from('roster_players').insert(rows)
+    try {
+      const { supaCall } = await import('../modules/supabaseOps')
+      await supaCall('lma.roster-import', supabase.from('roster_players').insert(rows), 8000)
+    } catch (timeoutErr) {
+      if (!timeoutErr.message?.includes('timed out')) throw timeoutErr
+      const { supaRawInsert } = await import('../modules/supaRaw')
+      await supaRawInsert('roster_players', rows, 12000)
+    }
   } catch (e) {
     console.warn('[lma] roster import failed:', e?.message)
   }

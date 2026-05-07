@@ -344,10 +344,25 @@ async function upsertSelfRosterEntry() {
       .eq('email', authStore.user.email.toLowerCase())
       .maybeSingle()
 
+    const { supaCall } = await import('../modules/supabaseOps')
     if (existing) {
-      await supabase.from('roster_players').update(selfRow).eq('id', existing.id)
+      try {
+        await supaCall('invite.upsert-self.update',
+          supabase.from('roster_players').update(selfRow).eq('id', existing.id), 6000)
+      } catch (e) {
+        if (!e.message?.includes('timed out')) throw e
+        const { supaRawUpdate } = await import('../modules/supaRaw')
+        await supaRawUpdate('roster_players', `id=eq.${existing.id}`, selfRow, 10000)
+      }
     } else {
-      await supabase.from('roster_players').insert(selfRow)
+      try {
+        await supaCall('invite.upsert-self.insert',
+          supabase.from('roster_players').insert(selfRow), 6000)
+      } catch (e) {
+        if (!e.message?.includes('timed out')) throw e
+        const { supaRawInsert } = await import('../modules/supaRaw')
+        await supaRawInsert('roster_players', selfRow, 10000)
+      }
     }
   } catch (e) {
     console.warn('[invite] upsertSelfRosterEntry failed:', e?.message)
@@ -388,7 +403,15 @@ async function seedGroupPlayersToRoster() {
     if (!rows.length) return
 
     // Insert with ignoreDuplicates so re-running is safe
-    await supabase.from('roster_players').insert(rows)
+    try {
+      const { supaCall } = await import('../modules/supabaseOps')
+      await supaCall('invite.seed-group',
+        supabase.from('roster_players').insert(rows), 8000)
+    } catch (e) {
+      if (!e.message?.includes('timed out')) throw e
+      const { supaRawInsert } = await import('../modules/supaRaw')
+      await supaRawInsert('roster_players', rows, 12000)
+    }
 
     localStorage.setItem(seedKey, '1')
   } catch (e) {

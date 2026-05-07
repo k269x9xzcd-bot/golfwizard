@@ -390,9 +390,25 @@ export const useAuthStore = defineStore('auth', () => {
 
       if (!toInsert.length) return
 
-      const { error: iErr } = await supabase.from('roster_players').insert(toInsert)
-      if (iErr) console.warn('[auth] syncRoundMembersToRoster insert error:', iErr.message)
-      else console.log(`[auth] syncRoundMembersToRoster: added ${toInsert.length} player(s)`)
+      try {
+        const { supaCall } = await import('../modules/supabaseOps')
+        const { error: iErr } = await supaCall(
+          'auth.sync-round-members',
+          supabase.from('roster_players').insert(toInsert),
+          6000,
+        )
+        if (iErr) console.warn('[auth] syncRoundMembersToRoster insert error:', iErr.message)
+        else console.log(`[auth] syncRoundMembersToRoster: added ${toInsert.length} player(s)`)
+      } catch (timeoutErr) {
+        if (!timeoutErr.message?.includes('timed out')) throw timeoutErr
+        try {
+          const { supaRawInsert } = await import('../modules/supaRaw')
+          await supaRawInsert('roster_players', toInsert, 10000)
+          console.log(`[auth] syncRoundMembersToRoster (raw): added ${toInsert.length} player(s)`)
+        } catch (rawErr) {
+          console.warn('[auth] syncRoundMembersToRoster raw fallback failed:', rawErr?.message)
+        }
+      }
     } catch (e) {
       console.warn('[auth] syncRoundMembersToRoster exception:', e?.message)
     }
