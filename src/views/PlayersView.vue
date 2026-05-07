@@ -704,13 +704,12 @@ async function syncAllGhin() {
   syncMsgType.value = 'info'
 
   try {
-    // ── Step 1: fresh roster read via fetchPlayers (supaRaw-first inside) ────
-    // fetchPlayers() now tries supaRaw before SJS, clearing stale localStorage
-    // caches via the CACHE_VER eviction. This is what actually updates the
-    // displayed handicap values from Supabase.
-    await rosterStore.fetchPlayers().catch(() => {})
-
-    // ── Step 2: query bb_member_index for BB-member updates ───────────────
+    // ── Step 1: query bb_member_index for BB-member updates ───────────────
+    // We deliberately do NOT fetchPlayers() at the start — a wholesale
+    // players.value replace can revert just-saved-but-not-yet-DB-committed
+    // changes (e.g. a GHIN # that the user just picked from search). The
+    // BB-sync loop below refreshes ghin_index in-place via updatePlayer,
+    // which preserves all other locally-set fields.
     // Wrapped in supaCall so it never hangs on iOS WKWebView zombie socket.
     let bbMap = {}
     try {
@@ -729,7 +728,7 @@ async function syncAllGhin() {
         }
       }
     } catch {
-      // bb_member_index unavailable — BB sync skipped, roster display already refreshed
+      // bb_member_index unavailable — BB sync skipped
     }
 
     let updated = 0
@@ -1128,9 +1127,10 @@ async function fetchGhinScores() {
   ghinLiveLowHI.value = data.low_hi_display ?? null
   ghinScoresFetched.value = true
 
-  if (myRosterPlayer.value?.id) {
-    await rosterStore.fetchPlayers()
-  }
+  // Don't fetchPlayers() here — a wholesale roster refresh can clobber
+  // optimistic state from concurrent toggles (e.g. is_favorite). The
+  // ghin-scores edge fn doesn't mutate the roster_players row, so there's
+  // nothing to re-read here.
   ghinScoresLoading.value = false
 }
 

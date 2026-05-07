@@ -288,6 +288,24 @@ export const useRosterStore = defineStore('roster', () => {
     const before = idx >= 0 ? { ...players.value[idx] } : null
     if (idx >= 0) players.value[idx] = { ...players.value[idx], ...updates }
 
+    // Re-find by id and merge, NOT replace by stale idx. A concurrent fetchPlayers
+    // may have replaced players.value during the await — using the old idx would
+    // either miss the row or corrupt a different player. Merging (instead of
+    // wholesale replace with the server row) also preserves any locally-newer
+    // optimistic fields if a fetch beat us in.
+    const _mergeServerRow = (row) => {
+      if (!row || typeof row !== 'object') return
+      const newIdx = players.value.findIndex(p => p.id === id)
+      if (newIdx >= 0) {
+        players.value[newIdx] = { ...players.value[newIdx], ...row }
+      }
+    }
+    const _revertById = () => {
+      if (!before) return
+      const newIdx = players.value.findIndex(p => p.id === id)
+      if (newIdx >= 0) players.value[newIdx] = before
+    }
+
     // Trivial single-column updates (e.g. is_favorite toggle) bypass SJS entirely
     // and use raw fetch with longer timeout — SJS's 5s ceiling is aggressive on
     // iOS PWA where stuck-socket re-establishment can take >5s.
@@ -299,7 +317,7 @@ export const useRosterStore = defineStore('roster', () => {
         const { supaRawRequest } = await import('../modules/supaRaw')
         const rows = await supaRawRequest('PATCH', `roster_players?id=eq.${id}&select=*`, updates, 12000)
         const row = Array.isArray(rows) ? rows[0] : rows
-        if (row && idx >= 0) players.value[idx] = row
+        _mergeServerRow(row)
         return
       }
       const { supaCall } = await import('../modules/supabaseOps')
@@ -308,14 +326,14 @@ export const useRosterStore = defineStore('roster', () => {
         supabase.from('roster_players').update(updates).eq('id', id).select().single(),
         8000,
       )
-      if (!res.error && res.data && idx >= 0) players.value[idx] = res.data
+      if (!res.error && res.data) _mergeServerRow(res.data)
       else if (res.error) throw res.error
     } catch (e) {
       const isNameConflict = e?.code === '23505' || e?.status === 409 ||
         (e?.message || '').toLowerCase().includes('unique') ||
         (e?.message || '').toLowerCase().includes('duplicate')
       if (isNameConflict) {
-        if (before && idx >= 0) players.value[idx] = before
+        _revertById()
         throw new Error(`A player named "${updates.name}" already exists in your roster. Use a different name or add a last initial (e.g. "Jason S").`)
       }
 
@@ -324,11 +342,11 @@ export const useRosterStore = defineStore('roster', () => {
         const { supaRawRequest } = await import('../modules/supaRaw')
         const rows = await supaRawRequest('PATCH', `roster_players?id=eq.${id}&select=*`, updates, 12000)
         const row = Array.isArray(rows) ? rows[0] : rows
-        if (row && idx >= 0) players.value[idx] = row
+        _mergeServerRow(row)
       } catch (rawErr) {
         const isRawConflict = rawErr?.status === 409 || rawErr?.message?.includes('409')
         if (isRawConflict) {
-          if (before && idx >= 0) players.value[idx] = before
+          _revertById()
           throw new Error(`A player named "${updates.name}" already exists in your roster. Use a different name or add a last initial.`)
         }
         // For non-conflict failures: keep optimistic update locally so the user
