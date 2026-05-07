@@ -909,6 +909,7 @@ const newLast = ref('')
 const newGhin = ref('')
 const newNickname = ref('')
 const newEmail = ref('')
+const newPickedFromSearch = ref(false)
 const addError = ref('')
 const addingPlayer = ref(false)
 
@@ -1284,6 +1285,7 @@ function applyAddGhinResult(r) {
   }
   newGhinNumber.value = r.ghin_number || null
   newClubName.value = r.club_name || null
+  newPickedFromSearch.value = true
   addGhinResults.value = []
   addGhinMsg.value = `✓ ${r.full_name} selected`
 }
@@ -1296,20 +1298,28 @@ async function add() {
   addingPlayer.value = true
   try {
     const fullName = last ? `${first} ${last}` : first
-    await rosterStore.addPlayer({
+    const ghinIdx = newGhin.value !== '' ? parseFloat(newGhin.value) : null
+    const payload = {
       name: fullName,
       first_name: first,
       last_name: last || null,
       short_name: last || first.slice(0, 8),
-      ghin_index: newGhin.value !== '' ? parseFloat(newGhin.value) : null,
+      ghin_index: ghinIdx,
       ghin_number: newGhinNumber.value || null,
       club_name: newClubName.value || null,
       nickname: newNickname.value.trim() || null,
       email: newEmail.value.trim() || null,
       use_nickname: false,
       is_favorite: true,
-    })
-    newFirst.value = ''; newLast.value = ''; newGhin.value = ''; newNickname.value = ''; newEmail.value = ''; newGhinNumber.value = null; newClubName.value = null
+    }
+    // Picking a search result IS a GHIN/BB sync. Stamp ghin_synced_at so the
+    // status dot lights up immediately — _autoSyncGhinNumber never runs in the
+    // add flow, and BB results without a ghin_number would never sync otherwise.
+    if (newPickedFromSearch.value && (payload.ghin_number || payload.ghin_index != null)) {
+      payload.ghin_synced_at = new Date().toISOString()
+    }
+    await rosterStore.addPlayer(payload)
+    newFirst.value = ''; newLast.value = ''; newGhin.value = ''; newNickname.value = ''; newEmail.value = ''; newGhinNumber.value = null; newClubName.value = null; newPickedFromSearch.value = false
     showAdd.value = false
     showToast(`${fullName} added`, 'gold')
   } catch (err) {
@@ -1440,6 +1450,7 @@ const editGhinNumber = ref('')
 const editClubName = ref('')
 const editNickname = ref('')
 const editUseNickname = ref(false)
+const editPickedFromSearch = ref(false)
 const ghinSearching = ref(false)
 const ghinSearchResults = ref([])
 const ghinSearchMsg = ref('')
@@ -1466,6 +1477,7 @@ function startEdit(p) {
   editNickname.value = p.nickname || ''
   editUseNickname.value = p.use_nickname || false
   editEmail.value = p.email || ''
+  editPickedFromSearch.value = false
   editError.value = ''
   editSaving.value = false
 }
@@ -1616,6 +1628,7 @@ async function applyGhinResult(r) {
     editGhin.value = String(parseFloat(hi))
   }
   if (r.club_name) editClubName.value = r.club_name
+  editPickedFromSearch.value = true
   console.log('[applyGhinResult] state after:', { editGhinNumber: editGhinNumber.value, editGhin: editGhin.value, editClubName: editClubName.value })
 }
 
@@ -1640,18 +1653,27 @@ async function saveEdit() {
 
   editSaving.value = true
   try {
-    await rosterStore.updatePlayer(playerId, {
+    const ghinIdx = editGhin.value !== '' ? parseFloat(editGhin.value) : null
+    const updates = {
       name: fullName,
       first_name: editFirst.value.trim(),
       last_name: editLast.value.trim() || null,
       short_name: editLast.value.trim() || editFirst.value.trim().slice(0, 8),
-      ghin_index: editGhin.value !== '' ? parseFloat(editGhin.value) : null,
+      ghin_index: ghinIdx,
       ghin_number: newGhinNumber,
       club_name: clubName,
       nickname: editNickname.value.trim() || null,
       use_nickname: editUseNickname.value,
       email: emailTrimmed || null,
-    })
+    }
+    // Picking a search result IS a GHIN/BB sync. Stamp ghin_synced_at so the
+    // status dot reflects the link immediately. _autoSyncGhinNumber only fires
+    // when ghin_number changes AND the edge fn succeeds — it won't run for BB
+    // picks where the result has no ghin_number (Todd Boccabella case).
+    if (editPickedFromSearch.value && (newGhinNumber || ghinIdx != null)) {
+      updates.ghin_synced_at = new Date().toISOString()
+    }
+    await rosterStore.updatePlayer(playerId, updates)
     editTarget.value = null
 
     if (ghinNumberChanged) {
