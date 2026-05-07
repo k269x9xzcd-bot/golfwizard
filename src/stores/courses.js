@@ -344,14 +344,22 @@ export const useCoursesStore = defineStore('courses', () => {
       console.log('[GW-store] searchCoursesApi response status:', resp.status)
       if (!resp.ok) return []
       const json = await resp.json()
-      const results = (json.courses || []).map(c => ({
-        name: c.club_name || c.course_name || c.name,
-        location: [c.city, c.state].filter(Boolean).join(', '),
-        isApiResult: true,
-        apiId: c.id,
-        tees: null,
-        teesData: null,
-      }))
+      const results = (json.courses || []).map(c => {
+        const clubName = c.club_name || ''
+        const courseName = c.course_name || ''
+        const distinct = clubName && courseName && clubName !== courseName
+        const primary = clubName || courseName || c.name || ''
+        return {
+          name: distinct ? `${clubName} — ${courseName}` : primary,
+          clubName: primary,
+          courseName: distinct ? courseName : '',
+          location: [c.city, c.state].filter(Boolean).join(', '),
+          isApiResult: true,
+          apiId: c.id,
+          tees: null,
+          teesData: null,
+        }
+      })
       apiSearchCache.value[query] = results
       return results
     } catch (e) {

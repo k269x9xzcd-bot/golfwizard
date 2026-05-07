@@ -87,7 +87,8 @@
             @click="openAddCourseFromApi(r)"
           >
             <div class="api-result-info">
-              <div class="api-result-name">{{ r.name }}</div>
+              <div class="api-result-name">{{ r.clubName || r.name }}</div>
+              <div v-if="r.courseName" class="api-result-course">{{ r.courseName }}</div>
               <div v-if="r.location" class="api-result-loc">{{ r.location }}</div>
             </div>
             <button class="api-result-add">＋ Add</button>
@@ -1275,6 +1276,7 @@ function showToast(msg, type = 'neutral') {
 .api-result-row:active { background: rgba(212,175,55,.08); }
 .api-result-info { flex: 1; min-width: 0; }
 .api-result-name { font-size: 15px; font-weight: 600; color: var(--gw-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.api-result-course { font-size: 13px; font-weight: 500; color: var(--gw-text); opacity: .85; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .api-result-loc { font-size: 12px; color: var(--gw-text-muted); margin-top: 2px; }
 .api-result-add { flex-shrink: 0; margin-left: 12px; padding: 6px 12px; background: rgba(212,175,55,.15); border: 1px solid rgba(212,175,55,.3); border-radius: var(--gw-radius-full); color: var(--gw-gold); font-size: 13px; font-weight: 600; cursor: pointer; }
 .loading-spinner { width: 28px; height: 28px; border: 3px solid rgba(255,255,255,.1); border-top-color: var(--gw-gold); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 12px; }
