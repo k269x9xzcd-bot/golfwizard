@@ -3,11 +3,37 @@
  *
  * computeLinkedMatch: thin wrapper kept for backward compat with LinkedMatchDetail.vue
  * summarizeLinkedMatch: status label for banners + detail view
+ * pickRelevantMatch: which match the CrossMatchBanner should show
  */
 import { computeCrossBestBall } from './gameEngine.js'
 
 export function computeLinkedMatch(roundA, roundB, config) {
   return computeCrossBestBall(roundA, roundB, config)
+}
+
+/**
+ * Pick the linked match the CrossMatchBanner should display.
+ *
+ * Rule: when an active round is loaded, scope strictly to that round —
+ * never fall back to "most recent" or you'll bleed a previous round's match
+ * into a new round that has none. With no active round (e.g. HomeView before
+ * a round is opened), fall back to the most recent pending/linked match so
+ * Home still surfaces in-flight matches.
+ *
+ * @param {Array} linkedMatches  - linkedStore.linkedMatches
+ * @param {string|null} activeRoundId  - roundsStore.activeRound?.id
+ * @param {boolean} isAuthenticated
+ * @returns {object|null}
+ */
+export function pickRelevantMatch(linkedMatches, activeRoundId, isAuthenticated) {
+  if (!isAuthenticated) return null
+  const list = Array.isArray(linkedMatches) ? linkedMatches : []
+  const active = list.filter(m => m.status === 'pending' || m.status === 'linked')
+  if (!active.length) return null
+  if (activeRoundId) {
+    return active.find(m => m.round_a_id === activeRoundId || m.round_b_id === activeRoundId) || null
+  }
+  return active[0] || null
 }
 
 /**

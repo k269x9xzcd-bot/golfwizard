@@ -17,7 +17,9 @@ import {
   computeNassau, computeSkins, computeMatch, computeVegas, computeSnake,
   computeHiLow, computeStableford, computeWolf, computeHammer, computeSixes,
   computeFiveThreeOne, computeDots, computeFidget, computeBestBallNet, computeBestBall, computeBbb,
+  memberHandicap,
 } from '../modules/gameEngine'
+import { formatMatchLabel } from '../modules/matchLabels'
 
 // Generates unique short labels for a set of members.
 // Starts with last name; bumps collisions → "F.LastName" → "Fi.LastName".
@@ -208,8 +210,15 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         if (is1v1) {
           r = computeMatch(ctx, cfg)
           if (!r) return _gameLine({ gameName: 'Match', winner: null, value: null, detail: 'Waiting for scores' })
-          p1n = r.p1?.name || '?'
-          p2n = r.p2?.name || '?'
+          const m1 = ctx.members.find(m => m.id === cfg.player1)
+          const m2 = ctx.members.find(m => m.id === cfg.player2)
+          const h1 = m1 ? memberHandicap(m1, ctx.course, ctx.tee) : 0
+          const h2 = m2 ? memberHandicap(m2, ctx.course, ctx.tee) : 0
+          const diff = h1 - h2
+          const baseN1 = r.p1?.name || '?'
+          const baseN2 = r.p2?.name || '?'
+          p1n = diff > 0 ? `${baseN1}(+${diff})` : baseN1
+          p2n = diff < 0 ? `${baseN2}(+${-diff})` : baseN2
           up = r.finalUp
           ppt = r.settlement?.ppt || cfg.ppt || 0
           p1Net = r.settlement?.p1Net || 0
@@ -220,8 +229,18 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         } else {
           r = computeBestBall(ctx, { ...cfg, ballsPerTeam: 1 })
           if (!r) return _gameLine({ gameName: 'Match', winner: null, value: null, detail: 'Waiting for scores' })
-          p1n = r.t1Name || teamInitialsStr(cfg.team1) || 'T1'
-          p2n = r.t2Name || teamInitialsStr(cfg.team2) || 'T2'
+          const annotated = formatMatchLabel({
+            config: cfg, members: ctx.members || [],
+            course: ctx.course, tee: ctx.tee, getInit: pInit,
+          })
+          if (annotated && annotated.includes(' v ')) {
+            const [a, b] = annotated.split(' v ')
+            p1n = a
+            p2n = b
+          } else {
+            p1n = r.t1Name || teamInitialsStr(cfg.team1) || 'T1'
+            p2n = r.t2Name || teamInitialsStr(cfg.team2) || 'T2'
+          }
           up = r.finalUp
           ppt = cfg.ppt || 0
           p1Net = r.settlement?.t1Net || 0
@@ -263,8 +282,8 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
             const m1 = ctx.members.find(m => m.id === cfg.player1)
             const m2 = ctx.members.find(m => m.id === cfg.player2)
             if (m1 && m2) {
-              const h1 = m1.round_hcp ?? 0
-              const h2 = m2.round_hcp ?? 0
+              const h1 = memberHandicap(m1, ctx.course, ctx.tee)
+              const h2 = memberHandicap(m2, ctx.course, ctx.tee)
               if (h1 !== h2) {
                 const giver = h1 < h2 ? m1 : m2
                 const receiver = h1 < h2 ? m2 : m1

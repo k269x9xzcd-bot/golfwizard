@@ -64,7 +64,7 @@ import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useRoundsStore } from '../stores/rounds'
 import { useLinkedMatchesStore } from '../stores/linkedMatches'
-import { computeLinkedMatch, summarizeLinkedMatch } from '../modules/linkedMatch'
+import { computeLinkedMatch, summarizeLinkedMatch, pickRelevantMatch } from '../modules/linkedMatch'
 
 const props = defineProps({
   // When true, hide the banner once the cross-match is complete (both rounds final
@@ -138,23 +138,16 @@ let activeMatchId = null
 
 /**
  * Find the linked match this user should see a banner for.
- * Priority: an active linked match that matches the currently-viewed
- * round (if there is one); otherwise the most recent pending/linked match.
+ * When a round is loaded, scope strictly to it — otherwise (HomeView with
+ * no active round) fall back to the most recent pending/linked match.
  */
-const relevantMatch = computed(() => {
-  if (!authStore.isAuthenticated) return null
-  const myMatches = linkedStore.linkedMatches.filter(m => m.status === 'pending' || m.status === 'linked')
-  if (!myMatches.length) return null
-
-  const activeRound = roundsStore.activeRound
-  if (activeRound?.id) {
-    const forActive = myMatches.find(m => m.round_a_id === activeRound.id || m.round_b_id === activeRound.id)
-    if (forActive) return forActive
-  }
-
-  // Otherwise the most recent (list is already ordered newest-first from store)
-  return myMatches[0] || null
-})
+const relevantMatch = computed(() =>
+  pickRelevantMatch(
+    linkedStore.linkedMatches,
+    roundsStore.activeRound?.id ?? null,
+    authStore.isAuthenticated,
+  )
+)
 
 // True when the cross-match has wrapped: explicit status, completed_at timestamp,
 // or both linked rounds flagged is_complete. Used to suppress the Home banner.

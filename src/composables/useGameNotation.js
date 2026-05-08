@@ -12,6 +12,7 @@ import {
   computeVegas, computeHiLow, computeSixes, computeStableford, computeHammer, computeBbb, computeWolf,
   holePar,
 } from '../modules/gameEngine'
+import { formatMatchLabel } from '../modules/matchLabels'
 
 // Escape HTML special chars to prevent XSS when interpolating player names into v-html strings
 function escHtml(str) {
@@ -46,6 +47,15 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
       if (t1 && t2) return `Nassau ${t1} v ${t2}`
     }
     if ((type?.toLowerCase() === 'match' || type?.toLowerCase() === 'match1v1') && config) {
+      const ctx = buildCtx()
+      const lbl = formatMatchLabel({
+        config,
+        members: ctx.members || [],
+        course: ctx.course,
+        tee: ctx.tee,
+        getInit: pInit,
+      })
+      if (lbl) return `Match ${lbl}`
       const p1 = config.player1 ? pInit(config.player1) : null
       const p2 = config.player2 ? pInit(config.player2) : null
       if (p1 && p2) return `Match ${p1} v ${p2}`
@@ -200,8 +210,15 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
           const leader = finalUp > 0 ? p1Label : p2Label
           let summary = finalUp === 0 ? 'AS' : `${leader} ${Math.abs(finalUp)}up`
           if (isDormie) summary = `<span class="nota-dormie">${summary} D!</span>`
+          const labelWithStrokes = formatMatchLabel({
+            config: cfg,
+            members: ctx.members || [],
+            course: ctx.course,
+            tee: ctx.tee,
+            getInit: pInit,
+          }) || `${p1Label} v ${p2Label}`
           rows.push({
-            icon: '⚔️', label: `${p1Label} v ${p2Label}`,
+            icon: '⚔️', label: labelWithStrokes,
             cells, outSummary: '', inSummary: '', totalSummary: summary,
             game,
           })

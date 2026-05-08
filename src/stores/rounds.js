@@ -10,6 +10,12 @@ import { buildTournamentWagerGames } from '../modules/tournamentWagers'
 import { getCourse, COURSES as BUILTIN_COURSES } from '../modules/courses'
 import { supaRawInsert, supaRawSelect, supaRawUpdate, supaRawRequest, supaRawDelete } from '../modules/supaRaw'
 import { supaCall } from '../modules/supabaseOps'
+import {
+  isUnrecoverableError as _isUnrecoverableScoreErr,
+  markAttempt as _markScoreAttempt,
+  shouldDropForRetries as _shouldDropScoreEntry,
+  reconcileQueueAgainstMembers as _reconcileScoreQueue,
+} from '../modules/scoreQueue'
 
 /**
  * Build a deterministic, self-contained snapshot of a course at the moment
@@ -153,33 +159,74 @@ export const useRoundsStore = defineStore('rounds', () => {
     if (!q.length) return
     _flushInFlight = true
     const failed = []
+    // Strip the per-entry retry counter before sending — it's a client-side
+    // metadata field that PostgREST will reject if posted.
+    const _payloadOf = ({ _attempts, ...rest }) => rest
     for (const entry of q) {
       let saved = false
+      let lastErr = null
       // Try SJS first
       try {
         const { error } = await Promise.race([
-          supabase.from('scores').upsert(entry, { onConflict: 'round_id,member_id,hole' }),
+          supabase.from('scores').upsert(_payloadOf(entry), { onConflict: 'round_id,member_id,hole' }),
           new Promise((_, reject) => setTimeout(() => reject(new Error('flush SJS timeout')), 2000))
         ])
         if (!error) saved = true
-      } catch {}
+        else lastErr = error
+      } catch (e) { lastErr = e }
       // Raw fetch fallback if SJS failed/timed out
       if (!saved) {
         try {
           await supaRawRequest(
             'POST',
             'scores?on_conflict=round_id,member_id,hole',
-            entry,
+            _payloadOf(entry),
             8000,
             { Prefer: 'resolution=merge-duplicates,return=representation' },
           )
           saved = true
-        } catch {}
+        } catch (e) { lastErr = e }
       }
-      if (!saved) failed.push(entry)
+      if (saved) continue
+      // Unrecoverable — drop immediately.
+      if (_isUnrecoverableScoreErr(lastErr)) {
+        console.warn('[scoreQueue] dropping unrecoverable item', {
+          member_id: entry.member_id, hole: entry.hole, code: lastErr?.code, status: lastErr?.status,
+        })
+        continue
+      }
+      // Bump attempt count; drop if over the cap.
+      const bumped = _markScoreAttempt(entry)
+      if (_shouldDropScoreEntry(bumped)) {
+        console.warn('[scoreQueue] dropping after retry cap', {
+          member_id: entry.member_id, hole: entry.hole, attempts: bumped._attempts,
+        })
+        continue
+      }
+      failed.push(bumped)
     }
     _saveQueue(failed)
     _flushInFlight = false
+  }
+
+  /**
+   * Reconcile the queue against a freshly-loaded round's members. Drops
+   * orphan items whose member_id isn't in the active roster (e.g. queued
+   * before round_members existed, with client-generated UUIDs that will
+   * forever 409). Safe to call on every loadRound.
+   */
+  function _reconcileQueueAgainstActiveMembers(roundId) {
+    if (!roundId) return 0
+    const q = _loadQueue()
+    if (!q.length) return 0
+    const validIds = (activeMembers.value || []).map(m => m.id)
+    const { kept, dropped } = _reconcileScoreQueue(q, validIds, roundId)
+    if (dropped.length) {
+      console.warn(`[scoreQueue] pruned ${dropped.length} orphan item(s) on round load`,
+        dropped.map(e => ({ member_id: e.member_id, hole: e.hole })))
+      _saveQueue(kept)
+    }
+    return dropped.length
   }
 
   // Flush whenever we come back online
@@ -720,6 +767,12 @@ export const useRoundsStore = defineStore('rounds', () => {
       sm[s.member_id][s.hole] = s.score
     }
     activeScores.value = sm
+
+    // Reconcile the offline score queue against this round's actual members.
+    // Drops orphan entries with stale client-generated member_ids that would
+    // otherwise FK-violate forever and freeze the "X scores pending sync"
+    // banner.
+    _reconcileQueueAgainstActiveMembers(roundId)
 
     // Subscribe to real-time updates
     subscribeToRound(roundId)
