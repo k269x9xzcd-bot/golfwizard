@@ -21,6 +21,10 @@ import {
 } from '../modules/gameEngine'
 import { formatMatchLabel } from '../modules/matchLabels'
 
+// Inline amber pill — drawn loud so live players can't miss the dormie state.
+const DORMIE_PILL = '<span class="gs-dormie-pill" aria-label="dormie">🚨 DORMIE</span>'
+const CLOSED_PILL = '<span class="gs-closed-pill" aria-label="closed">🔒 CLOSED</span>'
+
 // Generates unique short labels for a set of members.
 // Starts with last name; bumps collisions → "F.LastName" → "Fi.LastName".
 function makeUniqueLabels(members, partsOf) {
@@ -64,7 +68,7 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
     const icon = gameIcon(game.type)
     const t = game.type?.toLowerCase()
 
-    function _gameLine({ gameName, winner, value, detail }) {
+    function _gameLine({ gameName, winner, value, detail, dormie }) {
       const valStr = (() => {
         if (!value) return ''
         const parts = []
@@ -72,9 +76,11 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         if (value.dollars != null) parts.push(`+$${value.dollars}`)
         return parts.join(' · ')
       })()
-      const titleRight = winner
-        ? `<span class="gs-winner"><span class="gs-star">⭐️</span> <span class="gs-winner-name">${escHtml(winner)}</span><span class="gs-value">${valStr ? '&nbsp;' + valStr : ''}</span></span>`
-        : (valStr ? `<span class="gs-value gs-value-muted">${valStr}</span>` : '')
+      const titleRight = dormie
+        ? DORMIE_PILL
+        : winner
+          ? `<span class="gs-winner"><span class="gs-star">⭐️</span> <span class="gs-winner-name">${escHtml(winner)}</span><span class="gs-value">${valStr ? '&nbsp;' + valStr : ''}</span></span>`
+          : (valStr ? `<span class="gs-value gs-value-muted">${valStr}</span>` : '')
       const titleLeft = `<span class="gs-game-title">${icon} ${gameName}</span>`
       const titleRow = `<div class="gs-title-row">${titleLeft}${titleRight ? '<span class="gs-dash">·</span>' + titleRight : ''}</div>`
       const detailRow = detail ? `<div class="gs-detail-row">${detail}</div>` : ''
@@ -88,30 +94,71 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         const t1n = teamInitialsStr(cfg.team1 || []) || 'T1'
         const t2n = teamInitialsStr(cfg.team2 || []) || 'T2'
 
+        // Dormie/closeout state per bet within a segment.
+        // betLength = holes the bet runs over; played = holes with both nets present.
+        function betState(seg, bet) {
+          if (!seg) return null
+          const segHR = seg.holeResults || []
+          const start = bet.start
+          const inBet = segHR.filter(hr => hr.hole >= start)
+          const total = inBet.length
+          const played = inBet.filter(hr => hr.n1 != null && hr.n2 != null).length
+          const remaining = total - played
+          const score = bet.score || 0
+          const dormie = remaining > 0 && Math.abs(score) === remaining
+          const closed = remaining >= 0 && Math.abs(score) > remaining
+          const settled = (remaining === 0 && score !== 0) || closed
+          return { played, total, remaining, score, dormie, closed, settled }
+        }
+
         function fmtSeg(label, seg, segDollar) {
           if (!seg) return `<span style="opacity:.35">${label}: —</span>`
-          const up = seg.t1Up
-          const fmtUp = up === 0 ? 'AS' : (up > 0 ? `+${up}` : `${up}`)
-          const pressStrs = (seg.presses || []).map(p => {
-            const s = p.score || 0
-            return s === 0 ? 'AS' : (s > 0 ? `+${s}` : `${s}`)
-          })
-          const slashStatus = [fmtUp, ...pressStrs].join('/')
+          const mainBet = { start: seg.holeResults?.[0]?.hole ?? 1, score: seg.t1Up || 0 }
+          const mainState = betState(seg, mainBet)
+          const pressStates = (seg.presses || []).map(p => betState(seg, p))
+          const fmtUp = (s) => s === 0 ? 'AS' : (s > 0 ? `+${s}` : `${s}`)
+          // Mark each slash entry with a dormie/closed indicator.
+          const slashEntries = [
+            mainState ? markEntry(fmtUp(mainState.score), mainState) : fmtUp(seg.t1Up || 0),
+            ...pressStates.map((ps, i) => markEntry(fmtUp(ps.score), ps, i + 1)),
+          ]
+          const slashStatus = slashEntries.join('/')
           let html = `<span style="font-weight:600">${label}:</span> <span style="font-family:monospace;letter-spacing:0.5px">${slashStatus}</span>`
-          if (segDollar !== 0) {
+          // Any unsettled bet → segment $ is NOT certain → suppress.
+          const allBets = [mainState, ...pressStates].filter(Boolean)
+          const anyDormie = allBets.some(b => b.dormie)
+          const anyUnsettled = allBets.some(b => !b.settled && b.score !== 0)
+          if (anyDormie) html += ` ${DORMIE_PILL}`
+          else if (segDollar !== 0 && !anyUnsettled) {
             const winner = segDollar > 0 ? t1n : t2n
             html += ` · <span style="color:#4ade80;font-weight:700">${escHtml(winner)} $${Math.abs(segDollar)}</span>`
           }
           return html
         }
+        function markEntry(text, st, pressIdx) {
+          if (!st) return text
+          if (st.dormie) return `<span class="gs-dormie-mark" title="${pressIdx ? `Press ${pressIdx}` : 'Main'} dormie">${text}*</span>`
+          if (st.closed) return `<span class="gs-closed-mark">${text}</span>`
+          return text
+        }
 
         const s = r.settlement
         const fHtml = fmtSeg('Front', r.frontSeg, s.front)
         const bHtml = fmtSeg('Back', r.backSeg, s.back)
+
+        // Overall: 18 holes, count played across both segments.
+        const allHR = [...(r.frontSeg?.holeResults || []), ...(r.backSeg?.holeResults || [])]
+        const oPlayed = allHR.filter(hr => hr.n1 != null && hr.n2 != null).length
+        const totalHolesNassau = allHR.length || 18
+        const oRem = totalHolesNassau - oPlayed
         const oUp = r.overallUp
+        const oDormie = oRem > 0 && Math.abs(oUp) === oRem
+        const oClosed = oRem >= 0 && Math.abs(oUp) > oRem
         const oFmt = oUp === 0 ? 'AS' : (oUp > 0 ? `+${oUp}` : `${oUp}`)
         let oHtml = `<span style="font-weight:600">Overall:</span> <span style="font-family:monospace;letter-spacing:0.5px">${oFmt}</span>`
-        if (s.overall !== 0) {
+        if (oDormie) {
+          oHtml += ` ${DORMIE_PILL}`
+        } else if (s.overall !== 0 && (oRem === 0 || oClosed)) {
           const oWinner = s.overall > 0 ? t1n : t2n
           oHtml += ` · <span style="color:#4ade80;font-weight:700">${escHtml(oWinner)} $${Math.abs(s.overall)}</span>`
         }
@@ -255,6 +302,7 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         // computeBestBall doesn't emit matchOver — compute it from remaining holes
         const matchOver = r.matchOver ?? (played > 0 && Math.abs(up) > remaining)
         const matchResult = r.result ?? (up > 0 ? `${up}&${remaining}` : `${-up}&${remaining}`)
+        const isDormie = !matchOver && remaining > 0 && Math.abs(up) === remaining
 
         let winner = null, value = null, detail
         if (played === 0) {
@@ -267,6 +315,11 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         } else if (up === 0) {
           detail = `${p1n} vs ${p2n} — AS thru ${played}`
           if (isTournament) value = { pts: points / 2, dollars: null }
+        } else if (isDormie) {
+          // Dormie — match isn't decided yet ($ not certain). Suppress winner/$.
+          const leader = up > 0 ? p1n : p2n
+          const trailer = up > 0 ? p2n : p1n
+          detail = `${leader} ${Math.abs(up)} UP, ${remaining} to play vs ${trailer}`
         } else {
           winner = up > 0 ? p1n : p2n
           const loser = up > 0 ? p2n : p1n
@@ -306,7 +359,7 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
           } catch { /* skip */ }
         }
 
-        const base = _gameLine({ gameName: `Match${scoringBadge}`, winner, value, detail })
+        const base = _gameLine({ gameName: `Match${scoringBadge}`, winner, value, detail, dormie: isDormie })
         return strokesLine
           ? base.replace('</div></div>', `</div><div class="gs-strokes-line">${strokesLine}</div></div>`)
           : base
@@ -545,6 +598,7 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         const played = (r.holeResults || []).filter(h => !h.incomplete).length
         const remaining = (r.holeResults || []).filter(h => h.incomplete).length
         const matchOver = Math.abs(finalUp) > remaining && played > 0
+        const isDormie = !matchOver && remaining > 0 && Math.abs(finalUp) === remaining
         const ppt = r.settlement?.ppt || cfg.ppt || 0
         const isTournament = !!cfg.tournament
         const points = cfg.points || 2
@@ -561,13 +615,17 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         } else if (finalUp === 0) {
           detail = `${t1nE} vs ${t2nE} — AS thru ${played}`
           if (isTournament) value = { pts: points / 2, dollars: null }
+        } else if (isDormie) {
+          const leader = finalUp > 0 ? t1n : t2n
+          const trailer = finalUp > 0 ? t2n : t1n
+          detail = `${escHtml(leader)} ${Math.abs(finalUp)} UP, ${remaining} to play vs ${escHtml(trailer)}`
         } else {
           winner = finalUp > 0 ? t1n : t2n
           const loser = finalUp > 0 ? t2n : t1n
           detail = `${escHtml(winner)} (${Math.abs(finalUp)} UP thru ${played}) vs ${escHtml(loser)}`
           value = { pts: isTournament ? points : null, dollars: ppt > 0 ? ppt : null }
         }
-        return _gameLine({ gameName: 'Best Ball', winner, value, detail })
+        return _gameLine({ gameName: 'Best Ball', winner, value, detail, dormie: isDormie })
       }
 
       // ── BBN ──
@@ -644,8 +702,93 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
     return gameSummaryHtml(game)
   }
 
+  // ── Dormie state tracking — emits stable IDs for any segment currently in dormie.
+  // ScoringView watches this to fire a one-time toast on transition false→true.
+  // Closeout (up > remaining) is intentionally excluded — that's "settled," not "dormie."
+  const dormieStates = computed(() => {
+    if (!roundsStore.activeRound) return []
+    void _scoresTick.value  // reactivity dep on score updates
+    const ctx = buildCtx()
+    const out = []
+    const games = roundsStore.activeGames || []
+    const tournGames = tournamentWagerGames?.value ?? []
+    for (const game of [...tournGames, ...games]) {
+      const t = (game.type || '').toLowerCase()
+      try {
+        if (t === 'nassau') {
+          const r = computeNassau(ctx, game.config || {})
+          // Front segment main + presses.
+          for (const seg of [
+            { key: 'front', segObj: r.frontSeg, holes: 9 },
+            { key: 'back', segObj: r.backSeg, holes: 9 },
+          ]) {
+            if (!seg.segObj) continue
+            const segHR = seg.segObj.holeResults || []
+            const startHole = segHR[0]?.hole ?? 1
+            const main = { start: startHole, score: seg.segObj.t1Up || 0 }
+            const allBets = [main, ...(seg.segObj.presses || [])]
+            for (let bi = 0; bi < allBets.length; bi++) {
+              const b = allBets[bi]
+              const inBet = segHR.filter(hr => hr.hole >= b.start)
+              const total = inBet.length
+              const played = inBet.filter(hr => hr.n1 != null && hr.n2 != null).length
+              const remaining = total - played
+              const score = b.score || 0
+              if (remaining > 0 && Math.abs(score) === remaining) {
+                const subLabel = bi === 0 ? '' : ` press ${bi}`
+                out.push({
+                  id: `nassau:${game.id}:${seg.key}:${bi}`,
+                  label: `Nassau ${seg.key === 'front' ? 'Front' : 'Back'}${subLabel}`,
+                })
+              }
+            }
+          }
+          // Overall.
+          const allHR = [...(r.frontSeg?.holeResults || []), ...(r.backSeg?.holeResults || [])]
+          const oPlayed = allHR.filter(hr => hr.n1 != null && hr.n2 != null).length
+          const oRem = (allHR.length || 18) - oPlayed
+          const oUp = r.overallUp || 0
+          if (oRem > 0 && Math.abs(oUp) === oRem) {
+            out.push({ id: `nassau:${game.id}:overall:0`, label: 'Nassau Overall' })
+          }
+        } else if (t === 'match' || t === 'match1v1') {
+          const cfg = game.config || {}
+          const is1v1 = !!(cfg.player1 && cfg.player2)
+          let r = null
+          if (is1v1) r = computeMatch(ctx, cfg)
+          else if (cfg.team1?.length && cfg.team2?.length) r = computeBestBall(ctx, { ...cfg, ballsPerTeam: 1 })
+          if (!r) continue
+          const played = (r.holeResults || []).filter(h => !h.incomplete).length
+          const totalHoles = visibleHoles.value?.length || 18
+          const remaining = totalHoles - played
+          const up = r.finalUp || 0
+          const matchOver = r.matchOver ?? (played > 0 && Math.abs(up) > remaining)
+          if (!matchOver && remaining > 0 && Math.abs(up) === remaining) {
+            const lbl = is1v1
+              ? `${r.p1?.name || 'P1'} vs ${r.p2?.name || 'P2'}`
+              : `${r.t1Name || teamInitialsStr(cfg.team1) || 'T1'} vs ${r.t2Name || teamInitialsStr(cfg.team2) || 'T2'}`
+            out.push({ id: `match:${game.id}`, label: lbl })
+          }
+        } else if (t === 'best_ball' || t === 'bestball') {
+          const cfg = game.config || {}
+          const r = computeBestBall(ctx, cfg)
+          if (!r) continue
+          const played = (r.holeResults || []).filter(h => !h.incomplete).length
+          const remaining = (r.holeResults || []).filter(h => h.incomplete).length
+          const up = r.finalUp || 0
+          const matchOver = played > 0 && Math.abs(up) > remaining
+          if (!matchOver && remaining > 0 && Math.abs(up) === remaining) {
+            out.push({ id: `bb:${game.id}`, label: `${r.t1Name || 'T1'} vs ${r.t2Name || 'T2'}` })
+          }
+        }
+      } catch { /* skip */ }
+    }
+    return out
+  })
+
   return {
     liveSettlements,
     gameSummaryHtml: gameSummaryHtmlReactive,
+    dormieStates,
   }
 }

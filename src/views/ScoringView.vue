@@ -19,6 +19,13 @@
       <transition name="fade">
         <div v-if="viewerToast" class="viewer-toast">{{ viewerToast }}</div>
       </transition>
+      <!-- Dormie alert — fires once on transition into dormie state for any active match. -->
+      <transition name="fade">
+        <div v-if="dormieToast" class="dormie-toast" role="status">
+          <div class="dormie-toast-title">{{ dormieToast.title }}</div>
+          <div class="dormie-toast-sub">{{ dormieToast.sub }}</div>
+        </div>
+      </transition>
       <!-- Score sync error banner -->
       <div v-if="roundsStore.scoreSyncError" class="sync-error-banner">
         <span v-if="roundsStore.scoreSyncError === 'rls'">⚠️ Scores not saving — session issue. Please sign out and back in.</span>
@@ -1191,8 +1198,37 @@ const { holeMathLines } = useHoleMath({ buildCtx, pInit, teamInitialsStr })
 
 // ── Composable: live settlements ──────────────────────────────────
 const {
-  liveSettlements, gameSummaryHtml,
+  liveSettlements, gameSummaryHtml, dormieStates,
 } = useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitialsStr, pInit, memberDisplay, visibleHoles, rosterPlayers: computed(() => rosterStore.players), tournamentWagerGames: computed(() => tournamentWagerGames.value) })
+
+// ── Dormie toast — fires once when a match transitions false→true into dormie.
+// Tracks IDs we've already alerted on so a halved-then-unhalved hole won't re-fire.
+const dormieToast = ref(null) // { title, sub } | null
+const _seenDormieIds = new Set()
+let _dormieToastTimer = null
+let _dormieInitDone = false
+watch(dormieStates, (next) => {
+  // Skip first run — pre-populate so opening a round mid-dormie doesn't spam.
+  if (!_dormieInitDone) {
+    _dormieInitDone = true
+    for (const s of next) _seenDormieIds.add(s.id)
+    return
+  }
+  const fresh = next.filter(s => !_seenDormieIds.has(s.id))
+  for (const s of next) _seenDormieIds.add(s.id)
+  // Drop IDs no longer dormie so a future transition can re-fire if it happens again.
+  const live = new Set(next.map(s => s.id))
+  for (const id of [..._seenDormieIds]) if (!live.has(id)) _seenDormieIds.delete(id)
+  if (fresh.length === 0) return
+  const first = fresh[0]
+  const more = fresh.length > 1 ? ` +${fresh.length - 1} more` : ''
+  dormieToast.value = {
+    title: '🚨 DORMIE',
+    sub: `${first.label}${more}`,
+  }
+  if (_dormieToastTimer) clearTimeout(_dormieToastTimer)
+  _dormieToastTimer = setTimeout(() => { dormieToast.value = null }, 4000)
+}, { deep: true })
 
 
 // ── Tournament match status (single source of truth — tournament tables only) ──
