@@ -20,6 +20,7 @@ import {
   memberHandicap,
 } from '../modules/gameEngine'
 import { formatMatchLabel } from '../modules/matchLabels'
+import { isSettled, nassauBetSettled } from '../modules/betSettled'
 
 // Inline amber pill — drawn loud so live players can't miss the dormie state.
 const DORMIE_PILL = '<span class="gs-dormie-pill" aria-label="dormie">🚨 DORMIE</span>'
@@ -95,7 +96,7 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         const t2n = teamInitialsStr(cfg.team2 || []) || 'T2'
 
         // Dormie/closeout state per bet within a segment.
-        // betLength = holes the bet runs over; played = holes with both nets present.
+        // settled is from betSettled.js — single source of truth for "$ certain?".
         function betState(seg, bet) {
           if (!seg) return null
           const segHR = seg.holeResults || []
@@ -106,8 +107,8 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
           const remaining = total - played
           const score = bet.score || 0
           const dormie = remaining > 0 && Math.abs(score) === remaining
-          const closed = remaining >= 0 && Math.abs(score) > remaining
-          const settled = (remaining === 0 && score !== 0) || closed
+          const closed = Math.abs(score) > remaining
+          const settled = nassauBetSettled(segHR, start, score)
           return { played, total, remaining, score, dormie, closed, settled }
         }
 
@@ -164,6 +165,7 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         }
 
         let alohaHtml = ''
+        // Aloha settles only on H18 (engine returns r.aloha only when last hole resolved).
         if (r.aloha) {
           const ar = r.aloha
           const alohaWinner = ar.t1Delta > 0 ? t1n : t2n
@@ -174,16 +176,49 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
           alohaHtml = `<div>🌺 <span style="font-weight:600">Aloha:</span> <span style="opacity:.5">offered — waiting</span></div>`
         }
 
+        // Sum only segments whose $ outcome is mathematically certain.
+        // s.front/back/overall are the engine's projected deltas; we add them ONLY
+        // when their underlying segment is settled.
+        function frontSegSettled() {
+          const segHR = r.frontSeg?.holeResults || []
+          if (!segHR.length) return false
+          // Front segment is settled when ALL its bets (main + presses) are settled.
+          const startHole = segHR[0].hole
+          const main = nassauBetSettled(segHR, startHole, r.frontSeg.t1Up || 0)
+          const presses = (r.frontSeg.presses || []).every(p => nassauBetSettled(segHR, p.start, p.score || 0))
+          return main && presses
+        }
+        function backSegSettled() {
+          const segHR = r.backSeg?.holeResults || []
+          if (!segHR.length) return false
+          const startHole = segHR[0].hole
+          const main = nassauBetSettled(segHR, startHole, r.backSeg.t1Up || 0)
+          const presses = (r.backSeg.presses || []).every(p => nassauBetSettled(segHR, p.start, p.score || 0))
+          return main && presses
+        }
+        const fSet = frontSegSettled()
+        const bSet = backSegSettled()
+        const oSet = isSettled(oPlayed, totalHolesNassau, oUp)
+        const aSet = !!r.aloha  // engine emits aloha only when H18 resolved
+
+        const settledFront = fSet ? s.front : 0
+        const settledBack  = bSet ? s.back  : 0
+        const settledOverall = oSet ? s.overall : 0
+        const settledAloha = aSet ? (s.aloha || 0) : 0
+        const settledNet = settledFront + settledBack + settledOverall + settledAloha
+
         let totLine = ''
-        const netOwed = s.total
-        if (netOwed !== 0) {
-          const payer = netOwed < 0 ? t1n : t2n
-          const payee = netOwed < 0 ? t2n : t1n
-          const grossTotal = Math.abs(s.front) + Math.abs(s.back) + Math.abs(s.overall) + Math.abs(s.aloha || 0)
-          const grossNote = grossTotal > Math.abs(netOwed) ? ` <span style="font-size:10px;opacity:.5">(gross: $${grossTotal})</span>` : ''
-          totLine = `<div style="font-size:12px;font-weight:700;margin-top:5px;padding:5px 8px;background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);border-radius:8px;color:#4ade80">💰 ${escHtml(payer)} owe ${escHtml(payee)} $${Math.abs(netOwed)}${grossNote}</div>`
-        } else if (Math.abs(s.front) + Math.abs(s.back) + Math.abs(s.overall) > 0) {
-          totLine = `<div style="font-size:11px;margin-top:4px;opacity:.5">All square · $${Math.abs(s.front) + Math.abs(s.back) + Math.abs(s.overall)} action</div>`
+        const allSettled = fSet && bSet && oSet && (cfg.aloha?.status !== 'accepted' || aSet)
+        const anyUnsettled = !allSettled
+        if (settledNet !== 0) {
+          const payer = settledNet < 0 ? t1n : t2n
+          const payee = settledNet < 0 ? t2n : t1n
+          const liveTag = anyUnsettled ? ' <span style="font-size:10px;opacity:.5">(settled so far)</span>' : ''
+          totLine = `<div style="font-size:12px;font-weight:700;margin-top:5px;padding:5px 8px;background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);border-radius:8px;color:#4ade80">💰 ${escHtml(payer)} owe ${escHtml(payee)} $${Math.abs(settledNet)}${liveTag}</div>`
+        } else if (anyUnsettled) {
+          totLine = `<div style="font-size:11px;margin-top:4px;opacity:.5">No settled $ yet — bets in flight</div>`
+        } else if (allSettled) {
+          totLine = `<div style="font-size:11px;margin-top:4px;opacity:.5">All square</div>`
         }
 
         const fAmt = cfg.front ?? 10
@@ -299,9 +334,11 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
 
         const totalHoles = visibleHoles.value?.length || 18
         const remaining = totalHoles - played
-        // computeBestBall doesn't emit matchOver — compute it from remaining holes
-        const matchOver = r.matchOver ?? (played > 0 && Math.abs(up) > remaining)
-        const matchResult = r.result ?? (up > 0 ? `${up}&${remaining}` : `${-up}&${remaining}`)
+        // Compute locally — computeMatch's r.matchOver double-counts incomplete holes
+        // in holesRemaining (pre-existing engine bug), so we derive both flags from
+        // played/remaining/up which use the correct visibleHoles count.
+        const matchOver = isSettled(played, totalHoles, up) && up !== 0
+        const matchResult = up > 0 ? `${up}&${remaining}` : `${-up}&${remaining}`
         const isDormie = !matchOver && remaining > 0 && Math.abs(up) === remaining
 
         let winner = null, value = null, detail
@@ -563,8 +600,20 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         const r = computeSixes(ctx, cfg)
         if (!r) return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Sixes</span><span class="muted" style="font-size:11px">Need 4 players</span></div>`
         const ppt = cfg.ppt || 1
-        const standings = r.settlements?.map(s => `${escHtml(s.name)}: <span style="color:${(s.net||0) > 0 ? '#4ade80' : (s.net||0) < 0 ? '#f87171' : '#d4af37'};font-weight:700">${(s.net||0) > 0 ? '+' : ''}$${Math.abs(s.net||0)}</span>`).join(' · ') || '—'
-        return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Sixes</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppt}/segment</span><div style="font-size:11px;margin-top:3px">${standings}</div></div>`
+        // Each 6-hole segment settles only when all 6 holes are scored. Mid-segment
+        // pts are projections (engine treats partial segments as 3/3 ties).
+        const incompleteSegs = (r.segResults || []).filter(seg => !seg.skipped && (seg.holeDetails || []).some(h => h.incomplete)).length
+        const allSettled = incompleteSegs === 0
+        const standings = (r.settlements || []).map(s => {
+          if (!allSettled) {
+            // Show pts running, but no $ figure mid-segment.
+            return `${escHtml(s.name)}: <span style="opacity:.7">${s.pts || 0}pts</span>`
+          }
+          const col = (s.net||0) > 0 ? '#4ade80' : (s.net||0) < 0 ? '#f87171' : '#d4af37'
+          return `${escHtml(s.name)}: <span style="color:${col};font-weight:700">${(s.net||0) > 0 ? '+' : ''}$${Math.abs(s.net||0)}</span>`
+        }).join(' · ') || '—'
+        const liveTag = !allSettled ? `<span class="muted" style="font-size:10px;margin-left:6px">${incompleteSegs} seg in flight</span>` : ''
+        return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Sixes</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppt}/segment</span>${liveTag}<div style="font-size:11px;margin-top:3px">${standings}</div></div>`
       }
 
       // ── Dots ──

@@ -1285,17 +1285,18 @@ function showToast(msg, type = 'neutral') {
 .overlay-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,.6);
+  background: rgba(0,0,0,.72);
   z-index: 200;
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  backdrop-filter: blur(2px);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
 .overlay-sheet {
   width: 100%;
   max-width: 600px;
-  background: var(--gw-card-bg);
+  background: var(--gw-bg-sheet);
   border-radius: var(--gw-radius-xl) var(--gw-radius-xl) 0 0;
   max-height: 92vh;
   overflow: hidden;
@@ -1303,6 +1304,7 @@ function showToast(msg, type = 'neutral') {
   flex-direction: column;
   padding-bottom: env(safe-area-inset-bottom);
   border: 1px solid var(--gw-card-border);
+  box-shadow: 0 -12px 40px rgba(0,0,0,.45);
 }
 .overlay-content {
   display: flex;

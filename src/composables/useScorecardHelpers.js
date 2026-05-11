@@ -7,15 +7,20 @@
 import { computed } from 'vue'
 import { useRoundsStore } from '../stores/rounds'
 import { useCoursesStore } from '../stores/courses'
+import { useRosterStore } from '../stores/roster'
+import { useAuthStore } from '../stores/auth'
 import { COURSES } from '../modules/courses'
 import {
   memberHandicap as _memberHandicap,
   holeSI, strokesOnHole,
 } from '../modules/gameEngine'
+import { resolveMemberSourceName } from '../modules/memberNameResolver'
 
 export function useScorecardHelpers({ showFullHcp }) {
   const roundsStore = useRoundsStore()
   const coursesStore = useCoursesStore()
+  const rosterStore = useRosterStore()
+  const authStore = useAuthStore()
 
   // ── Course data ─────────────────────────────────────────────────
   const courseData = computed(() => {
@@ -251,16 +256,27 @@ export function useScorecardHelpers({ showFullHcp }) {
     return m.guest_name || m.name || m.short_name || '?'
   }
 
+  // Source name for initials — resolves through profile/roster, falls back to row data.
+  // See src/modules/memberNameResolver.js. Routed through one accessor so the
+  // collision-extension logic and base initials always see the same string.
+  function _sourceName(m) {
+    return resolveMemberSourceName(m, {
+      rosterPlayers: rosterStore.players,
+      authUser: authStore.user,
+      authProfile: authStore.profile,
+    })
+  }
+
   function _baseInitials(m) {
     if (!m) return '??'
-    const src = m.guest_name || m.name || m.short_name || ''
-    return nameToInitials(src)
+    return nameToInitials(_sourceName(m))
   }
 
   let _initialsCache = { key: null, map: null }
   function _buildInitialsMap() {
     const members = roundsStore.activeMembers || []
-    const key = members.map(m => m.id).join('|')
+    // Cache key includes roster size so initials refresh when roster loads.
+    const key = members.map(m => m.id).join('|') + '@' + (rosterStore.players?.length || 0)
     if (_initialsCache.key === key && _initialsCache.map) return _initialsCache.map
     const map = new Map()
     const base = new Map()
@@ -270,14 +286,14 @@ export function useScorecardHelpers({ showFullHcp }) {
     for (const m of members) {
       const b = base.get(m.id)
       if ((counts.get(b) || 0) <= 1) { map.set(m.id, b); continue }
-      const full = (m.guest_name || m.name || m.short_name || '').trim()
+      const full = _sourceName(m).trim()
       const parts = full.replace(/\./g, '').split(/\s+/).filter(Boolean)
       let ext = b
       const word = parts.length >= 2 ? parts[parts.length - 1] : (parts[0] || '')
       for (let extra = 1; extra <= 3 && ext.length < 5; extra++) {
         const candidate = b + (word[extra] || '').toLowerCase()
         const stillCollides = members.some(o => o.id !== m.id && _baseInitials(o) === b && (() => {
-          const oFull = (o.guest_name || o.name || o.short_name || '').trim()
+          const oFull = _sourceName(o).trim()
           const oParts = oFull.replace(/\./g, '').split(/\s+/).filter(Boolean)
           const oWord = oParts.length >= 2 ? oParts[oParts.length - 1] : (oParts[0] || '')
           const oCandidate = b + (oWord[extra] || '').toLowerCase()
