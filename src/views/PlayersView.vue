@@ -829,7 +829,7 @@ function confirmInvite(player) {
 async function invokeInvitePlayer(playerId, refreshed = false) {
   const result = await Promise.race([
     supabase.functions.invoke('invite-player', { body: { roster_player_id: playerId } }),
-    new Promise((_, reject) => setTimeout(() => reject(new Error('[invite-player] timed out')), 15000)),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('[invite-player] timed out')), 10000)),
   ])
   // verify_jwt:true on this fn means a stale/expired bearer is rejected at the gateway
   // before the function runs. supabase-js surfaces that as 'Failed to send a request to the Edge Function'.
@@ -844,6 +844,25 @@ async function invokeInvitePlayer(playerId, refreshed = false) {
   return result
 }
 
+// Poll roster_players.invited_at for up to ~5s after a SJS timeout. iOS PWA stuck
+// sockets can make the invoke call hang indefinitely while the function actually
+// completes and stamps invited_at server-side. If we see it stamped, declare success.
+async function pollInvitedAt(playerId, invokedAtMs, maxAttempts = 5) {
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise(r => setTimeout(r, 1000))
+    try {
+      const { data } = await supabase
+        .from('roster_players')
+        .select('invited_at')
+        .eq('id', playerId)
+        .maybeSingle()
+      const ts = data?.invited_at ? Date.parse(data.invited_at) : 0
+      if (ts && ts >= invokedAtMs - 2000) return true
+    } catch { /* keep polling */ }
+  }
+  return false
+}
+
 async function invitePlayer(player) {
   if (!player.email) return
   if (player.user_id) {
@@ -852,6 +871,7 @@ async function invitePlayer(player) {
   }
   inviteHint.value = ''
   inviteStatus.value[player.id] = 'sending'
+  const invokedAt = Date.now()
   try {
     const { data, error } = await invokeInvitePlayer(player.id)
     if (error) throw error
@@ -865,6 +885,17 @@ async function invitePlayer(player) {
     await rosterStore.updatePlayer(player.id, { invited_at: new Date().toISOString() })
     showInviteHint(`Invite sent to ${player.name.split(' ')[0]}!`)
   } catch (e) {
+    const isTimeout = /timed out/i.test(e?.message || '')
+    if (isTimeout) {
+      showInviteHint(`Still sending to ${player.name.split(' ')[0]} — checking…`)
+      const landed = await pollInvitedAt(player.id, invokedAt)
+      if (landed) {
+        inviteStatus.value[player.id] = 'sent'
+        await rosterStore.updatePlayer(player.id, { invited_at: new Date().toISOString() })
+        showInviteHint(`Invite sent to ${player.name.split(' ')[0]}!`)
+        return
+      }
+    }
     inviteStatus.value[player.id] = 'error'
     showInviteHint(`Failed to invite ${player.name.split(' ')[0]}: ${e?.message ?? 'unknown error'}`)
   }

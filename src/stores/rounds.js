@@ -10,6 +10,7 @@ import { buildTournamentWagerGames } from '../modules/tournamentWagers'
 import { getCourse, COURSES as BUILTIN_COURSES } from '../modules/courses'
 import { supaRawInsert, supaRawSelect, supaRawUpdate, supaRawRequest, supaRawDelete } from '../modules/supaRaw'
 import { supaCall } from '../modules/supabaseOps'
+import { canonicalGameKey, findDuplicateGame } from '../modules/gameConfigDedup'
 import {
   isUnrecoverableError as _isUnrecoverableScoreErr,
   markAttempt as _markScoreAttempt,
@@ -67,7 +68,9 @@ export const useRoundsStore = defineStore('rounds', () => {
   const activeRound = ref(null)
   const activeMembers = ref([])   // round_members rows
   const activeScores = ref({})    // { memberId: { hole: score } }
+  const activeScoreMeta = ref({}) // { memberId: { hole: { entered_by, entered_at } } }
   const activeGames = ref([])     // game_configs rows
+  const _inFlightGameKeys = new Set() // dedup guard for concurrent saveGameConfig inserts
 
   // Round history
   const rounds = ref([])
@@ -446,6 +449,7 @@ export const useRoundsStore = defineStore('rounds', () => {
       activeMembers.value = members
       activeGames.value = gameConfigs
       activeScores.value = {}
+      activeScoreMeta.value = {}
 
       _persistGuest()
       return round
@@ -625,6 +629,7 @@ export const useRoundsStore = defineStore('rounds', () => {
     activeMembers.value = insertedMembers.length ? insertedMembers : memberRows
     activeGames.value = gameRows
     activeScores.value = {}
+    activeScoreMeta.value = {}
 
     // Cache game rows to localStorage so loadRound can recover them if the background
     // insert fails or RLS blocks the SELECT on resume.
@@ -762,11 +767,15 @@ export const useRoundsStore = defineStore('rounds', () => {
 
     // Build scores map: { memberId: { hole: score } }
     const sm = {}
+    const meta = {}
     for (const s of (data.scores ?? [])) {
       if (!sm[s.member_id]) sm[s.member_id] = {}
       sm[s.member_id][s.hole] = s.score
+      if (!meta[s.member_id]) meta[s.member_id] = {}
+      meta[s.member_id][s.hole] = { entered_by: s.entered_by ?? null, entered_at: s.entered_at ?? null }
     }
     activeScores.value = sm
+    activeScoreMeta.value = meta
 
     // Reconcile the offline score queue against this round's actual members.
     // Drops orphan entries with stale client-generated member_ids that would
@@ -806,6 +815,9 @@ export const useRoundsStore = defineStore('rounds', () => {
       entered_at: new Date().toISOString(),
     }
 
+    if (!activeScoreMeta.value[memberId]) activeScoreMeta.value[memberId] = {}
+    activeScoreMeta.value[memberId][hole] = { entered_by: entry.entered_by, entered_at: entry.entered_at }
+
     // Try SJS with short timeout; fall back to raw fetch to survive stuck iOS sockets
     let sjsErr = null
     try {
@@ -844,6 +856,25 @@ export const useRoundsStore = defineStore('rounds', () => {
   async function saveGameConfig(game) {
     const auth = useAuthStore()
 
+    // Dedup guard: only for new games (no id). Edits to an existing row must pass through.
+    // Checks both already-committed activeGames and an in-flight set so back-to-back clicks
+    // (e.g. accidental double-tap on "Add side game") don't fire two INSERTs.
+    if (!game.id) {
+      const dupe = findDuplicateGame(game, activeGames.value)
+      if (dupe) return dupe
+      const key = canonicalGameKey(game)
+      if (_inFlightGameKeys.has(key)) return null
+      _inFlightGameKeys.add(key)
+      try {
+        return await _saveGameConfigInner(game, auth)
+      } finally {
+        _inFlightGameKeys.delete(key)
+      }
+    }
+    return _saveGameConfigInner(game, auth)
+  }
+
+  async function _saveGameConfigInner(game, auth) {
     if (!auth.isAuthenticated || String(activeRound.value?.id ?? '').startsWith('guest_')) {
       const newGame = { ...game, id: game.id || `gg_${Date.now()}`, round_id: activeRound.value?.id }
       const idx = activeGames.value.findIndex(g => g.id === newGame.id)
@@ -1009,6 +1040,8 @@ export const useRoundsStore = defineStore('rounds', () => {
             const s = payload.new
             if (!activeScores.value[s.member_id]) activeScores.value[s.member_id] = {}
             activeScores.value[s.member_id][s.hole] = s.score
+            if (!activeScoreMeta.value[s.member_id]) activeScoreMeta.value[s.member_id] = {}
+            activeScoreMeta.value[s.member_id][s.hole] = { entered_by: s.entered_by ?? null, entered_at: s.entered_at ?? null }
           }
         })
         .subscribe((status, err) => {
@@ -1253,6 +1286,7 @@ export const useRoundsStore = defineStore('rounds', () => {
         activeRound.value = null
         activeMembers.value = []
         activeScores.value = {}
+        activeScoreMeta.value = {}
         activeGames.value = []
       }
       rounds.value = rounds.value.filter(r => r.id !== roundId)
@@ -1267,6 +1301,7 @@ export const useRoundsStore = defineStore('rounds', () => {
       activeRound.value = null
       activeMembers.value = []
       activeScores.value = {}
+      activeScoreMeta.value = {}
       activeGames.value = []
     }
     rounds.value = rounds.value.filter(r => r.id !== roundId)
@@ -1314,11 +1349,15 @@ export const useRoundsStore = defineStore('rounds', () => {
     activeMembers.value = members ?? []
     const { data: scores } = await supabase.from('scores').select('*').eq('round_id', round.id)
     const sm = {}
+    const meta = {}
     for (const s of (scores ?? [])) {
       if (!sm[s.member_id]) sm[s.member_id] = {}
       sm[s.member_id][s.hole] = s.score
+      if (!meta[s.member_id]) meta[s.member_id] = {}
+      meta[s.member_id][s.hole] = { entered_by: s.entered_by ?? null, entered_at: s.entered_at ?? null }
     }
     activeScores.value = sm
+    activeScoreMeta.value = meta
     const { data: games } = await supabase.from('game_configs').select('*').eq('round_id', round.id)
     activeGames.value = (games ?? []).map(g => ({ ...g, config: typeof g.config === 'string' ? JSON.parse(g.config) : g.config }))
   }
@@ -1475,7 +1514,7 @@ export const useRoundsStore = defineStore('rounds', () => {
   }
 
   return {
-    activeRound, activeMembers, activeScores, activeGames,
+    activeRound, activeMembers, activeScores, activeScoreMeta, activeGames,
     knownRounds,
     rounds, myRounds, loading, activeRoundId, scoreSyncError,
     pendingQueueCount,

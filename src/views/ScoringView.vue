@@ -187,6 +187,10 @@
         <div class="delete-dialog" @click.stop>
           <div class="delete-title">Edit Score</div>
           <div class="delete-msg">{{ editScoreDialog.memberName }} — Hole {{ editScoreDialog.hole }}</div>
+          <div v-if="scoreMetaFor(editScoreDialog.memberId, editScoreDialog.hole)" class="edit-score-attribution">
+            Entered by <strong>{{ enteredByName(scoreMetaFor(editScoreDialog.memberId, editScoreDialog.hole)?.entered_by) }}</strong>
+            · {{ relativeTime(scoreMetaFor(editScoreDialog.memberId, editScoreDialog.hole)?.entered_at) }}
+          </div>
           <input
             class="edit-score-input"
             type="number"
@@ -818,6 +822,20 @@
                 <span :class="getScore(group.member.id, activeHole) ? (showNotations ? scoreNotation(getScore(group.member.id, activeHole), parForHole(activeHole)) : '') : 'muted'">
                   {{ getScore(group.member.id, activeHole) || '—' }}
                 </span>
+                <button
+                  v-if="scoreMetaFor(group.member.id, activeHole)"
+                  class="score-info-btn"
+                  @click.stop="toggleScoreInfo(group.member.id, activeHole)"
+                  aria-label="Who entered this score"
+                >❶</button>
+                <div
+                  v-if="scoreInfoOpen.memberId === group.member.id && scoreInfoOpen.hole === activeHole"
+                  class="score-info-popover"
+                  @click.stop
+                >
+                  Entered by <strong>{{ enteredByName(scoreMetaFor(group.member.id, activeHole)?.entered_by) }}</strong>
+                  · {{ relativeTime(scoreMetaFor(group.member.id, activeHole)?.entered_at) }}
+                </div>
               </div>
               <button class="score-tap score-tap-plus" @click="inlineInc(group.member)">+</button>
             <div v-if="scoreSaveState[group.member.id + '-' + activeHole]" class="score-save-state">{{ scoreSaveState[group.member.id + '-' + activeHole] }}</div>
@@ -1616,6 +1634,47 @@ async function saveDateEdit() {
   } finally {
     dateSaving.value = false
   }
+}
+
+// ── Score attribution popover (entered_by + entered_at) ──────────
+const scoreInfoOpen = ref({ memberId: null, hole: null })
+
+function scoreMetaFor(memberId, hole) {
+  return roundsStore.activeScoreMeta?.[memberId]?.[hole] ?? null
+}
+
+function toggleScoreInfo(memberId, hole) {
+  if (scoreInfoOpen.value.memberId === memberId && scoreInfoOpen.value.hole === hole) {
+    scoreInfoOpen.value = { memberId: null, hole: null }
+  } else {
+    scoreInfoOpen.value = { memberId, hole }
+  }
+}
+
+function enteredByName(uid) {
+  if (!uid) return 'unknown'
+  if (authStore.user?.id === uid) return 'you'
+  const member = roundsStore.activeMembers.find(m => m.user_id === uid)
+  if (member) return member.short_name || (member.name?.split(' ')[0] ?? `…${String(uid).slice(-4)}`)
+  return `…${String(uid).slice(-4)}`
+}
+
+function relativeTime(iso) {
+  if (!iso) return ''
+  const then = new Date(iso).getTime()
+  if (!Number.isFinite(then)) return ''
+  const diff = Date.now() - then
+  if (diff < 0) return 'just now'
+  const sec = Math.floor(diff / 1000)
+  if (sec < 45) return 'just now'
+  const min = Math.floor(sec / 60)
+  if (min < 60) return `${min}m ago`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr}h ago`
+  const day = Math.floor(hr / 24)
+  if (day === 1) return 'yesterday'
+  if (day < 7) return `${day}d ago`
+  return new Date(iso).toLocaleDateString()
 }
 
 // ── View-only edit score dialog ───────────────────────────────────
@@ -2759,6 +2818,50 @@ function formatDate(dateStr) {
 <style src="../styles/ScoringView.css" />
 
 <style>
+/* ── Score attribution (entered_by / entered_at) ── */
+.score-display { position: relative; }
+.score-info-btn {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(13, 95, 60, .85);
+  color: #fff;
+  border: 0;
+  font-size: 10px;
+  line-height: 18px;
+  padding: 0;
+  cursor: pointer;
+  opacity: .55;
+}
+.score-info-btn:hover, .score-info-btn:focus { opacity: 1; }
+.score-info-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  background: rgba(20, 20, 24, .96);
+  color: #f0ede0;
+  border: 1px solid rgba(212,175,55,.35);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(0,0,0,.35);
+}
+[data-theme="light"] .score-info-popover {
+  background: #0d3325;
+  color: #f0ede0;
+}
+.edit-score-attribution {
+  font-size: 12px;
+  opacity: .65;
+  margin: 4px 0 8px;
+}
+
 /* ── ScoringView light theme overrides (non-scoped to beat scoped specificity) ── */
 [data-theme="light"] .hole-banner {
   background: linear-gradient(135deg, #0d3325, #166044);
