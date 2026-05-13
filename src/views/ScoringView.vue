@@ -1217,7 +1217,7 @@ const { holeMathLines } = useHoleMath({ buildCtx, pInit, teamInitialsStr })
 // ── Composable: live settlements ──────────────────────────────────
 const {
   liveSettlements, gameSummaryHtml, dormieStates,
-} = useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitialsStr, pInit, memberDisplay, visibleHoles, rosterPlayers: computed(() => rosterStore.players), tournamentWagerGames: computed(() => tournamentWagerGames.value) })
+} = useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitialsStr, pInit, memberDisplay, visibleHoles, rosterPlayers: computed(() => rosterStore.players), tournamentWagerGames: computed(() => { try { return tournamentWagerGames.value } catch { return [] } }) })
 
 // ── Dormie toast — fires once when a match transitions false→true into dormie.
 // Tracks IDs we've already alerted on so a halved-then-unhalved hole won't re-fire.
