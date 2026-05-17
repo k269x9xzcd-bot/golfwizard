@@ -2485,6 +2485,11 @@ export function computeFourteen(ctx, config = {}) {
   const { from, to } = holeRange(ctx.holesMode)
   const DISCARD_COUNT = 4
 
+  // Default low-man (lowest hcp plays scratch); 'full' = full course handicap.
+  const netFn = config.hcpMode === 'full'
+    ? (m, h) => memberNetOnHole(ctx, m, h)
+    : (m, h) => memberNetOnHoleLowMan(ctx, m, h, members)
+
   // Round is complete when every member has a score for every hole.
   const isComplete = members.length > 0 && members.every(m => {
     for (let h = from; h <= to; h++) {
@@ -2497,9 +2502,17 @@ export function computeFourteen(ctx, config = {}) {
     let kept = []
     let manualDiscards = 0
     for (let h = from; h <= to; h++) {
-      const net = memberNetOnHole(ctx, m, h)
+      const net = netFn(m, h)
       if (net == null) continue
-      if (ctx.discards?.[m.id]?.[h]) { manualDiscards++; continue }
+      // Defensive: never honor more than DISCARD_COUNT discards. Excess rows
+      // (race condition) are ignored in hole order; the hole stays kept.
+      if (ctx.discards?.[m.id]?.[h] && manualDiscards < DISCARD_COUNT) {
+        manualDiscards++
+        continue
+      }
+      if (ctx.discards?.[m.id]?.[h]) {
+        console.warn(`[computeFourteen] member ${m.id} has >${DISCARD_COUNT} discards; ignoring hole ${h}`)
+      }
       kept.push({ hole: h, net })
     }
 
@@ -2514,20 +2527,62 @@ export function computeFourteen(ctx, config = {}) {
       kept = kept.filter(k => !droppedSet.has(k.hole))
     }
 
-    // When complete, kept is already trimmed to exactly 14 (18 − 4 discards).
-    // Mid-round / over-discard: fall back to the best 14 of whatever remains.
-    const final = isComplete ? kept : [...kept].sort((a, b) => a.net - b.net).slice(0, 14)
-    const total14 = final.reduce((s, k) => s + k.net, 0)
+    let holesScored = 0
+    for (let h = from; h <= to; h++) {
+      if (getScore(ctx, m.id, h) != null) holesScored++
+    }
+    const runningKept = kept.reduce((s, k) => s + k.net, 0)
+    const remaining = (to - from + 1) - holesScored
+    const projection = kept.length === 0
+      ? null
+      : runningKept + (runningKept / kept.length) * remaining
+
+    // Post-round: kept is already exactly 14 (18 − 4 discards). Mid-round the
+    // final 14 / total are not meaningful yet — null per spec §4.
+    const final = isComplete ? kept : null
+    const total14 = isComplete ? final.reduce((s, k) => s + k.net, 0) : null
 
     return {
       memberId: m.id,
       name: m.short_name,
       manualDiscards,
       autoDiscarded,
-      final14Holes: final.map(k => k.hole),
+      final14Holes: final ? final.map(k => k.hole) : null,
       total14,
+      holesScored,
+      runningKept,
+      projection,
     }
   })
 
-  return { players, isComplete }
+  let settlement = null
+  if (isComplete) {
+    if (config.settlement === 'pairwise') {
+      const ppt = config.ppt ?? 1
+      const perPlayer = {}
+      for (const p of players) {
+        let net = 0
+        for (const o of players) {
+          if (o.memberId === p.memberId) continue
+          net += (o.total14 - p.total14) * ppt
+        }
+        perPlayer[p.memberId] = net
+      }
+      settlement = { perPlayer, payouts: [] }
+    } else {
+      const pot = config.pot ?? 0
+      const N = players.length
+      const lowest = Math.min(...players.map(p => p.total14))
+      const winners = players.filter(p => p.total14 === lowest)
+      const M = winners.length
+      const winnerNet = (pot * (N - M)) / M
+      const perPlayer = {}
+      for (const p of players) {
+        perPlayer[p.memberId] = p.total14 === lowest ? winnerNet : -pot
+      }
+      settlement = { perPlayer, payouts: [] }
+    }
+  }
+
+  return { players, isComplete, settlement }
 }

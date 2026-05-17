@@ -9,7 +9,7 @@
  * - Tie/edge cases are tested alongside happy paths.
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   computeSkins,
   computeNassau,
@@ -1284,5 +1284,179 @@ describe('computeFourteen', () => {
     expect([...a.autoDiscarded].sort((x, y) => x - y)).toEqual([1, 2])
     expect(a.final14Holes.length).toBe(14)
     expect(a.total14).toBe(70)
+  })
+
+  it('auto-discards the 4 lowest-net kept holes when 0 used manually', () => {
+    // Alice: holes 1-4 net 2 (her 4 best), holes 5-18 net 6. No manual discards.
+    // Punishment: 4 auto-discards hit holes 1-4. final 14 = holes 5..18 = 14×6 = 84.
+    const scores = {
+      a: card(h => (h <= 4 ? 2 : 6)),
+      b: card(() => 5),
+      c: card(() => 6),
+      d: card(() => 7),
+    }
+    const result = computeFourteen(fourteenCtx(scores, {}), { settlement: 'pot', pot: 20 })
+
+    const a = player(result, 'a')
+    expect(a.manualDiscards).toBe(0)
+    expect([...a.autoDiscarded].sort((x, y) => x - y)).toEqual([1, 2, 3, 4])
+    expect(a.final14Holes.length).toBe(14)
+    expect(a.total14).toBe(84)
+  })
+
+  it('pairwise settlement: 4 players, perPlayer deltas sum to zero', () => {
+    // Scratch par-4 SI 1..18 → net == gross. Manual-discard holes 15-18.
+    // total14 = hole1 + 13×4. hole1 chosen so totals = [55,60,65,70].
+    const mk = h1 => card(h => (h === 1 ? h1 : h <= 14 ? 4 : 9))
+    const scores = { a: mk(3), b: mk(8), c: mk(13), d: mk(18) }
+    const dq = { 15: true, 16: true, 17: true, 18: true }
+    const discards = { a: { ...dq }, b: { ...dq }, c: { ...dq }, d: { ...dq } }
+    const result = computeFourteen(fourteenCtx(scores, discards), { settlement: 'pairwise', ppt: 1 })
+
+    expect(player(result, 'a').total14).toBe(55)
+    expect(player(result, 'd').total14).toBe(70)
+    expect(result.isComplete).toBe(true)
+    const pp = result.settlement.perPlayer
+    expect(pp.a).toBe(30)
+    expect(pp.d).toBe(-30)
+    const sum = Object.values(pp).reduce((s, v) => s + v, 0)
+    expect(sum).toBe(0)
+  })
+
+  it('pot settlement: single lowest winner nets +$60, losers -$20', () => {
+    const mk = h1 => card(h => (h === 1 ? h1 : h <= 14 ? 4 : 9))
+    const scores = { a: mk(3), b: mk(8), c: mk(13), d: mk(18) } // totals 55,60,65,70
+    const dq = { 15: true, 16: true, 17: true, 18: true }
+    const discards = { a: { ...dq }, b: { ...dq }, c: { ...dq }, d: { ...dq } }
+    const result = computeFourteen(fourteenCtx(scores, discards), { settlement: 'pot', pot: 20 })
+
+    const pp = result.settlement.perPlayer
+    expect(pp.a).toBe(60)
+    expect(pp.b).toBe(-20)
+    expect(pp.c).toBe(-20)
+    expect(pp.d).toBe(-20)
+    expect(Object.values(pp).reduce((s, v) => s + v, 0)).toBe(0)
+  })
+
+  it('pot settlement: 2-way tie at lowest → each winner +$20, each loser -$20', () => {
+    const mk = h1 => card(h => (h === 1 ? h1 : h <= 14 ? 4 : 9))
+    // a & b tie at 55; c=65, d=70 lose.
+    const scores = { a: mk(3), b: mk(3), c: mk(13), d: mk(18) }
+    const dq = { 15: true, 16: true, 17: true, 18: true }
+    const discards = { a: { ...dq }, b: { ...dq }, c: { ...dq }, d: { ...dq } }
+    const result = computeFourteen(fourteenCtx(scores, discards), { settlement: 'pot', pot: 20 })
+
+    const pp = result.settlement.perPlayer
+    expect(pp.a).toBe(20)
+    expect(pp.b).toBe(20)
+    expect(pp.c).toBe(-20)
+    expect(pp.d).toBe(-20)
+    expect(Object.values(pp).reduce((s, v) => s + v, 0)).toBe(0)
+  })
+
+  it('3-player pot: winner nets pot×2, others -pot', () => {
+    const mk = h1 => card(h => (h === 1 ? h1 : h <= 14 ? 4 : 9))
+    const ctx = {
+      course: makeCourse(), tee: 'white', holesMode: '18',
+      members: [makeMember('a', 'Alice'), makeMember('b', 'Bob'), makeMember('c', 'Carol')],
+      scores: { a: mk(3), b: mk(8), c: mk(13) }, // 55, 60, 65
+      discards: { a: { 15: true, 16: true, 17: true, 18: true }, b: { 15: true, 16: true, 17: true, 18: true }, c: { 15: true, 16: true, 17: true, 18: true } },
+    }
+    const result = computeFourteen(ctx, { settlement: 'pot', pot: 20 })
+    const pp = result.settlement.perPlayer
+    expect(pp.a).toBe(40)
+    expect(pp.b).toBe(-20)
+    expect(pp.c).toBe(-20)
+    expect(Object.values(pp).reduce((s, v) => s + v, 0)).toBe(0)
+  })
+
+  it('2-player game works in pot and pairwise', () => {
+    const mk = h1 => card(h => (h === 1 ? h1 : h <= 14 ? 4 : 9))
+    const dq = { 15: true, 16: true, 17: true, 18: true }
+    const base = {
+      course: makeCourse(), tee: 'white', holesMode: '18',
+      members: [makeMember('a', 'Alice'), makeMember('b', 'Bob')],
+      scores: { a: mk(3), b: mk(13) }, // 55 vs 65 → 10-stroke gap
+      discards: { a: { ...dq }, b: { ...dq } },
+    }
+    const pot = computeFourteen(base, { settlement: 'pot', pot: 20 }).settlement.perPlayer
+    expect(pot.a).toBe(20)
+    expect(pot.b).toBe(-20)
+
+    const pw = computeFourteen(base, { settlement: 'pairwise', ppt: 2 }).settlement.perPlayer
+    expect(pw.a).toBe(20)  // (65-55)×2
+    expect(pw.b).toBe(-20)
+    expect(pot.a + pot.b).toBe(0)
+    expect(pw.a + pw.b).toBe(0)
+  })
+
+  it('mid-round (10/18 scored): isComplete false, settlement null, projection populated', () => {
+    const card10 = v => { const o = {}; for (let h = 1; h <= 10; h++) o[h] = v; return o }
+    const scores = { a: card10(4), b: card10(5), c: card10(6), d: card10(7) }
+    const result = computeFourteen(fourteenCtx(scores, {}), { settlement: 'pot', pot: 20 })
+
+    expect(result.isComplete).toBe(false)
+    expect(result.settlement).toBe(null)
+    const a = player(result, 'a')
+    expect(a.holesScored).toBe(10)
+    expect(a.total14).toBe(null)
+    expect(a.final14Holes).toBe(null)
+    expect(a.autoDiscarded).toEqual([])
+    expect(a.runningKept).toBe(40)        // 10 × net 4
+    expect(a.projection).toBe(72)         // 40 + avg 4 × 8 remaining
+    expect(player(result, 'd').projection).toBe(126) // 70 + 7×8
+  })
+
+  it('hcpMode full vs lowMan produce different net totals (toggle wires through)', () => {
+    // a hcp 4 (low man), d hcp 18. Gross 5 every hole, no manual discards.
+    const ctx = {
+      course: makeCourse(), tee: 'white', holesMode: '18',
+      members: [makeMember('a', 'Alice', 4), makeMember('b', 'Bob', 4),
+                makeMember('c', 'Carol', 4), makeMember('d', 'Dave', 18)],
+      scores: { a: card(() => 5), b: card(() => 5), c: card(() => 5), d: card(() => 5) },
+      discards: {},
+    }
+    const full = computeFourteen(ctx, { settlement: 'pot', pot: 20, hcpMode: 'full' })
+    const lowMan = computeFourteen(ctx, { settlement: 'pot', pot: 20, hcpMode: 'lowMan' })
+    const dflt = computeFourteen(ctx, { settlement: 'pot', pot: 20 })
+
+    expect(player(full, 'd').total14).toBe(56)    // 1 stroke every hole → net 4 ×14
+    expect(player(lowMan, 'd').total14).toBe(60)  // adj hcp 14 → 4 holes net 5
+    expect(player(dflt, 'd').total14).toBe(60)    // default === lowMan
+  })
+
+  it('auto-discard targets best net by score regardless of entry order', () => {
+    // Holes inserted out of sequence; net-2 holes are 5 and 12 (her best).
+    // Punishment (0 manual) drops the 4 lowest-net holes by VALUE: 5,8,12,15.
+    const aScores = {}
+    for (const h of [9, 3, 14, 1, 18, 7, 11, 2, 16, 4, 13, 6, 17, 10, 5, 8, 15, 12]) {
+      aScores[h] = (h === 5 || h === 12) ? 2 : (h === 8 || h === 15) ? 3 : 6
+    }
+    const scores = { a: aScores, b: card(() => 5), c: card(() => 6), d: card(() => 7) }
+    const result = computeFourteen(fourteenCtx(scores, {}), { settlement: 'pot', pot: 20, hcpMode: 'full' })
+
+    const a = player(result, 'a')
+    expect([...a.autoDiscarded].sort((x, y) => x - y)).toEqual([5, 8, 12, 15])
+    expect(a.total14).toBe(84) // 14 × net 6
+  })
+
+  it('defensive: 5 is_discarded rows → first 4 by hole number, warns', () => {
+    // a discards holes 1,15,16,17,18 (5). Engine caps at first 4 by hole #:
+    // {1,15,16,17}. Hole 18 stays kept. manualDiscards=4 → no auto-discard.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const scores = {
+      a: card(() => 4), b: card(() => 5), c: card(() => 6), d: card(() => 7),
+    }
+    const discards = { a: { 1: true, 15: true, 16: true, 17: true, 18: true } }
+    const result = computeFourteen(fourteenCtx(scores, discards), { settlement: 'pot', pot: 20, hcpMode: 'full' })
+
+    const a = player(result, 'a')
+    expect(a.manualDiscards).toBe(4)
+    expect(a.autoDiscarded).toEqual([])
+    expect(a.final14Holes.length).toBe(14)
+    expect(a.final14Holes).toContain(18) // 5th discard ignored → 18 kept
+    expect(a.total14).toBe(56)           // 14 × net 4
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
   })
 })
