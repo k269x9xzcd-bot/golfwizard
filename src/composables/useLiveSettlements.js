@@ -17,6 +17,7 @@ import {
   computeNassau, computeSkins, computeMatch, computeVegas, computeSnake,
   computeHiLow, computeStableford, computeWolf, computeHammer, computeSixes,
   computeFiveThreeOne, computeDots, computeFidget, computeBestBallNet, computeBestBall, computeBbb,
+  computeFourteen,
   memberHandicap,
 } from '../modules/gameEngine'
 import { formatMatchLabel } from '../modules/matchLabels'
@@ -730,6 +731,25 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} ${t === 'nines' ? '9s' : '5-3-1'}</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppt}/pt${played > 0 ? ' · thru ' + played : ''}</span>${badgeHtml}<div style="font-size:11px;margin-top:4px">${standRows || 'No complete holes yet'}</div></div>`
       }
 
+
+      // ── 14 Holes ──
+      if (t === 'fourteen') {
+        const r = computeFourteen(ctx, cfg)
+        if (!r) return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} 14 Holes</span></div>`
+        const totalHoles = 18
+        const holesScored = r.players[0]?.holesScored ?? 0
+        const statusTag = r.isComplete
+          ? `<span style="font-size:10px;color:#4ade80;margin-left:4px">✓ complete</span>`
+          : `<span class="muted" style="font-size:10px;margin-left:4px">${holesScored}/${totalHoles} holes</span>`
+        const standRows = r.standings.map(p => {
+          const deltaStr = r.isComplete && r.settlement
+            ? (() => { const d = r.settlement.perPlayer[p.memberId]; return d > 0 ? `<span style="color:#4ade80">+$${d}</span>` : d < 0 ? `<span style="color:#f87171">-$${Math.abs(d)}</span>` : `<span class="muted">$0</span>` })()
+            : (p.projection != null ? `<span class="muted">${Math.round(p.projection)} proj</span>` : '')
+          const discardInfo = `${p.manualDiscards}/4 🗑️`
+          return `<div style="display:flex;justify-content:space-between;font-size:11px;padding:1px 0"><span>${escHtml(p.name)}</span><span>${p.total14 != null ? p.total14 : '—'} · ${discardInfo} ${deltaStr}</span></div>`
+        }).join('')
+        return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} 14 Holes</span>${statusTag}<div style="margin-top:4px">${standRows}</div></div>`
+      }
 
       return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} ${gameLabel(game.type, cfg)}</span></div>`
     } catch(e) {

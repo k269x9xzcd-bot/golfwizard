@@ -30,12 +30,13 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
       tee: roundsStore.activeRound?.tee,
       members: roundsStore.activeMembers,
       scores: roundsStore.activeScores,
+      discards: roundsStore.activeDiscards,
       holesMode: roundsStore.activeRound?.holes_mode || '18',
     }
   }
 
   function gameIcon(type) {
-    const icons = { nassau:'💰', skins:'💎', match:'⚔️', matchplay:'⚔️', bestball:'🤝', snake:'🐍', dots:'🎯', fidget:'😬', bbn:'🏌️', match1v1:'⚔️', vegas:'🎰', hilow:'📊', stableford:'⭐', wolf:'🐺', hammer:'🔨', sixes:'🎲', fivethreeone:'5️⃣', nines:'9️⃣', bbb:'🏌️' }
+    const icons = { nassau:'💰', skins:'💎', match:'⚔️', matchplay:'⚔️', bestball:'🤝', snake:'🐍', dots:'🎯', fidget:'😬', bbn:'🏌️', match1v1:'⚔️', vegas:'🎰', hilow:'📊', stableford:'⭐', wolf:'🐺', hammer:'🔨', sixes:'🎲', fivethreeone:'5️⃣', nines:'9️⃣', bbb:'🏌️', fourteen:'🎯' }
     return icons[type?.toLowerCase()] || '🎮'
   }
 

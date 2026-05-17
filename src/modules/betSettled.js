@@ -63,3 +63,11 @@ export function skinsCarrySettled(allHoleResults, totalHoles) {
     || hr.winner !== undefined).length  // computeSkins emits incomplete with reason
   return playedCount >= totalHoles
 }
+
+/**
+ * 14 Holes settlement: $ settled only when all 18 holes are scored for all
+ * players (isComplete from computeFourteen). No early-clinch possible.
+ */
+export function fourteenSettled(result) {
+  return result?.isComplete === true
+}

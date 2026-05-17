@@ -403,13 +403,13 @@
             v-for="g in MAIN_GAMES"
             :key="g.key"
             class="game-type-btn"
-            :class="{ selected: mainGame.type === g.key, 'game-type-btn--disabled': g.key === 'nines' && (props.lockedPlayers ?? form.players).length < 3 }"
-            :disabled="g.key === 'nines' && (props.lockedPlayers ?? form.players).length < 3"
-            :title="g.key === 'nines' && (props.lockedPlayers ?? form.players).length < 3 ? '5-3-1 requires at least 3 players' : ''"
+            :class="{ selected: mainGame.type === g.key, 'game-type-btn--disabled': isTileDisabled(g.key) }"
+            :disabled="isTileDisabled(g.key)"
+            :title="tileDisabledHint(g.key)"
             @click="setMainGame(g.key)"
           >
             <span class="gtb-icon">{{ g.icon }}</span>
-            <span class="gtb-label">{{ g.label }}<span v-if="g.key === 'nines' && (props.lockedPlayers ?? form.players).length < 3" style="font-size:9px;display:block;opacity:.6;">3+ players</span></span>
+            <span class="gtb-label">{{ g.label }}<span v-if="tileDisabledLabel(g.key)" style="font-size:9px;display:block;opacity:.6;">{{ tileDisabledLabel(g.key) }}</span></span>
             <button class="btn-game-info btn-game-info-grid" @click.stop="toggleGameInfo(g.key)" title="How to play" v-if="g.key !== 'none'">ℹ️</button>
           </button>
         </div>
@@ -665,6 +665,53 @@
             </div>
           </div>
           <div class="config-note">All {{ form.players.length }} players compete. Settle pairwise on pt difference.</div>
+        </div>
+
+        <!-- 14 Holes config -->
+        <div v-if="mainGame.type === 'fourteen'" class="game-config-card">
+          <div class="config-row">
+            <div class="config-field config-field--full">
+              <label>How does $ settle?</label>
+              <div class="holes-toggle">
+                <button class="holes-btn" :class="{ active: mainGame.config.settlement === 'pot' }" @click="mainGame.config.settlement = 'pot'">Pot</button>
+                <button class="holes-btn" :class="{ active: mainGame.config.settlement === 'pairwise' }" @click="mainGame.config.settlement = 'pairwise'">Pairwise</button>
+              </div>
+            </div>
+          </div>
+          <div v-if="mainGame.config.settlement === 'pot'" class="config-row">
+            <div class="config-field">
+              <label>Pot ante</label>
+              <div class="config-input-prefix">
+                <span class="prefix">$</span>
+                <input v-model.number="mainGame.config.pot" type="number" min="1" class="config-input" placeholder="20" />
+              </div>
+            </div>
+            <div class="config-field">
+              <label style="opacity:.5">per player</label>
+            </div>
+          </div>
+          <div v-if="mainGame.config.settlement === 'pairwise'" class="config-row">
+            <div class="config-field">
+              <label>Stroke value</label>
+              <div class="config-input-prefix">
+                <span class="prefix">$</span>
+                <input v-model.number="mainGame.config.ppt" type="number" min="0.25" step="0.25" class="config-input" placeholder="1" />
+              </div>
+            </div>
+            <div class="config-field">
+              <label style="opacity:.5">per stroke diff</label>
+            </div>
+          </div>
+          <div class="config-row">
+            <div class="config-field config-field--full">
+              <label>Handicap</label>
+              <div class="holes-toggle">
+                <button class="holes-btn" :class="{ active: mainGame.config.hcpMode === 'lowMan' }" @click="mainGame.config.hcpMode = 'lowMan'">Low-man</button>
+                <button class="holes-btn" :class="{ active: mainGame.config.hcpMode === 'full' }" @click="mainGame.config.hcpMode = 'full'">Full course</button>
+              </div>
+            </div>
+          </div>
+          <div class="config-note">All {{ form.players.length }} players compete individually. Lowest 14-total wins.</div>
         </div>
 
         <!-- Wolf config -->
@@ -1636,6 +1683,7 @@ const MAIN_GAMES = [
   { key: 'hammer',      icon: '🔨', label: 'Hammer' },
   { key: 'sixes',       icon: '🎲', label: 'Sixes' },
   { key: 'nines',        icon: '9️⃣', label: 'Nines (5-3-1)' },
+  { key: 'fourteen',    icon: '🎯', label: '14 Holes' },
   { key: 'none',        icon: '📋', label: 'Scores Only' },
 ]
 
@@ -1652,6 +1700,7 @@ const GAME_DEFAULTS = {
   sixes:       { ppt: 1, scoringModel: 'perhole' },
   nines:       { ppt: 1, sweepBonus: false, sweepMargin: 2, birdieBonus: false, birdieBonusPts: 1, birdieDouble: false, players: null },
   bestball:    { ppt: 5, ballsPerTeam: 1, team1: [], team2: [], hidden: true },
+  fourteen:    { settlement: 'pot', pot: 20, ppt: 1, hcpMode: 'lowMan' },
   none:        {},
 }
 
@@ -1727,6 +1776,31 @@ function addBbnTracker() {
 
 function removeBbnTracker(id) {
   bbnTrackers.value = bbnTrackers.value.filter(t => t.id !== id)
+}
+
+function isTileDisabled(key) {
+  const players = (props.lockedPlayers ?? form.value.players)
+  if (key === 'nines') return players.length < 3
+  if (key === 'fourteen') return players.length < 2 || players.length > 4 || form.value.holesMode !== '18'
+  return false
+}
+function tileDisabledHint(key) {
+  const players = (props.lockedPlayers ?? form.value.players)
+  if (key === 'nines' && players.length < 3) return '5-3-1 requires at least 3 players'
+  if (key === 'fourteen') {
+    if (players.length < 2 || players.length > 4) return 'Needs 2–4 players'
+    if (form.value.holesMode !== '18') return '18-hole only'
+  }
+  return ''
+}
+function tileDisabledLabel(key) {
+  const players = (props.lockedPlayers ?? form.value.players)
+  if (key === 'nines' && players.length < 3) return '3+ players'
+  if (key === 'fourteen') {
+    if (players.length < 2 || players.length > 4) return '2–4 players'
+    if (form.value.holesMode !== '18') return '18 holes only'
+  }
+  return ''
 }
 
 function setMainGame(key) {
@@ -2156,6 +2230,10 @@ const canNext = computed(() => {
 })
 const canFinish = computed(() => {
   if (!form.value.players.length || !form.value.courseName) return false
+  if (mainGame.value.type === 'fourteen') {
+    if (mainGame.value.config.settlement === 'pot' && !(mainGame.value.config.pot >= 1)) return false
+    if (mainGame.value.config.settlement === 'pairwise' && !(mainGame.value.config.ppt >= 0.25)) return false
+  }
   return true
 })
 

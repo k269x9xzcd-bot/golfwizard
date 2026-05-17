@@ -69,6 +69,7 @@ export const useRoundsStore = defineStore('rounds', () => {
   const activeMembers = ref([])   // round_members rows
   const activeScores = ref({})    // { memberId: { hole: score } }
   const activeScoreMeta = ref({}) // { memberId: { hole: { entered_by, entered_at } } }
+  const activeDiscards = ref({})  // { memberId: { hole: true } } — 14 Holes KEEP/DISCARD flags
   const activeGames = ref([])     // game_configs rows
   const _inFlightGameKeys = new Set() // dedup guard for concurrent saveGameConfig inserts
 
@@ -450,6 +451,7 @@ export const useRoundsStore = defineStore('rounds', () => {
       activeGames.value = gameConfigs
       activeScores.value = {}
       activeScoreMeta.value = {}
+      activeDiscards.value = {}
 
       _persistGuest()
       return round
@@ -768,14 +770,20 @@ export const useRoundsStore = defineStore('rounds', () => {
     // Build scores map: { memberId: { hole: score } }
     const sm = {}
     const meta = {}
+    const dm = {}
     for (const s of (data.scores ?? [])) {
       if (!sm[s.member_id]) sm[s.member_id] = {}
       sm[s.member_id][s.hole] = s.score
       if (!meta[s.member_id]) meta[s.member_id] = {}
       meta[s.member_id][s.hole] = { entered_by: s.entered_by ?? null, entered_at: s.entered_at ?? null }
+      if (s.is_discarded) {
+        if (!dm[s.member_id]) dm[s.member_id] = {}
+        dm[s.member_id][s.hole] = true
+      }
     }
     activeScores.value = sm
     activeScoreMeta.value = meta
+    activeDiscards.value = dm
 
     // Reconcile the offline score queue against this round's actual members.
     // Drops orphan entries with stale client-generated member_ids that would
@@ -850,6 +858,34 @@ export const useRoundsStore = defineStore('rounds', () => {
       scoreSyncError.value = isAuthErr ? 'rls' : 'db'
     }
     // Non-blocking: never throw — the optimistic update already applied
+  }
+
+  // ── Set KEEP/DISCARD flag (14 Holes) ────────────────────────
+  async function setDiscardFlag(memberId, hole, isDiscarded) {
+    // Optimistic update — UI reflects the tap immediately
+    if (!activeDiscards.value[memberId]) activeDiscards.value[memberId] = {}
+    if (isDiscarded) {
+      activeDiscards.value[memberId][hole] = true
+    } else {
+      delete activeDiscards.value[memberId][hole]
+    }
+
+    const auth = useAuthStore()
+    if (!auth.isAuthenticated || String(activeRound.value?.id ?? '').startsWith('guest_')) return
+
+    const filter = `round_id=eq.${activeRound.value.id},member_id=eq.${memberId},hole=eq.${hole}`
+    const patch = { is_discarded: isDiscarded }
+    try {
+      const { error } = await supaCall(
+        'scores.discard',
+        supabase.from('scores').update(patch).eq('round_id', activeRound.value.id).eq('member_id', memberId).eq('hole', hole),
+        5000
+      )
+      if (error) throw error
+    } catch {
+      console.warn('[setDiscardFlag] SJS timeout, raw fallback')
+      await supaRawUpdate('scores', filter, patch, 8000)
+    }
   }
 
   // ── Save game configs ───────────────────────────────────────
@@ -1287,6 +1323,7 @@ export const useRoundsStore = defineStore('rounds', () => {
         activeMembers.value = []
         activeScores.value = {}
         activeScoreMeta.value = {}
+        activeDiscards.value = {}
         activeGames.value = []
       }
       rounds.value = rounds.value.filter(r => r.id !== roundId)
@@ -1302,6 +1339,7 @@ export const useRoundsStore = defineStore('rounds', () => {
       activeMembers.value = []
       activeScores.value = {}
       activeScoreMeta.value = {}
+      activeDiscards.value = {}
       activeGames.value = []
     }
     rounds.value = rounds.value.filter(r => r.id !== roundId)
@@ -1514,13 +1552,13 @@ export const useRoundsStore = defineStore('rounds', () => {
   }
 
   return {
-    activeRound, activeMembers, activeScores, activeScoreMeta, activeGames,
+    activeRound, activeMembers, activeScores, activeScoreMeta, activeDiscards, activeGames,
     knownRounds,
     rounds, myRounds, loading, activeRoundId, scoreSyncError,
     pendingQueueCount,
     flushQueue: _flushQueue,
     patchActiveGames: (games) => { activeGames.value = games },
-    fetchRounds, createRound, loadRound, setScore,
+    fetchRounds, createRound, loadRound, setScore, setDiscardFlag,
     saveGameConfig, updateGameConfig, deleteGameConfig,
     updateRoundDate,
     joinByRoomCode, completeRound, deleteRound, setActiveRound,
