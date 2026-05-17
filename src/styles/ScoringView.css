@@ -2059,3 +2059,39 @@
   font-size: 10px; font-weight: 600; opacity: .6;
   margin-left: 4px;
 }
+
+/* ─── 14 Holes ─────────────────────────────────────────────────────────── */
+.cell-discarded { opacity: .45; }
+.cell-discarded span:first-child { text-decoration: line-through; text-decoration-color: #ef4444; }
+
+.fourteen-pill-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 6px 2px;
+}
+.fourteen-pill {
+  font-size: 11px; font-weight: 700; letter-spacing: .04em;
+  padding: 4px 10px; border-radius: 999px;
+  min-height: 28px; min-width: 64px;
+  border: 1.5px solid transparent;
+  cursor: pointer; transition: opacity .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.fourteen-pill--keep {
+  background: var(--gw-green-500, #1a7a55);
+  color: #fff;
+  border-color: var(--gw-green-500, #1a7a55);
+}
+.fourteen-pill--discard {
+  background: transparent;
+  color: #ef4444;
+  border-color: #ef4444;
+}
+.fourteen-pill:disabled {
+  opacity: .35; cursor: default;
+}
+.fourteen-discards-left {
+  font-size: 10px; font-weight: 600;
+  color: rgba(240,237,224,.45);
+}
+.fourteen-left--amber { color: #f59e0b; }
+.fourteen-left--red   { color: #ef4444; }
