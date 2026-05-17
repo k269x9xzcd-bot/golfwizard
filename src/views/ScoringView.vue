@@ -858,6 +858,23 @@
                 {{ getScore(group.member.id, activeHole) ? netScore(getScore(group.member.id, activeHole), memberEffectiveHcp(group.member), siForHole(activeHole)) : '—' }}
               </div>
             </div>
+            <!-- 14 Holes KEEP/DISCARD pill — only when score entered -->
+            <div v-if="fourteenGame && getScore(group.member.id, activeHole)" class="fourteen-pill-row">
+              <button
+                class="fourteen-pill"
+                :class="{ 'fourteen-pill--keep': !isDiscarded(group.member.id, activeHole), 'fourteen-pill--discard': isDiscarded(group.member.id, activeHole) }"
+                @click="!isDiscarded(group.member.id, activeHole) && discardsLeft(group.member.id) <= 0 ? null : toggleDiscard(group.member.id, activeHole)"
+                :disabled="!isDiscarded(group.member.id, activeHole) && discardsLeft(group.member.id) <= 0"
+                :title="!isDiscarded(group.member.id, activeHole) && discardsLeft(group.member.id) <= 0 ? 'All 4 discards used' : ''"
+              >
+                {{ isDiscarded(group.member.id, activeHole) ? 'DISCARD' : 'KEEP' }}
+              </button>
+              <span
+                class="fourteen-discards-left"
+                :class="{ 'fourteen-left--amber': discardsLeft(group.member.id) === 1, 'fourteen-left--red': discardsLeft(group.member.id) === 0 }"
+              >{{ discardsLeft(group.member.id) }} left</span>
+            </div>
+
             <div v-if="wolfGame && wolfOnThisHole === group.member.id && wolfChoiceForHole?.partner" class="wolf-badge-row">
               <template v-if="wolfChoiceForHole.partner === 'lone'">🐺 Lone</template>
               <template v-else-if="wolfChoiceForHole.partner === 'blind'">🙈 Blind</template>
@@ -1181,6 +1198,26 @@ const showDoubleFidgetPrompt = ref(false)
 const doubleFidgetGame = ref(null)
 
 const fidgetGame = computed(() => roundsStore.activeGames.find(g => g.type === 'fidget'))
+
+// ── 14 Holes ─────────────────────────────────────────────────────
+const fourteenGame = computed(() => roundsStore.activeGames.find(g => g.type === 'fourteen') || null)
+
+function isDiscarded(memberId, hole) {
+  return roundsStore.activeDiscards?.[memberId]?.[hole] === true
+}
+function discardsUsed(memberId) {
+  return Object.keys(roundsStore.activeDiscards?.[memberId] || {}).length
+}
+function discardsLeft(memberId) {
+  return Math.max(0, 4 - discardsUsed(memberId))
+}
+async function toggleDiscard(memberId, hole) {
+  if (!fourteenGame.value) return
+  const next = !isDiscarded(memberId, hole)
+  // Enforce hard cap: can't mark DISCARD when at 0 left (unless un-discarding)
+  if (next && discardsLeft(memberId) <= 0) return
+  await roundsStore.setDiscardFlag(memberId, hole, next)
+}
 
 // Watch for all-cleared condition after each score change
 watch(
