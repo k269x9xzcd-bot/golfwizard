@@ -10,7 +10,7 @@ import {
   computeSnake, computeHiLow, computeStableford, computeWolf,
   computeHammer, computeSixes, computeNines, computeFiveThreeOne, computeDots,
   computeFidget, computeBestBallNet, computeBestBall,
-  computeBbb, computeScotch6s, computeTeamDay,
+  computeBbb, computeScotch6s, computeTeamDay, computeFourteen,
 } from './gameEngine.js'
 
 // Route match games: 1v1 uses computeMatch, 2v2 (team1/team2) uses computeBestBall
@@ -43,6 +43,7 @@ const ENGINE_MAP = {
   bbb: computeBbb,
   scotch6s: computeScotch6s,
   teamday: computeTeamDay,
+  fourteen: computeFourteen,
 }
 
 /**
@@ -67,6 +68,16 @@ function extractPlayerNets(type, result, config, members) {
       if (netMap[s.to]   !== undefined) netMap[s.to]   += s.amount
     }
     return members.map(m => ({ id: m.id, name: m.short_name, net: netMap[m.id] || 0 }))
+  }
+
+  // ── 14 Holes — settlement.perPlayer is a memberId → signed net map.
+  // Null until the round is complete (no $ shown mid-round). ──
+  if (t === 'fourteen') {
+    const pp = result?.settlement?.perPlayer
+    if (!pp) return []
+    return members
+      .filter(m => pp[m.id] != null)
+      .map(m => ({ id: m.id, name: m.short_name, net: pp[m.id] }))
   }
 
   // ── Match — 1v1 uses settlement.p1Net; 2v2 delegates to bestball handler ──
