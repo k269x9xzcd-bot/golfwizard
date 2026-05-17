@@ -2474,3 +2474,60 @@ export function computeCrossBestBall(roundA, roundB, config = {}) {
     hcpPct,
   }
 }
+
+// ─────────────────────────────────────────────────────────────────
+// ── 14 HOLES ─────────────────────────────────────────────────────
+// Individual net stroke play. Sum of the 14 best kept net scores.
+// ctx.discards[memberId][hole] === true marks a discarded hole.
+// ─────────────────────────────────────────────────────────────────
+export function computeFourteen(ctx, config = {}) {
+  const members = ctx.members || []
+  const { from, to } = holeRange(ctx.holesMode)
+  const DISCARD_COUNT = 4
+
+  // Round is complete when every member has a score for every hole.
+  const isComplete = members.length > 0 && members.every(m => {
+    for (let h = from; h <= to; h++) {
+      if (getScore(ctx, m.id, h) == null) return false
+    }
+    return true
+  })
+
+  const players = members.map(m => {
+    let kept = []
+    let manualDiscards = 0
+    for (let h = from; h <= to; h++) {
+      const net = memberNetOnHole(ctx, m, h)
+      if (net == null) continue
+      if (ctx.discards?.[m.id]?.[h]) { manualDiscards++; continue }
+      kept.push({ hole: h, net })
+    }
+
+    // Punishment: at round end, unused discards auto-drop the BEST kept holes.
+    let autoDiscarded = []
+    if (isComplete && manualDiscards < DISCARD_COUNT) {
+      const need = DISCARD_COUNT - manualDiscards
+      const byBest = [...kept].sort((a, b) => a.net - b.net)
+      const dropped = byBest.slice(0, need)
+      autoDiscarded = dropped.map(k => k.hole)
+      const droppedSet = new Set(autoDiscarded)
+      kept = kept.filter(k => !droppedSet.has(k.hole))
+    }
+
+    // When complete, kept is already trimmed to exactly 14 (18 − 4 discards).
+    // Mid-round / over-discard: fall back to the best 14 of whatever remains.
+    const final = isComplete ? kept : [...kept].sort((a, b) => a.net - b.net).slice(0, 14)
+    const total14 = final.reduce((s, k) => s + k.net, 0)
+
+    return {
+      memberId: m.id,
+      name: m.short_name,
+      manualDiscards,
+      autoDiscarded,
+      final14Holes: final.map(k => k.hole),
+      total14,
+    }
+  })
+
+  return { players, isComplete }
+}

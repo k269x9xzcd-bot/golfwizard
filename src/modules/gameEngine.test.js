@@ -30,6 +30,7 @@ import {
   computeScotch6s,
   computeTeamDay,
   computeCrossBestBall,
+  computeFourteen,
 } from './gameEngine.js'
 
 // ─────────────────────────────────────────────────────────────────
@@ -1219,5 +1220,69 @@ describe('computeCrossBestBall (4v4 cross-match, 2BB net)', () => {
     expect(result.teamB.vsPar).toBe(0)
     expect(result.delta).toBe(-2)
     expect(result.settlement.winner).toBe('A')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────
+// ── 14 HOLES (computeFourteen) ───────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
+// Discards modeled as ctx.discards[memberId][hole] === true — the
+// pure-engine surface of the scores.is_discarded column.
+describe('computeFourteen', () => {
+  function fourteenCtx(scores, discards = {}) {
+    return {
+      course: makeCourse(),
+      tee: 'white',
+      holesMode: '18',
+      members: [
+        makeMember('a', 'Alice'),
+        makeMember('b', 'Bob'),
+        makeMember('c', 'Carol'),
+        makeMember('d', 'Dave'),
+      ],
+      scores,
+      discards,
+    }
+  }
+  function card(per) { const o = {}; for (let h = 1; h <= 18; h++) o[h] = per(h); return o }
+  function player(result, id) { return result.players.find(p => p.memberId === id) }
+
+  it('sums the 14 best kept net scores when 4 discards used manually', () => {
+    // Scratch, par 4, SI 1..18 → net == gross.
+    // Alice: holes 1-14 gross 4, holes 15-18 gross 8. Discard the four 8s.
+    const scores = {
+      a: card(h => (h <= 14 ? 4 : 8)),
+      b: card(() => 5),
+      c: card(() => 6),
+      d: card(() => 7),
+    }
+    const discards = { a: { 15: true, 16: true, 17: true, 18: true } }
+    const result = computeFourteen(fourteenCtx(scores, discards), { settlement: 'pot', pot: 20, hcpMode: 'lowMan' })
+
+    const a = player(result, 'a')
+    expect(a.total14).toBe(56)        // 14 × net 4
+    expect(a.manualDiscards).toBe(4)
+    expect(a.autoDiscarded).toEqual([]) // all 4 used manually → no punishment
+  })
+
+  it('auto-discards the BEST kept holes when fewer than 4 used (punishment)', () => {
+    // Alice: holes 1-2 net 2 (her best), holes 3-16 net 5, holes 17-18 net 9.
+    // She manually discards only the two 9s (holes 17,18) → 2 of 4 used.
+    // Punishment: 2 auto-discards hit her BEST kept holes (1,2).
+    // final 14 = holes 3..16 = fourteen net-5 = 70.
+    const scores = {
+      a: card(h => (h <= 2 ? 2 : h <= 16 ? 5 : 9)),
+      b: card(() => 5),
+      c: card(() => 6),
+      d: card(() => 7),
+    }
+    const discards = { a: { 17: true, 18: true } }
+    const result = computeFourteen(fourteenCtx(scores, discards), { settlement: 'pot', pot: 20 })
+
+    const a = player(result, 'a')
+    expect(a.manualDiscards).toBe(2)
+    expect([...a.autoDiscarded].sort((x, y) => x - y)).toEqual([1, 2])
+    expect(a.final14Holes.length).toBe(14)
+    expect(a.total14).toBe(70)
   })
 })
