@@ -1740,6 +1740,12 @@ function setMainGame(key) {
     mainGame.value.config.team1 = oldTeam1
     mainGame.value.config.team2 = oldTeam2
   }
+  // Seed 1v1/2v2 match player slots from the first two players in the round
+  // (GAME_DEFAULTS is static, so player1/player2 can't be seeded there).
+  if (key === 'match') {
+    mainGame.value.config.player1 = form.value.players[0]?.id ?? ''
+    mainGame.value.config.player2 = form.value.players[1]?.id ?? ''
+  }
   // Pre-select first 3 players for nines when 4+ in round
   if (key === 'nines' && form.value.players.length > 3) {
     mainGame.value.config.players = form.value.players.slice(0, 3).map(p => p.id)
@@ -1763,6 +1769,16 @@ function toggleSideGame(key) {
   // Init 3-player picker when enabling nines side game in a 4+ player round
   if (key === 'nines' && sideGames.value.nines.enabled && form.value.players.length > 3 && !sideGames.value.nines.players) {
     sideGames.value.nines.players = form.value.players.slice(0, 3).map(p => p.id)
+  }
+  // Auto-seed 1v1 match player slots on enable (can't seed at declaration —
+  // form.players isn't populated yet). Only fill if still empty.
+  if ((key === 'match1' || key === 'match2') && sideGames.value[key].enabled) {
+    if (sideGames.value[key].player1 === '') {
+      sideGames.value[key].player1 = form.value.players[0]?.id ?? ''
+    }
+    if (sideGames.value[key].player2 === '') {
+      sideGames.value[key].player2 = form.value.players[1]?.id ?? ''
+    }
   }
 }
 
@@ -2683,6 +2699,15 @@ function _loadEditGames() {
     } else {
       m.scoring = smg.config?.scoring || 'closeout'; m.player1 = smg.config?.player1 || ''; m.player2 = smg.config?.player2 || ''; m.ppt = smg.config?.ppt ?? 10
     }
+  })
+
+  // Fallback: a loaded side match with empty player slots gets seeded from
+  // the first two players in the round so the dropdowns never show blank.
+  ;['match1', 'match2'].forEach(key => {
+    const m = sg[key]
+    if (!m.enabled) return
+    if (m.player1 === '') m.player1 = form.value.players[0]?.id ?? ''
+    if (m.player2 === '') m.player2 = form.value.players[1]?.id ?? ''
   })
 
   const bbnRows = games.filter(g => g.type === 'bbn')

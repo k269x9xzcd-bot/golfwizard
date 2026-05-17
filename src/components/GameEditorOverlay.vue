@@ -41,13 +41,14 @@
             {{ gt.icon }} {{ gt.label }}
           </button>
         </div>
+        <div v-if="addError" class="ge-add-error">{{ addError }}</div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoundsStore } from '../stores/rounds'
 
 const props = defineProps({
@@ -59,6 +60,8 @@ const props = defineProps({
 const emit = defineEmits(['close'])
 
 const roundsStore = useRoundsStore()
+
+const addError = ref('')
 
 const addableGameTypes = computed(() => {
   const existing = new Set(roundsStore.activeGames.map(g => g.type?.toLowerCase()))
@@ -91,8 +94,13 @@ async function removeGame(gameId) {
 }
 
 async function addNewGame(type) {
+  addError.value = ''
   const members = roundsStore.activeMembers
   const memberIds = members.map(m => m.id)
+  if (type === 'match1v1' && memberIds.length < 2) {
+    addError.value = 'Need at least 2 players to add a 1v1 match.'
+    return
+  }
   let config = {}
   switch (type) {
     case 'nassau': {

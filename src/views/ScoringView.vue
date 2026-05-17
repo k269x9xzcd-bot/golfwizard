@@ -428,11 +428,24 @@
                     :key="h"
                     class="col-score-cell"
                     :class="{ 'cell-winner': isNetWinner(group.member.id, h), 'cell-defidget': isFidgetWinner(group.member.id, h), [sixesCellClass(group.member.id, h)]: true }"
-                    @click="isViewOnly ? openEditScoreDialog(group.member.id, h) : (activeHole = h)"
+                    @click="onCellClick(group.member.id, h)"
+                    @pointerdown="onCellPressStart(group.member.id, h)"
+                    @pointerup="onCellPressEnd()"
+                    @pointercancel="onCellPressEnd()"
+                    @pointerleave="onCellPressEnd()"
+                    @contextmenu.prevent
                   >
                     <span v-if="getScore(group.member.id, h)" :class="showNotations ? scoreNotation(getScore(group.member.id, h), parForHole(h)) : ''">{{ getScore(group.member.id, h) }}</span>
                     <span v-else class="score-empty-dot">·</span>
                     <span v-if="strokeDotsOnHole(group.member, h)" class="stroke-dots">{{ '•'.repeat(strokeDotsOnHole(group.member, h)) }}</span>
+                    <div
+                      v-if="scoreInfoOpen.memberId === group.member.id && scoreInfoOpen.hole === h"
+                      class="score-info-popover"
+                      @click.stop
+                    >
+                      Entered by <strong>{{ enteredByName(scoreMetaFor(group.member.id, h)?.entered_by) }}</strong>
+                      · {{ relativeTime(scoreMetaFor(group.member.id, h)?.entered_at) }}
+                    </div>
                   </td>
                   <!-- OUT subtotal -->
                   <td v-if="hasBack9" class="col-subtotal">{{ memberGrossTotal(group.member.id, frontHoles[0], frontHoles[frontHoles.length-1]) }}</td>
@@ -442,11 +455,24 @@
                     :key="h"
                     class="col-score-cell"
                     :class="{ 'cell-winner': isNetWinner(group.member.id, h), 'cell-defidget': isFidgetWinner(group.member.id, h), [sixesCellClass(group.member.id, h)]: true }"
-                    @click="isViewOnly ? openEditScoreDialog(group.member.id, h) : (activeHole = h)"
+                    @click="onCellClick(group.member.id, h)"
+                    @pointerdown="onCellPressStart(group.member.id, h)"
+                    @pointerup="onCellPressEnd()"
+                    @pointercancel="onCellPressEnd()"
+                    @pointerleave="onCellPressEnd()"
+                    @contextmenu.prevent
                   >
                     <span v-if="getScore(group.member.id, h)" :class="showNotations ? scoreNotation(getScore(group.member.id, h), parForHole(h)) : ''">{{ getScore(group.member.id, h) }}</span>
                     <span v-else class="score-empty-dot">·</span>
                     <span v-if="strokeDotsOnHole(group.member, h)" class="stroke-dots">{{ '•'.repeat(strokeDotsOnHole(group.member, h)) }}</span>
+                    <div
+                      v-if="scoreInfoOpen.memberId === group.member.id && scoreInfoOpen.hole === h"
+                      class="score-info-popover"
+                      @click.stop
+                    >
+                      Entered by <strong>{{ enteredByName(scoreMetaFor(group.member.id, h)?.entered_by) }}</strong>
+                      · {{ relativeTime(scoreMetaFor(group.member.id, h)?.entered_at) }}
+                    </div>
                   </td>
                   <!-- IN subtotal -->
                   <td v-if="hasBack9" class="col-subtotal">{{ memberGrossTotal(group.member.id, backHoles[0], backHoles[backHoles.length-1]) }}</td>
@@ -822,20 +848,6 @@
                 <span :class="getScore(group.member.id, activeHole) ? (showNotations ? scoreNotation(getScore(group.member.id, activeHole), parForHole(activeHole)) : '') : 'muted'">
                   {{ getScore(group.member.id, activeHole) || '—' }}
                 </span>
-                <button
-                  v-if="scoreMetaFor(group.member.id, activeHole)"
-                  class="score-info-btn"
-                  @click.stop="toggleScoreInfo(group.member.id, activeHole)"
-                  aria-label="Who entered this score"
-                >❶</button>
-                <div
-                  v-if="scoreInfoOpen.memberId === group.member.id && scoreInfoOpen.hole === activeHole"
-                  class="score-info-popover"
-                  @click.stop
-                >
-                  Entered by <strong>{{ enteredByName(scoreMetaFor(group.member.id, activeHole)?.entered_by) }}</strong>
-                  · {{ relativeTime(scoreMetaFor(group.member.id, activeHole)?.entered_at) }}
-                </div>
               </div>
               <button class="score-tap score-tap-plus" @click="inlineInc(group.member)">+</button>
             <div v-if="scoreSaveState[group.member.id + '-' + activeHole]" class="score-save-state">{{ scoreSaveState[group.member.id + '-' + activeHole] }}</div>
@@ -1650,6 +1662,63 @@ function toggleScoreInfo(memberId, hole) {
     scoreInfoOpen.value = { memberId, hole }
   }
 }
+
+function closeScoreInfo() {
+  if (scoreInfoOpen.value.memberId != null) {
+    scoreInfoOpen.value = { memberId: null, hole: null }
+  }
+}
+
+// ── Card-view grid cell: tap navigates / edits; long-press shows attribution ──
+let _cellPressTimer = null
+let _cellLongPressFired = false
+
+function onCellPressStart(memberId, hole) {
+  _cellLongPressFired = false
+  if (isViewOnly.value) return            // viewOnly uses tap → edit dialog, no long-press
+  if (!getScore(memberId, hole)) return   // attribution only exists for scored holes
+  if (!scoreMetaFor(memberId, hole)) return
+  clearTimeout(_cellPressTimer)
+  _cellPressTimer = setTimeout(() => {
+    _cellLongPressFired = true
+    toggleScoreInfo(memberId, hole)
+  }, 500)
+}
+
+function onCellPressEnd() {
+  clearTimeout(_cellPressTimer)
+}
+
+function onCellClick(memberId, hole) {
+  if (_cellLongPressFired) {              // long-press already handled this interaction
+    _cellLongPressFired = false
+    return
+  }
+  if (isViewOnly.value) {
+    openEditScoreDialog(memberId, hole)
+    return
+  }
+  closeScoreInfo()
+  activeHole.value = hole
+}
+
+// Dismiss the attribution popover on any pointer-down outside it.
+function _scoreInfoOutside(e) {
+  if (e.target?.closest?.('.score-info-popover')) return
+  if (e.target?.closest?.('.col-score-cell')) return  // cell handlers manage their own state
+  closeScoreInfo()
+}
+watch(() => scoreInfoOpen.value.memberId, (open) => {
+  if (open != null) {
+    setTimeout(() => document.addEventListener('pointerdown', _scoreInfoOutside, true), 0)
+  } else {
+    document.removeEventListener('pointerdown', _scoreInfoOutside, true)
+  }
+})
+onUnmounted(() => {
+  clearTimeout(_cellPressTimer)
+  document.removeEventListener('pointerdown', _scoreInfoOutside, true)
+})
 
 function enteredByName(uid) {
   if (!uid) return 'unknown'
@@ -2820,23 +2889,15 @@ function formatDate(dateStr) {
 <style>
 /* ── Score attribution (entered_by / entered_at) ── */
 .score-display { position: relative; }
-.score-info-btn {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: rgba(13, 95, 60, .85);
-  color: #fff;
-  border: 0;
-  font-size: 10px;
-  line-height: 18px;
-  padding: 0;
-  cursor: pointer;
-  opacity: .55;
+/* Card-view score cell anchors the long-press attribution popover.
+   touch-callout/user-select disabled so iOS long-press shows the
+   popover instead of the text-selection callout. */
+.col-score-cell {
+  position: relative;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
-.score-info-btn:hover, .score-info-btn:focus { opacity: 1; }
 .score-info-popover {
   position: absolute;
   top: calc(100% + 6px);
