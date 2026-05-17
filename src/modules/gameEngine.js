@@ -2501,9 +2501,11 @@ export function computeFourteen(ctx, config = {}) {
   const players = members.map(m => {
     let kept = []
     let manualDiscards = 0
+    const netByHole = {}
     for (let h = from; h <= to; h++) {
       const net = netFn(m, h)
       if (net == null) continue
+      netByHole[h] = net
       // Defensive: never honor more than DISCARD_COUNT discards. Excess rows
       // (race condition) are ignored in hole order; the hole stays kept.
       if (ctx.discards?.[m.id]?.[h] && manualDiscards < DISCARD_COUNT) {
@@ -2545,6 +2547,7 @@ export function computeFourteen(ctx, config = {}) {
     return {
       memberId: m.id,
       name: m.short_name,
+      netByHole,
       manualDiscards,
       autoDiscarded,
       final14Holes: final ? final.map(k => k.hole) : null,
@@ -2554,6 +2557,12 @@ export function computeFourteen(ctx, config = {}) {
       projection,
     }
   })
+
+  const standings = [...players].sort((a, b) =>
+    isComplete
+      ? a.total14 - b.total14
+      : (a.projection ?? Infinity) - (b.projection ?? Infinity)
+  )
 
   let settlement = null
   if (isComplete) {
@@ -2568,7 +2577,18 @@ export function computeFourteen(ctx, config = {}) {
         }
         perPlayer[p.memberId] = net
       }
-      settlement = { perPlayer, payouts: [] }
+      const payouts = []
+      for (let i = 0; i < players.length; i++) {
+        for (let j = i + 1; j < players.length; j++) {
+          const a = players[i], b = players[j]
+          const amount = Math.abs(a.total14 - b.total14) * ppt
+          if (amount === 0) continue
+          const loser = a.total14 > b.total14 ? a : b
+          const winner = loser === a ? b : a
+          payouts.push({ from: loser.memberId, to: winner.memberId, amount })
+        }
+      }
+      settlement = { perPlayer, payouts }
     } else {
       const pot = config.pot ?? 0
       const N = players.length
@@ -2580,9 +2600,17 @@ export function computeFourteen(ctx, config = {}) {
       for (const p of players) {
         perPlayer[p.memberId] = p.total14 === lowest ? winnerNet : -pot
       }
-      settlement = { perPlayer, payouts: [] }
+      // Each loser's ante splits equally among the M tied winners.
+      const losers = players.filter(p => p.total14 !== lowest)
+      const payouts = []
+      for (const l of losers) {
+        for (const w of winners) {
+          payouts.push({ from: l.memberId, to: w.memberId, amount: pot / M })
+        }
+      }
+      settlement = { perPlayer, payouts }
     }
   }
 
-  return { players, isComplete, settlement }
+  return { players, standings, isComplete, settlement }
 }

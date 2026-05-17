@@ -1459,4 +1459,92 @@ describe('computeFourteen', () => {
     expect(warn).toHaveBeenCalled()
     warn.mockRestore()
   })
+
+  it('netByHole maps every scored hole to its net, including discarded holes', () => {
+    // Scratch par-4 SI 1..18 → net == gross. Hole 7 discarded but still in map.
+    const scores = {
+      a: card(h => (h === 7 ? 9 : 4)),
+      b: card(() => 5), c: card(() => 6), d: card(() => 7),
+    }
+    const discards = { a: { 7: true, 16: true, 17: true, 18: true } }
+    const result = computeFourteen(fourteenCtx(scores, discards), { settlement: 'pot', pot: 20, hcpMode: 'full' })
+
+    const a = player(result, 'a')
+    expect(Object.keys(a.netByHole).length).toBe(18)
+    expect(a.netByHole[7]).toBe(9)   // discarded hole still mapped
+    expect(a.netByHole[1]).toBe(4)
+  })
+
+  it('netByHole only includes scored holes mid-round', () => {
+    const card10 = v => { const o = {}; for (let h = 1; h <= 10; h++) o[h] = v; return o }
+    const scores = { a: card10(4), b: card10(5), c: card10(6), d: card10(7) }
+    const result = computeFourteen(fourteenCtx(scores, {}), { settlement: 'pot', pot: 20, hcpMode: 'full' })
+
+    const a = player(result, 'a')
+    expect(Object.keys(a.netByHole).length).toBe(10)
+    expect(a.netByHole[11]).toBeUndefined()
+  })
+
+  it('standings sorted asc by total14 post-round', () => {
+    const mk = h1 => card(h => (h === 1 ? h1 : h <= 14 ? 4 : 9))
+    const scores = { a: mk(13), b: mk(3), c: mk(18), d: mk(8) } // 65,55,70,60
+    const dq = { 15: true, 16: true, 17: true, 18: true }
+    const discards = { a: { ...dq }, b: { ...dq }, c: { ...dq }, d: { ...dq } }
+    const result = computeFourteen(fourteenCtx(scores, discards), { settlement: 'pot', pot: 20, hcpMode: 'full' })
+
+    expect(result.standings.map(s => s.memberId)).toEqual(['b', 'd', 'a', 'c'])
+    expect(result.standings.map(s => s.total14)).toEqual([55, 60, 65, 70])
+  })
+
+  it('standings sorted asc by projection mid-round', () => {
+    const card10 = v => { const o = {}; for (let h = 1; h <= 10; h++) o[h] = v; return o }
+    const scores = { a: card10(6), b: card10(4), c: card10(7), d: card10(5) }
+    const result = computeFourteen(fourteenCtx(scores, {}), { settlement: 'pot', pot: 20, hcpMode: 'full' })
+
+    expect(result.isComplete).toBe(false)
+    expect(result.standings.map(s => s.memberId)).toEqual(['b', 'd', 'a', 'c'])
+  })
+
+  it('pairwise payouts: per-pair transfers reconcile to perPlayer', () => {
+    const mk = h1 => card(h => (h === 1 ? h1 : h <= 14 ? 4 : 9))
+    const scores = { a: mk(3), b: mk(8), c: mk(13), d: mk(18) } // 55,60,65,70
+    const dq = { 15: true, 16: true, 17: true, 18: true }
+    const discards = { a: { ...dq }, b: { ...dq }, c: { ...dq }, d: { ...dq } }
+    const { settlement } = computeFourteen(fourteenCtx(scores, discards), { settlement: 'pairwise', ppt: 1 })
+
+    // 4 players → 6 unique pairs.
+    expect(settlement.payouts.length).toBe(6)
+    // d (70, worst) pays a (55, best) 15.
+    const dToA = settlement.payouts.find(p => p.from === 'd' && p.to === 'a')
+    expect(dToA.amount).toBe(15)
+    // Every transfer flows from higher total to lower; amount positive.
+    for (const p of settlement.payouts) expect(p.amount).toBeGreaterThan(0)
+    // Reconcile: (received − paid) per member === perPlayer delta.
+    const recon = {}
+    for (const p of settlement.payouts) {
+      recon[p.to] = (recon[p.to] || 0) + p.amount
+      recon[p.from] = (recon[p.from] || 0) - p.amount
+    }
+    expect(recon).toEqual(settlement.perPlayer)
+  })
+
+  it('pot payouts: each loser pays the winner their ante', () => {
+    const mk = h1 => card(h => (h === 1 ? h1 : h <= 14 ? 4 : 9))
+    const scores = { a: mk(3), b: mk(8), c: mk(13), d: mk(18) } // a wins
+    const dq = { 15: true, 16: true, 17: true, 18: true }
+    const discards = { a: { ...dq }, b: { ...dq }, c: { ...dq }, d: { ...dq } }
+    const { settlement } = computeFourteen(fourteenCtx(scores, discards), { settlement: 'pot', pot: 20 })
+
+    expect(settlement.payouts.length).toBe(3) // 3 losers → winner
+    for (const p of settlement.payouts) {
+      expect(p.to).toBe('a')
+      expect(p.amount).toBe(20)
+    }
+    const recon = {}
+    for (const p of settlement.payouts) {
+      recon[p.to] = (recon[p.to] || 0) + p.amount
+      recon[p.from] = (recon[p.from] || 0) - p.amount
+    }
+    expect(recon).toEqual(settlement.perPlayer)
+  })
 })
