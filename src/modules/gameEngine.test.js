@@ -225,6 +225,40 @@ describe('computeNassau', () => {
     expect(result.settlement.total).toBe(0)
   })
 
+  it('press opens on hole 18 when team is down 2 after hole 17', () => {
+    // Back 9: t2 wins holes 10-16 (7 holes), t1 wins holes 17+18.
+    // After hole 17, t2 is 2 down on back bet (down 7, won back 6 = net -1 still losing by 6?).
+    // Simpler: t2 wins holes 10-11 (goes 2 up = t1 score=-2 = t2 is up 2, t1 is down 2).
+    // pressAt=2: t1 is down 2 after hole 11 → press opens hole 12. Tested separately.
+    // For hole-17 press: t2 wins holes 10-17 exactly 2 times more than t1 via hole 16+17,
+    // and we want exactly 2 down after hole 17.
+    // Easiest: make t2 win holes 10 and 17 (2 wins), t1 wins nothing on back → t1 2 down after 17.
+    const t1 = Array(18).fill(4)
+    const t2 = Array(18).fill(4)
+    t2[9]  = 3  // t2 wins hole 10 → t1 is 1 down
+    t2[16] = 3  // t2 wins hole 17 → t1 is 2 down after h17, rem=1
+    // t1 wins hole 18 (3 vs 4) — presses on h18 + main back should settle
+    t1[17] = 3
+    const ctx = nassauCtx(t1, t2)
+    const result = computeNassau(ctx, { front: 10, back: 10, overall: 20, pressAt: 2, team1: ['a'], team2: ['b'] })
+    // A press opened on hole 18; t1 wins it → pressWins > 0 for back segment
+    expect(result.backSeg.presses.length).toBeGreaterThan(0)
+    expect(result.backSeg.pressWins).toBeGreaterThan(0)
+  })
+
+  it('press opens on hole 9 when team is down 2 after hole 8', () => {
+    // t2 wins holes 1 and 8 (t1 down 2 after h8, rem=1) then t1 wins hole 9
+    const t1 = Array(18).fill(4)
+    const t2 = Array(18).fill(4)
+    t2[0] = 3  // t2 wins h1 → t1 down 1
+    t2[7] = 3  // t2 wins h8 → t1 down 2 after h8, rem=1
+    t1[8] = 3  // t1 wins h9 — press on h9 should resolve in t1's favor
+    const ctx = nassauCtx(t1, t2)
+    const result = computeNassau(ctx, { front: 10, back: 10, overall: 20, pressAt: 2, team1: ['a'], team2: ['b'] })
+    expect(result.frontSeg.presses.length).toBeGreaterThan(0)
+    expect(result.frontSeg.pressWins).toBeGreaterThan(0)
+  })
+
   it('front9 holesMode — only front bet, back and overall are zero', () => {
     // Alice wins all 9 holes — front bet should settle, back + overall untouched
     const t1 = Array(18).fill(3)
