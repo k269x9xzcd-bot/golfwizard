@@ -1227,6 +1227,11 @@ export const useRoundsStore = defineStore('rounds', () => {
 
     // 2. Save settlement JSON snapshot
     if (settlementData) {
+      const _upsertMerge = (table, row) => supaRawRequest(
+        'POST', `${table}?on_conflict=round_id&select=*`, row, 8000,
+        { Prefer: 'resolution=merge-duplicates,return=representation' }
+      )
+
       try {
         await _withTimeout(
           supabase.from('round_settlements').upsert({
@@ -1237,8 +1242,17 @@ export const useRoundsStore = defineStore('rounds', () => {
           5000, 'round_settlements.upsert'
         )
       } catch (e) {
-        console.warn('Failed to save settlement snapshot:', e.message)
-        // Non-fatal — round is already marked complete
+        console.warn('[rounds] round_settlements SJS failed, trying raw:', e.message)
+        try {
+          await _upsertMerge('round_settlements', {
+            round_id: roundId,
+            settlement_json: settlementData,
+            computed_at: new Date().toISOString(),
+          })
+        } catch (e2) {
+          console.warn('Failed to save settlement snapshot:', e2.message)
+          // Non-fatal — round is already marked complete
+        }
       }
 
       // 3. Save individual ledger entries — upsert so iOS double-complete retries are safe
@@ -1256,8 +1270,16 @@ export const useRoundsStore = defineStore('rounds', () => {
             5000, 'ledger_entries.upsert'
           )
         } catch (e) {
-          console.warn('Failed to save ledger entries:', e.message)
-          // Non-fatal
+          console.warn('[rounds] ledger_entries SJS failed, trying raw:', e.message)
+          try {
+            await supaRawRequest(
+              'POST', 'ledger_entries?on_conflict=round_id,from_member_id,to_member_id&select=*', rows, 8000,
+              { Prefer: 'resolution=merge-duplicates,return=representation' }
+            )
+          } catch (e2) {
+            console.warn('Failed to save ledger entries:', e2.message)
+            // Non-fatal
+          }
         }
       }
     }

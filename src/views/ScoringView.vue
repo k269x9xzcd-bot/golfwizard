@@ -2339,7 +2339,15 @@ const isBonnieBriar = computed(() => {
 const isCaptain = computed(() => {
   const r = roundsStore.activeRound
   if (!r) return true
-  if (!r.owner_id) return true
+  if (!r.owner_id) {
+    // Guest/unsynced round — always captain if not authenticated (pure offline session)
+    if (!authStore.isAuthenticated) return true
+    // Authenticated: captain only if they're a linked member (or no members are linked yet)
+    const uid = authStore.user?.id
+    const linkedMembers = r.round_members?.filter(m => m.profile_id)
+    if (!linkedMembers?.length) return true
+    return linkedMembers.some(m => m.profile_id === uid)
+  }
   if (!authStore.isAuthenticated) return false
   return r.owner_id === authStore.user?.id
 })

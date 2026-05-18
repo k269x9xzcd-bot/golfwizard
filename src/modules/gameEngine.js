@@ -410,8 +410,16 @@ export function computeNassau(ctx, config) {
     return { holeResults, t1Up: t1UpFinal, t1Wins, pressWins, presses }
   }
 
-  const frontSeg = processSegment(1, 9, front)
-  const backSeg = processSegment(10, 18, back)
+  const { from, to } = holeRange(ctx.holesMode)
+  const isFull18 = ctx.holesMode === '18' || !ctx.holesMode
+  const isFront9 = ctx.holesMode === 'front9'
+  const isBack9  = ctx.holesMode === 'back9'
+
+  // For a 9-hole round, only one segment exists (no overall)
+  const frontSeg = (isFull18 || isFront9) ? processSegment(1, 9, front)
+    : { holeResults: [], t1Up: 0, t1Wins: 0, pressWins: 0, presses: [] }
+  const backSeg  = (isFull18 || isBack9) ? processSegment(10, 18, back)
+    : { holeResults: [], t1Up: 0, t1Wins: 0, pressWins: 0, presses: [] }
 
   // Overall
   const allHoles = [...frontSeg.holeResults, ...backSeg.holeResults]
@@ -420,7 +428,9 @@ export function computeNassau(ctx, config) {
     if (r.winner === 't2') return acc - 1
     return acc
   }, 0)
-  const overallT1Wins = overallUp > 0 ? overall : overallUp < 0 ? -overall : 0
+  const overallT1Wins = isFull18
+    ? (overallUp > 0 ? overall : overallUp < 0 ? -overall : 0)
+    : 0
 
   const t1Total = frontSeg.t1Wins + frontSeg.pressWins + backSeg.t1Wins + backSeg.pressWins + overallT1Wins
   const t1Name = t1.map(m => m.short_name).join('+')

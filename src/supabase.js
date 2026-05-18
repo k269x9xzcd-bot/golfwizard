@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { supaPreflightOk } from './modules/supaRaw'
 
 // Hardcoded — these are public anon keys, safe to commit.
 // Eliminates .env dependency that kept getting lost during branch switches.
@@ -40,11 +41,23 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 // a token refresh if needed. We do NOT ping Supabase (that backfired on iOS
 // 18.7 — see comments below). Just force the auth refresh, which writes the
 // new token to localStorage so supaRaw.js picks it up synchronously.
+let _hiddenAt = 0
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-      // Fire-and-forget — don't await, just kick off the refresh
+    if (document.visibilityState === 'hidden') {
+      _hiddenAt = Date.now()
+    } else if (document.visibilityState === 'visible') {
+      // Fire-and-forget — don't await, just kick off the auth refresh
       supabase.auth.getSession().catch(() => {})
+      // After 30s+ in background, probe the connection pool via raw fetch.
+      // Raw fetch bypasses the SJS socket pool, so it also forces a fresh
+      // connection — if it times out, the pool is likely zombie.
+      const backgroundMs = Date.now() - _hiddenAt
+      if (backgroundMs >= 30_000) {
+        supaPreflightOk(3500).then(ok => {
+          if (!ok) console.warn('[supabase] wake-probe failed after', Math.round(backgroundMs / 1000), 's background — socket pool may be stale')
+        }).catch(() => {})
+      }
     }
   })
 }

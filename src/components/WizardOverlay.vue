@@ -1918,9 +1918,11 @@ async function runManualGhinSearch() {
   const seq = ++_psManualSeq
   psManualSearching.value = true
   try {
-    const { data, error } = await supabase.functions.invoke('ghin-player-search', {
+    const invokePromise = supabase.functions.invoke('ghin-player-search', {
       body: { first_name: first, last_name: last, ghin_number: profile.ghin_number, password: profile.ghin_password },
     })
+    const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('ghin-player-search timeout')), 8000))
+    const { data, error } = await Promise.race([invokePromise, timeout])
     if (seq !== _psManualSeq) return
     if (!error && Array.isArray(data?.results)) {
       // Filter out anyone already in the roster
@@ -2755,6 +2757,7 @@ function buildGameConfigs() {
 const SIDE_TYPES = new Set(['skins', 'dots', 'snake', 'fidget', 'bbn', 'bbb', 'match1v1'])
 
 function _loadEditGames() {
+  form.value.holesMode = roundsStore.activeRound?.holes_mode || '18'
   form.value.players = roundsStore.activeMembers.map(m => ({
     id: m.id,
     short_name: m.short_name,

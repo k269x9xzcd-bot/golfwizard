@@ -224,6 +224,30 @@ describe('computeNassau', () => {
     expect(result.settlement.overall).toBe(0)
     expect(result.settlement.total).toBe(0)
   })
+
+  it('front9 holesMode — only front bet, back and overall are zero', () => {
+    // Alice wins all 9 holes — front bet should settle, back + overall untouched
+    const t1 = Array(18).fill(3)
+    const t2 = Array(18).fill(4)
+    const ctx = { ...nassauCtx(t1, t2), holesMode: 'front9' }
+    const result = computeNassau(ctx, { front: 10, back: 10, overall: 20, pressAt: 0, team1: ['a'], team2: ['b'] })
+    expect(result.settlement.front).toBe(10)
+    expect(result.settlement.back).toBe(0)
+    expect(result.settlement.overall).toBe(0)
+    expect(result.settlement.total).toBe(10)
+  })
+
+  it('back9 holesMode — only back bet, front and overall are zero', () => {
+    // Alice wins all back 9 holes — back bet should settle, front + overall untouched
+    const t1 = Array(18).fill(3)
+    const t2 = Array(18).fill(4)
+    const ctx = { ...nassauCtx(t1, t2), holesMode: 'back9' }
+    const result = computeNassau(ctx, { front: 10, back: 10, overall: 20, pressAt: 0, team1: ['a'], team2: ['b'] })
+    expect(result.settlement.front).toBe(0)
+    expect(result.settlement.back).toBe(10)
+    expect(result.settlement.overall).toBe(0)
+    expect(result.settlement.total).toBe(10)
+  })
 })
 
 // ─────────────────────────────────────────────────────────────────

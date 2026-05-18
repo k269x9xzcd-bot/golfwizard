@@ -253,10 +253,22 @@ async function onAuthClose() {
 
   // Bind this profile_id directly to the roster row from the invite
   if (inviteRid.value) {
-    await supabase.from('roster_players')
-      .update({ profile_id: authStore.user.id })
-      .eq('id', inviteRid.value)
-      .is('profile_id', null)
+    try {
+      const { supaCall } = await import('../modules/supabaseOps')
+      await supaCall('invite.linkProfile',
+        supabase.from('roster_players')
+          .update({ profile_id: authStore.user.id })
+          .eq('id', inviteRid.value)
+          .is('profile_id', null),
+        6000
+      )
+    } catch {
+      const { supaRawUpdate } = await import('../modules/supaRaw')
+      await supaRawUpdate('roster_players',
+        `id=eq.${inviteRid.value}&profile_id=is.null`,
+        { profile_id: authStore.user.id }, 8000
+      ).catch(() => {})
+    }
   }
 
   // Pre-fill first_name/last_name from invite if profile has no full name yet
