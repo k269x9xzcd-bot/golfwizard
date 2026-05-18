@@ -448,14 +448,18 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         const t2n = teamInitialsStr(cfg.team2 || []) || 'T2'
         const diff = (r.t1Pts || 0) - (r.t2Pts || 0)
         const status = diff === 0 ? 'All square' : (diff > 0 ? `${t1n} leads ${r.t1Pts}-${r.t2Pts}` : `${t2n} leads ${r.t2Pts}-${r.t1Pts}`)
+        const played = (r.holeResults || []).filter(h => !h.incomplete).length
+        const totalHoles = visibleHoles.value.length || 18
+        const roundComplete = played >= totalHoles
         let money = ''
-        if (diff !== 0) {
+        if (diff !== 0 && roundComplete) {
           const loser = diff > 0 ? t2n : t1n
           const ppt = cfg.ppt || 1
           const amt = Math.abs(diff) * ppt
           money = ` · <span style="color:#4ade80;font-weight:700">${loser} owe $${amt}</span>`
         }
-        return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Hi-Low</span><span class="muted" style="font-size:10px;margin-left:4px">${t1n} vs ${t2n}</span><div style="font-size:11px;margin-top:2px">${status}${money}</div></div>`
+        const thruTag = !roundComplete && played > 0 ? `<span class="muted" style="font-size:10px;margin-left:6px">thru ${played}</span>` : ''
+        return `<div style="margin-bottom:6px"><span style="font-weight:700">${icon} Hi-Low</span><span class="muted" style="font-size:10px;margin-left:4px">${t1n} vs ${t2n}</span>${thruTag}<div style="font-size:11px;margin-top:2px">${status}${money}</div></div>`
       }
 
       // ── Hammer ──
@@ -476,9 +480,14 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
               return `H${h.hole}: $${h.holeValue}(${h.throws}🔨)`
             }).join(' · ') + '</div>'
           : ''
-        const netStr = net !== 0
-          ? `<div style="margin-top:4px;font-size:12px;font-weight:700;color:#4ade80">💰 ${net > 0 ? t2n : t1n} owe ${net > 0 ? t1n : t2n} $${Math.abs(net)}</div>`
-          : '<div style="margin-top:4px;font-size:11px;color:#888">All square</div>'
+        const playedH = (r.holeResults || []).filter(h => !h.incomplete).length
+        const totalHolesH = visibleHoles.value.length || 18
+        const hammerComplete = playedH >= totalHolesH
+        const netStr = hammerComplete
+          ? (net !== 0
+            ? `<div style="margin-top:4px;font-size:12px;font-weight:700;color:#4ade80">💰 ${net > 0 ? t2n : t1n} owe ${net > 0 ? t1n : t2n} $${Math.abs(net)}</div>`
+            : '<div style="margin-top:4px;font-size:11px;color:#888">All square</div>')
+          : `<div style="margin-top:4px;font-size:11px;color:#888">thru ${playedH} · $settled per hole above</div>`
         return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Hammer</span><span class="muted" style="font-size:10px;margin-left:4px">${t1n} vs ${t2n} · $${ppt}/hole</span>${varStr}${holeStr}${netStr}</div>`
       }
 
@@ -622,8 +631,12 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         const r = computeDots(ctx, cfg)
         if (!r) return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Dots</span></div>`
         const ppt = r.ppt || cfg.ppt || 1
+        const dotsPlayed = (r.holeResults || []).filter(h => !h.incomplete).length
+        const dotsComplete = dotsPlayed >= (visibleHoles.value.length || 18)
         const counts = r.settlements?.map(s => `${escHtml(s.name)}: ${s.myDots || 0}`).join(' · ') || '—'
-        const dollarLine = r.settlements?.filter(s => (s.net||0) !== 0).map(s => `${escHtml(s.name)}${(s.net||0) > 0 ? '<span style="color:#4ade80"> +$' + s.net + '</span>' : '<span style="color:#f87171"> -$' + Math.abs(s.net) + '</span>'}`).join(' · ') || ''
+        const dollarLine = dotsComplete
+          ? (r.settlements?.filter(s => (s.net||0) !== 0).map(s => `${escHtml(s.name)}${(s.net||0) > 0 ? '<span style="color:#4ade80"> +$' + s.net + '</span>' : '<span style="color:#f87171"> -$' + Math.abs(s.net) + '</span>'}`).join(' · ') || '')
+          : ''
         return `<div style="margin-bottom:8px"><span style="font-weight:700">${icon} Dots</span><span class="muted" style="font-size:10px;margin-left:4px">$${ppt}/dot</span><div style="font-size:11px;margin-top:3px;opacity:.8">${counts}</div>${dollarLine ? '<div style="font-size:11px;margin-top:2px">' + dollarLine + '</div>' : ''}</div>`
       }
 
@@ -713,6 +726,7 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
         const hasBirdie = r.hasBirdie
         const badgeHtml = (hasSweep ? '<span style="font-size:10px;margin-left:6px;opacity:.8">🧹 Sweep on</span>' : '')
                         + (hasBirdie ? '<span style="font-size:10px;margin-left:6px;opacity:.8">🐦 Birdie bonus on</span>' : '')
+        const ninesComplete = played >= (visibleHoles.value.length || 18)
         const standRows = sorted.map((s) => {
           const netColor = s.net > 0 ? '#4ade80' : s.net < 0 ? '#f87171' : '#d4af37'
           const rank = sorted.findIndex(x => x.pts === s.pts)
@@ -723,8 +737,8 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
           const tallyHtml = t ? ((t.sweeps ? `<span style="font-size:10px;margin-left:4px">🧹×${t.sweeps}</span>` : '') + (t.birdies ? `<span style="font-size:10px;margin-left:4px">🐦×${t.birdies}</span>` : '')) : ''
           return `<div style="display:flex;align-items:center;gap:6px;padding:2px 0">`
             + `<span style="min-width:60px">${medal}<span style="font-weight:700">${escHtml(s.name)}</span></span>`
-            + `<span style="color:#d4af37;font-weight:700">${s.pts}pts · $${rawDollars}</span>`
-            + `<span style="color:${netColor};font-size:10px">(net ${netStr})</span>`
+            + `<span style="color:#d4af37;font-weight:700">${s.pts}pts${ninesComplete ? ` · $${rawDollars}` : ''}</span>`
+            + (ninesComplete ? `<span style="color:${netColor};font-size:10px">(net ${netStr})</span>` : '')
             + tallyHtml
             + `</div>`
         }).join('')

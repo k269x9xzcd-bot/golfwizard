@@ -186,7 +186,7 @@
                 <button class="round-action-btn round-action-share" @click.stop="doShareRecap(round)" :disabled="sharingId === round.id">
                   {{ sharingId === round.id ? '⏳' : '↑ Share' }}
                 </button>
-                <button class="round-action-btn round-action-delete" @click.stop="confirmDelete(round)">
+                <button v-if="round.owner_id && round.owner_id === authStore.user?.id" class="round-action-btn round-action-delete" @click.stop="confirmDelete(round)">
                   🗑️
                 </button>
               </div>

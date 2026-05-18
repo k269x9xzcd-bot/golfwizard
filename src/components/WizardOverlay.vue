@@ -1747,7 +1747,7 @@ function updateStablefordPts(key, val) {
 
 const sideGames = ref({
   skins:  { enabled: false, ppt: 5, carry: true },
-  dots:   { enabled: false, ppt: 2, birdieEnabled: true, eagleEnabled: true, greenieEnabled: true, sandieEnabled: true },
+  dots:   { enabled: false, ppt: 2, birdieEnabled: true, eagleEnabled: true, greenieEnabled: true, sandieEnabled: true, netBirdieEnabled: true, barkieEnabled: false, arnieEnabled: false, ferretEnabled: false, negativeEnabled: false },
   snake:  { enabled: false, ppt: 5 },
   fidget: { enabled: false, ppp: 10, doubleFidget: false },
   nines:  { enabled: false, ppt: 1, sweepBonus: false, sweepMargin: 2, birdieBonus: false, birdieBonusPts: 1, birdieDouble: false, players: null },
@@ -2230,10 +2230,34 @@ const canNext = computed(() => {
 })
 const canFinish = computed(() => {
   if (!form.value.players.length || !form.value.courseName) return false
-  if (mainGame.value.type === 'fourteen') {
-    if (mainGame.value.config.settlement === 'pot' && !(mainGame.value.config.pot >= 1)) return false
-    if (mainGame.value.config.settlement === 'pairwise' && !(mainGame.value.config.ppt >= 0.25)) return false
+  const players = props.lockedPlayers ?? form.value.players
+  const cfg = mainGame.value.config || {}
+  const type = mainGame.value.type
+
+  if (type === 'fourteen') {
+    if (cfg.settlement === 'pot' && !(cfg.pot >= 1)) return false
+    if (cfg.settlement === 'pairwise' && !(cfg.ppt >= 0.25)) return false
   }
+
+  // Wolf: tee order must include all players
+  if (type === 'wolf') {
+    if (!cfg.wolfTeeOrder || cfg.wolfTeeOrder.length !== players.length) return false
+  }
+
+  // Team games: team1 + team2 must cover all players
+  const teamGames = ['nassau', 'vegas', 'hilow', 'hammer', 'sixes', 'bestball', 'match']
+  if (teamGames.includes(type)) {
+    const t1 = cfg.team1 || []
+    const t2 = cfg.team2 || []
+    if (t1.length === 0 || t2.length === 0) return false
+    if (t1.length + t2.length !== players.length) return false
+  }
+
+  // Match 1v1: both players must be selected
+  if (type === 'match' && cfg.format === '1v1') {
+    if (!cfg.player1 || !cfg.player2) return false
+  }
+
   return true
 })
 
@@ -2651,6 +2675,11 @@ function buildGameConfigs() {
       eagleEnabled: sg.dots.eagleEnabled,
       greenieEnabled: sg.dots.greenieEnabled,
       sandieEnabled: sg.dots.sandieEnabled,
+      netBirdie: sg.dots.netBirdieEnabled,
+      barkieEnabled: sg.dots.barkieEnabled,
+      arnieEnabled: sg.dots.arnieEnabled,
+      ferretEnabled: sg.dots.ferretEnabled,
+      negativeEnabled: sg.dots.negativeEnabled,
     }})
   }
   if (sg.snake.enabled) {

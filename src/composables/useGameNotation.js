@@ -10,7 +10,7 @@ import {
   computeNassau, computeSkins, computeMatch, computeSnake,
   computeDots, computeFidget, computeBestBall, computeBestBallNet, computeFiveThreeOne, computeNines,
   computeVegas, computeHiLow, computeSixes, computeStableford, computeHammer, computeBbb, computeWolf,
-  holePar,
+  holePar, holeRange,
 } from '../modules/gameEngine'
 import { formatMatchLabel } from '../modules/matchLabels'
 
@@ -480,8 +480,8 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
         try {
           const r = computeStableford(ctx, game.config)
           if (!r) continue
-          const to = ctx.holesMode === 9 ? 9 : 18
-          const frontEnd = to === 9 ? to : 9
+          const is9hole = ctx.holesMode !== '18'
+          const frontEnd = 9
           const medalColors = ['#FFD700', '#C0C0C0', '#CD7F32']
           const sorted = [...(r.settlements || [])].sort((a, b) => b.pts - a.pts)
 
@@ -507,8 +507,8 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
               icon: '⭐', label: initials,
               labelHtml: `<span style="color:${dotColor};margin-right:3px">●</span>${escHtml(initials)}`,
               cells,
-              outSummary: ctx.holesMode !== 9 ? `${outPts}` : '',
-              inSummary: ctx.holesMode !== 9 ? `${inPts}` : '',
+              outSummary: !is9hole ? `${outPts}` : '',
+              inSummary: !is9hole ? `${inPts}` : '',
               totalSummary: `<span style="font-weight:700">${totalPts}pts</span>`,
               netSummary: `<span style="color:${netColor};font-size:11px;font-weight:700">${netStr}</span>`,
               cls: 'row-531',
@@ -560,8 +560,9 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
         try {
           const r = computeFiveThreeOne(ctx, game.config)
           if (!r) continue
-          const to = ctx.holesMode === 9 ? 9 : 18
-          const frontEnd = ctx.holesMode === 9 ? to : 9
+          const is9hole = ctx.holesMode !== '18'
+          const { from, to } = holeRange(ctx.holesMode || '18')
+          const frontEnd = 9
           const medalColors = ['#FFD700', '#C0C0C0', '#CD7F32']
           const sorted531 = [...r.settlements].sort((a, b) => b.pts - a.pts)
 
@@ -572,7 +573,7 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
             const cells = {}
             let outPts = 0, inPts = 0
 
-            for (let h = 1; h <= to; h++) {
+            for (let h = from; h <= to; h++) {
               const hr = r.holeResults.find(x => x.hole === h)
               if (!hr || hr.incomplete) { cells[h] = { text: '', cls: '' }; continue }
               const pts = hr.holePts?.[player.id]
@@ -594,8 +595,8 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
               label: initials,
               labelHtml: `<span style="color:${dotColor};margin-right:3px">●</span>${escHtml(initials)}`,
               cells,
-              outSummary: ctx.holesMode !== 9 ? `<span style="font-weight:700">${Math.round(outPts*100)/100}</span>` : '',
-              inSummary: ctx.holesMode !== 9 ? `<span style="font-weight:700">${Math.round(inPts*100)/100}</span>` : '',
+              outSummary: !is9hole ? `<span style="font-weight:700">${Math.round(outPts*100)/100}</span>` : '',
+              inSummary: !is9hole ? `<span style="font-weight:700">${Math.round(inPts*100)/100}</span>` : '',
               totalSummary: `<span style="font-weight:700">${totalPts}pts</span>`,
               netSummary: `<span style="color:${netColor};font-size:11px;font-weight:700">${netStr}</span>`,
               cls: 'row-531',

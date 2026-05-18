@@ -192,15 +192,14 @@ function extractPlayerNets(type, result, config, members) {
     return nets
   }
 
-  // ── Snake — holder pays everyone else ──
+  // ── Snake — holder pays ppt×count TO EACH other player ──
   if (t === 'snake' && result.holder) {
     const ppt = config.ppt || 5
     const count = result.snakeCount || 0
     if (!count) return []
     const others = members.filter(m => m.id !== result.holder)
-    const totalOwed = ppt * count
-    const nets = [{ id: result.holder, name: result.holderName, net: -totalOwed }]
-    const perOther = totalOwed / Math.max(others.length, 1)
+    const perOther = ppt * count  // each non-holder collects this
+    const nets = [{ id: result.holder, name: result.holderName, net: -(perOther * Math.max(others.length, 1)) }]
     for (const m of others) {
       nets.push({ id: m.id, name: m.short_name, net: perOther })
     }
