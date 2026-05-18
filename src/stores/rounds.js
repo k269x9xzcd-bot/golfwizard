@@ -161,56 +161,63 @@ export const useRoundsStore = defineStore('rounds', () => {
     if (_flushInFlight) return  // already running — skip concurrent call
     const q = _loadQueue()
     if (!q.length) return
+    // IMPORTANT: use try/finally so _flushInFlight always resets even if an
+    // unexpected error escapes the per-entry try/catch below. Without this,
+    // the flag stays true for the session and all subsequent flush calls
+    // (including the completeRound retry loop) silently no-op.
     _flushInFlight = true
     const failed = []
     // Strip the per-entry retry counter before sending — it's a client-side
     // metadata field that PostgREST will reject if posted.
     const _payloadOf = ({ _attempts, ...rest }) => rest
-    for (const entry of q) {
-      let saved = false
-      let lastErr = null
-      // Try SJS first
-      try {
-        const { error } = await Promise.race([
-          supabase.from('scores').upsert(_payloadOf(entry), { onConflict: 'round_id,member_id,hole' }),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('flush SJS timeout')), 2000))
-        ])
-        if (!error) saved = true
-        else lastErr = error
-      } catch (e) { lastErr = e }
-      // Raw fetch fallback if SJS failed/timed out
-      if (!saved) {
+    try {
+      for (const entry of q) {
+        let saved = false
+        let lastErr = null
+        // Try SJS first
         try {
-          await supaRawRequest(
-            'POST',
-            'scores?on_conflict=round_id,member_id,hole',
-            _payloadOf(entry),
-            8000,
-            { Prefer: 'resolution=merge-duplicates,return=representation' },
-          )
-          saved = true
+          const { error } = await Promise.race([
+            supabase.from('scores').upsert(_payloadOf(entry), { onConflict: 'round_id,member_id,hole' }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('flush SJS timeout')), 2000))
+          ])
+          if (!error) saved = true
+          else lastErr = error
         } catch (e) { lastErr = e }
+        // Raw fetch fallback if SJS failed/timed out
+        if (!saved) {
+          try {
+            await supaRawRequest(
+              'POST',
+              'scores?on_conflict=round_id,member_id,hole',
+              _payloadOf(entry),
+              8000,
+              { Prefer: 'resolution=merge-duplicates,return=representation' },
+            )
+            saved = true
+          } catch (e) { lastErr = e }
+        }
+        if (saved) continue
+        // Unrecoverable — drop immediately.
+        if (_isUnrecoverableScoreErr(lastErr)) {
+          console.warn('[scoreQueue] dropping unrecoverable item', {
+            member_id: entry.member_id, hole: entry.hole, code: lastErr?.code, status: lastErr?.status,
+          })
+          continue
+        }
+        // Bump attempt count; drop if over the cap.
+        const bumped = _markScoreAttempt(entry)
+        if (_shouldDropScoreEntry(bumped)) {
+          console.warn('[scoreQueue] dropping after retry cap', {
+            member_id: entry.member_id, hole: entry.hole, attempts: bumped._attempts,
+          })
+          continue
+        }
+        failed.push(bumped)
       }
-      if (saved) continue
-      // Unrecoverable — drop immediately.
-      if (_isUnrecoverableScoreErr(lastErr)) {
-        console.warn('[scoreQueue] dropping unrecoverable item', {
-          member_id: entry.member_id, hole: entry.hole, code: lastErr?.code, status: lastErr?.status,
-        })
-        continue
-      }
-      // Bump attempt count; drop if over the cap.
-      const bumped = _markScoreAttempt(entry)
-      if (_shouldDropScoreEntry(bumped)) {
-        console.warn('[scoreQueue] dropping after retry cap', {
-          member_id: entry.member_id, hole: entry.hole, attempts: bumped._attempts,
-        })
-        continue
-      }
-      failed.push(bumped)
+      _saveQueue(failed)
+    } finally {
+      _flushInFlight = false
     }
-    _saveQueue(failed)
-    _flushInFlight = false
   }
 
   /**
@@ -1196,7 +1203,11 @@ export const useRoundsStore = defineStore('rounds', () => {
     }
 
     // ── AUTHENTICATED PATH ──────────────────────────────────
-    // 0. Flush queued scores — retry up to 3x before completing
+    // 0. Flush queued scores — retry up to 3x before completing.
+    // Force-reset the in-flight guard first: if a background flush (e.g. from
+    // the 'online' event) is somehow still holding the flag, our retries would
+    // all silently no-op and scores would survive the round as un-synced queue.
+    _flushInFlight = false
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         await _flushQueue()

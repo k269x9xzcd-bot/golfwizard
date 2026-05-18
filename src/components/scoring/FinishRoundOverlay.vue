@@ -10,6 +10,9 @@
           <span class="fr-net">NET {{ playerNetTotal(member.id) || '—' }}</span>
         </div>
       </div>
+      <div v-if="pendingScores > 0" class="finish-pending-warning">
+        ⏳ {{ pendingScores }} score{{ pendingScores > 1 ? 's' : '' }} still syncing — they'll be saved when you finish.
+      </div>
       <div v-if="error" class="finish-error">{{ error }}</div>
       <div class="finish-review-actions">
         <button class="btn-cancel" :disabled="finishing" @click="emit('close')">Back to Scoring</button>
@@ -27,6 +30,7 @@ defineProps({
   members:       { type: Array,    default: () => [] },
   finishing:     { type: Boolean,  default: false },
   error:         { type: String,   default: null },
+  pendingScores: { type: Number,   default: 0 },
   memberDisplay: { type: Function, required: true },
   playerTotal:   { type: Function, required: true },
   playerNetTotal:{ type: Function, required: true },

@@ -123,6 +123,9 @@ async function saveRetroScores() {
     for (const e of entries) {
       await roundsStore.setScore(e.memberId, e.hole, e.score)
     }
+    // Drain the queue so scores are confirmed in DB before the overlay closes.
+    // setScore never throws, so any failures land in the queue — flush them now.
+    if (roundsStore.flushQueue) await roundsStore.flushQueue()
     emit('saved')
     emit('close')
   } catch (e) {

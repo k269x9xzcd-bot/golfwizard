@@ -1101,6 +1101,7 @@
           :members="roundsStore.activeMembers"
           :finishing="finishing"
           :error="finishError"
+          :pending-scores="pendingScores"
           :member-display="memberDisplay"
           :player-total="playerTotal"
           :player-net-total="playerNetTotal"
