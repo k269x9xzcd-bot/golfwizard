@@ -27,10 +27,9 @@
       <div class="round-info">
         <div class="round-course">{{ roundsStore.activeRound.course_name }}</div>
         <div class="round-date">{{ formatDate(roundsStore.activeRound.date) }}</div>
-        <div v-if="roundsStore.activeRound.room_code" class="round-code">
-          <span class="code-icon">📡</span>
-          {{ roundsStore.activeRound.room_code }}
-        </div>
+        <button v-if="roundsStore.activeRound.room_code" class="round-invite-btn" @click="shareRoundCode">
+          {{ inviteCopied ? '✓ Copied!' : '📡 Invite' }}
+        </button>
       </div>
 
       <!-- Scoreboard summary -->
@@ -523,6 +522,23 @@ import {
 } from '../modules/gameEngine'
 
 const roundsStore = useRoundsStore()
+
+// Room code invite
+const inviteCopied = ref(false)
+async function shareRoundCode() {
+  const code = roundsStore.activeRound?.room_code
+  if (!code) return
+  const url = `${location.origin}${location.pathname}#/join/${code}`
+  if (navigator.share) {
+    try { await navigator.share({ title: 'Join my round on GolfWizard', text: `Join code: ${code}`, url }) } catch { /* cancelled */ }
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(url)
+    inviteCopied.value = true
+    setTimeout(() => { inviteCopied.value = false }, 2000)
+  } catch { /* clipboard unavailable */ }
+}
 
 // Expanded state
 const expandedIds = ref(new Set())
@@ -1066,19 +1082,20 @@ function balanceClass(val) {
   font-size: 13px;
   color: var(--gw-text-muted);
 }
-.round-code {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-family: var(--gw-font-mono);
-  font-size: 13px;
-  color: var(--gw-gold);
-  background: rgba(212, 175, 55, 0.15);
+.round-invite-btn {
+  font-family: var(--gw-font-body);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gw-gold, #d4af37);
+  background: rgba(212, 175, 55, 0.12);
   border: 1px solid rgba(212, 175, 55, 0.3);
   border-radius: var(--gw-radius-full);
-  padding: 3px 10px;
+  padding: 4px 12px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
 }
-.code-icon { font-size: 11px; }
+.round-invite-btn:active { background: rgba(212, 175, 55, 0.22); }
 
 /* ── Section label ───────────────────────────────────────── */
 .section-label {

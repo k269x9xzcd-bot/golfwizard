@@ -69,13 +69,15 @@ export const useRoundsStore = defineStore('rounds', () => {
   const activeMembers = ref([])   // round_members rows
   const activeScores = ref({})    // { memberId: { hole: score } }
   const activeScoreMeta = ref({}) // { memberId: { hole: { entered_by, entered_at } } }
-  const activeDiscards = ref({})  // { memberId: { hole: true } } — 14 Holes KEEP/DISCARD flags
   const activeGames = ref([])     // game_configs rows
   const _inFlightGameKeys = new Set() // dedup guard for concurrent saveGameConfig inserts
 
   // Round history
   const rounds = ref([])
   const loading = ref(false)
+
+  // Scorer invites
+  const scorerInvites = ref([])
 
   // Rounds this user owns or is a member of (excludes cross-match opponent rounds fetched via RLS)
   const myRounds = computed(() => {
@@ -458,7 +460,6 @@ export const useRoundsStore = defineStore('rounds', () => {
       activeGames.value = gameConfigs
       activeScores.value = {}
       activeScoreMeta.value = {}
-      activeDiscards.value = {}
 
       _persistGuest()
       return round
@@ -777,20 +778,14 @@ export const useRoundsStore = defineStore('rounds', () => {
     // Build scores map: { memberId: { hole: score } }
     const sm = {}
     const meta = {}
-    const dm = {}
     for (const s of (data.scores ?? [])) {
       if (!sm[s.member_id]) sm[s.member_id] = {}
       sm[s.member_id][s.hole] = s.score
       if (!meta[s.member_id]) meta[s.member_id] = {}
       meta[s.member_id][s.hole] = { entered_by: s.entered_by ?? null, entered_at: s.entered_at ?? null }
-      if (s.is_discarded) {
-        if (!dm[s.member_id]) dm[s.member_id] = {}
-        dm[s.member_id][s.hole] = true
-      }
     }
     activeScores.value = sm
     activeScoreMeta.value = meta
-    activeDiscards.value = dm
 
     // Reconcile the offline score queue against this round's actual members.
     // Drops orphan entries with stale client-generated member_ids that would
@@ -865,34 +860,6 @@ export const useRoundsStore = defineStore('rounds', () => {
       scoreSyncError.value = isAuthErr ? 'rls' : 'db'
     }
     // Non-blocking: never throw — the optimistic update already applied
-  }
-
-  // ── Set KEEP/DISCARD flag (14 Holes) ────────────────────────
-  async function setDiscardFlag(memberId, hole, isDiscarded) {
-    // Optimistic update — UI reflects the tap immediately
-    if (!activeDiscards.value[memberId]) activeDiscards.value[memberId] = {}
-    if (isDiscarded) {
-      activeDiscards.value[memberId][hole] = true
-    } else {
-      delete activeDiscards.value[memberId][hole]
-    }
-
-    const auth = useAuthStore()
-    if (!auth.isAuthenticated || String(activeRound.value?.id ?? '').startsWith('guest_')) return
-
-    const filter = `round_id=eq.${activeRound.value.id},member_id=eq.${memberId},hole=eq.${hole}`
-    const patch = { is_discarded: isDiscarded }
-    try {
-      const { error } = await supaCall(
-        'scores.discard',
-        supabase.from('scores').update(patch).eq('round_id', activeRound.value.id).eq('member_id', memberId).eq('hole', hole),
-        5000
-      )
-      if (error) throw error
-    } catch {
-      console.warn('[setDiscardFlag] SJS timeout, raw fallback')
-      await supaRawUpdate('scores', filter, patch, 8000)
-    }
   }
 
   // ── Save game configs ───────────────────────────────────────
@@ -1356,7 +1323,6 @@ export const useRoundsStore = defineStore('rounds', () => {
         activeMembers.value = []
         activeScores.value = {}
         activeScoreMeta.value = {}
-        activeDiscards.value = {}
         activeGames.value = []
       }
       rounds.value = rounds.value.filter(r => r.id !== roundId)
@@ -1372,7 +1338,6 @@ export const useRoundsStore = defineStore('rounds', () => {
       activeMembers.value = []
       activeScores.value = {}
       activeScoreMeta.value = {}
-      activeDiscards.value = {}
       activeGames.value = []
     }
     rounds.value = rounds.value.filter(r => r.id !== roundId)
@@ -1584,14 +1549,54 @@ export const useRoundsStore = defineStore('rounds', () => {
     localStorage.removeItem(_guestKey(r.id))
   }
 
+  // ── Scorer invites ─────────────────────────────────────────────
+  async function fetchScorerInvites() {
+    const auth = useAuthStore()
+    if (!auth.user?.id) return
+    const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString()
+    const { data } = await supabase
+      .from('scorer_invites')
+      .select('*')
+      .eq('to_profile_id', auth.user.id)
+      .eq('status', 'pending')
+      .gte('created_at', fourHoursAgo)
+      .order('created_at', { ascending: false })
+    scorerInvites.value = data ?? []
+  }
+
+  async function createScorerInvite(toProfileId, toName) {
+    const auth = useAuthStore()
+    const r = activeRound.value
+    if (!r?.room_code || !auth.user?.id) throw new Error('No active round with room code')
+    const row = {
+      round_id: r.id,
+      from_profile_id: auth.user.id,
+      from_name: auth.profile?.display_name || auth.profile?.short_name || 'Someone',
+      to_profile_id: toProfileId,
+      room_code: r.room_code,
+      round_name: r.name || r.course_name,
+      course_name: r.course_name,
+    }
+    const { error } = await supabase.from('scorer_invites').insert(row)
+    if (error) throw error
+  }
+
+  async function respondScorerInvite(inviteId, accept) {
+    const invite = scorerInvites.value.find(i => i.id === inviteId)
+    const status = accept ? 'accepted' : 'declined'
+    await supabase.from('scorer_invites').update({ status }).eq('id', inviteId)
+    scorerInvites.value = scorerInvites.value.filter(i => i.id !== inviteId)
+    return accept ? invite : null
+  }
+
   return {
-    activeRound, activeMembers, activeScores, activeScoreMeta, activeDiscards, activeGames,
+    activeRound, activeMembers, activeScores, activeScoreMeta, activeGames,
     knownRounds,
     rounds, myRounds, loading, activeRoundId, scoreSyncError,
     pendingQueueCount,
     flushQueue: _flushQueue,
     patchActiveGames: (games) => { activeGames.value = games },
-    fetchRounds, createRound, loadRound, setScore, setDiscardFlag,
+    fetchRounds, createRound, loadRound, setScore,
     saveGameConfig, updateGameConfig, deleteGameConfig,
     updateRoundDate,
     joinByRoomCode, completeRound, deleteRound, setActiveRound,
@@ -1600,5 +1605,6 @@ export const useRoundsStore = defineStore('rounds', () => {
     saveGuestRound, loadGuestRounds,
     clearActiveRound,
     syncGuestRoundToDb,
+    scorerInvites, fetchScorerInvites, createScorerInvite, respondScorerInvite,
   }
 })

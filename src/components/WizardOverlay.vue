@@ -403,13 +403,13 @@
             v-for="g in MAIN_GAMES"
             :key="g.key"
             class="game-type-btn"
-            :class="{ selected: mainGame.type === g.key, 'game-type-btn--disabled': isTileDisabled(g.key) }"
-            :disabled="isTileDisabled(g.key)"
-            :title="tileDisabledHint(g.key)"
+            :class="{ selected: mainGame.type === g.key, 'game-type-btn--disabled': g.key === 'nines' && (props.lockedPlayers ?? form.players).length < 3 }"
+            :disabled="g.key === 'nines' && (props.lockedPlayers ?? form.players).length < 3"
+            :title="g.key === 'nines' && (props.lockedPlayers ?? form.players).length < 3 ? '5-3-1 requires at least 3 players' : ''"
             @click="setMainGame(g.key)"
           >
             <span class="gtb-icon">{{ g.icon }}</span>
-            <span class="gtb-label">{{ g.label }}<span v-if="tileDisabledLabel(g.key)" style="font-size:9px;display:block;opacity:.6;">{{ tileDisabledLabel(g.key) }}</span></span>
+            <span class="gtb-label">{{ g.label }}<span v-if="g.key === 'nines' && (props.lockedPlayers ?? form.players).length < 3" style="font-size:9px;display:block;opacity:.6;">3+ players</span></span>
             <button class="btn-game-info btn-game-info-grid" @click.stop="toggleGameInfo(g.key)" title="How to play" v-if="g.key !== 'none'">ℹ️</button>
           </button>
         </div>
@@ -665,53 +665,6 @@
             </div>
           </div>
           <div class="config-note">All {{ form.players.length }} players compete. Settle pairwise on pt difference.</div>
-        </div>
-
-        <!-- 14 Holes config -->
-        <div v-if="mainGame.type === 'fourteen'" class="game-config-card">
-          <div class="config-row">
-            <div class="config-field config-field--full">
-              <label>How does $ settle?</label>
-              <div class="holes-toggle">
-                <button class="holes-btn" :class="{ active: mainGame.config.settlement === 'pot' }" @click="mainGame.config.settlement = 'pot'">Pot</button>
-                <button class="holes-btn" :class="{ active: mainGame.config.settlement === 'pairwise' }" @click="mainGame.config.settlement = 'pairwise'">Pairwise</button>
-              </div>
-            </div>
-          </div>
-          <div v-if="mainGame.config.settlement === 'pot'" class="config-row">
-            <div class="config-field">
-              <label>Pot ante</label>
-              <div class="config-input-prefix">
-                <span class="prefix">$</span>
-                <input v-model.number="mainGame.config.pot" type="number" min="1" class="config-input" placeholder="20" />
-              </div>
-            </div>
-            <div class="config-field">
-              <label style="opacity:.5">per player</label>
-            </div>
-          </div>
-          <div v-if="mainGame.config.settlement === 'pairwise'" class="config-row">
-            <div class="config-field">
-              <label>Stroke value</label>
-              <div class="config-input-prefix">
-                <span class="prefix">$</span>
-                <input v-model.number="mainGame.config.ppt" type="number" min="0.25" step="0.25" class="config-input" placeholder="1" />
-              </div>
-            </div>
-            <div class="config-field">
-              <label style="opacity:.5">per stroke diff</label>
-            </div>
-          </div>
-          <div class="config-row">
-            <div class="config-field config-field--full">
-              <label>Handicap</label>
-              <div class="holes-toggle">
-                <button class="holes-btn" :class="{ active: mainGame.config.hcpMode === 'lowMan' }" @click="mainGame.config.hcpMode = 'lowMan'">Low-man</button>
-                <button class="holes-btn" :class="{ active: mainGame.config.hcpMode === 'full' }" @click="mainGame.config.hcpMode = 'full'">Full course</button>
-              </div>
-            </div>
-          </div>
-          <div class="config-note">All {{ form.players.length }} players compete individually. Lowest 14-total wins.</div>
         </div>
 
         <!-- Wolf config -->
@@ -1683,7 +1636,6 @@ const MAIN_GAMES = [
   { key: 'hammer',      icon: '🔨', label: 'Hammer' },
   { key: 'sixes',       icon: '🎲', label: 'Sixes' },
   { key: 'nines',        icon: '9️⃣', label: 'Nines (5-3-1)' },
-  { key: 'fourteen',    icon: '🎯', label: '14 Holes' },
   { key: 'none',        icon: '📋', label: 'Scores Only' },
 ]
 
@@ -1700,7 +1652,6 @@ const GAME_DEFAULTS = {
   sixes:       { ppt: 1, scoringModel: 'perhole' },
   nines:       { ppt: 1, sweepBonus: false, sweepMargin: 2, birdieBonus: false, birdieBonusPts: 1, birdieDouble: false, players: null },
   bestball:    { ppt: 5, ballsPerTeam: 1, team1: [], team2: [], hidden: true },
-  fourteen:    { settlement: 'pot', pot: 20, ppt: 1, hcpMode: 'lowMan' },
   none:        {},
 }
 
@@ -1747,7 +1698,7 @@ function updateStablefordPts(key, val) {
 
 const sideGames = ref({
   skins:  { enabled: false, ppt: 5, carry: true },
-  dots:   { enabled: false, ppt: 2, birdieEnabled: true, eagleEnabled: true, greenieEnabled: true, sandieEnabled: true, netBirdieEnabled: true, barkieEnabled: false, arnieEnabled: false, ferretEnabled: false, negativeEnabled: false },
+  dots:   { enabled: false, ppt: 2, birdieEnabled: true, eagleEnabled: true, greenieEnabled: true, sandieEnabled: true },
   snake:  { enabled: false, ppt: 5 },
   fidget: { enabled: false, ppp: 10, doubleFidget: false },
   nines:  { enabled: false, ppt: 1, sweepBonus: false, sweepMargin: 2, birdieBonus: false, birdieBonusPts: 1, birdieDouble: false, players: null },
@@ -1776,31 +1727,6 @@ function addBbnTracker() {
 
 function removeBbnTracker(id) {
   bbnTrackers.value = bbnTrackers.value.filter(t => t.id !== id)
-}
-
-function isTileDisabled(key) {
-  const players = (props.lockedPlayers ?? form.value.players)
-  if (key === 'nines') return players.length < 3
-  if (key === 'fourteen') return players.length < 2 || players.length > 4 || form.value.holesMode !== '18'
-  return false
-}
-function tileDisabledHint(key) {
-  const players = (props.lockedPlayers ?? form.value.players)
-  if (key === 'nines' && players.length < 3) return '5-3-1 requires at least 3 players'
-  if (key === 'fourteen') {
-    if (players.length < 2 || players.length > 4) return 'Needs 2–4 players'
-    if (form.value.holesMode !== '18') return '18-hole only'
-  }
-  return ''
-}
-function tileDisabledLabel(key) {
-  const players = (props.lockedPlayers ?? form.value.players)
-  if (key === 'nines' && players.length < 3) return '3+ players'
-  if (key === 'fourteen') {
-    if (players.length < 2 || players.length > 4) return '2–4 players'
-    if (form.value.holesMode !== '18') return '18 holes only'
-  }
-  return ''
 }
 
 function setMainGame(key) {
@@ -1913,11 +1839,42 @@ async function runManualGhinSearch() {
   const first = psManualFirst.value.trim()
   const last = psManualLast.value.trim()
   if (first.length < 2 || last.length < 2) return
-  const profile = authStore.profile
-  if (!profile?.ghin_number || !profile?.ghin_password) return  // silent — no creds, manual entry only
   const seq = ++_psManualSeq
   psManualSearching.value = true
   try {
+    const rosterGhins = new Set(rosterStore.players.map(p => String(p.ghin_number || '')).filter(Boolean))
+
+    // 1. BB member index first (same as roster search)
+    const { data: bbData } = await supabase
+      .from('bb_member_index')
+      .select('ghin_number, first_name, last_name, handicap_index')
+      .ilike('last_name', `%${last}%`)
+      .order('last_name')
+      .limit(20)
+
+    if (seq !== _psManualSeq) return
+
+    let bbMatches = (bbData || []).filter(b => !b.ghin_number || !rosterGhins.has(String(b.ghin_number)))
+    const fl = first.toLowerCase()
+    const exact = bbMatches.filter(b => b.first_name?.toLowerCase().startsWith(fl))
+    if (exact.length > 0) bbMatches = exact
+
+    if (bbMatches.length > 0) {
+      psManualResults.value = bbMatches.map(b => ({
+        full_name: `${b.first_name} ${b.last_name}`,
+        first_name: b.first_name,
+        last_name: b.last_name,
+        ghin_number: b.ghin_number,
+        handicap_index: b.handicap_index,
+        club_name: 'Bonnie Briar CC',
+        status: 'Active',
+      }))
+      return
+    }
+
+    // 2. Fall back to GHIN edge function
+    const profile = authStore.profile
+    if (!profile?.ghin_number || !profile?.ghin_password) return
     const invokePromise = supabase.functions.invoke('ghin-player-search', {
       body: { first_name: first, last_name: last, ghin_number: profile.ghin_number, password: profile.ghin_password },
     })
@@ -1925,8 +1882,6 @@ async function runManualGhinSearch() {
     const { data, error } = await Promise.race([invokePromise, timeout])
     if (seq !== _psManualSeq) return
     if (!error && Array.isArray(data?.results)) {
-      // Filter out anyone already in the roster
-      const rosterGhins = new Set(rosterStore.players.map(p => String(p.ghin_number || '')).filter(Boolean))
       psManualResults.value = data.results.filter(r => !r.ghin_number || !rosterGhins.has(String(r.ghin_number)))
     }
   } catch { /* silent */ } finally {
@@ -1935,7 +1890,13 @@ async function runManualGhinSearch() {
 }
 
 function applyManualGhinResult(r) {
-  if (r.first_name) psManualFirst.value = r.first_name
+  // BB results have first_name/last_name; GHIN API results have full_name + last_name
+  if (r.first_name) {
+    psManualFirst.value = r.first_name
+  } else if (r.full_name) {
+    const parts = r.full_name.trim().split(/\s+/)
+    psManualFirst.value = parts.length > 1 ? parts.slice(0, -1).join(' ') : parts[0]
+  }
   if (r.last_name) psManualLast.value = r.last_name
   const hi = r.handicap_index
   if (hi != null && hi !== 'NH' && !isNaN(parseFloat(hi))) {
@@ -2232,34 +2193,6 @@ const canNext = computed(() => {
 })
 const canFinish = computed(() => {
   if (!form.value.players.length || !form.value.courseName) return false
-  const players = props.lockedPlayers ?? form.value.players
-  const cfg = mainGame.value.config || {}
-  const type = mainGame.value.type
-
-  if (type === 'fourteen') {
-    if (cfg.settlement === 'pot' && !(cfg.pot >= 1)) return false
-    if (cfg.settlement === 'pairwise' && !(cfg.ppt >= 0.25)) return false
-  }
-
-  // Wolf: tee order must include all players
-  if (type === 'wolf') {
-    if (!cfg.wolfTeeOrder || cfg.wolfTeeOrder.length !== players.length) return false
-  }
-
-  // Team games: team1 + team2 must cover all players
-  const teamGames = ['nassau', 'vegas', 'hilow', 'hammer', 'sixes', 'bestball', 'match']
-  if (teamGames.includes(type)) {
-    const t1 = cfg.team1 || []
-    const t2 = cfg.team2 || []
-    if (t1.length === 0 || t2.length === 0) return false
-    if (t1.length + t2.length !== players.length) return false
-  }
-
-  // Match 1v1: both players must be selected
-  if (type === 'match' && cfg.format === '1v1') {
-    if (!cfg.player1 || !cfg.player2) return false
-  }
-
   return true
 })
 
@@ -2677,11 +2610,6 @@ function buildGameConfigs() {
       eagleEnabled: sg.dots.eagleEnabled,
       greenieEnabled: sg.dots.greenieEnabled,
       sandieEnabled: sg.dots.sandieEnabled,
-      netBirdie: sg.dots.netBirdieEnabled,
-      barkieEnabled: sg.dots.barkieEnabled,
-      arnieEnabled: sg.dots.arnieEnabled,
-      ferretEnabled: sg.dots.ferretEnabled,
-      negativeEnabled: sg.dots.negativeEnabled,
     }})
   }
   if (sg.snake.enabled) {
@@ -2760,10 +2688,14 @@ function _loadEditGames() {
   form.value.holesMode = roundsStore.activeRound?.holes_mode || '18'
   form.value.players = roundsStore.activeMembers.map(m => ({
     id: m.id,
-    short_name: m.short_name,
-    full_name: m.full_name,
-    handicap_index: m.handicap_index,
-    ghinIndex: m.handicap_index ?? null,
+    name: m.full_name || m.guest_name || m.short_name || '?',
+    shortName: m.short_name || (m.full_name || m.guest_name || '').split(' ')[0] || '?',
+    ghinIndex: m.ghin_index ?? null,
+    ghinSyncedAt: m.ghin_synced_at ?? null,
+    nickname: m.nickname ?? null,
+    use_nickname: m.use_nickname ?? false,
+    profileId: m.profile_id ?? null,
+    email: m.email ?? null,
   }))
 
   const TYPE_NORM = { fivethreeone: 'nines' }

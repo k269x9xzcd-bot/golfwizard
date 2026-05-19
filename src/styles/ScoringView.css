@@ -489,6 +489,36 @@
   color: #f87171; font-size: 14px; font-weight: 700; cursor: pointer;
 }
 
+/* ── Invite to Score picker ──────────────────────────────────── */
+.scoring-view .invite-picker-panel {
+  background: var(--gw-green-800, #0d3325);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 16px; padding: 20px; max-width: 360px; width: 100%;
+  max-height: 80vh; display: flex; flex-direction: column; gap: 14px;
+}
+.scoring-view .invite-picker-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.scoring-view .invite-picker-title { font-size: 16px; font-weight: 800; color: var(--gw-text, #f0ede0); margin-bottom: 4px; }
+.scoring-view .invite-picker-sub { font-size: 12px; color: rgba(240,237,224,.6); line-height: 1.45; }
+.scoring-view .invite-picker-empty { font-size: 13px; color: rgba(240,237,224,.55); text-align: center; padding: 12px 0; }
+.scoring-view .invite-picker-list { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+.scoring-view .invite-picker-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 14px; border-radius: 12px;
+  background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08);
+}
+.scoring-view .invite-picker-name { font-size: 14px; font-weight: 600; color: var(--gw-text, #f0ede0); }
+.scoring-view .invite-picker-btn {
+  padding: 7px 16px; border-radius: 9px; font-size: 12px; font-weight: 700;
+  background: rgba(212,175,55,.15); border: 1px solid rgba(212,175,55,.35);
+  color: #d4af37; cursor: pointer; font-family: inherit; white-space: nowrap;
+  -webkit-tap-highlight-color: transparent; flex-shrink: 0;
+}
+.scoring-view .invite-picker-btn:disabled {
+  background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.1);
+  color: rgba(240,237,224,.4); cursor: default;
+}
+.scoring-view .invite-picker-error { font-size: 12px; color: #f87171; text-align: center; }
+
 /* ── Tab Strip (Card + Hole buttons) ─────────────────────────── */
 .tab-strip {
   padding: 8px 12px;

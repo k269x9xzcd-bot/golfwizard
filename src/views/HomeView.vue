@@ -52,6 +52,22 @@
       <div class="mib-arrow">›</div>
     </div>
 
+    <!-- Scorer invite banners -->
+    <div
+      v-for="invite in roundsStore.scorerInvites"
+      :key="invite.id"
+      class="scorer-invite-banner"
+    >
+      <div class="sib-body">
+        <div class="sib-title">📡 {{ invite.from_name }} wants you to score</div>
+        <div class="sib-sub">{{ invite.round_name || invite.course_name }}</div>
+      </div>
+      <div class="sib-actions">
+        <button class="sib-decline" @click="declineScorerInvite(invite.id)">Decline</button>
+        <button class="sib-accept" @click="acceptScorerInvite(invite)">Accept</button>
+      </div>
+    </div>
+
     <!-- Pending roster-share banners -->
     <div
       v-for="share in rosterStore.pendingShares"
@@ -240,6 +256,7 @@ onMounted(async () => {
     linkedStore.fetchUserLinkedMatches()
     linkedStore.fetchPendingInvites()
     rosterStore.loadPendingShares()
+    roundsStore.fetchScorerInvites()
   }
 })
 
@@ -250,8 +267,23 @@ watch(() => authStore.isAuthenticated, async (authed) => {
     linkedStore.fetchUserLinkedMatches()
     linkedStore.fetchPendingInvites()
     rosterStore.loadPendingShares()
+    roundsStore.fetchScorerInvites()
   }
 })
+
+async function acceptScorerInvite(invite) {
+  try {
+    await roundsStore.respondScorerInvite(invite.id, true)
+    await roundsStore.joinByRoomCode(invite.room_code)
+    router.push('/scoring')
+  } catch (e) {
+    console.warn('[scorer-invite] accept failed:', e)
+  }
+}
+
+async function declineScorerInvite(inviteId) {
+  await roundsStore.respondScorerInvite(inviteId, false)
+}
 
 function roundPlayerNames(round) {
   const members = round.round_members || []
@@ -303,6 +335,27 @@ async function openRound(id) {
 .mib-title { font-family: var(--gw-font-display); font-size: 15px; font-weight: 700; color: var(--gw-gold); }
 .mib-sub { font-size: 12px; color: rgba(240,237,224,.6); margin-top: 2px; }
 .mib-arrow { font-size: 22px; color: var(--gw-gold); opacity: .7; }
+
+.scorer-invite-banner {
+  display: flex; align-items: center; gap: 10px;
+  margin: 12px 16px 0; padding: 12px 14px;
+  background: rgba(212,175,55,.10); border: 1px solid rgba(212,175,55,.35);
+  border-radius: 14px;
+}
+.sib-body { flex: 1; min-width: 0; }
+.sib-title { font-size: 14px; font-weight: 700; color: var(--gw-text-primary); }
+.sib-sub { font-size: 12px; color: var(--gw-text-muted); margin-top: 2px; }
+.sib-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.sib-accept {
+  padding: 7px 13px; border-radius: 8px; border: none; cursor: pointer;
+  background: rgba(212,175,55,.25); color: #d4af37; font-size: 12px; font-weight: 700;
+  font-family: inherit; -webkit-tap-highlight-color: transparent;
+}
+.sib-decline {
+  padding: 7px 10px; border-radius: 8px; border: none; cursor: pointer;
+  background: transparent; color: var(--gw-text-muted); font-size: 12px;
+  font-family: inherit; -webkit-tap-highlight-color: transparent;
+}
 
 .roster-share-banner {
   display: flex; align-items: center; gap: 10px;

@@ -126,6 +126,9 @@
           <button v-if="isCaptain" class="round-menu-item" @click="doSimulateFill">
             🎲 Simulate Scores
           </button> -->
+          <button v-if="isCaptain && roundsStore.activeRound?.room_code" class="round-menu-item" @click="showRoundMenu = false; showInvitePicker = true; invitePickerSent = new Set(); invitePickerError = ''">
+            📡 Invite to Score
+          </button>
           <button v-if="isCaptain" class="round-menu-item round-menu-danger" @click="showRoundMenu = false; confirmDeleteActive = true">
             🗑️ Delete Round
           </button>
@@ -211,6 +214,39 @@
               {{ editScoreSaving ? 'Saving…' : 'Save' }}
             </button>
           </div>
+        </div>
+      </div>
+
+      <!-- ── Invite to Score picker ───────────────────────────────── -->
+      <div v-if="showInvitePicker" class="delete-overlay" @click="showInvitePicker = false">
+        <div class="invite-picker-panel" @click.stop>
+          <div class="invite-picker-header">
+            <div>
+              <div class="invite-picker-title">📡 Invite to Score</div>
+              <div class="invite-picker-sub">Pick someone from your roster with a GolfWizard account — they'll get a notification.</div>
+            </div>
+            <button class="close-btn-sm" @click="showInvitePicker = false">✕</button>
+          </div>
+          <div v-if="invitableRosterPlayers.length === 0" class="invite-picker-empty">
+            No roster players with GolfWizard accounts found. They need to sign in to GolfWizard first.
+          </div>
+          <div v-else class="invite-picker-list">
+            <div
+              v-for="p in invitableRosterPlayers"
+              :key="p.id"
+              class="invite-picker-row"
+            >
+              <div class="invite-picker-name">{{ p.name }}</div>
+              <button
+                class="invite-picker-btn"
+                :disabled="invitePickerSending === p.user_id || invitePickerSent.has(p.user_id)"
+                @click="sendScorerInvite(p)"
+              >
+                {{ invitePickerSent.has(p.user_id) ? '✓ Sent' : invitePickerSending === p.user_id ? '…' : 'Invite' }}
+              </button>
+            </div>
+          </div>
+          <div v-if="invitePickerError" class="invite-picker-error">{{ invitePickerError }}</div>
         </div>
       </div>
 
@@ -858,23 +894,6 @@
                 {{ getScore(group.member.id, activeHole) ? netScore(getScore(group.member.id, activeHole), memberEffectiveHcp(group.member), siForHole(activeHole)) : '—' }}
               </div>
             </div>
-            <!-- 14 Holes KEEP/DISCARD pill — only when score entered -->
-            <div v-if="fourteenGame && getScore(group.member.id, activeHole)" class="fourteen-pill-row">
-              <button
-                class="fourteen-pill"
-                :class="{ 'fourteen-pill--keep': !isDiscarded(group.member.id, activeHole), 'fourteen-pill--discard': isDiscarded(group.member.id, activeHole) }"
-                @click="!isDiscarded(group.member.id, activeHole) && discardsLeft(group.member.id) <= 0 ? null : toggleDiscard(group.member.id, activeHole)"
-                :disabled="!isDiscarded(group.member.id, activeHole) && discardsLeft(group.member.id) <= 0"
-                :title="!isDiscarded(group.member.id, activeHole) && discardsLeft(group.member.id) <= 0 ? 'All 4 discards used' : ''"
-              >
-                {{ isDiscarded(group.member.id, activeHole) ? 'DISCARD' : 'KEEP' }}
-              </button>
-              <span
-                class="fourteen-discards-left"
-                :class="{ 'fourteen-left--amber': discardsLeft(group.member.id) === 1, 'fourteen-left--red': discardsLeft(group.member.id) === 0 }"
-              >{{ discardsLeft(group.member.id) }} left</span>
-            </div>
-
             <div v-if="wolfGame && wolfOnThisHole === group.member.id && wolfChoiceForHole?.partner" class="wolf-badge-row">
               <template v-if="wolfChoiceForHole.partner === 'lone'">🐺 Lone</template>
               <template v-else-if="wolfChoiceForHole.partner === 'blind'">🙈 Blind</template>
@@ -1199,26 +1218,6 @@ const showDoubleFidgetPrompt = ref(false)
 const doubleFidgetGame = ref(null)
 
 const fidgetGame = computed(() => roundsStore.activeGames.find(g => g.type === 'fidget'))
-
-// ── 14 Holes ─────────────────────────────────────────────────────
-const fourteenGame = computed(() => roundsStore.activeGames.find(g => g.type === 'fourteen') || null)
-
-function isDiscarded(memberId, hole) {
-  return roundsStore.activeDiscards?.[memberId]?.[hole] === true
-}
-function discardsUsed(memberId) {
-  return Object.keys(roundsStore.activeDiscards?.[memberId] || {}).length
-}
-function discardsLeft(memberId) {
-  return Math.max(0, 4 - discardsUsed(memberId))
-}
-async function toggleDiscard(memberId, hole) {
-  if (!fourteenGame.value) return
-  const next = !isDiscarded(memberId, hole)
-  // Enforce hard cap: can't mark DISCARD when at 0 left (unless un-discarding)
-  if (next && discardsLeft(memberId) <= 0) return
-  await roundsStore.setDiscardFlag(memberId, hole, next)
-}
 
 // Watch for all-cleared condition after each score change
 watch(
@@ -2366,6 +2365,54 @@ const viewerToast = ref('')
 function flashViewerToast() {
   viewerToast.value = 'View-only — you\'re not a member of this round. Ask the scorer to share the room code.'
   setTimeout(() => { viewerToast.value = '' }, 3500)
+}
+
+// ── Scorer invite picker ────────────────────────────────────────
+const showInvitePicker = ref(false)
+const invitePickerSending = ref(null) // profile_id being sent
+const invitePickerSent = ref(new Set())
+const invitePickerError = ref('')
+
+const invitableRosterPlayers = computed(() => {
+  // Roster players with a linked GolfWizard account (user_id set),
+  // excluding those already in the round and the captain themselves
+  const myId = authStore.user?.id
+  const memberProfileIds = new Set(
+    roundsStore.activeMembers.map(m => m.profile_id).filter(Boolean)
+  )
+  return rosterStore.players.filter(p =>
+    p.user_id &&
+    p.user_id !== myId &&
+    !memberProfileIds.has(p.user_id)
+  )
+})
+
+async function sendScorerInvite(player) {
+  invitePickerSending.value = player.user_id
+  invitePickerError.value = ''
+  try {
+    await roundsStore.createScorerInvite(player.user_id, player.name)
+    invitePickerSent.value = new Set([...invitePickerSent.value, player.user_id])
+  } catch (e) {
+    invitePickerError.value = e?.message || 'Failed to send invite'
+  } finally {
+    invitePickerSending.value = null
+  }
+}
+
+async function shareRoundCode() {
+  const code = roundsStore.activeRound?.room_code
+  if (!code) return
+  const url = `${location.origin}${location.pathname}#/join/${code}`
+  if (navigator.share) {
+    try { await navigator.share({ title: 'Join my round on GolfWizard', text: `Join code: ${code}`, url }) } catch { /* cancelled */ }
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(url)
+    viewerToast.value = `✓ Join link copied — share it to let someone score`
+    setTimeout(() => { viewerToast.value = '' }, 3000)
+  } catch { /* unavailable */ }
 }
 
 // ── In-round config editing ─────────────────────────────────────
