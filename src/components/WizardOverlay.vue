@@ -879,6 +879,37 @@
           </div>
         </div>
 
+        <!-- 14 Holes config -->
+        <div v-if="mainGame.type === 'fourteen'" class="game-config-card">
+          <div class="config-row">
+            <div class="config-field">
+              <label>Settlement</label>
+              <select v-model="mainGame.config.settlement" class="config-select">
+                <option value="pot">Pot (lowest wins)</option>
+                <option value="pairwise">Pairwise ($ per stroke)</option>
+              </select>
+            </div>
+            <div class="config-field" v-if="mainGame.config.settlement === 'pot'">
+              <label>$ ante per player</label>
+              <input v-model.number="mainGame.config.pot" type="number" min="1" class="config-input" placeholder="20" />
+            </div>
+            <div class="config-field" v-if="mainGame.config.settlement === 'pairwise'">
+              <label>$ per stroke</label>
+              <input v-model.number="mainGame.config.ppt" type="number" min="1" class="config-input" placeholder="1" />
+            </div>
+          </div>
+          <div class="config-row">
+            <div class="config-field">
+              <label>Handicap</label>
+              <select v-model="mainGame.config.hcpMode" class="config-select">
+                <option value="lowman">Low-man adjusted</option>
+                <option value="full">Full course</option>
+              </select>
+            </div>
+          </div>
+          <div class="config-note">Each player discards their 4 worst holes. Lowest 14-hole net total wins.</div>
+        </div>
+
         <!-- No main game -->
         <div v-if="mainGame.type === 'none'" class="config-note">Select a main game or just track scores.</div>
 
@@ -1636,6 +1667,7 @@ const MAIN_GAMES = [
   { key: 'hammer',      icon: '🔨', label: 'Hammer' },
   { key: 'sixes',       icon: '🎲', label: 'Sixes' },
   { key: 'nines',        icon: '9️⃣', label: 'Nines (5-3-1)' },
+  { key: 'fourteen',    icon: '🎯', label: '14 Holes' },
   { key: 'none',        icon: '📋', label: 'Scores Only' },
 ]
 
@@ -1652,6 +1684,7 @@ const GAME_DEFAULTS = {
   sixes:       { ppt: 1, scoringModel: 'perhole' },
   nines:       { ppt: 1, sweepBonus: false, sweepMargin: 2, birdieBonus: false, birdieBonusPts: 1, birdieDouble: false, players: null },
   bestball:    { ppt: 5, ballsPerTeam: 1, team1: [], team2: [], hidden: true },
+  fourteen:    { hcpMode: 'lowman', settlement: 'pot', pot: 20, ppt: 1 },
   none:        {},
 }
 
