@@ -894,6 +894,17 @@
                 {{ getScore(group.member.id, activeHole) ? netScore(getScore(group.member.id, activeHole), memberEffectiveHcp(group.member), siForHole(activeHole)) : '—' }}
               </div>
             </div>
+            <div v-if="fourteenGame && getScore(group.member.id, activeHole)" class="fourteen-pill-row">
+              <button
+                class="fourteen-pill"
+                :class="isDiscarded(group.member.id, activeHole) ? 'fourteen-pill--discard' : 'fourteen-pill--keep'"
+                :disabled="!isDiscarded(group.member.id, activeHole) && discardsLeft(group.member.id) === 0"
+                @click="toggleDiscard(group.member.id, activeHole)"
+              >
+                {{ isDiscarded(group.member.id, activeHole) ? '✕ DISCARD' : '✓ KEEP' }}
+              </button>
+              <span class="fourteen-discards-left">{{ discardsLeft(group.member.id) }} left</span>
+            </div>
             <div v-if="wolfGame && wolfOnThisHole === group.member.id && wolfChoiceForHole?.partner" class="wolf-badge-row">
               <template v-if="wolfChoiceForHole.partner === 'lone'">🐺 Lone</template>
               <template v-else-if="wolfChoiceForHole.partner === 'blind'">🙈 Blind</template>
@@ -2533,6 +2544,24 @@ async function resetScores() {
 
 // ── Snake 3-putt ────────────────────────────────────────────────
 const snakeGame = computed(() => roundsStore.activeGames.find(g => g.type?.toLowerCase() === 'snake') || null)
+
+const fourteenGame = computed(() => roundsStore.activeGames.find(g => g.type === 'fourteen') || null)
+const FOURTEEN_DISCARDS = 4
+function isDiscarded(memberId, hole) {
+  return !!roundsStore.activeDiscards?.[memberId]?.[hole]
+}
+function discardsUsed(memberId) {
+  return Object.keys(roundsStore.activeDiscards?.[memberId] || {}).length
+}
+function discardsLeft(memberId) {
+  return Math.max(0, FOURTEEN_DISCARDS - discardsUsed(memberId))
+}
+async function toggleDiscard(memberId, hole) {
+  if (!getScore(memberId, hole)) return
+  const current = isDiscarded(memberId, hole)
+  if (!current && discardsLeft(memberId) === 0) return
+  await roundsStore.setDiscard(memberId, hole, !current)
+}
 const snakeHolder = computed(() => { const e = snakeGame.value?.config?.events || []; return e.length ? e[e.length - 1].pid : null })
 const snakeHolderName = computed(() => { if (!snakeHolder.value) return null; const m = roundsStore.activeMembers.find(m => m.id === snakeHolder.value); return memberDisplay(m) })
 const snakeEventsOnHole = computed(() => (snakeGame.value?.config?.events || []).filter(e => e.hole === activeHole.value))

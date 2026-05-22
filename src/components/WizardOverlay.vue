@@ -1139,6 +1139,49 @@
             </div>
           </div>
 
+          <!-- 14 Holes as side game — hidden when it's already the main game -->
+          <div class="side-game-row" :class="{ 'side-game-on': sideGames.fourteen.enabled }" v-if="mainGame.type !== 'fourteen'">
+            <div class="side-game-header" @click="toggleSideGame('fourteen')">
+              <span>🎯 14 Holes (best-14 net)</span>
+              <span class="side-header-actions">
+                <button class="btn-game-info btn-game-info-sm" @click.stop="toggleGameInfo('fourteen')" title="How to play">ℹ️</button>
+                <span class="side-toggle">{{ sideGames.fourteen.enabled ? '▲' : '▼' }}</span>
+              </span>
+            </div>
+            <div v-if="gameInfoKey === 'fourteen'" class="game-info-popover game-info-inline">
+              <p class="game-info-desc">{{ getGameDef('fourteen')?.desc }}</p>
+              <button class="btn-close-info" @click="gameInfoKey = null">Got it</button>
+            </div>
+            <div v-if="sideGames.fourteen.enabled" class="side-game-config">
+              <div class="config-row">
+                <div class="config-field">
+                  <label>Settlement</label>
+                  <select v-model="sideGames.fourteen.settlement" class="config-select">
+                    <option value="pot">Pot (lowest wins)</option>
+                    <option value="pairwise">Pairwise ($ per stroke)</option>
+                  </select>
+                </div>
+                <div class="config-field" v-if="sideGames.fourteen.settlement === 'pot'">
+                  <label>$ ante per player</label>
+                  <input v-model.number="sideGames.fourteen.pot" type="number" min="1" class="config-input" placeholder="20" />
+                </div>
+                <div class="config-field" v-if="sideGames.fourteen.settlement === 'pairwise'">
+                  <label>$ per stroke</label>
+                  <input v-model.number="sideGames.fourteen.ppt" type="number" min="1" class="config-input" placeholder="1" />
+                </div>
+              </div>
+              <div class="config-row">
+                <div class="config-field">
+                  <label>Handicap</label>
+                  <select v-model="sideGames.fourteen.hcpMode" class="config-select">
+                    <option value="lowman">Low-man adjusted</option>
+                    <option value="full">Full course</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- 1v1 Side Match -->
           <div class="side-game-row" :class="{ 'side-game-on': sideGames.match1.enabled }">
             <div class="side-game-header" @click="toggleSideGame('match1')">
@@ -1739,6 +1782,7 @@ const sideGames = ref({
   match2: { enabled: false, player1: '', player2: '', ppt: 10, scoring: 'closeout', front: 10, back: 10, overall: 20, pressAt: 2 },
   bbn:    { enabled: false },
   bbb:    { enabled: false, ppt: 1, doubleBongo: false },
+  fourteen: { enabled: false, hcpMode: 'lowman', settlement: 'pot', pot: 20, ppt: 1 },
 })
 
 // When a 4th player is added and nines side game is enabled but has no player subset, auto-init
@@ -2697,6 +2741,14 @@ function buildGameConfigs() {
       players: form.value.players.map(p => p.id),
     }})
   }
+  if (sg.fourteen.enabled && mainGame.value.type !== 'fourteen') {
+    games.push({ type: 'fourteen', config: {
+      hcpMode: sg.fourteen.hcpMode,
+      settlement: sg.fourteen.settlement,
+      pot: sg.fourteen.pot,
+      ppt: sg.fourteen.ppt,
+    }})
+  }
   // Best Ball trackers (only if enabled)
   if (sideGames.value.bbn.enabled) {
     for (const tracker of bbnTrackers.value) {
@@ -2762,6 +2814,15 @@ function _loadEditGames() {
 
   const bbbRow = games.find(g => g.type === 'bbb')
   if (bbbRow) { sg.bbb.enabled = true; sg.bbb.ppt = bbbRow.config?.ppt ?? 1; sg.bbb.doubleBongo = bbbRow.config?.doubleBongo ?? false }
+
+  const fourteenSideRow = games.find(g => g.type === 'fourteen' && g !== mainRow)
+  if (fourteenSideRow) {
+    sg.fourteen.enabled = true
+    sg.fourteen.hcpMode = fourteenSideRow.config?.hcpMode ?? 'lowman'
+    sg.fourteen.settlement = fourteenSideRow.config?.settlement ?? 'pot'
+    sg.fourteen.pot = fourteenSideRow.config?.pot ?? 20
+    sg.fourteen.ppt = fourteenSideRow.config?.ppt ?? 1
+  }
 
   const sideMatches = games.filter(g => g.type === 'match1v1' || (g.type === 'nassau' && g.config?._sideMatch))
   sideMatches.forEach((smg, idx) => {

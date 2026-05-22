@@ -69,6 +69,7 @@ export const useRoundsStore = defineStore('rounds', () => {
   const activeMembers = ref([])   // round_members rows
   const activeScores = ref({})    // { memberId: { hole: score } }
   const activeScoreMeta = ref({}) // { memberId: { hole: { entered_by, entered_at } } }
+  const activeDiscards = ref({})  // { memberId: { hole: true } } — 14 Holes KEEP/DISCARD
   const activeGames = ref([])     // game_configs rows
   const _inFlightGameKeys = new Set() // dedup guard for concurrent saveGameConfig inserts
 
@@ -778,14 +779,20 @@ export const useRoundsStore = defineStore('rounds', () => {
     // Build scores map: { memberId: { hole: score } }
     const sm = {}
     const meta = {}
+    const disc = {}
     for (const s of (data.scores ?? [])) {
       if (!sm[s.member_id]) sm[s.member_id] = {}
       sm[s.member_id][s.hole] = s.score
       if (!meta[s.member_id]) meta[s.member_id] = {}
       meta[s.member_id][s.hole] = { entered_by: s.entered_by ?? null, entered_at: s.entered_at ?? null }
+      if (s.is_discarded) {
+        if (!disc[s.member_id]) disc[s.member_id] = {}
+        disc[s.member_id][s.hole] = true
+      }
     }
     activeScores.value = sm
     activeScoreMeta.value = meta
+    activeDiscards.value = disc
 
     // Reconcile the offline score queue against this round's actual members.
     // Drops orphan entries with stale client-generated member_ids that would
@@ -860,6 +867,25 @@ export const useRoundsStore = defineStore('rounds', () => {
       scoreSyncError.value = isAuthErr ? 'rls' : 'db'
     }
     // Non-blocking: never throw — the optimistic update already applied
+  }
+
+  // ── Toggle discard flag (14 Holes KEEP/DISCARD) ────────────
+  async function setDiscard(memberId, hole, isDiscarded) {
+    const auth = useAuthStore()
+    // Optimistic update
+    if (!activeDiscards.value[memberId]) activeDiscards.value[memberId] = {}
+    if (isDiscarded) activeDiscards.value[memberId][hole] = true
+    else delete activeDiscards.value[memberId][hole]
+
+    if (!auth.isAuthenticated || String(activeRound.value?.id ?? '').startsWith('guest_')) return
+
+    const patch = { is_discarded: isDiscarded }
+    const filter = `round_id=eq.${activeRound.value.id}&member_id=eq.${memberId}&hole=eq.${hole}`
+    try {
+      await supaCall('setDiscard', supabase.from('scores').update(patch).eq('round_id', activeRound.value.id).eq('member_id', memberId).eq('hole', hole), 5000)
+    } catch {
+      try { await supaRawUpdate('scores', filter, patch, 8000) } catch (e) { console.warn('[setDiscard] failed:', e?.message) }
+    }
   }
 
   // ── Save game configs ───────────────────────────────────────
@@ -1052,6 +1078,9 @@ export const useRoundsStore = defineStore('rounds', () => {
             activeScores.value[s.member_id][s.hole] = s.score
             if (!activeScoreMeta.value[s.member_id]) activeScoreMeta.value[s.member_id] = {}
             activeScoreMeta.value[s.member_id][s.hole] = { entered_by: s.entered_by ?? null, entered_at: s.entered_at ?? null }
+            if (!activeDiscards.value[s.member_id]) activeDiscards.value[s.member_id] = {}
+            if (s.is_discarded) activeDiscards.value[s.member_id][s.hole] = true
+            else delete activeDiscards.value[s.member_id][s.hole]
           }
         })
         .subscribe((status, err) => {
@@ -1590,13 +1619,13 @@ export const useRoundsStore = defineStore('rounds', () => {
   }
 
   return {
-    activeRound, activeMembers, activeScores, activeScoreMeta, activeGames,
+    activeRound, activeMembers, activeScores, activeScoreMeta, activeDiscards, activeGames,
     knownRounds,
     rounds, myRounds, loading, activeRoundId, scoreSyncError,
     pendingQueueCount,
     flushQueue: _flushQueue,
     patchActiveGames: (games) => { activeGames.value = games },
-    fetchRounds, createRound, loadRound, setScore,
+    fetchRounds, createRound, loadRound, setScore, setDiscard,
     saveGameConfig, updateGameConfig, deleteGameConfig,
     updateRoundDate,
     joinByRoomCode, completeRound, deleteRound, setActiveRound,
