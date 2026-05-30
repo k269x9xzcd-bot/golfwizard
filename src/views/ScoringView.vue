@@ -110,7 +110,7 @@
           <button v-if="isCaptain" class="round-menu-item" @click="showRoundMenu = false; openRetroScore()">
             📝 Enter Scores from Card
           </button>
-          <button class="round-menu-item" v-if="isCaptain && !roundsStore.activeRound?.is_complete" :disabled="finishing" @click="showRoundMenu = false; finishRound()">
+          <button class="round-menu-item" v-if="isCaptain && !roundsStore.activeRound?.is_complete" :disabled="finishing" @click="showRoundMenu = false; showSettlementModal = true">
             {{ finishing ? '⏳ Finishing…' : '✅ Finish Round' }}
           </button>
           <button class="round-menu-item" v-if="isCaptain && roundsStore.activeRound?.is_complete && !roundsStore.activeRound?.owner_id && authStore.isAuthenticated" :disabled="syncing" @click="syncToAccount">
@@ -1138,6 +1138,20 @@
           @close="showFinishReview = false"
           @finish="finishRound"
         />
+
+        <!-- Settlement modal — shown from gear menu "Finish Round" -->
+        <SettlementModal
+          :show="showSettlementModal"
+          :settlements="liveSettlements"
+          :finishing="finishing"
+          :sharing="sharing"
+          :error="finishError"
+          :pending-scores="pendingScores"
+          :warning="fourteenDiscardWarning"
+          @close="showSettlementModal = false"
+          @finish="showSettlementModal = false; finishRound()"
+          @share="doShareScorecard"
+        />
       </div>
 
       <!-- Score entry modal removed — inline +/- on player cards -->
@@ -1164,11 +1178,12 @@ import ThemeToggle from '../components/ui/ThemeToggle.vue'
 import HcpEditorModal from '../components/scoring/HcpEditorModal.vue'
 import RoundPickerSheet from '../components/scoring/RoundPickerSheet.vue'
 import FinishRoundOverlay from '../components/scoring/FinishRoundOverlay.vue'
+import SettlementModal from '../components/scoring/SettlementModal.vue'
 import { useScorecardHelpers } from '../composables/useScorecardHelpers'
 import { useGameNotation } from '../composables/useGameNotation'
 import { useHoleMath } from '../composables/useHoleMath'
 import { useLiveSettlements } from '../composables/useLiveSettlements'
-import { computeNassau, computeHammer, computeFidget, courseHandicap, holeSI, strokesOnHole } from '../modules/gameEngine'
+import { computeNassau, computeHammer, computeFidget, courseHandicap, holeSI, strokesOnHole, memberNetOnHole, memberNetOnHoleLowMan } from '../modules/gameEngine'
 import { computeMatchOutcome } from '../modules/tournamentOutcome'
 import { normalizeWagers, buildTournamentWagerGames } from '../modules/tournamentWagers'
 import { buildLiveSections } from '../modules/liveSections'
@@ -1822,6 +1837,7 @@ async function saveEditScore() {
   editScoreToast.value = ''
   try {
     await roundsStore.setScore(memberId, hole, val)
+    if (fourteenGame.value) recomputeFourteenDiscards(memberId)
     editScoreToast.value = 'saved'
     setTimeout(() => {
       editScoreDialog.value = null
@@ -2258,6 +2274,7 @@ watch(gameNotationRows, (rows) => {
   expandedNotationRows.value = s
 }, { immediate: true })
 const showFinishReview = ref(false)
+const showSettlementModal = ref(false)
 
 // ── Landscape mode (glance-only scorecard) ──────────────────────
 // When the phone rotates to landscape we switch to a stripped-down
@@ -2441,6 +2458,7 @@ function inlineSetPar(member) {
   const par = parForHole(hole)
   const newScore = existing === null ? par : existing
   roundsStore.setScore(member.id, hole, newScore)
+  if (fourteenGame.value) recomputeFourteenDiscards(member.id)
 }
 
 function inlineInc(member) {
@@ -2453,6 +2471,7 @@ function inlineInc(member) {
   } else if (existing < 13) {
     roundsStore.setScore(member.id, hole, existing + 1)
   }
+  if (fourteenGame.value) recomputeFourteenDiscards(member.id)
 }
 
 function inlineDec(member) {
@@ -2465,6 +2484,7 @@ function inlineDec(member) {
   } else if (existing > 1) {
     roundsStore.setScore(member.id, hole, existing - 1)
   }
+  if (fourteenGame.value) recomputeFourteenDiscards(member.id)
 }
 
 
@@ -2556,6 +2576,57 @@ function discardsUsed(memberId) {
 function discardsLeft(memberId) {
   return Math.max(0, FOURTEEN_DISCARDS - discardsUsed(memberId))
 }
+// Warn when finishing with unused discards (will result in punishment auto-drop)
+const fourteenDiscardWarning = computed(() => {
+  if (!fourteenGame.value) return null
+  const warnings = []
+  for (const m of roundsStore.activeMembers) {
+    const left = discardsLeft(m.id)
+    if (left > 0) {
+      const name = memberDisplay(m)
+      warnings.push(`${name} has ${left} unused discard${left > 1 ? 's' : ''} — best hole${left > 1 ? 's' : ''} will be dropped as punishment`)
+    }
+  }
+  return warnings.length ? warnings.join('; ') : null
+})
+async function recomputeFourteenDiscards(memberId) {
+  if (!fourteenGame.value) return
+  const ctx = buildCtx()
+  const member = roundsStore.activeMembers.find(m => m.id === memberId)
+  if (!member) return
+  const hcpMode = fourteenGame.value.config?.hcpMode || 'lowman'
+  const netFn = hcpMode === 'full'
+    ? (h) => memberNetOnHole(ctx, member, h)
+    : (h) => memberNetOnHoleLowMan(ctx, member, h, roundsStore.activeMembers)
+
+  const holes = visibleHoles.value
+  const holesWithNet = []
+  for (const h of holes) {
+    const score = getScore(memberId, h)
+    if (score == null) continue
+    const net = netFn(h)
+    if (net == null) continue
+    holesWithNet.push({ hole: h, net })
+  }
+
+  if (holesWithNet.length === 0) return
+
+  // Pick the 4 worst (highest net) holes to discard
+  const sorted = [...holesWithNet].sort((a, b) => b.net - a.net || a.hole - b.hole)
+  const worstFour = new Set(sorted.slice(0, FOURTEEN_DISCARDS).map(x => x.hole))
+
+  // Update discards: set worst 4, clear the rest
+  const updates = []
+  for (const { hole } of holesWithNet) {
+    const shouldDiscard = worstFour.has(hole)
+    const isCurrentlyDiscarded = isDiscarded(memberId, hole)
+    if (shouldDiscard !== isCurrentlyDiscarded) {
+      updates.push(roundsStore.setDiscard(memberId, hole, shouldDiscard))
+    }
+  }
+  if (updates.length > 0) await Promise.allSettled(updates)
+}
+
 async function toggleDiscard(memberId, hole) {
   if (!getScore(memberId, hole)) return
   const current = isDiscarded(memberId, hole)

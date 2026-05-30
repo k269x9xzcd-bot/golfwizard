@@ -2793,6 +2793,17 @@ function _loadEditGames() {
     if (normType === 'nines' && form.value.players.length > 3 && !mainGame.value.config.players) {
       mainGame.value.config.players = form.value.players.slice(0, 3).map(p => p.id)
     }
+    // If team1/team2 are empty, derive from round_members.team (set by loadRound)
+    const cfg = mainGame.value.config
+    if (cfg.team1 !== undefined && !cfg.team1?.length && !cfg.team2?.length) {
+      const members = roundsStore.activeMembers
+      const derivedT1 = members.filter(m => m.team === 1).map(m => m.id)
+      const derivedT2 = members.filter(m => m.team === 2).map(m => m.id)
+      if (derivedT1.length || derivedT2.length) {
+        mainGame.value.config.team1 = derivedT1
+        mainGame.value.config.team2 = derivedT2
+      }
+    }
     showMainGrid.value = false
   } else {
     mainGame.value = { type: 'none', config: {} }

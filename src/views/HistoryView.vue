@@ -183,6 +183,9 @@
                 <button class="round-action-btn round-action-edit" @click.stop.prevent="reopenRound(round)" :disabled="loadingRoundId === round.id">
                   {{ loadingRoundId === round.id ? '⏳' : '✏️ Edit' }}
                 </button>
+                <button v-if="round.is_complete && (round.owner_id === authStore.user?.id || !round.owner_id)" class="round-action-btn round-action-edit-scores" @click.stop="openEditScores(round)">
+                  📝 Scores
+                </button>
                 <button class="round-action-btn round-action-share" @click.stop="doShareRecap(round)" :disabled="sharingId === round.id">
                   {{ sharingId === round.id ? '⏳' : '↑ Share' }}
                 </button>
@@ -211,6 +214,16 @@
         </div>
       </div>
     </div>
+
+    <!-- Edit Scores modal -->
+    <HistoryEditScoresModal
+      :show="!!editScoresRound"
+      :round="editScoresRound"
+      :members="editScoresRound?.round_members || []"
+      :holes="editScoresHoles"
+      @close="editScoresRound = null"
+      @saved="editScoresRound = null"
+    />
 
     </template><!-- end rounds segment -->
 
@@ -331,6 +344,7 @@ import { computeAllSettlements } from '../modules/settlements'
 import { buildTournamentWagerGames, normalizeWagers } from '../modules/tournamentWagers'
 import { isCrossMatchComplete, crossMatchDisplayStatus } from '../modules/crossMatchStatus'
 import { shareHistoryRecap } from '../modules/scorecardShare'
+import HistoryEditScoresModal from '../components/scoring/HistoryEditScoresModal.vue'
 // ScorecardGrid removed -- share now uses ScorecardCapture component via scorecardShare.js
 import {
   computeNassau, computeSkins, computeMatch, computeBestBall, computeBestBallNet,
@@ -466,6 +480,24 @@ const deleteError = ref('')
 const deleting = ref(false)
 
 const sharingId = ref(null)
+
+// Edit scores for finished rounds
+const editScoresRound = ref(null)
+const editScoresHoles = computed(() => {
+  if (!editScoresRound.value) return Array.from({ length: 18 }, (_, i) => i + 1)
+  const members = editScoresRound.value.round_members || []
+  const scores  = editScoresRound.value.scores || []
+  const allHoles = [...new Set(scores.map(s => s.hole))].sort((a, b) => a - b)
+  if (allHoles.length > 0) return allHoles
+  // Fallback: infer from member count or format
+  const format = editScoresRound.value.format
+  if (format === 'front9') return Array.from({ length: 9 }, (_, i) => i + 1)
+  if (format === 'back9')  return Array.from({ length: 9 }, (_, i) => i + 10)
+  return Array.from({ length: 18 }, (_, i) => i + 1)
+})
+function openEditScores(round) {
+  editScoresRound.value = round
+}
 
 async function doShareRecap(round) {
   if (sharingId.value) return
@@ -1730,6 +1762,7 @@ function eventMatchPoints(match) {
 .round-action-view { border-color: rgba(147,197,253,.25); color: #93c5fd; }
 .round-action-share { border-color: rgba(212,175,55,.3); color: var(--gw-gold); }
 .round-action-delete { border-color: rgba(248,113,113,.3); color: #f87171; flex: 0 0 auto; padding: 10px 14px; }
+.round-action-edit-scores { border-color: rgba(167,139,250,.3); color: #a78bfa; }
 
 /* Delete confirmation overlay */
 .delete-overlay {
