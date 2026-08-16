@@ -301,6 +301,9 @@
 .hcp-editor-input--modified {
   border-color: #d4af37; color: #d4af37;
 }
+.hcp-editor-tee-select {
+  width: 84px; font-size: 12px; -webkit-appearance: none; padding: 8px 4px;
+}
 /* Strokes-per-hole grid inside HCP editor */
 .hcp-editor-holes {
   display: grid; grid-template-columns: repeat(9, 1fr); gap: 3px;

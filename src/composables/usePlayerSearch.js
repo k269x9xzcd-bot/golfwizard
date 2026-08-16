@@ -117,9 +117,16 @@ export function usePlayerSearch(rosterPlayers) {
     if (!data || _lastQuery !== query.value.trim()) return
 
     let filtered = data
+    // Tracks whether any BB-index row actually matched the typed FIRST name too,
+    // not just the last name. A last-name-only substring match (e.g. searching
+    // "Neil Court" hitting an unrelated "Jeremy Court" already in the BB index)
+    // must not count as a real hit for this person — otherwise it silently blocks
+    // the GHIN fallback below and the person being searched for is never found.
+    let hasFirstNameMatch = !first
     if (first) {
       const fl = first.toLowerCase()
       const exact = filtered.filter(p => p.first_name?.toLowerCase().startsWith(fl))
+      hasFirstNameMatch = exact.length > 0
       if (exact.length > 0) filtered = exact
     }
 
@@ -134,8 +141,13 @@ export function usePlayerSearch(rosterPlayers) {
       source: 'bb',
     }))
 
-    // If no BB results, try GHIN name search as fallback
-    if (bbResults.value.length === 0 && _lastQuery === query.value.trim()) {
+    // Fall back to a live GHIN name search when the BB index has nothing for this
+    // person specifically — either no rows at all, or only same-last-name rows
+    // that belong to someone else (BUG FIX 2026-08-15: this used to gate purely on
+    // "any last-name row found," so a same-surname-different-person BB hit — e.g.
+    // "Neil Court" vs. an already-indexed "Jeremy Court" — silently suppressed the
+    // GHIN fallback and the real person was never found. See project memory.)
+    if ((bbResults.value.length === 0 || !hasFirstNameMatch) && _lastQuery === query.value.trim()) {
       await _ghinNameSearch(q)
     }
   }

@@ -208,6 +208,16 @@
                   placeholder="—"
                 />
               </div>
+              <select
+                v-if="teesForCourse.length > 1"
+                class="chip-tee-select"
+                v-model="p.tee"
+                :title="'Tee for ' + (p.shortName || p.name)"
+                @click.stop
+              >
+                <option :value="null">{{ form.tee || 'Round tee' }}</option>
+                <option v-for="t in teesForCourse" :key="t.name" :value="t.name">{{ t.name }}</option>
+              </select>
             </div>
             <button class="chip-remove" @click.stop="form.players.splice(i, 1)" title="Remove">×</button>
           </div>
@@ -1817,9 +1827,15 @@ function setMainGame(key) {
     mainGame.value.config.team1 = oldTeam1
     mainGame.value.config.team2 = oldTeam2
   }
-  // Seed 1v1/2v2 match player slots from the first two players in the round
+  // Seed 1v1 match player slots from the first two players in the round
   // (GAME_DEFAULTS is static, so player1/player2 can't be seeded there).
-  if (key === 'match') {
+  // BUG FIX (2026-08-15): this used to run unconditionally, seeding player1/player2
+  // even when format defaulted to '2v2'. Every downstream consumer (settlements,
+  // live summary, notation, history) routed on "player1 && player2 present" to decide
+  // 1v1 vs 2v2, so a 2v2 Match Play round with team1/team2 correctly set via TeamPicker
+  // still silently settled as a 1v1 between the round's first two players. Only seed
+  // when format is actually '1v1'; the format watcher below handles later toggles.
+  if (key === 'match' && mainGame.value.config.format === '1v1') {
     mainGame.value.config.player1 = form.value.players[0]?.id ?? ''
     mainGame.value.config.player2 = form.value.players[1]?.id ?? ''
   }
@@ -1831,6 +1847,22 @@ function setMainGame(key) {
   if (key !== 'none') showMainGrid.value = false
   gameInfoKey.value = null
 }
+
+// Keep Match Play's player1/player2 (1v1) and team1/team2 (2v2) fields mutually
+// exclusive as the user toggles format, so a stale value from the other mode never
+// leaks into the saved config and confuses the 1v1-vs-2v2 routing downstream.
+watch(() => mainGame.value.config.format, (fmt, oldFmt) => {
+  if (mainGame.value.type !== 'match' || !fmt || fmt === oldFmt) return
+  if (fmt === '1v1') {
+    if (!mainGame.value.config.player1) mainGame.value.config.player1 = form.value.players[0]?.id ?? ''
+    if (!mainGame.value.config.player2) mainGame.value.config.player2 = form.value.players[1]?.id ?? ''
+    mainGame.value.config.team1 = []
+    mainGame.value.config.team2 = []
+  } else if (fmt === '2v2') {
+    mainGame.value.config.player1 = ''
+    mainGame.value.config.player2 = ''
+  }
+})
 
 function toggleNinesPlayer(id) {
   const current = mainGame.value.config.players || []
@@ -2014,6 +2046,7 @@ async function psAddResult(r) {
     use_nickname: r.useNickname ?? false,
     profileId: r.profileId ?? null,
     email: r.email ?? null,
+    tee: null,  // null = plays the round's default tee; set via the chip's tee picker
   }
 
   form.value.players.push(playerObj)
@@ -2065,6 +2098,7 @@ async function psAddManual() {
         use_nickname: existing.use_nickname ?? false,
         profileId: existing.user_id ?? null,
         email: existing.email ?? null,
+        tee: null,
       })
     }
     resetManualForm()
@@ -2083,6 +2117,7 @@ async function psAddManual() {
     use_nickname: false,
     profileId: null,
     email,
+    tee: null,
   })
 
   if (psManualSaveToRoster.value) {
@@ -2672,6 +2707,19 @@ function buildGameConfigs() {
         delete cfg.players
       }
     }
+    // Match Play: last-line-of-defense guard against saving a config with both
+    // player1/player2 AND team1/team2 populated — every settlement/notation/history
+    // consumer decides 1v1 vs 2v2 off config.format, so strip whichever pair doesn't
+    // match the selected format before it ever reaches the DB.
+    if (mainGame.value.type === 'match') {
+      if (cfg.format === '2v2') {
+        cfg.player1 = ''
+        cfg.player2 = ''
+      } else if (cfg.format === '1v1') {
+        cfg.team1 = []
+        cfg.team2 = []
+      }
+    }
     games.push({ type: mainGame.value.type, config: cfg })
   }
 
@@ -2793,9 +2841,10 @@ function _loadEditGames() {
     if (normType === 'nines' && form.value.players.length > 3 && !mainGame.value.config.players) {
       mainGame.value.config.players = form.value.players.slice(0, 3).map(p => p.id)
     }
-    // If team1/team2 are empty, derive from round_members.team (set by loadRound)
+    // If team1/team2 are empty, derive from round_members.team (set by loadRound).
+    // Skip for a 1v1 Match Play config — it has no teams and shouldn't grow them.
     const cfg = mainGame.value.config
-    if (cfg.team1 !== undefined && !cfg.team1?.length && !cfg.team2?.length) {
+    if (cfg.team1 !== undefined && !cfg.team1?.length && !cfg.team2?.length && cfg.format !== '1v1') {
       const members = roundsStore.activeMembers
       const derivedT1 = members.filter(m => m.team === 1).map(m => m.id)
       const derivedT2 = members.filter(m => m.team === 2).map(m => m.id)

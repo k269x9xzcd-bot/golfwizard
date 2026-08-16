@@ -11,11 +11,14 @@ import {
   computeHammer, computeSixes, computeNines, computeFiveThreeOne, computeDots,
   computeFidget, computeBestBallNet, computeBestBall,
   computeBbb, computeScotch6s, computeTeamDay, computeFourteen,
+  isMatch1v1,
 } from './gameEngine.js'
 
-// Route match games: 1v1 uses computeMatch, 2v2 (team1/team2) uses computeBestBall
+// Route match games: 1v1 uses computeMatch, 2v2 (team1/team2) uses computeBestBall.
+// isMatch1v1() trusts config.format when present — don't route on player1/player2
+// presence alone, since a 2v2 config can still carry stale player1/player2 values.
 function _computeMatchAny(ctx, config) {
-  if (config.player1 && config.player2) return computeMatch(ctx, config)
+  if (isMatch1v1(config)) return config.player1 && config.player2 ? computeMatch(ctx, config) : null
   if (Array.isArray(config.team1) && config.team1.length && Array.isArray(config.team2) && config.team2.length) {
     return computeBestBall(ctx, { ...config, ballsPerTeam: 1 })
   }
@@ -81,8 +84,11 @@ function extractPlayerNets(type, result, config, members) {
   }
 
   // ── Match — 1v1 uses settlement.p1Net; 2v2 delegates to bestball handler ──
+  // isMatch1v1() trusts config.format when present — don't route on player1/player2
+  // presence alone, since a 2v2 config can still carry stale player1/player2 values
+  // (this was the root cause of a 2v2 Match Play round settling as 1v1 — see project memory).
   if (t === 'match' || t === 'match1v1') {
-    const is1v1 = config.player1 && config.player2
+    const is1v1 = isMatch1v1(config) && !!(config.player1 && config.player2)
     if (!is1v1) return extractPlayerNets('bestball', result, config, members)
     const m1 = members.find(m => m.id === config.player1)
     const m2 = members.find(m => m.id === config.player2)

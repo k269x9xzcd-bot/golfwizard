@@ -31,6 +31,11 @@ import {
   computeTeamDay,
   computeCrossBestBall,
   computeFourteen,
+  memberTee,
+  memberNetOnHole,
+  memberNetOnHoleLowMan,
+  lowestHcp,
+  courseHandicap,
 } from './gameEngine.js'
 
 // ─────────────────────────────────────────────────────────────────
@@ -1342,5 +1347,103 @@ describe('computeFourteen', () => {
     expect([...a.autoDiscarded].sort((x, y) => x - y)).toEqual([1, 2])
     expect(a.final14Holes.length).toBe(14)
     expect(a.total14).toBe(70)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────
+// ── PER-MEMBER TEE (proposed feature, dry-run proof-of-concept) ───
+// ─────────────────────────────────────────────────────────────────
+// Two-tee course: 'back' plays the SI order backwards from 'front'. A member
+// with no tee override still uses ctx.tee (backward-compat check); a member
+// with their own tee gets THAT tee's course handicap (slope/rating) and SI
+// order for stroke placement, even inside a shared 2v2 low-man match.
+describe('per-member tee resolution (proposed round_members.tee column)', () => {
+  const TWO_TEE_COURSE = {
+    par: Array.from({ length: 18 }, () => 4),
+    si: Array.from({ length: 18 }, (_, i) => i + 1),   // fallback / 'front' order
+    teesData: {
+      front: { slope: 113, rating: 72, siByHole: Array.from({ length: 18 }, (_, i) => i + 1) },
+      back:  { slope: 130, rating: 74, siByHole: Array.from({ length: 18 }, (_, i) => 18 - i) },
+    },
+    name: 'Two-Tee Course',
+  }
+
+  it('memberTee() falls back to ctx.tee when the member has no override', () => {
+    const m = makeMember('a', 'Alice')
+    expect(memberTee(m, 'front')).toBe('front')
+  })
+
+  it('memberTee() prefers the member override over ctx.tee', () => {
+    const m = { ...makeMember('a', 'Alice'), tee: 'back' }
+    expect(memberTee(m, 'front')).toBe('back')
+  })
+
+  it('courseHandicap differs per tee for the same ghin_index (slope/rating swap)', () => {
+    const front = courseHandicap(10, TWO_TEE_COURSE, 'front')  // round(10*113/113 + (72-72)) = 10
+    const back = courseHandicap(10, TWO_TEE_COURSE, 'back')    // round(10*130/113 + (74-72)) = round(11.5+2) = 14 (JS round .5 up)
+    expect(front).toBe(10)
+    expect(back).toBe(14)
+    expect(back).not.toBe(front)
+  })
+
+  it('memberNetOnHole: two members with identical ghin_index but different tees get different strokes on the same hole', () => {
+    // Both scratch off index 10, hole 1 has SI 1 on 'front' but SI 18 on 'back'.
+    // A single stroke-a-hole player (hcp 10) gets a stroke on every hole 1-10 by SI —
+    // hole 1 is SI 1 on 'front' (stroke) but SI 18 on 'back' (no stroke, since back's
+    // course-handicap-14 player still only reaches SI<=14... use hcp 18 on back to force it).
+    const front = { id: 'a', ghin_index: 10, tee: 'front' }
+    const back = { id: 'b', ghin_index: 10, tee: 'back' }
+    const ctx = {
+      course: TWO_TEE_COURSE,
+      tee: 'front',
+      holesMode: '18',
+      members: [front, back],
+      scores: { a: { 1: 5 }, b: { 1: 5 } },
+    }
+    const netFront = memberNetOnHole(ctx, front, 1)   // hole 1 SI1 on front, hcp 10 → 1 stroke → 5-1=4
+    const netBack = memberNetOnHole(ctx, back, 1)     // hole 1 SI18 on back, hcp 14 → 1 stroke at SI18 too (14>=18? no) → 0 strokes → 5-0=5
+    expect(netFront).toBe(4)
+    expect(netBack).toBe(5)
+  })
+
+  it('a member with no tee override still uses ctx.tee (existing single-tee rounds unaffected)', () => {
+    const legacy = { id: 'a', ghin_index: 10 }  // no .tee field — matches every existing round_members row today
+    const ctx = { course: TWO_TEE_COURSE, tee: 'front', holesMode: '18', members: [legacy], scores: { a: { 1: 5 } } }
+    expect(memberNetOnHole(ctx, legacy, 1)).toBe(4)  // identical to the 'front' case above
+  })
+
+  it('lowestHcp resolves each participant off THEIR OWN tee, not a single shared tee', () => {
+    const front = { id: 'a', ghin_index: 10, tee: 'front' }  // course hcp 10 on front
+    const back = { id: 'b', ghin_index: 10, tee: 'back' }    // course hcp 14 on back
+    // min should be 10 (front's own tee), not what either would be if both were forced onto ctx.tee='back' (10 & 10)
+    expect(lowestHcp([front, back], TWO_TEE_COURSE, 'front')).toBe(10)
+  })
+
+  it('memberNetOnHoleLowMan: 2v2 low-man match settles correctly when two players are on a different tee than the other two', () => {
+    // a,b on 'front' (course hcp 10 each); c,d on 'back' (course hcp 14 each, harder tee).
+    // Low man across all 4 = 10 (a and b). c/d get adjusted hcp (14-10)=4 strokes distributed
+    // by BACK's own SI order (their tee), not front's.
+    const a = { id: 'a', ghin_index: 10, tee: 'front' }
+    const b = { id: 'b', ghin_index: 10, tee: 'front' }
+    const c = { id: 'c', ghin_index: 10, tee: 'back' }
+    const d = { id: 'd', ghin_index: 10, tee: 'back' }
+    const members = [a, b, c, d]
+    const ctx = {
+      course: TWO_TEE_COURSE, tee: 'front', holesMode: '18', members,
+      scores: { a: { 1: 4 }, b: { 1: 4 }, c: { 1: 4 }, d: { 1: 4 } },
+    }
+    // hole 1: SI1 on front, SI18 on back.
+    // a/b (adj hcp 0): no stroke → net 4.
+    // c/d (adj hcp 4, SI18 on THEIR tee 'back'): 18<=4? no → no stroke on hole 1 either → net 4.
+    // (Strokes for c/d would show up on holes with back-SI <= 4, i.e. holes 15-18 in this synthetic layout.)
+    expect(memberNetOnHoleLowMan(ctx, a, 1, members)).toBe(4)
+    expect(memberNetOnHoleLowMan(ctx, c, 1, members)).toBe(4)
+    // Pick a hole where back's SI (18-i) is <= 4 → hole 15 (si=18-14=4).
+    const ctx15 = {
+      course: TWO_TEE_COURSE, tee: 'front', holesMode: '18', members,
+      scores: { a: { 15: 4 }, b: { 15: 4 }, c: { 15: 4 }, d: { 15: 4 } },
+    }
+    expect(memberNetOnHoleLowMan(ctx15, a, 15, members)).toBe(4)   // front SI for hole15 = 15, adj hcp 0 → no stroke
+    expect(memberNetOnHoleLowMan(ctx15, c, 15, members)).toBe(3)   // back SI for hole15 = 4, adj hcp 4 → 1 stroke → 4-1=3
   })
 })

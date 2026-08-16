@@ -46,6 +46,16 @@
                   :value="m.ghin_index"
                   @change="emit('updateHcp', m.id, $event.target.value)" placeholder="—" />
               </div>
+              <div class="hcp-input-group" v-if="teeOptions.length > 1">
+                <span class="hcp-input-label">Tee</span>
+                <select class="hcp-editor-input hcp-editor-tee-select"
+                  :class="{ 'hcp-editor-input--modified': m.tee != null }"
+                  :value="m.tee ?? ''"
+                  @change="emit('updateTee', m.id, $event.target.value || null)">
+                  <option value="">{{ roundTee || 'Round' }}</option>
+                  <option v-for="t in teeOptions" :key="t.name" :value="t.name">{{ t.name }}</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
@@ -120,6 +130,8 @@ const props = defineProps({
   // HCP editor
   showHcpEditor:   { type: Boolean, default: false },
   members:         { type: Array,   default: () => [] },
+  teeOptions:      { type: Array,   default: () => [] },
+  roundTee:        { type: String,  default: '' },
   // Opp editor
   showOppEditor:      { type: Boolean, default: false },
   editOppPlayers:     { type: Array,   default: () => [] },
@@ -136,7 +148,7 @@ const props = defineProps({
 
 const emit = defineEmits([
   'closeDateEditor', 'update:editDateValue', 'saveDateEdit',
-  'closeHcpEditor', 'updateHcp', 'updateStrokes', 'updateStrokesLocal',
+  'closeHcpEditor', 'updateHcp', 'updateStrokes', 'updateStrokesLocal', 'updateTee',
   'closeOppEditor', 'removeOpp', 'toggleOpp', 'addOppGuest', 'saveOppEditor',
   'update:oppEditorSearch', 'update:oppEditorGuestName',
 ])

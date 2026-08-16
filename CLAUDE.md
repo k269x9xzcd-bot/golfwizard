@@ -40,7 +40,7 @@ Vue 3 + Vite + Pinia + Supabase. iOS PWA primary surface. Friends-first scoring 
 | Live URL | https://k269x9xzcd-bot.github.io/golfwizard |
 | Custom domain | golfwizard.net (purchased for Resend email; DNS pending) |
 | Email | Resend on golfwizard.net (sender `noreply@golfwizard.net`) |
-| Sentry | Wired in `main.js` + `.env.example` |
+| Sentry | `@sentry/vue` is a `package.json` dependency but NOT actually initialized anywhere — no `Sentry.init()` call in `main.js`, no DSN in `.env.example`. Installed, not wired. See Open work. |
 
 ### Key tables
 
@@ -342,6 +342,8 @@ Full spec: see git history for `project_game_audit_spec.md` content, or ask Jaso
 | Low | Game audit spec (16 tasks) | Frozen — needs per-game sign-off |
 | Low | Replace `.view-header` markup with `<AppHeader>` component | Zero user-visible change |
 | Low | DNS records for Resend → golfwizard.net → update Supabase SMTP sender to `noreply@golfwizard.net` | |
+| **High** | Rotate the leaked GitHub PAT (`ghp_dziJx…`) at github.com/settings/tokens — still in the iCloud repo's `.git/config`. RLS on `app_secrets` (which stores it) was enabled 2026-07-30, closing anon read access, but the token value itself is unchanged. | Found 2026-07-30 via Supabase security advisors; RLS fix applied same day |
+| Low | Actually wire up Sentry — `Sentry.init()` in `main.js` + real DSN in `.env.example`/deploy env. Package is already installed. | Future enhancement, requested 2026-07-30 |
 
 ### Shared-roster banner — design
 

@@ -18,7 +18,7 @@ import {
   computeHiLow, computeStableford, computeWolf, computeHammer, computeSixes,
   computeFiveThreeOne, computeDots, computeFidget, computeBestBallNet, computeBestBall, computeBbb,
   computeFourteen,
-  memberHandicap,
+  memberHandicap, isMatch1v1,
 } from '../modules/gameEngine'
 import { formatMatchLabel } from '../modules/matchLabels'
 import { isSettled, nassauBetSettled } from '../modules/betSettled'
@@ -283,7 +283,7 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
 
       // ── Match ──
       if (t === 'match' || t === 'match1v1') {
-        const is1v1 = !!(cfg.player1 && cfg.player2)
+        const is1v1 = isMatch1v1(cfg) && !!(cfg.player1 && cfg.player2)
         const is2v2 = !is1v1 && Array.isArray(cfg.team1) && cfg.team1.length && Array.isArray(cfg.team2) && cfg.team2.length
 
         if (!is1v1 && !is2v2) return _gameLine({ gameName: 'Match', winner: null, value: null, detail: 'Waiting for scores' })
@@ -836,7 +836,7 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
           }
         } else if (t === 'match' || t === 'match1v1') {
           const cfg = game.config || {}
-          const is1v1 = !!(cfg.player1 && cfg.player2)
+          const is1v1 = isMatch1v1(cfg) && !!(cfg.player1 && cfg.player2)
           let r = null
           if (is1v1) r = computeMatch(ctx, cfg)
           else if (cfg.team1?.length && cfg.team2?.length) r = computeBestBall(ctx, { ...cfg, ballsPerTeam: 1 })

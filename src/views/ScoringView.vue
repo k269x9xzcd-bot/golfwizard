@@ -110,6 +110,9 @@
           <button v-if="isCaptain" class="round-menu-item" @click="showRoundMenu = false; openRetroScore()">
             📝 Enter Scores from Card
           </button>
+          <button v-if="isCaptain && activeHole > 0" class="round-menu-item round-menu-danger" @click="showRoundMenu = false; clearCurrentHoleScores()">
+            🧹 Clear Hole {{ activeHole }} Scores
+          </button>
           <button class="round-menu-item" v-if="isCaptain && !roundsStore.activeRound?.is_complete" :disabled="finishing" @click="showRoundMenu = false; showSettlementModal = true">
             {{ finishing ? '⏳ Finishing…' : '✅ Finish Round' }}
           </button>
@@ -161,6 +164,8 @@
         :course-hcp="hcpEditorCourseHcp"
         :is-modified="hcpEditorIsModified"
         :strokes-per-hole="hcpEditorStrokes"
+        :tee-options="hcpEditorTeeOptions"
+        :round-tee="roundsStore.activeRound?.tee"
         :show-opp-editor="showOppEditor"
         :edit-opp-players="editOppPlayers"
         :opp-editor-search="oppEditorSearch"
@@ -175,6 +180,7 @@
         @update-hcp="updateMemberHcp"
         @update-strokes="updateMemberStrokes"
         @update-strokes-local="updateMemberStrokesLocal"
+        @update-tee="updateMemberTee"
         @close-opp-editor="showOppEditor = false"
         @remove-opp="editOppPlayers.splice($event, 1)"
         @toggle-opp="toggleEditOpp"
@@ -1125,34 +1131,35 @@
           <button class="finish-btn finish-btn-review" @click="activeHole = roundCompletionInfo.missingHoles[0]">Go to H{{ roundCompletionInfo.missingHoles[0] }}</button>
         </div>
 
-        <!-- Finish Round Review overlay -->
-        <FinishRoundOverlay
-          :show="showFinishReview"
-          :members="roundsStore.activeMembers"
-          :finishing="finishing"
-          :error="finishError"
-          :pending-scores="pendingScores"
-          :member-display="memberDisplay"
-          :player-total="playerTotal"
-          :player-net-total="playerNetTotal"
-          @close="showFinishReview = false"
-          @finish="finishRound"
-        />
-
-        <!-- Settlement modal — shown from gear menu "Finish Round" -->
-        <SettlementModal
-          :show="showSettlementModal"
-          :settlements="liveSettlements"
-          :finishing="finishing"
-          :sharing="sharing"
-          :error="finishError"
-          :pending-scores="pendingScores"
-          :warning="fourteenDiscardWarning"
-          @close="showSettlementModal = false"
-          @finish="showSettlementModal = false; finishRound()"
-          @share="doShareScorecard"
-        />
       </div>
+
+      <!-- Finish Round Review overlay — sibling of card-view/hole-view so it's reachable from both -->
+      <FinishRoundOverlay
+        :show="showFinishReview"
+        :members="roundsStore.activeMembers"
+        :finishing="finishing"
+        :error="finishError"
+        :pending-scores="pendingScores"
+        :member-display="memberDisplay"
+        :player-total="playerTotal"
+        :player-net-total="playerNetTotal"
+        @close="showFinishReview = false"
+        @finish="finishRound"
+      />
+
+      <!-- Settlement modal — shown from gear menu "Finish Round" (both card + hole view) -->
+      <SettlementModal
+        :show="showSettlementModal"
+        :settlements="liveSettlements"
+        :finishing="finishing"
+        :sharing="sharing"
+        :error="finishError"
+        :pending-scores="pendingScores"
+        :warning="fourteenDiscardWarning"
+        @close="showSettlementModal = false"
+        @finish="showSettlementModal = false; finishRound()"
+        @share="doShareScorecard"
+      />
 
       <!-- Score entry modal removed — inline +/- on player cards -->
     </div>
@@ -1183,7 +1190,7 @@ import { useScorecardHelpers } from '../composables/useScorecardHelpers'
 import { useGameNotation } from '../composables/useGameNotation'
 import { useHoleMath } from '../composables/useHoleMath'
 import { useLiveSettlements } from '../composables/useLiveSettlements'
-import { computeNassau, computeHammer, computeFidget, courseHandicap, holeSI, strokesOnHole, memberNetOnHole, memberNetOnHoleLowMan } from '../modules/gameEngine'
+import { computeNassau, computeHammer, computeFidget, courseHandicap, holeSI, strokesOnHole, memberNetOnHole, memberNetOnHoleLowMan, memberTee } from '../modules/gameEngine'
 import { computeMatchOutcome } from '../modules/tournamentOutcome'
 import { normalizeWagers, buildTournamentWagerGames } from '../modules/tournamentWagers'
 import { buildLiveSections } from '../modules/liveSections'
@@ -2561,6 +2568,18 @@ async function resetScores() {
   await clearGameState()
 }
 
+// Clear every player's score for the currently-viewed hole only — for
+// fixing a mis-entered hole without wiping the whole round. Only meaningful
+// in hole view (activeHole > 0); the gear-menu item is hidden in card view.
+async function clearCurrentHoleScores() {
+  const hole = activeHole.value
+  if (!hole) return
+  if (!confirm(`Clear all scores for Hole ${hole}? This cannot be undone.`)) return
+  await Promise.all(
+    roundsStore.activeMembers.map(m => roundsStore.clearScore(m.id, hole))
+  )
+}
+
 
 // ── Snake 3-putt ────────────────────────────────────────────────
 const snakeGame = computed(() => roundsStore.activeGames.find(g => g.type?.toLowerCase() === 'snake') || null)
@@ -2688,9 +2707,12 @@ async function finishRound() {
   finishError.value = null
   try {
     await roundsStore.completeRound(roundsStore.activeRound.id)
+    // completeRound now awaits the complete_round RPC, which flushes queued
+    // scores + settlement/ledger in the same transaction as marking the round
+    // complete — by the time this resolves everything is durably committed,
+    // so no artificial delay is needed before HistoryView fetches.
     showFinishReview.value = false
-    // Brief delay so Supabase scores flush before HistoryView fetches
-    await new Promise(r => setTimeout(r, 800))
+    showSettlementModal.value = false
     router.push('/history')
   } catch (e) {
     console.error('Finish round error:', e)
@@ -2832,10 +2854,37 @@ async function updateMemberStrokes(memberId, rawValue) {
   }
 }
 
+async function updateMemberTee(memberId, rawValue) {
+  const tee = rawValue || null  // '' (the "Round tee" option) clears the override
+  const m = roundsStore.activeMembers.find(x => x.id === memberId)
+  if (!m) return
+  m.tee = tee
+  try {
+    const { supabase } = await import('../supabase')
+    const { supaCall: _sc } = await import('../modules/supabaseOps')
+    const res = await _sc('round_members.tee', supabase.from('round_members').update({ tee }).eq('id', memberId), 5000)
+    if (res.error) throw res.error
+  } catch (e) {
+    if (e.message?.includes('timed out')) {
+      const { supaRawUpdate: _ru } = await import('../modules/supaRaw')
+      await _ru('round_members', `id=eq.${memberId}`, { tee }, 8000).catch(() => {})
+    } else {
+      console.warn('[ScoringView] updateMemberTee failed:', e)
+    }
+  }
+}
+
+// Tee options for the per-player tee dropdown in the HCP editor — reuses the
+// course snapshot's full teesData map (every tee, not just the round's default).
+const hcpEditorTeeOptions = computed(() => {
+  const teesData = courseData.value?.teesData || {}
+  return Object.keys(teesData).map(name => ({ name }))
+})
+
 // ── HCP editor helpers ──────────────────────────────────────────
 function hcpEditorCourseHcp(member) {
   const course = courseData.value
-  const tee = roundsStore.activeRound?.tee
+  const tee = memberTee(member, roundsStore.activeRound?.tee)
   return courseHandicap(member.ghin_index ?? 0, course, tee)
 }
 
@@ -2847,7 +2896,7 @@ function hcpEditorIsModified(member) {
 
 function hcpEditorStrokes(member) {
   const course = courseData.value
-  const tee = roundsStore.activeRound?.tee
+  const tee = memberTee(member, roundsStore.activeRound?.tee)
   const holesMode = roundsStore.activeRound?.holes_mode || '18'
   const numHoles = holesMode === '9f' || holesMode === '9b' ? 9 : 18
   // Use stroke_override when set — this makes the hole grid react to edits in real-time

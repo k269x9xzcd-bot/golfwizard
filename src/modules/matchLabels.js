@@ -13,7 +13,7 @@
  * Pulls course handicap from memberHandicap() — same source the engines use,
  * so the displayed strokes match what the score-net pipeline applies.
  */
-import { memberHandicap } from './gameEngine.js'
+import { memberHandicap, isMatch1v1 } from './gameEngine.js'
 
 function _annotate(init, strokes) {
   if (!strokes || strokes <= 0) return init
@@ -36,8 +36,9 @@ export function formatMatchLabel({ config, members, course, tee, getInit }) {
   const init = id => getInit?.(id) || '?'
   const hcp = m => memberHandicap(m, course, tee)
 
-  // 1v1
-  if (config.player1 && config.player2) {
+  // 1v1 — isMatch1v1() trusts config.format when present; don't route on
+  // player1/player2 presence alone, since a 2v2 config can still carry stale values.
+  if (isMatch1v1(config) && config.player1 && config.player2) {
     const m1 = members.find(m => m.id === config.player1)
     const m2 = members.find(m => m.id === config.player2)
     if (!m1 || !m2) return ''

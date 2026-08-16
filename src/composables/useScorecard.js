@@ -20,6 +20,8 @@ import {
   computeDots,
   computeFidget,
   computeBestBallNet,
+  computeBestBall,
+  isMatch1v1,
 } from '../modules/gameEngine'
 
 export function useScorecard(round, ctx) {
@@ -350,21 +352,39 @@ export function useScorecard(round, ctx) {
 
       if (t === 'match' || t === 'match1v1') {
         try {
-          const r = computeMatch(ctx.value, game.config)
-          if (!r) continue
+          const cfg = game.config || {}
+          // 1v1: use computeMatch; 2v2: fall back to computeBestBall (team match play).
+          // isMatch1v1() trusts cfg.format when present — don't route on player1/player2
+          // presence alone, since a 2v2 config can still carry stale player1/player2 values.
+          const is1v1 = isMatch1v1(cfg) && !!(cfg.player1 && cfg.player2)
+          let holeResults, p1Init, p2Init
+          if (is1v1) {
+            const r = computeMatch(ctx.value, cfg)
+            if (!r) continue
+            holeResults = r.holeResults || []
+            p1Init = pInit(r.p1?.id) || 'P1'
+            p2Init = pInit(r.p2?.id) || 'P2'
+          } else if (cfg.team1?.length && cfg.team2?.length) {
+            const r = computeBestBall(ctx.value, { ...cfg, ballsPerTeam: 1 })
+            if (!r) continue
+            holeResults = (r.holeResults || []).map(hr => ({ ...hr, p1Up: hr.t1Up }))
+            p1Init = teamInitialsStr(cfg.team1) || 'T1'
+            p2Init = teamInitialsStr(cfg.team2) || 'T2'
+          } else {
+            continue
+          }
           const cells = {}
-          const played = r.holeResults?.filter(hr => !hr.incomplete) || []
+          const played = holeResults.filter(hr => !hr.incomplete)
           const totalHoles = visibleHoles.value.length
-          for (const hr of (r.holeResults || [])) {
+          for (const hr of holeResults) {
             if (hr.incomplete) { cells[hr.hole] = { text: '', cls: '' }; continue }
             const up = hr.p1Up ?? 0
             if (up > 0) cells[hr.hole] = { text: `U${up}`, cls: 'nota-t1' }
             else if (up < 0) cells[hr.hole] = { text: `D${Math.abs(up)}`, cls: 'nota-t2' }
             else cells[hr.hole] = { text: 'AS', cls: 'nota-halved' }
           }
-          const up = r.finalUp, remaining = totalHoles - played.length
+          const up = played.at(-1)?.p1Up ?? 0, remaining = totalHoles - played.length
           const isDormie = remaining > 0 && Math.abs(up) === remaining
-          const p1Init = pInit(r.p1?.id) || 'P1', p2Init = pInit(r.p2?.id) || 'P2'
           const leader = up > 0 ? p1Init : p2Init
           let summary = up === 0 ? 'AS' : `${leader} ${Math.abs(up)}up`
           if (isDormie) summary = `<span class="nota-dormie">${summary} D!</span>`

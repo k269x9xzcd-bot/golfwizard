@@ -5,6 +5,7 @@
 import {
   computeNassau, computeSkins, computeMatch, computeBestBall,
   computeVegas, computeHiLow, computeWolf, computeHammer, computeFiveThreeOne, computeSixes,
+  isMatch1v1,
 } from '../modules/gameEngine'
 
 export function useHoleMath({ buildCtx, pInit, teamInitialsStr }) {
@@ -45,7 +46,7 @@ export function useHoleMath({ buildCtx, pInit, teamInitialsStr }) {
   }
 
   function _match(ctx, cfg, hole) {
-    if (cfg.player1 && cfg.player2) {
+    if (isMatch1v1(cfg) && cfg.player1 && cfg.player2) {
       const r = computeMatch(ctx, cfg)
       if (!r) return []
       const hr = r.holeResults.find(x => x.hole === hole)

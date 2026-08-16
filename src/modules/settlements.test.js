@@ -79,3 +79,62 @@ describe('settlements — snake extractPlayerNets', () => {
     expect(summary.g1.nets.every(n => n.net === 0)).toBe(true)
   })
 })
+
+// ── Match — 2v2 routing (regression: 2026-08-15 team-vs-1v1 bug) ─────────────
+//
+// The wizard used to seed config.player1/player2 from the round's first two
+// players even when format was '2v2', so every downstream consumer that routed
+// on "player1 && player2 present" (instead of config.format) silently settled
+// a 2v2 team match as a 1v1 between the wrong two players — ignoring the other
+// two entirely. isMatch1v1()/config.format is now the source of truth. This
+// test pins that a 2v2 config carrying stale player1/player2 (the exact shape
+// a pre-fix save would have produced) still settles as team1 vs team2.
+describe('settlements — match 2v2 vs stale 1v1 fields', () => {
+  function makeMatchCtx() {
+    const members = [
+      { id: 'jason', short_name: 'Jason', name: 'Jason', ghin_index: 0, stroke_override: null },
+      { id: 'rocco', short_name: 'Rocco', name: 'Rocco', ghin_index: 0, stroke_override: null },
+      { id: 'jeremy', short_name: 'Jeremy', name: 'Jeremy', ghin_index: 0, stroke_override: null },
+      { id: 'neil', short_name: 'Neil', name: 'Neil', ghin_index: 0, stroke_override: null },
+    ]
+    // Team 1 (jason, rocco) shoots par every hole; Team 2 (jeremy, neil) shoots
+    // bogey every hole, so team1 wins every hole and jason/rocco tie each other.
+    const scores = {}
+    for (const id of ['jason', 'rocco']) { scores[id] = {}; for (let h = 1; h <= 18; h++) scores[id][h] = 4 }
+    for (const id of ['jeremy', 'neil']) { scores[id] = {}; for (let h = 1; h <= 18; h++) scores[id][h] = 5 }
+    return { course: FLAT_COURSE, tee: 'white', holesMode: '18', members, scores, discards: {} }
+  }
+
+  it('routes to team1 vs team2 even when player1/player2 are stale-populated', () => {
+    const ctx = makeMatchCtx()
+    const games = [{
+      id: 'g1', type: 'match',
+      config: {
+        format: '2v2', ppt: 20,
+        team1: ['jason', 'rocco'], team2: ['jeremy', 'neil'],
+        // Stale fields a pre-fix wizard save would have left behind — must be ignored.
+        player1: 'jason', player2: 'rocco',
+      },
+    }]
+    const { summary } = computeAllSettlements(ctx, games)
+    const nets = summary.g1.nets
+    expect(nets).toHaveLength(4)
+    expect(nets.find(n => n.id === 'jason').net).toBe(20)
+    expect(nets.find(n => n.id === 'rocco').net).toBe(20)
+    expect(nets.find(n => n.id === 'jeremy').net).toBe(-20)
+    expect(nets.find(n => n.id === 'neil').net).toBe(-20)
+  })
+
+  it('still routes 1v1 correctly when format is 1v1 and no teams are set', () => {
+    const ctx = makeMatchCtx()
+    const games = [{
+      id: 'g1', type: 'match',
+      config: { format: '1v1', ppt: 20, player1: 'jason', player2: 'jeremy', team1: [], team2: [] },
+    }]
+    const { summary } = computeAllSettlements(ctx, games)
+    const nets = summary.g1.nets
+    expect(nets).toHaveLength(2)
+    expect(nets.find(n => n.id === 'jason').net).toBe(20)
+    expect(nets.find(n => n.id === 'jeremy').net).toBe(-20)
+  })
+})

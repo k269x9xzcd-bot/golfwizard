@@ -516,7 +516,7 @@ import { COURSES } from '../modules/courses'
 import {
   computeNassau, computeSkins, computeMatch, computeSnake, computeDots, computeFidget,
   computeBestBall, computeBestBallNet, computeVegas, computeHiLow, computeStableford,
-  computeWolf, computeHammer, computeSixes, computeFiveThreeOne,
+  computeWolf, computeHammer, computeSixes, computeFiveThreeOne, isMatch1v1,
   memberHandicap, memberNetOnHole,
   holePar, holeSI, strokesOnHole, holeRange
 } from '../modules/gameEngine'
@@ -750,9 +750,32 @@ function skinsWonCount(game) {
 }
 
 // Match Play
+// isMatch1v1() trusts config.format when present — don't route on player1/player2
+// presence alone, since a 2v2 config can still carry stale player1/player2 values.
 function matchPlayResult(game) {
   if (!gameCtx.value || !gameCtx.value.course) return null
-  return computeMatch(gameCtx.value, game.config) ?? null
+  const cfg = game.config || {}
+  if (isMatch1v1(cfg) && cfg.player1 && cfg.player2) {
+    return computeMatch(gameCtx.value, cfg) ?? null
+  }
+  if (!cfg.team1?.length || !cfg.team2?.length) return null
+  const r = computeBestBall(gameCtx.value, { ...cfg, ballsPerTeam: 1 })
+  if (!r) return null
+  const up = r.finalUp || 0
+  const played = (r.holeResults || []).filter(h => !h.incomplete).length
+  const remaining = (r.holeResults || []).filter(h => h.incomplete).length
+  const matchOver = played > 0 && Math.abs(up) > remaining
+  const result = matchOver
+    ? (up > 0 ? `${up}&${remaining}` : `${-up}&${remaining}`)
+    : (up > 0 ? `${up} UP` : up < 0 ? `${-up} DOWN` : 'A/S')
+  return {
+    ...r,
+    finalUp: up,
+    result,
+    matchOver,
+    p1: { name: r.t1Name || 'T1' },
+    p2: { name: r.t2Name || 'T2' },
+  }
 }
 
 function matchStatusClass(diff) {

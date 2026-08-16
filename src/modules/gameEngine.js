@@ -5,11 +5,16 @@
  * Context shape:
  *   ctx = {
  *     scores: { [memberId]: { [hole]: grossScore } },
- *     members: [{ id, short_name, round_hcp, ghin_index }],
+ *     members: [{ id, short_name, round_hcp, ghin_index, tee? }],
  *     course: { par: [], si: [], teesData: {}, name },
- *     tee: string,             // selected tee name
+ *     tee: string,             // round default tee name
  *     holesMode: '18'|'front9'|'back9',
  *   }
+ *
+ * Per-member tee: member.tee (optional) overrides ctx.tee for that one
+ * player — course handicap AND stroke-index lookup both key off it. Use
+ * memberTee(member, ctx.tee) to resolve. Members without their own tee
+ * fall back to ctx.tee, so existing single-tee rounds are unaffected.
  */
 
 // ── Hole range ──────────────────────────────────────────────────
@@ -81,13 +86,22 @@ export function netScore(gross, hcp, si) {
   return gross - strokesOnHole(hcp, si)
 }
 
+// ── Per-member tee resolution ──────────────────────────────────────
+// member.tee overrides the round/ctx default tee. Falls back to the shared
+// tee when the member has no override — existing single-tee rounds (where
+// no round_members.tee value has ever been set) behave identically.
+export function memberTee(member, fallbackTee) {
+  return member?.tee ?? fallbackTee
+}
+
 // ── Adjusted net for low-man game handicap ───────────────────────
+// `tee` here is the fallback tee for any member without their own override.
 export function lowestHcp(members, course, tee) {
-  return Math.min(...members.map(m => memberHandicap(m, course, tee)))
+  return Math.min(...members.map(m => memberHandicap(m, course, memberTee(m, tee))))
 }
 
 export function adjustedHcp(member, minHcp, course, tee, pct = 1.0) {
-  const full = memberHandicap(member, course, tee)
+  const full = memberHandicap(member, course, memberTee(member, tee))
   return Math.round((full - minHcp) * pct)
 }
 
@@ -99,8 +113,9 @@ export function getScore(ctx, memberId, hole) {
 export function memberNetOnHole(ctx, member, hole) {
   const gross = getScore(ctx, member.id, hole)
   if (gross == null) return null
-  const hcp = memberHandicap(member, ctx.course, ctx.tee)
-  const si = holeSI(ctx.course, hole, ctx.tee)
+  const tee = memberTee(member, ctx.tee)
+  const hcp = memberHandicap(member, ctx.course, tee)
+  const si = holeSI(ctx.course, hole, tee)
   return gross - strokesOnHole(hcp, si)
 }
 
@@ -108,6 +123,10 @@ export function memberNetOnHole(ctx, member, hole) {
  * memberNetOnHoleLowMan: net score using low-man adjusted handicap.
  * The lowest-hcp player in the group plays scratch; others get the difference.
  * Used by team games: Nassau, Match, Best Ball (team), Vegas, Hi-Low, Hammer.
+ * Each member's own tee (member.tee, falling back to ctx.tee) determines both
+ * their course handicap AND the stroke index used to place strokes on holes —
+ * a player off the forward tees can have a different SI order than one off
+ * the tips on the same course.
  */
 export function memberNetOnHoleLowMan(ctx, member, hole, allMembers) {
   const gross = getScore(ctx, member.id, hole)
@@ -115,7 +134,7 @@ export function memberNetOnHoleLowMan(ctx, member, hole, allMembers) {
   const participants = allMembers || ctx.members
   const minHcp = lowestHcp(participants, ctx.course, ctx.tee)
   const adjHcp = adjustedHcp(member, minHcp, ctx.course, ctx.tee)
-  const si = holeSI(ctx.course, hole, ctx.tee)
+  const si = holeSI(ctx.course, hole, memberTee(member, ctx.tee))
   return gross - strokesOnHole(adjHcp, si)
 }
 
@@ -470,6 +489,23 @@ export function computeNassau(ctx, config) {
 // ─────────────────────────────────────────────────────────────────
 // ── MATCH PLAY (1v1 or 2v2) ──────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────
+// Decide whether a 'match'/'match1v1' game_configs row is a 1v1 (player1/player2,
+// computeMatch) or 2v2 (team1/team2, computeBestBall) match.
+//
+// The wizard's "Match Play" game always writes an explicit `format` field
+// ('1v1' | '2v2') — trust that first. Only fall back to presence-based
+// detection for legacy configs that never had a `format` field (e.g. the
+// always-1v1 side-match rows saved as type:'match1v1', which have player1/
+// player2 but no format). Presence-based detection alone is NOT reliable for
+// the main 'match' game: the wizard used to seed player1/player2 from the
+// round's first two players even when format was '2v2', which made every
+// 2v2 Match Play round silently settle as a 1v1 between the wrong two
+// players. See project memory for details.
+export function isMatch1v1(config = {}) {
+  if (config.format) return config.format === '1v1'
+  return !!(config.player1 && config.player2)
+}
+
 export function computeMatch(ctx, config) {
   const {
     player1, player2,
@@ -672,8 +708,8 @@ export function computeDots(ctx, config) {
 
     for (const m of members) {
       const gross = getScore(ctx, m.id, h)
-      const hcp = memberHandicap(m, ctx.course, ctx.tee)
-      const si = holeSI(ctx.course, h, ctx.tee)
+      const hcp = memberHandicap(m, ctx.course, memberTee(m, ctx.tee))
+      const si = holeSI(ctx.course, h, memberTee(m, ctx.tee))
       const strokes = strokesOnHole(hcp, si)
       const net = gross != null ? gross - strokes : null
       const scoreVsPar = netBirdie ? net : gross  // which score to use for birdie/eagle
@@ -1712,7 +1748,7 @@ export function scorecardSummary(ctx) {
   const summary = {}
 
   for (const m of ctx.members) {
-    const hcp = memberHandicap(m, ctx.course, ctx.tee)
+    const hcp = memberHandicap(m, ctx.course, memberTee(m, ctx.tee))
     let frontGross = 0, backGross = 0
     let frontNet = 0, backNet = 0
     let frontPar = 0, backPar = 0
@@ -1721,7 +1757,7 @@ export function scorecardSummary(ctx) {
     for (let h = from; h <= to; h++) {
       const gross = getScore(ctx, m.id, h)
       const par = holePar(ctx.course, h)
-      const si = holeSI(ctx.course, h, ctx.tee)
+      const si = holeSI(ctx.course, h, memberTee(m, ctx.tee))
       const strokes = strokesOnHole(hcp, si)
       const net = gross != null ? gross - strokes : null
 
@@ -1843,8 +1879,8 @@ export function computeScotch6s(ctx, config) {
     const gross = getScore(ctx, id, h)
     if (gross == null) return null
     if (!useNet) return gross
-    const hcp = Math.round(memberHandicap(m, ctx.course, ctx.tee) * hcpPct)
-    return gross - strokesOnHole(hcp, holeSI(ctx.course, h, ctx.tee))
+    const hcp = Math.round(memberHandicap(m, ctx.course, memberTee(m, ctx.tee)) * hcpPct)
+    return gross - strokesOnHole(hcp, holeSI(ctx.course, h, memberTee(m, ctx.tee)))
   }
 
   let t1total = 0, t2total = 0
@@ -1948,8 +1984,8 @@ export function computeTeamDay(ctx, config) {
       if (!m) return null
       const gross = getScore(ctx, id, h)
       if (gross == null) return null
-      const hcp = memberHandicap(m, ctx.course, ctx.tee)
-      const si  = holeSI(ctx.course, h, ctx.tee)
+      const hcp = memberHandicap(m, ctx.course, memberTee(m, ctx.tee))
+      const si  = holeSI(ctx.course, h, memberTee(m, ctx.tee))
       const net = gross - strokesOnHole(hcp, si)
       return { id, gross, net }
     }).filter(Boolean)

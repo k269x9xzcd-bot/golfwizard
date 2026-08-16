@@ -555,6 +555,7 @@ export const useRoundsStore = defineStore('rounds', () => {
       nickname: p.nickname ?? null,
       use_nickname: p.use_nickname ?? false,
       email: p.email ?? null,
+      tee: p.tee ?? null,
     }))
 
     const gameRows = games.map((g, i) => ({
@@ -566,24 +567,27 @@ export const useRoundsStore = defineStore('rounds', () => {
       created_by: auth.user?.id ?? null,
     }))
 
-    // ── Insert round ────────────────────────────────────────────────
-    let round
+    // ── Create round + members + games in one atomic RPC round trip ──
+    // Replaces the old 3-step sequence (insert round → insert members →
+    // background insert games) with a single transaction, so there's no
+    // window where the round exists without its games, and no background
+    // setTimeout racing the user to the scorecard.
+    const payload = { round: roundBody, members: memberRows, games: gameRows }
+    let rpcResult
     try {
       const res = await supaWithTimeout(
-        'rounds.insert',
-        supabase.from('rounds').insert(roundBody).select().single(),
-        2000,
+        'create_round.rpc',
+        supabase.rpc('create_round', { payload }),
+        4000,
       )
-      round = res.data
       if (res.error) throw res.error
+      rpcResult = res.data
     } catch (e) {
-      _debugLog(`[rounds] SJS insert timed out, trying raw fetch fallback…`)
+      _debugLog(`[rounds] create_round SJS failed, trying raw fetch fallback…`)
       try {
-        const rows = await supaRawInsert('rounds', roundBody, 12000)
-        round = Array.isArray(rows) ? rows[0] : rows
-        _debugLog(`[rounds] raw insert SUCCEEDED — round id ${round?.id?.slice(0, 8) || '?'}`)
+        rpcResult = await supaRawRequest('POST', 'rpc/create_round', { payload }, 12000)
       } catch (rawErr) {
-        _debugLog(`[rounds] raw insert also failed: ${rawErr.message} (HTTP ${rawErr.status || '?'})`)
+        _debugLog(`[rounds] create_round raw fetch also failed: ${rawErr.message} (HTTP ${rawErr.status || '?'})`)
         if (rawErr.status === 400 || rawErr.message?.includes('400')) {
           throw new Error(`Round data is incomplete — make sure you selected a course and tee before tapping Start Round. (${rawErr.message})`)
         }
@@ -596,84 +600,32 @@ export const useRoundsStore = defineStore('rounds', () => {
       }
     }
 
+    const round = rpcResult?.round
     if (!round) throw new Error('Failed to create round in database.')
     if (round.id !== roundId) {
-      // Supabase accepted the insert but the returned id differs — shouldn't happen with explicit id,
-      // but if it does, patch idMap so score FK writes use the correct id.
+      // Server accepted the insert but the returned id differs — shouldn't happen with
+      // explicit id, but if it does, this is at least visible in the debug log.
       _debugLog(`[rounds] WARNING: returned id ${round.id} differs from pre-generated ${roundId}`)
     }
-    console.log('[rounds] Round inserted:', round.id)
+    console.log('[rounds] Round created via RPC:', round.id)
 
-    // ── Insert members ──────────────────────────────────────────────
-    let insertedMembers = []
-    if (players.length) {
-      try {
-        const { data: mData, error: mErr } = await supaWithTimeout(
-          'round_members.insert',
-          supabase.from('round_members').insert(memberRows).select(),
-          2000,
-        )
-        if (mErr) throw mErr
-        insertedMembers = mData ?? []
-      } catch (e) {
-        _debugLog('[rounds] members SJS insert failed, trying raw fetch…')
-        try {
-          const rows = await supaRawInsert('round_members', memberRows, 10000)
-          insertedMembers = Array.isArray(rows) ? rows : []
-        } catch (rawErr) {
-          try {
-            const rows = await supaRawSelect('round_members', `select=*&round_id=eq.${round.id}`, 8000)
-            insertedMembers = Array.isArray(rows) ? rows : []
-          } catch {
-            // Last resort: use pre-generated rows so IDs are consistent
-            console.warn('[rounds] all member insert paths failed — using pre-generated rows')
-            insertedMembers = memberRows
-          }
-        }
-      }
-    }
+    const insertedMembers = Array.isArray(rpcResult?.members) && rpcResult.members.length ? rpcResult.members : memberRows
+    const insertedGames = Array.isArray(rpcResult?.games) && rpcResult.games.length ? rpcResult.games : gameRows
 
-    // ── Set store state immediately ─────────────────────────────────
-    // Games are inserted in the background below. We already have their pre-generated
-    // rows, so the store is fully usable (notation, scoring) without waiting for the DB.
+    // ── Set store state ────────────────────────────────────────────
     activeRound.value = round
-    activeMembers.value = insertedMembers.length ? insertedMembers : memberRows
-    activeGames.value = gameRows
+    activeMembers.value = insertedMembers
+    activeGames.value = insertedGames
     activeScores.value = {}
     activeScoreMeta.value = {}
 
-    // Cache game rows to localStorage so loadRound can recover them if the background
-    // insert fails or RLS blocks the SELECT on resume.
-    if (gameRows.length) {
-      try { localStorage.setItem(`gw_games_cache_${round.id}`, JSON.stringify(gameRows)) } catch {}
+    // Cache game rows to localStorage so loadRound can recover them if an
+    // RLS gap ever blocks the SELECT on resume.
+    if (insertedGames.length) {
+      try { localStorage.setItem(`gw_games_cache_${round.id}`, JSON.stringify(insertedGames)) } catch {}
     }
 
-    console.log('[rounds] Round active, members:', activeMembers.value.length, 'games:', gameRows.length)
-
-    // ── Insert games in background — non-blocking ───────────────────
-    // Round and members are in DB now (FK constraints satisfied for score writes).
-    // Games insert in the background so the scorecard appears without waiting.
-    if (gameRows.length) {
-      setTimeout(async () => {
-        try {
-          const { data: gData, error: gErr } = await supabase.from('game_configs').insert(gameRows).select()
-          if (gErr) throw gErr
-          // Patch store with DB-returned rows (e.g. server-set timestamps)
-          if (gData?.length) activeGames.value = gData
-          _debugLog(`✓ game_configs.insert (background, ${gData?.length} rows)`)
-        } catch (e) {
-          _debugLog(`✗ game_configs.insert (SJS bg): ${e.message} — trying raw…`)
-          try {
-            const rows = await supaRawInsert('game_configs', gameRows, 10000)
-            if (Array.isArray(rows) && rows.length) activeGames.value = rows
-          } catch (rawErr) {
-            // Games failed to persist — active store still has pre-generated rows so
-            // the UI works; they just won't survive a reload.
-            console.warn('[rounds] background game_configs insert failed:', rawErr.message)
-          }
-        }
-      }, 0)
-    }
+    console.log('[rounds] Round active, members:', activeMembers.value.length, 'games:', insertedGames.length)
 
     // Subscribe to real-time and auto-save roster — deferred to avoid blocking
     setTimeout(() => {
@@ -867,6 +819,43 @@ export const useRoundsStore = defineStore('rounds', () => {
       scoreSyncError.value = isAuthErr ? 'rls' : 'db'
     }
     // Non-blocking: never throw — the optimistic update already applied
+  }
+
+  // ── Clear a score (e.g. mis-entered hole) ───────────────────
+  // scores.score is NOT NULL in the DB — there's no "set to null" upsert,
+  // clearing means deleting the row entirely. getScore()-style lookups
+  // already treat a missing entry the same as null.
+  async function clearScore(memberId, hole) {
+    const auth = useAuthStore()
+    // Optimistic update — always apply immediately to local state
+    if (activeScores.value[memberId]) delete activeScores.value[memberId][hole]
+    if (activeScoreMeta.value[memberId]) delete activeScoreMeta.value[memberId][hole]
+
+    if (!auth.isAuthenticated || String(activeRound.value?.id ?? '').startsWith('guest_')) {
+      _persistGuest()
+      return
+    }
+    _persistGuest()
+
+    try {
+      const res = await supaCall(
+        'scores.clear',
+        supabase.from('scores').delete()
+          .eq('round_id', activeRound.value.id).eq('member_id', memberId).eq('hole', hole),
+        5000,
+      )
+      if (res.error) throw res.error
+    } catch (e) {
+      if (!e.message?.includes('timed out')) {
+        console.warn('[clearScore] failed:', e?.message)
+        return
+      }
+      await supaRawDelete(
+        'scores',
+        `round_id=eq.${activeRound.value.id}&member_id=eq.${memberId}&hole=eq.${hole}`,
+        8000,
+      ).catch(err => console.warn('[clearScore] raw fallback failed:', err?.message))
+    }
   }
 
   // ── Toggle discard flag (14 Holes KEEP/DISCARD) ────────────
@@ -1199,96 +1188,32 @@ export const useRoundsStore = defineStore('rounds', () => {
     }
 
     // ── AUTHENTICATED PATH ──────────────────────────────────
-    // 0. Flush queued scores — retry up to 3x before completing.
-    // Force-reset the in-flight guard first: if a background flush (e.g. from
-    // the 'online' event) is somehow still holding the flag, our retries would
-    // all silently no-op and scores would survive the round as un-synced queue.
-    _flushInFlight = false
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        await _flushQueue()
-        const remaining = _loadQueue()
-        if (!remaining.length) break
-        if (attempt < 3) await new Promise(r => setTimeout(r, 1000 * attempt))
-      } catch (e) {
-        console.warn(`[rounds] flush attempt ${attempt} failed:`, e.message)
-      }
-    }
-
-    // 1. Mark round complete — use raw fetch with timeout to avoid iOS hang
+    // Flush queued scores + mark complete + persist settlement/ledger — one
+    // atomic RPC round trip. Replaces the old flush retry loop (up to 3
+    // attempts with 1s/2s backoff) plus three separate sequential writes.
     const _withTimeout = (promise, ms, label) => Promise.race([
       promise,
       new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms))
     ])
 
+    const queuedForThisRound = _loadQueue().filter(e => e.round_id === roundId)
+    const queuedScoresPayload = queuedForThisRound.map(({ member_id, hole, score, entered_by, entered_at }) => ({
+      member_id, hole, score, entered_by, entered_at,
+    }))
+    const rpcArgs = { round_id: roundId, queued_scores: queuedScoresPayload, settlements: settlementData }
+
     try {
-      await _withTimeout(
-        supabase.from('rounds').update({ is_complete: true }).eq('id', roundId),
-        5000, 'rounds.complete'
-      )
+      const res = await _withTimeout(supabase.rpc('complete_round', rpcArgs), 6000, 'complete_round.rpc')
+      if (res.error) throw res.error
     } catch (e) {
-      // SJS timed out or failed — fall back to raw fetch
-      console.warn('[rounds] completeRound SJS failed, trying raw:', e.message)
-      await supaRawUpdate('rounds', `id=eq.${roundId}`, { is_complete: true }, 8000)
+      console.warn('[rounds] complete_round SJS failed, trying raw:', e.message)
+      await supaRawRequest('POST', 'rpc/complete_round', rpcArgs, 12000)
     }
 
-    // 2. Save settlement JSON snapshot
-    if (settlementData) {
-      const _upsertMerge = (table, row) => supaRawRequest(
-        'POST', `${table}?on_conflict=round_id&select=*`, row, 8000,
-        { Prefer: 'resolution=merge-duplicates,return=representation' }
-      )
-
-      try {
-        await _withTimeout(
-          supabase.from('round_settlements').upsert({
-            round_id: roundId,
-            settlement_json: settlementData,
-            computed_at: new Date().toISOString(),
-          }, { onConflict: 'round_id' }),
-          5000, 'round_settlements.upsert'
-        )
-      } catch (e) {
-        console.warn('[rounds] round_settlements SJS failed, trying raw:', e.message)
-        try {
-          await _upsertMerge('round_settlements', {
-            round_id: roundId,
-            settlement_json: settlementData,
-            computed_at: new Date().toISOString(),
-          })
-        } catch (e2) {
-          console.warn('Failed to save settlement snapshot:', e2.message)
-          // Non-fatal — round is already marked complete
-        }
-      }
-
-      // 3. Save individual ledger entries — upsert so iOS double-complete retries are safe
-      if (settlementData.ledger?.length) {
-        const rows = settlementData.ledger.map(l => ({
-          round_id: roundId,
-          from_member_id: l.from_member_id,
-          to_member_id: l.to_member_id,
-          amount: l.amount,
-          note: l.note || 'Round settlement',
-        }))
-        try {
-          await _withTimeout(
-            supabase.from('ledger_entries').upsert(rows, { onConflict: 'round_id,from_member_id,to_member_id' }),
-            5000, 'ledger_entries.upsert'
-          )
-        } catch (e) {
-          console.warn('[rounds] ledger_entries SJS failed, trying raw:', e.message)
-          try {
-            await supaRawRequest(
-              'POST', 'ledger_entries?on_conflict=round_id,from_member_id,to_member_id&select=*', rows, 8000,
-              { Prefer: 'resolution=merge-duplicates,return=representation' }
-            )
-          } catch (e2) {
-            console.warn('Failed to save ledger entries:', e2.message)
-            // Non-fatal
-          }
-        }
-      }
+    // RPC succeeded — those scores are now durably saved server-side, so drop
+    // them from the offline queue (leave any other rounds' entries untouched).
+    if (queuedForThisRound.length) {
+      _saveQueue(_loadQueue().filter(e => e.round_id !== roundId))
     }
 
     // 4. Tournament round → derive structural outcome (BB + singles) and
@@ -1625,7 +1550,7 @@ export const useRoundsStore = defineStore('rounds', () => {
     pendingQueueCount,
     flushQueue: _flushQueue,
     patchActiveGames: (games) => { activeGames.value = games },
-    fetchRounds, createRound, loadRound, setScore, setDiscard,
+    fetchRounds, createRound, loadRound, setScore, clearScore, setDiscard,
     saveGameConfig, updateGameConfig, deleteGameConfig,
     updateRoundDate,
     joinByRoomCode, completeRound, deleteRound, setActiveRound,

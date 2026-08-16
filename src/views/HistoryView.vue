@@ -350,7 +350,7 @@ import {
   computeNassau, computeSkins, computeMatch, computeBestBall, computeBestBallNet,
   computeVegas, computeDots, computeFidget, computeSnake, computeWolf,
   computeHiLow, computeStableford, computeSixes, computeFiveThreeOne, computeNines, computeHammer,
-  computeBbb, computeScotch6s, computeTeamDay, computeCrossBestBall,
+  computeBbb, computeScotch6s, computeTeamDay, computeCrossBestBall, isMatch1v1,
 } from '../modules/gameEngine'
 import { COURSES as BUILTIN_COURSES } from '../modules/courses'
 
@@ -787,7 +787,7 @@ function buildRecapSections(round) {
       const t = (g.type || '').toLowerCase()
       const r = _recapOne(ctx, g)
       if (!r) continue
-      const isPairBet = (t === 'match' || t === 'match1v1') && g.config?.player1 && g.config?.player2
+      const isPairBet = (t === 'match' || t === 'match1v1') && isMatch1v1(g.config || {}) && g.config?.player1 && g.config?.player2
       const row = {
         label: `${r.icon} ${r.label}`,
         money: r.winnerLine || 'tracker only',
@@ -881,23 +881,28 @@ function _recapOne(ctx, game) {
     }
 
     if (t === 'match' || t === 'match1v1') {
-      const r = computeMatch(ctx, cfg)
+      // isMatch1v1() trusts cfg.format when present — don't route on player1/player2
+      // presence alone, since a 2v2 config can still carry stale player1/player2 values.
+      const is1v1 = isMatch1v1(cfg) && !!(cfg.player1 && cfg.player2)
+      const r = is1v1 ? computeMatch(ctx, cfg) : computeBestBall(ctx, { ...cfg, ballsPerTeam: 1 })
       if (!r) return base
-      const p1n = r.p1?.name || '?'
-      const p2n = r.p2?.name || '?'
+      const p1n = is1v1 ? (r.p1?.name || '?') : (r.t1Name || 'T1')
+      const p2n = is1v1 ? (r.p2?.name || '?') : (r.t2Name || 'T2')
       const up = r.finalUp
       const played = (r.holeResults || []).filter(h => !h.incomplete).length
-      const p1Net = r.settlement?.p1Net || 0
+      const remaining = (r.holeResults || []).filter(h => h.incomplete).length
+      const p1Net = is1v1 ? (r.settlement?.p1Net || 0) : (r.settlement?.t1Net || 0)
+      const matchOver = is1v1 ? r.matchOver : (Math.abs(up) > remaining && played > 0)
       const isTournament = !!cfg.tournament
       const pts = cfg.points || 1
       const ppt = r.settlement?.ppt || cfg.ppt || 0
 
       if (played === 0) { base.detail = `${p1n} vs ${p2n} -- not started`; return base }
-      if (r.matchOver) {
+      if (matchOver) {
         const win = up > 0 ? p1n : p2n
         const lose = up > 0 ? p2n : p1n
         base.winnerLine = _fmtWinnerValue(win, { pts: isTournament ? pts : null, dollars: Math.abs(p1Net) || ppt || null })
-        base.detail = `${win} (${r.result}) vs ${lose}`
+        base.detail = `${win} (${is1v1 ? r.result : `${Math.abs(up)}&${remaining}`}) vs ${lose}`
       } else if (up === 0) {
         base.detail = `${p1n} vs ${p2n} -- AS thru ${played}`
         if (isTournament) base.winnerLine = `halved * ${pts / 2}pt each`

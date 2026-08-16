@@ -10,7 +10,7 @@ import {
   computeNassau, computeSkins, computeMatch, computeSnake,
   computeDots, computeFidget, computeBestBall, computeBestBallNet, computeFiveThreeOne, computeNines,
   computeVegas, computeHiLow, computeSixes, computeStableford, computeHammer, computeBbb, computeWolf,
-  holePar, holeRange,
+  holePar, holeRange, isMatch1v1,
 } from '../modules/gameEngine'
 import { formatMatchLabel } from '../modules/matchLabels'
 
@@ -169,8 +169,10 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
       if (t === 'match' || t === 'match1v1') {
         try {
           const cfg = game.config || {}
-          // 1v1: use computeMatch; 2v2: fall back to computeBestBall (team match play)
-          const is1v1 = cfg.player1 && cfg.player2
+          // 1v1: use computeMatch; 2v2: fall back to computeBestBall (team match play).
+          // isMatch1v1() trusts cfg.format when present — don't route on player1/player2
+          // presence alone, since a 2v2 config can still carry stale player1/player2 values.
+          const is1v1 = isMatch1v1(cfg) && !!(cfg.player1 && cfg.player2)
           let holeResults, finalUp, p1Label, p2Label, isDormie
 
           if (is1v1) {
