@@ -4,7 +4,7 @@ import { supabase } from '../supabase'
 import { useAuthStore } from './auth'
 import { COURSES as BUILTIN_COURSES } from '../modules/courses'
 import { supaCallWithRetry, supaCall } from '../modules/supabaseOps'
-import { supaRawRequest } from '../modules/supaRaw'
+import { supaRawRequest, supaRawInsert, supaRawUpdate } from '../modules/supaRaw'
 
 export const useCoursesStore = defineStore('courses', () => {
   const customCourses = ref([])  // user's private courses from Supabase
@@ -213,22 +213,46 @@ export const useCoursesStore = defineStore('courses', () => {
     // Upsert: if a course with this name already exists for this user, update it
     const existing = customCourses.value.find(c => c.name === course.name)
     if (existing) {
-      const { data, error } = await supaCallWithRetry(
-        'courses.addCourse.update',
-        () => supabase.from('courses').update({ tees: teesData, holes }).eq('id', existing.id).select().single(),
-        8000,
-      )
+      let data, error
+      try {
+        ;({ data, error } = await supaCallWithRetry(
+          'courses.addCourse.update',
+          () => supabase.from('courses').update({ tees: teesData, holes }).eq('id', existing.id).select().single(),
+          8000,
+        ))
+      } catch (e) {
+        // SJS call hung (iOS stuck-socket pattern) — retry over a fresh raw fetch
+        // instead of losing the save. See supaRaw.js for why this is needed.
+        if (!e.message?.includes('timed out')) throw e
+        const rows = await supaRawUpdate('courses', `id=eq.${existing.id}`, { tees: teesData, holes }, 10000)
+        data = rows?.[0]
+        error = null
+      }
       if (error) throw error
       const idx = customCourses.value.findIndex(c => c.id === existing.id)
       if (idx >= 0) customCourses.value[idx] = { ...customCourses.value[idx], ...data }
       return data
     }
 
-    const { data, error } = await supaCallWithRetry(
-      'courses.addCourse.insert',
-      () => supabase.from('courses').insert(row).select().single(),
-      8000,
-    )
+    let data, error
+    try {
+      ;({ data, error } = await supaCallWithRetry(
+        'courses.addCourse.insert',
+        () => supabase.from('courses').insert(row).select().single(),
+        8000,
+      ))
+    } catch (e) {
+      // SJS call hung (iOS stuck-socket pattern) — retry over a fresh raw fetch
+      // before giving up and falling to the pending-queue path below.
+      if (!e.message?.includes('timed out')) throw e
+      try {
+        const rows = await supaRawInsert('courses', row, 10000)
+        data = rows?.[0]
+        error = null
+      } catch (e2) {
+        error = e2
+      }
+    }
     if (error) {
       // Supabase unreachable (e.g. iOS stuck socket) — persist to a pending queue so
       // the next fetchCustomCourses can retry the insert automatically.
@@ -271,11 +295,21 @@ export const useCoursesStore = defineStore('courses', () => {
       supaUpdates.holes = existingPar.map((p, i) => ({ par: p, si: existingSi[i] ?? (i + 1) }))
     }
     if (updates.name) supaUpdates.name = updates.name
-    const { data, error } = await supaCallWithRetry(
-      'courses.updateCourse',
-      () => supabase.from('courses').update(supaUpdates).eq('id', id).select().single(),
-      8000,
-    )
+    let data, error
+    try {
+      ;({ data, error } = await supaCallWithRetry(
+        'courses.updateCourse',
+        () => supabase.from('courses').update(supaUpdates).eq('id', id).select().single(),
+        8000,
+      ))
+    } catch (e) {
+      // SJS call hung (iOS stuck-socket pattern) — retry over a fresh raw fetch
+      // instead of losing the edit.
+      if (!e.message?.includes('timed out')) throw e
+      const rows = await supaRawUpdate('courses', `id=eq.${id}`, supaUpdates, 10000)
+      data = rows?.[0]
+      error = null
+    }
     if (error) throw error
     const idx = customCourses.value.findIndex(c => c.id === id)
     if (idx >= 0) customCourses.value[idx] = { ...customCourses.value[idx], ...data }
