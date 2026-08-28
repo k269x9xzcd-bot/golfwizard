@@ -143,11 +143,17 @@
           </div>
           <div class="wiz-field">
             <label class="wiz-label">Holes</label>
-            <div class="holes-toggle">
-              <button v-for="h in [['18','Full 18'],['front9','Front 9'],['back9','Back 9']]" :key="h[0]"
+            <!-- Courses with fewer than 18 holes (e.g. a 12-hole course like
+                 The Dozen) have no front/back split — just show what the
+                 round will be instead of an irrelevant toggle. -->
+            <div v-if="holesModeOptions.length > 1" class="holes-toggle">
+              <button v-for="h in holesModeOptions" :key="h[0]"
                 class="holes-btn" :class="{ active: form.holesMode === h[0] }" @click="form.holesMode = h[0]">
                 {{ h[1] }}
               </button>
+            </div>
+            <div v-else class="holes-toggle holes-toggle--fixed">
+              <span class="holes-btn active">{{ holesModeOptions[0][1] }}</span>
             </div>
           </div>
         </div>
@@ -2197,6 +2203,26 @@ watch(courseSearch, async (q) => {
     apiResults.value = await coursesStore.searchCoursesApi(q)
     apiSearching.value = false
   }, 400)
+})
+
+// Courses with fewer than 18 holes (e.g. a 12-hole course, two 6-hole loops
+// played back to back) have no meaningful front9/back9 split — force
+// holesMode to '12' and hide the 18/front9/back9 toggle for those.
+const courseHoleCount = computed(() => {
+  const courseName = form.value.courseName
+  if (!courseName) return 18
+  const c = coursesStore.getCourse(courseName)
+  return Array.isArray(c?.par) ? c.par.length : 18
+})
+
+const holesModeOptions = computed(() => {
+  if (courseHoleCount.value === 12) return [['12', '12 Holes']]
+  return [['18', 'Full 18'], ['front9', 'Front 9'], ['back9', 'Back 9']]
+})
+
+watch(courseHoleCount, (n) => {
+  if (n === 12) form.value.holesMode = '12'
+  else if (form.value.holesMode === '12') form.value.holesMode = '18'
 })
 
 const teesForCourse = computed(() => {

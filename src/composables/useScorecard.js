@@ -30,6 +30,7 @@ export function useScorecard(round, ctx) {
     const mode = round.value?.holes_mode || '18'
     if (mode === 'front9') return 'Front 9'
     if (mode === 'back9') return 'Back 9'
+    if (mode === '12') return '12 Holes'
     return '18 Holes'
   })
 
@@ -37,12 +38,16 @@ export function useScorecard(round, ctx) {
     const mode = round.value?.holes_mode || '18'
     if (mode === 'front9') return Array.from({ length: 9 }, (_, i) => i + 1)
     if (mode === 'back9') return Array.from({ length: 9 }, (_, i) => i + 10)
+    if (mode === '12') return Array.from({ length: 12 }, (_, i) => i + 1)
     return Array.from({ length: 18 }, (_, i) => i + 1)
   })
 
-  const hasBack9 = computed(() => visibleHoles.value.length > 9)
-  const frontHoles = computed(() => visibleHoles.value.filter(h => h <= 9))
-  const backHoles = computed(() => visibleHoles.value.filter(h => h > 9))
+  // 12-hole courses (two 6-hole loops, e.g. Arcadia Bluffs' The Dozen) split
+  // OUT/IN at hole 6, not hole 9 — everything else splits at the usual 9.
+  const frontBackSplit = computed(() => ((round.value?.holes_mode) || '18') === '12' ? 6 : 9)
+  const hasBack9 = computed(() => visibleHoles.value.length > frontBackSplit.value)
+  const frontHoles = computed(() => visibleHoles.value.filter(h => h <= frontBackSplit.value))
+  const backHoles = computed(() => visibleHoles.value.filter(h => h > frontBackSplit.value))
 
   const hasYardage = computed(() => {
     const c = ctx.value?.course

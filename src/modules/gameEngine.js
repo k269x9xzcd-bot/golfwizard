@@ -8,23 +8,33 @@
  *     members: [{ id, short_name, round_hcp, ghin_index, tee? }],
  *     course: { par: [], si: [], teesData: {}, name },
  *     tee: string,             // round default tee name
- *     holesMode: '18'|'front9'|'back9',
+ *     holesMode: '18'|'front9'|'back9'|'12',
  *   }
  *
  * Per-member tee: member.tee (optional) overrides ctx.tee for that one
  * player — course handicap AND stroke-index lookup both key off it. Use
  * memberTee(member, ctx.tee) to resolve. Members without their own tee
  * fall back to ctx.tee, so existing single-tee rounds are unaffected.
+ *
+ * holesMode '12' is for a full round at a 12-hole course (e.g. two 6-hole
+ * loops played back to back, like Arcadia Bluffs' "The Dozen") — holes 1-12,
+ * no front/back split. It is NOT a segment of an 18-hole course, so games
+ * with their own hardcoded 9/9 split (computeNassau's front/back bet
+ * segments, the 5-3-1 ladder, etc.) do not derive their segment boundaries
+ * from holeRange()/holeCount() and are NOT 12-hole-aware — scope this out
+ * or fix those specific games before offering them for a 12-hole round.
  */
 
 // ── Hole range ──────────────────────────────────────────────────
 export function holeRange(holesMode) {
   if (holesMode === 'front9') return { from: 1, to: 9 }
   if (holesMode === 'back9')  return { from: 10, to: 18 }
+  if (holesMode === '12')     return { from: 1, to: 12 }
   return { from: 1, to: 18 }
 }
 
 export function holeCount(holesMode) {
+  if (holesMode === '12') return 12
   return holesMode === '18' ? 18 : 9
 }
 
