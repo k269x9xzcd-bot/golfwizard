@@ -109,3 +109,29 @@ describe('reconcileQueueAgainstMembers', () => {
     expect(dropped).toHaveLength(8)
   })
 })
+
+import { findUnsyncedScores } from './scoreQueue.js'
+
+describe('findUnsyncedScores', () => {
+  const A = 'a', B = 'b'
+  it('returns local scores missing on the server', () => {
+    const local = { [A]: { 4: 5, 5: 3 }, [B]: { 5: 4 } }
+    const server = [{ member_id: A, hole: 4, score: 5 }, { member_id: B, hole: 5, score: 4 }]
+    const out = findUnsyncedScores(local, {}, server, [A, B])
+    expect(out).toHaveLength(1)
+    expect(out[0]).toMatchObject({ member_id: A, hole: 5, score: 3 })
+  })
+  it('pushes a differing score only when this device entered it later', () => {
+    const local = { [A]: { 1: 4 } }
+    const metaNew = { [A]: { 1: { entered_at: '2026-10-04T15:00:00Z' } } }
+    const metaOld = { [A]: { 1: { entered_at: '2026-10-04T13:00:00Z' } } }
+    const server = [{ member_id: A, hole: 1, score: 5, entered_at: '2026-10-04T14:00:00Z' }]
+    expect(findUnsyncedScores(local, metaNew, server, [A])).toHaveLength(1)
+    expect(findUnsyncedScores(local, metaOld, server, [A])).toHaveLength(0)
+    expect(findUnsyncedScores(local, {}, server, [A])).toHaveLength(0)
+  })
+  it('skips null scores and non-members', () => {
+    const local = { [A]: { 1: null }, zz: { 1: 4 } }
+    expect(findUnsyncedScores(local, {}, [], [A])).toHaveLength(0)
+  })
+})

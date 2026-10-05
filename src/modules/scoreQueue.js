@@ -10,8 +10,10 @@
  *      row. Every retry returns a 409 / FK-violation. Reconcile against the
  *      loaded round's actual member ids and drop these on round load.
  *
- *   2. Repeated transient failures — keep a per-entry attempt counter and
- *      drop after MAX_ATTEMPTS so the queue is self-healing.
+ *   2. Repeated transient failures — keep a per-entry attempt counter for
+ *      logging only. Transient (network) failures are NEVER dropped: a dropped
+ *      entry is a lost score (Bonnie Briar 2026-10-04, Shpiz hole 5). Only
+ *      unrecoverable errors (FK/409 member_id) are dropped.
  *
  * Pure / no I/O — caller owns localStorage + console.warn.
  */
@@ -70,4 +72,50 @@ export function reconcileQueueAgainstMembers(queue, validMemberIds, roundId) {
     }
   }
   return { kept, dropped }
+}
+
+/**
+ * Local scores the server doesn't have (or has an older value for).
+ * Used by completeRound so a score that silently failed to sync — but is
+ * still on this device — gets pushed before the round is settled.
+ *
+ * Only pushes when the server row is MISSING, or when this device's own
+ * entry is newer than the server's (so we never clobber a later edit made
+ * from another phone).
+ *
+ * @param {Object} localScores  { [memberId]: { [hole]: score } }
+ * @param {Object} localMeta    { [memberId]: { [hole]: { entered_by, entered_at } } }
+ * @param {Array}  serverRows   [{ member_id, hole, score, entered_at }]
+ * @param {Array<string>} validMemberIds
+ * @returns {Array} payload entries { member_id, hole, score, entered_by, entered_at }
+ */
+export function findUnsyncedScores(localScores, localMeta, serverRows, validMemberIds) {
+  const out = []
+  if (!localScores) return out
+  const valid = new Set(validMemberIds || Object.keys(localScores))
+  const server = new Map()
+  for (const r of (serverRows || [])) server.set(`${r.member_id}|${Number(r.hole)}`, r)
+  for (const [memberId, holes] of Object.entries(localScores)) {
+    if (!valid.has(memberId) || !holes) continue
+    for (const [h, score] of Object.entries(holes)) {
+      if (score == null || score === '' || Number.isNaN(Number(score))) continue
+      const hole = Number(h)
+      const meta = localMeta?.[memberId]?.[hole] || localMeta?.[memberId]?.[h] || {}
+      const srv = server.get(`${memberId}|${hole}`)
+      const localAt = meta.entered_at ? Date.parse(meta.entered_at) : NaN
+      const srvAt = srv?.entered_at ? Date.parse(srv.entered_at) : NaN
+      const missing = !srv
+      const newerLocal = srv && Number(srv.score) !== Number(score) && !Number.isNaN(localAt) && (Number.isNaN(srvAt) || localAt > srvAt)
+      if (missing || newerLocal) {
+        out.push({
+          member_id: memberId,
+          hole,
+          score: Number(score),
+          entered_by: meta.entered_by ?? null,
+          entered_at: meta.entered_at ?? new Date().toISOString(),
+        })
+      }
+    }
+  }
+  return out
 }

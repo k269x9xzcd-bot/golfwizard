@@ -16,6 +16,7 @@ import {
   markAttempt as _markScoreAttempt,
   shouldDropForRetries as _shouldDropScoreEntry,
   reconcileQueueAgainstMembers as _reconcileScoreQueue,
+  findUnsyncedScores as _findUnsyncedScores,
 } from '../modules/scoreQueue'
 
 /**
@@ -207,13 +208,14 @@ export const useRoundsStore = defineStore('rounds', () => {
           })
           continue
         }
-        // Bump attempt count; drop if over the cap.
+        // Bump attempt count and KEEP it — never drop on transient failures.
+        // completeRound pushes anything still queued (and any local score the
+        // server is missing) through the complete_round RPC.
         const bumped = _markScoreAttempt(entry)
         if (_shouldDropScoreEntry(bumped)) {
-          console.warn('[scoreQueue] dropping after retry cap', {
+          console.warn('[scoreQueue] still failing after retries, keeping', {
             member_id: entry.member_id, hole: entry.hole, attempts: bumped._attempts,
           })
-          continue
         }
         failed.push(bumped)
       }
@@ -1200,6 +1202,40 @@ export const useRoundsStore = defineStore('rounds', () => {
     const queuedScoresPayload = queuedForThisRound.map(({ member_id, hole, score, entered_by, entered_at }) => ({
       member_id, hole, score, entered_by, entered_at,
     }))
+
+    // Safety net: push any score that's on this device but missing (or older)
+    // on the server, even if it fell out of the queue. Settlement above was
+    // computed from local scores, so the server must match them.
+    if (activeRound.value?.id === roundId) {
+      try {
+        let serverRows = null
+        try {
+          const res = await _withTimeout(
+            supabase.from('scores').select('member_id,hole,score,entered_at').eq('round_id', roundId),
+            4000, 'scores.select')
+          if (res.error) throw res.error
+          serverRows = res.data
+        } catch (e) {
+          serverRows = await supaRawSelect('scores', `select=member_id,hole,score,entered_at&round_id=eq.${roundId}`, 8000)
+        }
+        const unsynced = _findUnsyncedScores(
+          activeScores.value, activeScoreMeta.value, serverRows || [],
+          (activeMembers.value || []).map(m => m.id),
+        )
+        const queuedKeys = new Set(queuedScoresPayload.map(e => `${e.member_id}|${e.hole}`))
+        for (const e of unsynced) {
+          if (!queuedKeys.has(`${e.member_id}|${e.hole}`)) queuedScoresPayload.push(e)
+        }
+        if (unsynced.length) console.warn('[rounds] completeRound: pushing unsynced local scores', unsynced)
+      } catch (e) {
+        // Can't verify server state — push every local score. Upsert is
+        // idempotent; worst case it rewrites identical values.
+        console.warn('[rounds] completeRound: server score check failed, pushing all local scores:', e?.message)
+        const all = _findUnsyncedScores(activeScores.value, activeScoreMeta.value, [], (activeMembers.value || []).map(m => m.id))
+        const queuedKeys = new Set(queuedScoresPayload.map(x => `${x.member_id}|${x.hole}`))
+        for (const x of all) if (!queuedKeys.has(`${x.member_id}|${x.hole}`)) queuedScoresPayload.push(x)
+      }
+    }
     const rpcArgs = { round_id: roundId, queued_scores: queuedScoresPayload, settlements: settlementData }
 
     try {
