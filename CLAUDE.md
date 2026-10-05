@@ -72,7 +72,7 @@ supabase/functions/ ghin-player-search, ghin-sync, ghin-roster-sync,
                     invite-player, ghin-scores, ghin-lookup
 ```
 
-### Large files (push via terminal git, not GitHub MCP)
+### Large files (push via git from the cloud clone, never GitHub MCP push_files)
 
 - `src/components/WizardOverlay.vue` — ~101KB
 - `src/views/ScoringView.vue` — ~64KB after ADR-003 split (was 170KB)
@@ -83,18 +83,21 @@ GitHub MCP `push_files` truncates over ~40-50KB. CI threshold currently blocks `
 
 ---
 
-## Deploy
+## Deploy — cloud session, no Mac needed (since 2026-10-05)
 
-```bash
-cd ~/Desktop/golfwizard
-npm run deploy
-```
+Jason works from his phone (Claude app / claude.ai). Cloud sessions clone this repo with push access, so do the whole loop here:
 
-`scripts/deploy.js` does: remove stale `.git/*.lock` → `git pull --rebase --autostash` → bump patch in `package.json` → `vite build` → commit → push. GitHub Actions handles the Pages publish.
+1. Make the change. Keep diffs minimal.
+2. `npm install && npm test` — must pass (x86 cloud VM runs vitest fine; the old rolldown arm64 failure was a Cowork-VM-only problem).
+3. `npm run build` — must succeed.
+4. Run `engineering:deploy-checklist`. Note the current `origin/main` hash as the rollback point.
+5. Bump patch in `package.json` (don't commit `package-lock.json` churn from `npm install`), commit `vX.Y.Z: <what>`, `git fetch origin main`, push `HEAD:main`.
+6. Confirm the Actions run is green: `gh run list --repo k269x9xzcd-bot/golfwizard --limit 1`.
+7. Tell Jason the version, the rollback hash, and what to smoke-test on his iPhone.
 
-**Always run `engineering:deploy-checklist` first.**
+`scripts/deploy.js` / `~/Desktop/golfwizard` is the legacy Mac path — don't send Jason to the terminal. The Desktop clone is behind origin; never assume it's current.
 
-If `.git/index.lock` survives a Ctrl-C, Jason removes it manually before retrying.
+DB data fixes, migrations, and edge-fn deploys go through the Supabase connector (project `mhzhdmsiliyfnijzddhu`). Ask before writing to prod data.
 
 ---
 
@@ -421,9 +424,9 @@ Plays at Bonnie Briar Country Club primarily. `bb_member_index` table holds the 
 | Live | https://k269x9xzcd-bot.github.io/golfwizard |
 | Repo | github.com/k269x9xzcd-bot/golfwizard |
 | Supabase project | mhzhdmsiliyfnijzddhu |
-| Current version | v3.10.221 (origin) → v3.10.222 in flight |
-| Deploy | `cd ~/Desktop/golfwizard && npm run deploy` |
+| Current version | see `package.json` on `main` |
+| Deploy | cloud session — see Deploy section |
 | CI | https://github.com/k269x9xzcd-bot/golfwizard/actions |
 | Domain | golfwizard.net (DNS → Resend pending) |
-| Tests | `npm test` (vitest, 50 game-engine tests) |
+| Tests | `npm test` (vitest, 232 tests as of v3.10.287) |
 | Dev | `npm run dev` → iPhone on local Wi-Fi for live PWA testing |
