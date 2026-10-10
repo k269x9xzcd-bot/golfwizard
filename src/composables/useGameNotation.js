@@ -4,6 +4,8 @@
  * Extracted from ScoringView.vue (ADR-003, Phase 3a).
  * Depends on helpers from useScorecardHelpers (passed in as params).
  */
+import { useViewerPerspective } from './useViewerPerspective'
+import { sideClass } from '../modules/viewerPerspective'
 import { computed } from 'vue'
 import { useRoundsStore } from '../stores/rounds'
 import {
@@ -21,6 +23,7 @@ function escHtml(str) {
 
 export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pInit, tournamentSingles }) {
   const roundsStore = useRoundsStore()
+  const { orient } = useViewerPerspective()
 
   const HALVED_HTML = '<span class="nota-frac" aria-label="halved"><span class="nf-num">1</span><span class="nf-den">2</span></span>'
 
@@ -41,6 +44,7 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
   }
 
   function gameLabel(type, config) {
+    config = orient({ type, config })?.config ?? config
     if (type?.toLowerCase() === 'bbn' && config?.label) return config.label
     if (type?.toLowerCase() === 'nassau' && config) {
       const t1 = teamInitialsStr(config.team1 || [])
@@ -90,7 +94,9 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
     const ctx = buildCtx()
     const games = roundsStore.activeGames
 
-    for (const game of games) {
+    for (const _rawGame of games) {
+      const game = orient(_rawGame)
+      const _flip = !!game._viewerFlipped
       const t = game.type?.toLowerCase()
 
       // ── NASSAU ──
@@ -105,8 +111,8 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
           for (const hr of allHR) {
             if (hr.n1 == null || hr.n2 == null) { cells[hr.hole] = { text: '', cls: '' }; continue }
             const up = hr.t1Up ?? 0
-            if (up > 0) cells[hr.hole] = { text: `U${up}`, cls: 'nota-t1' }
-            else if (up < 0) cells[hr.hole] = { text: `D${Math.abs(up)}`, cls: 'nota-t2' }
+            if (up > 0) cells[hr.hole] = { text: `U${up}`, cls: sideClass('nota-t1', _flip) }
+            else if (up < 0) cells[hr.hole] = { text: `D${Math.abs(up)}`, cls: sideClass('nota-t2', _flip) }
             else cells[hr.hole] = { text: 'AS', cls: 'nota-halved' }
           }
           const fPlayed = r.frontSeg?.holeResults?.filter(hr => hr.n1 != null).length || 0
@@ -206,8 +212,8 @@ export function useGameNotation({ courseData, visibleHoles, teamInitialsStr, pIn
           for (const hr of holeResults) {
             if (hr.incomplete) { cells[hr.hole] = { text: '', cls: '' }; continue }
             const up = hr.p1Up ?? 0
-            if (up > 0) cells[hr.hole] = { text: `U${up}`, cls: 'nota-t1' }
-            else if (up < 0) cells[hr.hole] = { text: `D${Math.abs(up)}`, cls: 'nota-t2' }
+            if (up > 0) cells[hr.hole] = { text: `U${up}`, cls: sideClass('nota-t1', _flip) }
+            else if (up < 0) cells[hr.hole] = { text: `D${Math.abs(up)}`, cls: sideClass('nota-t2', _flip) }
             else cells[hr.hole] = { text: 'AS', cls: 'nota-halved' }
           }
           const leader = finalUp > 0 ? p1Label : p2Label

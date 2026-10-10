@@ -15,9 +15,11 @@ import {
   holeSI, strokesOnHole,
 } from '../modules/gameEngine'
 import { resolveMemberSourceName } from '../modules/memberNameResolver'
+import { useViewerPerspective } from './useViewerPerspective'
 
 export function useScorecardHelpers({ showFullHcp }) {
   const roundsStore = useRoundsStore()
+  const _viewer = useViewerPerspective()
   const coursesStore = useCoursesStore()
   const rosterStore = useRosterStore()
   const authStore = useAuthStore()
@@ -238,12 +240,16 @@ export function useScorecardHelpers({ showFullHcp }) {
   function teamBarClass(m) { return m.team === 1 ? 'bar-t1' : m.team === 2 ? 'bar-t2' : '' }
 
   // ── Sorted players ───────────────────────────────────────────────
+  // Viewer's team first (display only); falls back to team 1 first.
   const sortedPlayerGroups = computed(() => {
-    const members = roundsStore.activeMembers
-    const t1 = members.filter(m => m.team === 1).map(m => ({ member: m, team: 1 }))
-    const t2 = members.filter(m => m.team === 2).map(m => ({ member: m, team: 2 }))
+    const members = _viewer.viewerOrderedMembers.value
+    const vTeam = members.find(m => m.id === _viewer.viewerId.value)?.team
+    const first = vTeam === 2 ? 2 : 1
+    const second = first === 1 ? 2 : 1
+    const a = members.filter(m => m.team === first).map(m => ({ member: m, team: first }))
+    const b = members.filter(m => m.team === second).map(m => ({ member: m, team: second }))
     const noTeam = members.filter(m => !m.team || (m.team !== 1 && m.team !== 2)).map(m => ({ member: m, team: 0 }))
-    return [...t1, ...t2, ...noTeam]
+    return [...a, ...b, ...noTeam]
   })
 
   // ── Display / initials ───────────────────────────────────────────

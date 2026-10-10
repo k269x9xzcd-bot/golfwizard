@@ -7,11 +7,14 @@ import {
   computeVegas, computeHiLow, computeWolf, computeHammer, computeFiveThreeOne, computeSixes,
   isMatch1v1,
 } from '../modules/gameEngine'
+import { useViewerPerspective } from './useViewerPerspective'
 
 export function useHoleMath({ buildCtx, pInit, teamInitialsStr }) {
+  const { orient } = useViewerPerspective()
 
   function holeMathLines(game, hole) {
     if (!game || !hole) return []
+    game = orient(game)  // display only — viewer's side first
     const ctx = buildCtx()
     const t = game.type?.toLowerCase()
     const cfg = game.config || {}

@@ -5,6 +5,7 @@
  * Depends on buildCtx, gameIcon, gameLabel, teamInitialsStr, pInit, memberDisplay,
  * visibleHoles from sister composables.
  */
+import { useViewerPerspective } from './useViewerPerspective'
 import { computed } from 'vue'
 import { useRoundsStore } from '../stores/rounds'
 import { computeAllSettlements } from '../modules/settlements'
@@ -50,6 +51,7 @@ function makeUniqueLabels(members, partsOf) {
 
 export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitialsStr, pInit, memberDisplay, visibleHoles, rosterPlayers, tournamentWagerGames }) {
   const roundsStore = useRoundsStore()
+  const { orient } = useViewerPerspective()
 
   const liveSettlements = computed(() => {
     if (!roundsStore.activeRound) return null
@@ -65,6 +67,7 @@ export function useLiveSettlements({ buildCtx, gameIcon, gameLabel, teamInitials
   })
 
   function gameSummaryHtml(game) {
+    game = orient(game)  // display only — viewer's side first
     const ctx = buildCtx()
     const cfg = game.config || {}
     const icon = gameIcon(game.type)
