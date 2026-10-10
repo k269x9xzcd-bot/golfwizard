@@ -734,8 +734,8 @@
       <div v-else ref="holeViewEl" class="hole-view" @touchstart="onTouchStart" @touchend="onTouchEnd">
 
         <!-- Offline pending scores banner -->
-        <div v-if="pendingScores > 0" class="offline-pending-banner">
-          <span class="pending-dot"></span> {{ pendingScores }} score{{ pendingScores > 1 ? 's' : '' }} pending sync
+        <div v-if="pendingScores > 0" class="offline-pending-banner" role="button" @click="retryPendingScores">
+          <span class="pending-dot"></span> {{ pendingScores }} score{{ pendingScores > 1 ? 's' : '' }} pending sync · tap to retry
         </div>
 
         <!-- Hole Banner -->
@@ -1614,12 +1614,12 @@ function showSaveState(memberId, hole, state) {
 
 async function retryPendingScores() {
   if (roundsStore.flushQueue) await roundsStore.flushQueue()
-  pendingScores.value = roundsStore.pendingQueueCount()
+  pendingScores.value = roundsStore.pendingQueueCount(roundsStore.activeRound?.id)
 }
 
 onMounted(async () => {
   _pendingInterval = setInterval(() => {
-    pendingScores.value = roundsStore.pendingQueueCount()
+    pendingScores.value = roundsStore.pendingQueueCount(roundsStore.activeRound?.id)
   }, 2000)
 
   // Auto-open the user's in-progress round when none is currently loaded —

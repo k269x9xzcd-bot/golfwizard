@@ -157,12 +157,36 @@ export const useRoundsStore = defineStore('rounds', () => {
     else q.push(entry)
     _saveQueue(q)
   }
+  // A later successful save (or a clear) supersedes any queued copy.
+  function _dequeue(roundId, memberId, hole) {
+    const q = _loadQueue()
+    const kept = q.filter(e => !(e.round_id === roundId && e.member_id === memberId && e.hole === hole))
+    if (kept.length !== q.length) _saveQueue(kept)
+  }
+  // Queued value no longer matches what this device shows for the active
+  // round (edited since) — sending it would overwrite newer data. Missing
+  // local value is NOT stale (scores may still be loading); clears dequeue.
+  function _isStaleQueueEntry(e) {
+    if (!activeRound.value || activeRound.value.id !== e.round_id) return false
+    const local = activeScores.value?.[e.member_id]?.[e.hole]
+    return local != null && Number(local) !== Number(e.score)
+  }
+  function _pruneStaleQueue() {
+    const q = _loadQueue()
+    if (!q.length) return
+    const kept = q.filter(e => !_isStaleQueueEntry(e))
+    if (kept.length !== q.length) {
+      console.warn(`[scoreQueue] dropped ${q.length - kept.length} stale item(s)`)
+      _saveQueue(kept)
+    }
+  }
 
   let _flushInFlight = false  // guard against concurrent flush calls
   async function _flushQueue() {
     const auth = useAuthStore()
     if (!auth.isAuthenticated) return
     if (_flushInFlight) return  // already running — skip concurrent call
+    _pruneStaleQueue()
     const q = _loadQueue()
     if (!q.length) return
     // IMPORTANT: use try/finally so _flushInFlight always resets even if an
@@ -245,9 +269,17 @@ export const useRoundsStore = defineStore('rounds', () => {
     return dropped.length
   }
 
-  // Flush whenever we come back online
+  // Flush when back online, when the app returns to the foreground, and
+  // every 30s while anything is queued. The 'online' event alone never fires
+  // on iOS when the failure was a stuck socket rather than a lost signal.
   if (typeof window !== 'undefined') {
     window.addEventListener('online', () => _flushQueue())
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') _flushQueue()
+    })
+    setInterval(() => {
+      if (_loadQueue().length && navigator.onLine !== false) _flushQueue()
+    }, 30000)
   }
 
   // ── Computed ────────────────────────────────────────────────
@@ -798,6 +830,7 @@ export const useRoundsStore = defineStore('rounds', () => {
       ])
       if (error) throw error
       scoreSyncError.value = null
+      _dequeue(entry.round_id, memberId, hole)
       return  // success
     } catch (e) {
       sjsErr = e
@@ -813,6 +846,7 @@ export const useRoundsStore = defineStore('rounds', () => {
         { Prefer: 'resolution=merge-duplicates,return=representation' },
       )
       scoreSyncError.value = null
+      _dequeue(entry.round_id, memberId, hole)
     } catch (rawErr) {
       console.warn('Score save failed (SJS + raw):', rawErr.message)
       _enqueue(entry)
@@ -838,6 +872,7 @@ export const useRoundsStore = defineStore('rounds', () => {
       return
     }
     _persistGuest()
+    _dequeue(activeRound.value.id, memberId, hole)
 
     try {
       const res = await supaCall(
@@ -1198,6 +1233,7 @@ export const useRoundsStore = defineStore('rounds', () => {
       new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms))
     ])
 
+    _pruneStaleQueue()
     const queuedForThisRound = _loadQueue().filter(e => e.round_id === roundId)
     const queuedScoresPayload = queuedForThisRound.map(({ member_id, hole, score, entered_by, entered_at }) => ({
       member_id, hole, score, entered_by, entered_at,
@@ -1437,8 +1473,10 @@ export const useRoundsStore = defineStore('rounds', () => {
     activeRound.value = null
   }
 
-  function pendingQueueCount() {
-    return _loadQueue().length
+  function pendingQueueCount(roundId) {
+    _pruneStaleQueue()
+    const q = _loadQueue()
+    return roundId ? q.filter(e => e.round_id === roundId).length : q.length
   }
 
   // ── Sync a completed guest round to Supabase ───────────────
