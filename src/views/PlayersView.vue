@@ -663,7 +663,7 @@ import { useAuthStore } from '../stores/auth'
 import { supabase } from '../supabase'
 import bbLogo from '../assets/bonnie-briar-logo.png'
 import { supaCall } from '../modules/supabaseOps'
-import { supaRawEdgeFunction } from '../modules/supaRaw'
+import { supaRawEdgeFunction, supaRawSelect } from '../modules/supaRaw'
 
 const rosterStore = useRosterStore()
 const authStore = useAuthStore()
@@ -1184,6 +1184,57 @@ function onAddNameInput() {
   _addSearchTimer = setTimeout(() => addSearchGhin(), 350)
 }
 
+// ── Shared name search (add + edit). iOS PWA stuck-socket safe: each SJS call
+// has a short timeout and falls back to a raw fetch on a fresh socket.
+const _raceTimeout = (p, ms, label) => Promise.race([
+  p,
+  new Promise((_, rej) => setTimeout(() => rej(new Error(`${label} timeout`)), ms)),
+])
+
+async function searchBbIndex(first, last) {
+  const cols = 'ghin_number,first_name,last_name,handicap_index'
+  let rows
+  try {
+    const { data, error } = await _raceTimeout(
+      supabase.from('bb_member_index').select(cols).ilike('last_name', last).order('last_name').limit(50),
+      4000, 'bb_index'
+    )
+    if (error) throw error
+    rows = data
+  } catch (e) {
+    console.warn('[ghin-search] bb_index SJS failed, raw fallback:', e?.message)
+    rows = await supaRawSelect('bb_member_index',
+      `select=${cols}&last_name=ilike.${encodeURIComponent(last)}&order=last_name&limit=50`, 4000)
+  }
+  const lastLower = last.toLowerCase()
+  const firstLower = first.toLowerCase()
+  return (rows || []).filter(p =>
+    p.last_name?.toLowerCase() === lastLower && p.first_name?.toLowerCase().startsWith(firstLower))
+}
+
+async function searchGhinApi(first, last, profile) {
+  const body = {
+    first_name: first,
+    last_name: last,
+    ghin_number: profile.ghin_number,
+    password: profile.ghin_password,
+  }
+  let data
+  try {
+    const r = await _raceTimeout(supabase.functions.invoke('ghin-player-search', { body }), 4000, 'ghin_search')
+    if (r.error) throw r.error
+    data = r.data
+  } catch (e) {
+    console.warn('[ghin-search] SJS invoke failed, raw fallback:', e?.message)
+    data = await supaRawEdgeFunction('ghin-player-search', body, 7000)
+  }
+  if (Array.isArray(data?.results)) return { results: data.results }
+  if (typeof data?.error === 'string' && data.error.includes('credentials')) {
+    return { results: [], credsMsg: 'GHIN search unavailable. Add credentials in Profile.' }
+  }
+  throw new Error(data?.error || 'Unexpected GHIN search response')
+}
+
 async function addSearchGhin() {
   const first = newFirst.value.trim()
   const last = newLast.value.trim()
@@ -1202,64 +1253,24 @@ async function addSearchGhin() {
         addGhinError.value = 'Search timed out'
       }
     }
-  }, 8000)
+  }, 12000)
 
   // Race a promise against a timeout
-  const withTimeout = (p, ms, label) => Promise.race([
-    p,
-    new Promise((_, rej) => setTimeout(() => rej(new Error(`${label} timeout`)), ms)),
-  ])
-
   try {
-    // BB index first — exact last name + first-name prefix (4s timeout)
-    let bbMatches = []
-    try {
-      const { data: bbRows } = await withTimeout(
-        supabase.from('bb_member_index')
-          .select('ghin_number, first_name, last_name, handicap_index')
-          .ilike('last_name', last)
-          .order('last_name').limit(50),
-        4000, 'bb_index'
-      )
-      if (seq !== _addSearchSeq) return
-      bbMatches = (bbRows || []).filter(p => p.last_name?.toLowerCase() === last.toLowerCase())
-      const firstLower = first.toLowerCase()
-      bbMatches = bbMatches.filter(p => p.first_name?.toLowerCase().startsWith(firstLower))
-    } catch (e) {
-      console.warn('[ghin-search] bb_index failed/timeout, continuing with edge fn:', e?.message)
-    }
-
-    // GHIN API search via edge fn (5s timeout)
+    // BB index + GHIN API in parallel; each has its own raw-fetch fallback
     const profile = authStore.profile
-    let ghinResults = []
-    if (profile?.ghin_number && profile?.ghin_password) {
-      try {
-        const { data, error } = await withTimeout(
-          supabase.functions.invoke('ghin-player-search', {
-            body: {
-              first_name: first,
-              last_name: last,
-              ghin_number: profile.ghin_number,
-              password: profile.ghin_password,
-            },
-          }),
-          5000, 'ghin_search'
-        )
-        if (seq !== _addSearchSeq) return
-        if (!error && Array.isArray(data?.results)) {
-          ghinResults = data.results
-        } else if (data?.error?.includes('credentials')) {
-          addGhinMsg.value = 'GHIN search unavailable. Add credentials in Profile.'
-        }
-      } catch (e) {
-        console.warn('[ghin-search] edge fn failed/timeout:', e?.message)
-        if (seq === _addSearchSeq && !bbMatches.length) {
-          addGhinError.value = 'GHIN search failed — tap to retry'
-        }
-      }
-    } else if (bbMatches.length === 0) {
-      addGhinMsg.value = 'Add GHIN credentials in Profile to enable full GHIN search.'
-    }
+    const hasCreds = !!(profile?.ghin_number && profile?.ghin_password)
+    const [bbRes, ghinRes] = await Promise.allSettled([
+      searchBbIndex(first, last),
+      hasCreds ? searchGhinApi(first, last, profile) : Promise.resolve({ results: [] }),
+    ])
+    if (seq !== _addSearchSeq) return
+    const bbMatches = bbRes.status === 'fulfilled' ? bbRes.value : []
+    const ghinResults = ghinRes.status === 'fulfilled' ? ghinRes.value.results : []
+    if (ghinRes.status === 'fulfilled' && ghinRes.value.credsMsg) addGhinMsg.value = ghinRes.value.credsMsg
+    const failed = hasCreds ? ghinRes.status === 'rejected' : bbRes.status === 'rejected'
+    if (failed && !bbMatches.length) addGhinError.value = 'GHIN search failed — tap to retry'
+    if (!hasCreds && !bbMatches.length) addGhinMsg.value = 'Add GHIN credentials in Profile to enable full GHIN search.'
 
     // Merge: BB matches first (already in our roster index), then GHIN, dedup by ghin_number
     const seenGhins = new Set()
@@ -1288,7 +1299,7 @@ async function addSearchGhin() {
 
     if (seq !== _addSearchSeq) return
     addGhinResults.value = merged
-    if (!merged.length) {
+    if (!merged.length && !addGhinError.value && !addGhinMsg.value) {
       addGhinMsg.value = `No golfer found for "${first} ${last}".`
     }
   } catch(e) {
@@ -1546,63 +1557,22 @@ async function searchGhinForEdit() {
       ghinSearching.value = false
       if (!ghinSearchResults.value.length) ghinSearchError.value = 'Search timed out'
     }
-  }, 8000)
-
-  const withTimeout = (p, ms, label) => Promise.race([
-    p,
-    new Promise((_, rej) => setTimeout(() => rej(new Error(`${label} timeout`)), ms)),
-  ])
+  }, 12000)
 
   try {
-    // BB index first
-    let bbMatches = []
-    try {
-      const { data: bbRows } = await withTimeout(
-        supabase.from('bb_member_index')
-          .select('ghin_number, first_name, last_name, handicap_index')
-          .ilike('last_name', last)
-          .order('last_name').limit(50),
-        4000, 'bb_index'
-      )
-      if (seq !== _editSearchSeq) return
-      bbMatches = (bbRows || []).filter(p => p.last_name?.toLowerCase() === last.toLowerCase())
-      const firstLower = first.toLowerCase()
-      bbMatches = bbMatches.filter(p => p.first_name?.toLowerCase().startsWith(firstLower))
-    } catch (e) {
-      console.warn('[ghin-search-edit] bb_index failed/timeout:', e?.message)
-    }
-
-    // GHIN edge fn
     const profile = authStore.profile
-    let ghinResults = []
-    if (profile?.ghin_number && profile?.ghin_password) {
-      try {
-        const { data, error } = await withTimeout(
-          supabase.functions.invoke('ghin-player-search', {
-            body: {
-              first_name: first,
-              last_name: last,
-              ghin_number: profile.ghin_number,
-              password: profile.ghin_password,
-            },
-          }),
-          5000, 'ghin_search'
-        )
-        if (seq !== _editSearchSeq) return
-        if (!error && Array.isArray(data?.results)) {
-          ghinResults = data.results
-        } else if (data?.error?.includes('credentials')) {
-          ghinSearchMsg.value = 'GHIN search unavailable. Add credentials in Profile.'
-        }
-      } catch (e) {
-        console.warn('[ghin-search-edit] edge fn failed/timeout:', e?.message)
-        if (seq === _editSearchSeq && !bbMatches.length) {
-          ghinSearchError.value = 'GHIN search failed — tap to retry'
-        }
-      }
-    } else if (bbMatches.length === 0) {
-      ghinSearchMsg.value = 'Add GHIN credentials in Profile to enable full GHIN search.'
-    }
+    const hasCreds = !!(profile?.ghin_number && profile?.ghin_password)
+    const [bbRes, ghinRes] = await Promise.allSettled([
+      searchBbIndex(first, last),
+      hasCreds ? searchGhinApi(first, last, profile) : Promise.resolve({ results: [] }),
+    ])
+    if (seq !== _editSearchSeq) return
+    const bbMatches = bbRes.status === 'fulfilled' ? bbRes.value : []
+    const ghinResults = ghinRes.status === 'fulfilled' ? ghinRes.value.results : []
+    if (ghinRes.status === 'fulfilled' && ghinRes.value.credsMsg) ghinSearchMsg.value = ghinRes.value.credsMsg
+    const failed = hasCreds ? ghinRes.status === 'rejected' : bbRes.status === 'rejected'
+    if (failed && !bbMatches.length) ghinSearchError.value = 'GHIN search failed — tap to retry'
+    if (!hasCreds && !bbMatches.length) ghinSearchMsg.value = 'Add GHIN credentials in Profile to enable full GHIN search.'
 
     // Merge — BB first, then GHIN, dedup by ghin_number
     const seenGhins = new Set()
@@ -1631,7 +1601,7 @@ async function searchGhinForEdit() {
 
     if (seq !== _editSearchSeq) return
     ghinSearchResults.value = merged
-    if (!merged.length && !ghinSearchError.value) ghinSearchMsg.value = `No golfer found for "${first} ${last}".`
+    if (!merged.length && !ghinSearchError.value && !ghinSearchMsg.value) ghinSearchMsg.value = `No golfer found for "${first} ${last}".`
   } catch (e) {
     if (seq !== _editSearchSeq) return
     ghinSearchError.value = 'Search failed — tap to retry'
